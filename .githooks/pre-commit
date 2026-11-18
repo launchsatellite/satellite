@@ -1,0 +1,14 @@
+#!/bin/sh
+# Before every commit. Work happens on a branch, and nothing the content guards catch is committed.
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+# The very first commit of a repository has nowhere else to go, so it may land on main.
+if git rev-parse --verify --quiet HEAD >/dev/null; then
+  case "$branch" in
+    main | master)
+      echo "Commit on a branch, not on $branch. Run git switch -c fix/<topic>, or spec/NNN-<slug> for a feature." >&2
+      exit 1
+      ;;
+  esac
+fi
+exec "$ROOT/guards/check.sh" files

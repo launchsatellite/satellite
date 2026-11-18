@@ -1,0 +1,14 @@
+# Content guards. Nothing matching these ever gets committed, in a file or a commit message.
+# Format   <name> => <extended regex>, matched case-insensitively against every line.
+# Write each pattern so it never matches its own line here (a bracket where the real thing has a
+# plain character). Add a rule, then run guards/test.sh.
+
+private key => -----BEGIN[A-Z ]*PRIVATE KEY-----
+OpenAI or Anthropic key => sk-(proj-|ant-|svcacct-)?[A-Za-z0-9_-]{32,}
+GitHub token => (gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,})
+AWS access key => (^|[^A-Za-z0-9])(AKIA|ASIA)[0-9A-Z]{16}([^A-Za-z0-9]|$)
+npm token => npm_[A-Za-z0-9]{36}
+Google API key => AIza[0-9A-Za-z_-]{35}
+Slack token => xox[abprs]-[A-Za-z0-9-]{10,}
+home folder path => (/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/|[C]:[\\]Users[\\][A-Za-z0-9._-]+[\\])
+AI attribution => (co-authored-by[:].*(claude|codex|copilot|cursor|chatgpt|openai|anthropic|gemini|devin|aider|windsurf|[[]bot[]])|noreply@anthropic[.]com|generated (with|by) [[]?(claude code|codex|copilot|chatgpt|gemini|devin|aider|windsurf))

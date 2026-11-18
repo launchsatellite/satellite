@@ -1,0 +1,23 @@
+# env files stay out of Git and out of agent transcripts, only the example is committed
+.env
+.env.*
+!.env.example
+.secrets/
+
+# agent scratch, what lasts goes into a spec, a doc or a skill
+/docs/
+/.superpowers/
+.claude/settings.local.json
+.claude/worktrees/
+
+# os and editors
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# keys
+*.pem
+*.key
+
+# build outputs and caches arrive with the stack

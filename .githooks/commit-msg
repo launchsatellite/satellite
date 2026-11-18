@@ -1,0 +1,11 @@
+#!/bin/sh
+# Every commit message. A conventional-commit subject, and nothing the content guards catch.
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+file=${1:?commit-msg needs the message file}
+subject=$(grep -v '^#' "$file" | grep -v '^[[:space:]]*$' | head -n 1)
+types='feat|fix|perf|refactor|docs|test|build|ci|chore|revert|style'
+if ! printf '%s\n' "$subject" | grep -Eq "^(($types)(\([a-z0-9._/,-]+\))?!?: [^ ]|Merge |Revert \")"; then
+  echo "\"$subject\" is not a conventional commit. Write it as type(scope): what changed, like fix(git): stage a renamed file." >&2
+  exit 1
+fi
+exec "$ROOT/guards/check.sh" message "$file"

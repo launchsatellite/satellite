@@ -1,0 +1,20 @@
+#!/bin/sh
+# The green checkpoint. Agents and CI run it before calling a change done. Every step runs even
+# after one fails, so one run reports everything that is wrong.
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 2
+failed=""
+run() {
+  name=$1
+  shift
+  printf '\n==> %s\n' "$name"
+  "$@" || failed="$failed $name"
+}
+
+run guards ./guards/check.sh files
+run guard-tests ./guards/test.sh
+# The stack's format check, lint, typecheck and tests arrive here with the first spec, one run line each.
+
+echo
+[ -z "$failed" ] || { echo "check: FAILED:$failed"; exit 1; }
+echo "check: all green"

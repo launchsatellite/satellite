@@ -1,0 +1,23 @@
+#!/bin/sh
+# Before every push. Nothing reaches main except through a merged pull request, and pushed work
+# is never rewritten.
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main | refs/heads/master)
+      echo "Never push to ${remote_ref#refs/heads/}. Push your branch and open a pull request." >&2
+      status=1
+      continue
+      ;;
+  esac
+  [ "$local_sha" = "$zero" ] || [ "$remote_sha" = "$zero" ] && continue
+  if ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    echo "${remote_ref#refs/heads/} has commits you have not fetched. Run git fetch, merge them, then push." >&2
+    status=1
+  elif ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+    echo "Refusing to rewrite ${remote_ref#refs/heads/}. Merge instead of rebasing pushed work." >&2
+    status=1
+  fi
+done
+exit $status

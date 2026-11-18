@@ -1,0 +1,35 @@
+name: Task
+description: One change, ready for a person or a coding agent to pick up.
+body:
+  - type: input
+    id: spec
+    attributes:
+      label: Spec
+      description: The approved spec this task belongs to, like specs/002-shell/spec.md. Leave empty for fixes, docs, CI and tooling.
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What to change and why, in one or two sentences. Point at the plan task if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Checkable statements, each proven in the real app, by a command or by a test where one is worth it.
+      value: |
+        - [ ] `./scripts/check` passes
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out of scope
+      description: What this task must not change. Anything else found along the way becomes a follow-up.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes for the agent
+      description: Files to read first, constraints, decisions already made, anything not obvious.

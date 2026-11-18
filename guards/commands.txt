@@ -1,0 +1,17 @@
+# Command guards. Every shell command an agent runs is matched against these rules first.
+# Format   <deny|ask> <extended regex> => <reason shown to the agent>
+# Matching is case-insensitive, deny rules win over ask rules, reasons are plain text without quotes.
+# Add a rule, then add a case to guards/test.sh and run it.
+
+deny git[^;&|]*[[:space:]]push[^;&|]*[[:space:]:+](main|master)([[:space:]]|$) => Never push to main. Push your branch and open a pull request.
+deny git[^;&|]*[[:space:]]push[^;&|]*[[:space:]](-[a-z]*f[a-z]*|--force[a-z-]*|--mirror|[+][^[:space:]]+)([[:space:]]|$) => Never force-push. Merge instead of rewriting pushed work.
+deny --no-verify|core[.]hookspath|git[^;&|]*[[:space:]]commit[^;&|]*[[:space:]]-[a-z]*n[a-z]*([[:space:]]|$) => Never skip or rewire the Git hooks.
+deny gh[[:space:]]+pr[[:space:]]+merge|gh[[:space:]]+pr[[:space:]]+review[^;&|]*(--approve|[[:space:]]-a([[:space:]]|$))|gh[[:space:]]+api[^;&|]*/merge => A human approves and merges every pull request.
+deny gh[[:space:]]+repo[[:space:]]+(edit|delete)|gh[[:space:]]+auth[[:space:]]+token => Repository settings and tokens belong to the maintainer.
+deny (>|(^|[[:space:];&|(])(tee|rm|mv|cp|ln|chmod|truncate)[[:space:]]|sed[[:space:]]+-[a-z]*i|git[[:space:]]+(rm|mv|checkout|restore)[[:space:]])[^;&|]*(guards/|[.]githooks/|[.]claude/settings) => Guard files belong to the maintainer. Propose the change in your report.
+deny (^|[^a-z0-9_.-])[.]env($|[^a-z0-9_.-]|[.](local|dev|development|prod|production|staging|test))|[.]secrets/ => Env files and .secrets/ stay out of agent transcripts.
+deny claude[^;&|]*(--dangerously-skip-permissions|bypasspermissions) => Never start an agent with its permissions off.
+
+ask gh[[:space:]]+(release|repo[[:space:]]+create)|(npm|pnpm|yarn)[[:space:]]+publish => Publishing is outward-facing, a human confirms it.
+ask git[^;&|]*[[:space:]](reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f|branch[[:space:]]+-D)|git[^;&|]*[[:space:]]push[^;&|]*--delete => This destroys work, a human confirms it.
+ask (^|[[:space:];&|(])rm[[:space:]]+-[a-z]*(rf|fr) => Recursive delete, a human confirms it.
