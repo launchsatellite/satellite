@@ -27,7 +27,7 @@ body:
     id: scope
     attributes:
       label: Out of scope
-      description: What this task must not change. Anything else found along the way becomes a follow-up.
+      description: What this task must not change. Anything else found along the way goes in the report to the maintainer.
   - type: textarea
     id: notes
     attributes:

@@ -33,7 +33,7 @@ A new top-level folder gets a row here in the same change.
 
 | Skill | Use when |
 | --- | --- |
-| `satellite-workflow` | starting, building or finishing any change, from spec to pull request and follow-ups |
+| `satellite-workflow` | starting, building or finishing any change, from spec to pull request and until it is merged |
 | `satellite-conventions` | writing or reviewing any code, including when a test is worth writing |
 
 Our own skills are named `satellite-<area>`, so they are easy to find. Write or fix one in the same change whenever you explain something twice or learn how an area really works. A skill is one folder with a `SKILL.md`, frontmatter `name` equal to the folder and a one-line `description` that starts with "Use when", plus a row here. Create a skill only when its area exists.
