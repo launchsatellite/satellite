@@ -26,7 +26,7 @@ For a spec, write `plan.md` next to it right before building, with tasks, exact 
 
 - Read the code you change, its callers and its history first (`git log -p -S <symbol>`).
 - Small conventional commits, `type(scope): what changed`, imperative, under about 72 characters.
-- Stay in scope. Anything else becomes a follow-up in the pull request.
+- Stay in scope. Anything else you notice goes in your report to the maintainer, never in the pull request.
 
 ## 5. Prove and simplify
 

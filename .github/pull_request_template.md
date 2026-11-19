@@ -21,7 +21,3 @@ for the person using Satellite, not the implementation.
 ## Risk and rollback
 
 <!-- What could break and how to undo it, or "None beyond reverting the merge." -->
-
-## Follow-ups
-
-<!-- Out-of-scope work you noticed, or "None." -->
