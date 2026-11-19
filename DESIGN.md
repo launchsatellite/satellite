@@ -12,7 +12,7 @@ Everything is built from one unit, the pixel. A status pixel, a tile, a mosaic b
 | --- | --- | --- |
 | Where | The site, docs, posters, cards, launch moments | The app |
 | Feel | Loud, flat fields of colour, big type | Quiet, greys carry the interface |
-| Corners | Square | 6 controls, 8 inputs and cards, 10 panels, 12 floating surfaces |
+| Corners | Square, only controls and the product window are rounded | 6 controls, 8 inputs, 10 cards, menus and toasts, 12 palette, dialogs and windows |
 | Mosaic | At the edges of heroes, cards and footers | Only in launch, first run and empty states |
 | Colour | Whole fields of ultraviolet, paper or void | Colour only means state |
 
@@ -30,11 +30,11 @@ Nothing is ever tilted, rotated or scattered. Every piece sits straight on cells
 | Ultraviolet | `#6A4BFF` | Working, focus, the one primary action |
 | Ultraviolet deep | `#4A2EE0` | Ultraviolet text on light |
 | Lilac | `#C7B9FF` | Merged, approved, secondary state |
-| Signal | `#FF5A1F` | Needs you, and nothing else |
+| Signal | `#FF5A1F` | Needs you, errors and destructive actions, nothing else |
 | Volt | `#DCFF3D` | Ready, passing checks |
-| Greys | `#161618` `#1F1F22` `#2E2E33` `#5C5C63` `#8E8E95` `#C9C9CC` | Lines, surfaces and secondary text |
+| Greys | `#0E0E10` `#161618` `#1F1F22` `#2E2E33` `#5C5C63` `#8E8E95` `#C9C9CC` | Lines, surfaces and secondary text |
 
-State colours mean the same thing everywhere. Ultraviolet is working, signal is needs you, volt is ready, lilac is done, grey is idle. Signal orange stays rare, so it always reads as "you are the blocker".
+State colours mean the same thing everywhere. Ultraviolet is working, signal is needs you, volt is ready, lilac is done, grey is idle. Signal orange stays rare, so it always reads as "you are the blocker" or "this can break something".
 
 ### App tokens
 
@@ -55,6 +55,8 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `sigfg` | `#FF5A1F` | `#C2410C` | Signal as text |
 | `add` / `addfg` | `#15122B` / `#A493FF` | `#EEEBFF` / `#4A2EE0` | Added lines |
 | `del` / `delfg` | `#2A130B` / `#FF8A5C` | `#FFEDE6` / `#C2410C` | Removed lines |
+| `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
+| `signal` | `#FF5A1F` | `#FF5A1F` | Needs you, destructive actions |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
 
 Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets a `#6B7800` inner edge so it stays visible.
@@ -92,28 +94,26 @@ The signature texture. A field of square blocks in a fixed mix of ultraviolet, p
 
 - A 4px grid. Gaps inside a control 4 to 8, between controls 8 to 12, between groups 16 to 24, between sections 32 and up.
 - Broadcast pages sit on one 12 column hairline grid. Header, section labels, content and footer share the same lines. On phones the cells stack and the lines still meet.
-- Control height is 28, small 24, large 36. Rows in lists are 28.
+- Buttons are 28, small 24, large 36. Inputs and palette rows are 32, list rows 28 to 30, bars 40.
 - Only menus, the palette, dialogs and toasts cast a shadow.
 
 ## Components
 
-BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner, block progress and readouts. Molecules are sidebar rows, tabs, segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
+BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner for network work, block progress and readouts. Molecules are sidebar rows, tabs, segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
 
-- Focus is a 2px ultraviolet ring.
+- Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
 - Selection is a grey fill. The menu hover is the one place ultraviolet fills a row.
 - Status is a square pixel, never a dot.
 - One primary action per view.
-- Avatars are generated pixel faces, so every project and person gets one without uploads.
+- Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
 
 ## App
 
-The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops. Requests Satellite prepares, like a diff comment or a failed check, are typed into Claude Code's prompt and the person presses enter.
-
-Agents open pull requests. Satellite shows them and helps review them.
+The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops.
 
 ## Motion
 
-Everything moves in steps on the pixel grid, never with easing. The launch moment is the one animation the brand owns. The mosaic field resolves into Twin, then the wordmark arrives, over 4.2 seconds. With reduced motion every animation shows its final frame.
+Broadcast moves in steps on the pixel grid, never with easing. In the app motion is functional at 120ms, and status changes step. The launch moment is the one animation the brand owns. The mosaic field resolves into Twin, then the wordmark arrives, over 4.2 seconds. With reduced motion every animation shows its final frame.
 
 ## Voice
 
