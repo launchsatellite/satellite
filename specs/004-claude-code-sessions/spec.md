@@ -14,7 +14,7 @@ The agent pane is the reason Satellite exists. It runs the user's real Claude Co
 - Each session is launched with a session id Satellite chooses and with status hooks passed for that process only. The hooks post to a listener on the loopback address, protected by a secret made at start. Nothing is written to the user's settings or the repo.
 - Status per session, working, needs you, done or stopped. A workspace shows the most urgent status of its sessions as one pixel in the sidebar.
 - After a restart each workspace offers to resume its last session.
-- Send to Claude Code. A command that types a prepared request into the selected session's prompt as plain text and never submits it. Control characters are stripped.
+- Send to Claude Code. A command that types a prepared request into the selected session's prompt as plain text and never submits it. Control characters are stripped, and the request holds at most 800 characters, the most Claude Code shows before folding a paste into a placeholder.
 - Terminal behaviour matches what Claude Code expects. Shift+Enter, image paste, dropped files as paths, links that open in the system browser after a check, colours that follow the theme, and scrollback with a limit.
 - The moments around Claude Code are drawn by Satellite. Not installed, session ended, stopped unexpectedly.
 

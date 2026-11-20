@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { holdsHiddenText, promptText, promptTextLimit } from "./prompt-text.ts";
+import { holdsHiddenText, promptText } from "./prompt-text.ts";
 
 describe("promptText", () => {
   it("never leaves a way to submit", () => {
@@ -33,13 +33,14 @@ describe("promptText", () => {
     expect(promptText(text)).toBe(text);
   });
 
-  it("cuts long text on a whole character", () => {
-    expect(promptText(`${"a".repeat(3999)}\u{1f469}`)).toBe("a".repeat(3999));
-    expect(promptText(`${"a".repeat(3997)}\u{1f469}\u{200d}\u{1f4bb}`)).toBe(
-      `${"a".repeat(3997)}\u{1f469}`,
+  it("cuts long text to what Claude Code shows before folding a paste, on a whole character", () => {
+    expect(promptText("b".repeat(800))).toBe("b".repeat(800));
+    expect(promptText("b".repeat(2400))).toBe("b".repeat(800));
+    expect(promptText(`${"a".repeat(799)}\u{1f469}`)).toBe("a".repeat(799));
+    expect(promptText(`${"a".repeat(797)}\u{1f469}\u{200d}\u{1f4bb}`)).toBe(
+      `${"a".repeat(797)}\u{1f469}`,
     );
-    expect(promptText("b".repeat(promptTextLimit * 3))).toHaveLength(promptTextLimit);
-    expect(promptText(`${"\u{7}".repeat(5000)}${"c".repeat(4000)}`)).toBe("c".repeat(4000));
+    expect(promptText(`${"\u{7}".repeat(5000)}${"c".repeat(4000)}`)).toBe("c".repeat(800));
   });
 });
 

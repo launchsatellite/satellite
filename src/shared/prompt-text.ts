@@ -1,4 +1,4 @@
-export const promptTextLimit = 4000;
+const promptTextLimit = 800;
 
 const lineBreaks = /\r\n|[\r\n\t\u{2028}\u{2029}]/gu;
 const hidden =
