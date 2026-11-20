@@ -1,3 +1,5 @@
+import { ToolReadout } from "../proving/tool-readout.tsx";
+
 export function AppWindow() {
   return (
     <div
@@ -7,8 +9,10 @@ export function AppWindow() {
       <section
         data-testid="column-projects"
         aria-label="Projects"
-        className="border-r border-line bg-side"
-      />
+        className="flex flex-col justify-end border-r border-line bg-side p-4"
+      >
+        <ToolReadout />
+      </section>
       <section
         data-testid="column-repository"
         aria-label="Repository"
