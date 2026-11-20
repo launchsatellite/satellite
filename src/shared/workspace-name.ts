@@ -13,10 +13,20 @@ const branchLimit = 255;
 const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const forbiddenInBranch = /[~^:?*[\\]|\.\.|@\{|\/\//;
 
+function reordersText(code: number): boolean {
+  return (
+    code === 0x061c ||
+    code === 0x200e ||
+    code === 0x200f ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
+}
+
 function hasControlOrSpace(name: string): boolean {
   for (let index = 0; index < name.length; index += 1) {
     const code = name.charCodeAt(index);
-    if (code <= 0x20 || code === 0x7f) return true;
+    if (code <= 0x20 || code === 0x7f || reordersText(code)) return true;
   }
   return false;
 }

@@ -78,4 +78,11 @@ describe("isStartRef", () => {
     ];
     for (const ref of refused) expect(isStartRef(ref)).toBe(false);
   });
+
+  it("refuses refs that hold a control that reorders text", () => {
+    for (const control of ["\u061c", "\u200e", "\u200f", "\u202a", "\u202e", "\u2066", "\u2069"]) {
+      expect(isStartRef(`refs/heads/main${control}x`)).toBe(false);
+    }
+    expect(isStartRef("refs/heads/caf\u00e9")).toBe(true);
+  });
 });
