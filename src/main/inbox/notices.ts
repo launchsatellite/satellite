@@ -19,6 +19,7 @@ export interface NoticesOptions {
 export interface Notices {
   update(needing: readonly Needing[]): void;
   setEnabled(on: boolean): void;
+  seen(): void;
 }
 interface Named {
   entry: Needing;
@@ -44,6 +45,10 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   const clearTimer = () => {
     clearTimeout(timer);
     timer = undefined;
+  };
+  const forgetWaiting = () => {
+    pending.clear();
+    clearTimer();
   };
   const closeShown = () => {
     shown?.notice.close();
@@ -111,9 +116,8 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     },
     setEnabled(on) {
       enabled = on;
-      if (on) return;
-      pending.clear();
-      clearTimer();
+      if (!on) forgetWaiting();
     },
+    seen: forgetWaiting,
   };
 }

@@ -89,7 +89,10 @@ async function start({
     },
     allowedOrigin(entryUrl),
   );
-  await createMainWindow(entryUrl);
+  const window = await createMainWindow(entryUrl);
+  window.on("focus", () => {
+    if (!noticesRecorded()) notices.seen();
+  });
 }
 
 function failStart(error: unknown): void {

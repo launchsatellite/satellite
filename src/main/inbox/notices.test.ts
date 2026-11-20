@@ -326,4 +326,20 @@ describe("createNotices", () => {
     expect(opened).toEqual([first]);
     expect(opened[0]?.owner.id).toBe(1);
   });
+
+  it("never announces later a need the user saw with the window in front", async () => {
+    const { state, shown, notices } = setup();
+    notices.update([need("1")]);
+    await settle(1000);
+    notices.update([need("1"), need("2")]);
+    state.front = true;
+    notices.seen();
+    await settle(1000);
+    state.front = false;
+    await settle(noticeGapMs * 2);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you"]);
+    notices.update([need("1"), need("2"), need("3")]);
+    await settle();
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w3 needs you"]);
+  });
 });
