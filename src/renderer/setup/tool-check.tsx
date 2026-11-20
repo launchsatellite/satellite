@@ -26,19 +26,11 @@ const tools: readonly { tool: CheckedTool; name: string }[] = [
   { tool: "gh", name: "GitHub CLI" },
   { tool: "claude", name: "Claude Code" },
 ];
-const missingDetail: Record<CheckedTool, string> = {
-  git: "git is not installed, or Satellite cannot find it.",
-  gh: "GitHub CLI is not installed, or Satellite cannot find it.",
-  claude: "Claude Code is not installed, or Satellite cannot find it.",
-};
-const brokenDetail: Record<CheckedTool, string> = {
-  git: "git is installed, but Satellite couldn't run it.",
-  gh: "GitHub CLI is installed, but Satellite couldn't run it.",
-  claude: "Claude Code is installed, but Satellite couldn't run it.",
-};
+const missingDetail = "Not installed, or Satellite can't find it.";
+const brokenDetail = "Installed, but Satellite couldn't run it.";
 const signedOutDetail = {
-  none: "GitHub CLI is not signed in.",
-  failed: "GitHub CLI couldn't confirm its sign-in. Check the connection, or sign in again.",
+  none: "Not signed in.",
+  failed: "Couldn't confirm its sign-in. Check the connection, or sign in again.",
 };
 const leads = {
   command: "Run this in a terminal, then check again.",
@@ -46,10 +38,10 @@ const leads = {
   diagnose: "Run this in a terminal to see why.",
 };
 
-function installRow(tool: CheckedTool, fix: InstallFix): Row {
+function installRow(fix: InstallFix): Row {
   return {
     ready: false,
-    detail: missingDetail[tool],
+    detail: missingDetail,
     fix: { lead: leads[fix.kind], text: fix.text },
   };
 }
@@ -57,11 +49,11 @@ function installRow(tool: CheckedTool, fix: InstallFix): Row {
 function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
   switch (state.state) {
     case "missing":
-      return installRow(tool, state.fix);
+      return installRow(state.fix);
     case "broken":
       return {
         ready: false,
-        detail: brokenDetail[tool],
+        detail: brokenDetail,
         fix: { lead: leads.diagnose, text: `${tool} --version` },
       };
     case "signed-out":
@@ -73,7 +65,7 @@ function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
     case "token-refused":
       return {
         ready: false,
-        detail: `GitHub CLI refused the token in ${state.variable}. Replace it, or remove it from your environment, then check again.`,
+        detail: `Refused the token in ${state.variable}. Replace it, or remove it from your environment, then check again.`,
       };
     case "ready":
       if (!("account" in state)) return { ready: true, detail: `${state.version} found` };
@@ -116,13 +108,17 @@ function CheckRow({
         {failing && row.fix !== undefined && (
           <>
             <p className="text-[12.5px] text-fg2">{row.fix.lead}</p>
-            <code className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-all text-fg select-all">
+            <code className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all">
               {row.fix.text}
             </code>
           </>
         )}
       </div>
-      {row?.ready === true && <span className="font-pixel text-[13px] text-dim uppercase">✓</span>}
+      {row?.ready === true && (
+        <span aria-hidden className="font-pixel text-[13px] text-dim uppercase">
+          ✓
+        </span>
+      )}
     </div>
   );
 }
@@ -153,10 +149,10 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
   ).length;
   return (
     <div className="h-full overflow-y-auto p-6">
-      <div className="flex min-h-full items-center justify-center">
+      <div className="@container flex min-h-full items-center justify-center">
         <div
           data-testid="tool-check"
-          className="flex w-[min(500px,100%)] flex-col gap-[18px] rounded-[12px] border border-line bg-bg px-[34px] pt-[34px] pb-[30px]"
+          className="flex w-[min(500px,100%)] flex-col gap-[18px] rounded-[12px] border border-line bg-bg px-5 pt-6 pb-5 @min-[440px]:px-[34px] @min-[440px]:pt-[34px] @min-[440px]:pb-[30px]"
         >
           <h2
             ref={heading}
@@ -189,37 +185,42 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
               ))
             )}
           </div>
-          <div className="flex items-center gap-[10px]">
-            <span data-testid={settled ? "check-count" : undefined} className="mr-auto">
+          <div className="flex flex-wrap items-center gap-[10px]">
+            <span
+              data-testid={settled ? "check-count" : undefined}
+              className="mr-auto whitespace-nowrap"
+            >
               <span aria-hidden className="font-pixel text-[13px] text-dim uppercase">
                 {`0${String(readyCount)} / 03`}
               </span>
               <span className="sr-only">{`${String(readyCount)} of 3 tools ready`}</span>
             </span>
-            <Button
-              variant="ghost"
-              icon="refresh"
-              onClick={checkAgain}
-              disabled={!settled}
-              testId="check-again"
-            >
-              Check again
-            </Button>
-            {firstRun ? (
-              <CommandButton command="project.add" testId="add-first-project">
-                Add your first project
-              </CommandButton>
-            ) : (
+            <span className="ml-auto flex flex-wrap items-center justify-end gap-[10px]">
               <Button
                 variant="ghost"
-                onClick={() => {
-                  onClose?.();
-                }}
-                testId="close-check"
+                icon="refresh"
+                onClick={checkAgain}
+                disabled={!settled}
+                testId="check-again"
               >
-                Close
+                Check again
               </Button>
-            )}
+              {firstRun ? (
+                <CommandButton command="project.add" testId="add-first-project">
+                  Add your first project
+                </CommandButton>
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    onClose?.();
+                  }}
+                  testId="close-check"
+                >
+                  Close
+                </Button>
+              )}
+            </span>
           </div>
         </div>
       </div>

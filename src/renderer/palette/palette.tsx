@@ -12,6 +12,7 @@ import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
+import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { rankMatches } from "./fuzzy-match.ts";
 
@@ -21,6 +22,7 @@ export interface SwitcherItem {
   ref: WorkspaceRef;
   label: string;
   project: string;
+  parent?: string;
 }
 
 interface PaletteProps {
@@ -74,13 +76,17 @@ function switcherOptions(
   switcher: readonly SwitcherItem[],
   onOpenWorkspace: (ref: WorkspaceRef) => void,
 ): PaletteOption[] {
-  const ranked = rankMatches(query, switcher, (item) => `${item.label} ${item.project}`);
+  const ranked = rankMatches(
+    query,
+    switcher,
+    (item) => `${item.label} ${item.project} ${item.parent ?? ""}`,
+  );
   return withUniqueTestIds(
     ranked.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
       testId: `switch-${item.project}-${item.ref.workspace}`,
       title: item.label,
-      detail: item.project,
+      detail: item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       pixel: true,
       run: () => {
         onOpenWorkspace(item.ref);
@@ -235,16 +241,14 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
                     runOption(option);
                   }}
                 >
-                  {option.pixel === true && (
-                    <span className="size-[6px] flex-none rounded-[2px] bg-dim" />
-                  )}
+                  {option.pixel === true && <StatusPixel state="idle" size={6} />}
                   <span
                     className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
                   >
                     {option.title}
                   </span>
                   {option.detail !== undefined && (
-                    <span className="ml-auto max-w-[45%] flex-none truncate font-pixel text-[12px] text-dim uppercase">
+                    <span className="ml-auto max-w-[45%] flex-none truncate text-[12px] text-dim">
                       {option.detail}
                     </span>
                   )}

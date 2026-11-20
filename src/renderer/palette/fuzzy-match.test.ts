@@ -20,8 +20,8 @@ describe("fuzzyScore", () => {
 
 describe("rankMatches", () => {
   it("ranks consecutive word-start matches first", () => {
-    expect(rankMatches("rem", ["Use the dark theme", "Remove project"], identity)[0]).toBe(
-      "Remove project",
+    expect(rankMatches("rem", ["Use the dark theme", "Remove this project"], identity)[0]).toBe(
+      "Remove this project",
     );
   });
 

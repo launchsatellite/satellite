@@ -15,13 +15,17 @@ export function WorkspaceHeader({
       data-testid="workspace-header"
       className="flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
-      <h1 className="min-w-0 truncate text-[14px] font-semibold">{project.name}</h1>
-      <span className="flex-none text-dim">
-        <Icon name="branch" size={13} />
-      </span>
-      <span className="truncate font-mono text-[12px] text-dim">
-        {workspaceLabel(project, workspace)}
-      </span>
+      <h1 className="max-w-[60%] flex-none truncate text-[14px] font-semibold">{project.name}</h1>
+      {project.missing === null && (
+        <>
+          <span className="flex-none text-dim">
+            <Icon name="branch" size={13} />
+          </span>
+          <span className="min-w-0 truncate font-mono text-[12px] text-dim">
+            {workspaceLabel(project, workspace)}
+          </span>
+        </>
+      )}
       <span className="ml-auto flex-none">
         <CommandButton
           command="project.remove"

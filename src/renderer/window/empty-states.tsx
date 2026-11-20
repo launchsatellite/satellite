@@ -37,15 +37,19 @@ export function NothingSelected() {
 
 export function FolderMissing({
   name,
+  parent,
   missing,
 }: {
   name: string;
+  parent: string;
   missing: NonNullable<ProjectView["missing"]>;
 }) {
   return missing === "folder" ? (
     <Centred testId="folder-missing" title={`${name} isn't where it was`}>
       <p className="mt-1 text-[13px] text-fg2">
-        Put the folder back and Satellite finds it again, or remove the project.
+        {parent === ""
+          ? "Put the folder back and Satellite finds it again, or remove the project."
+          : `Put it back in ${parent} and Satellite finds it again, or remove the project.`}
       </p>
     </Centred>
   ) : (
