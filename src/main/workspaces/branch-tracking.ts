@@ -7,10 +7,29 @@ interface Tracking {
 
 const countCap = 1_000_000;
 const branchesPerRead = 21;
+const countShape = /^\d+\n?$/;
 const trackShape = /^(?:ahead (\d+)(?:, behind (\d+))?|behind (\d+))$/;
 
 function capped(digits: string | undefined): number {
   return digits === undefined ? 0 : Math.min(Number(digits), countCap);
+}
+
+export function parseCount(stdout: string): number | null {
+  return countShape.test(stdout) ? capped(stdout.trim()) : null;
+}
+
+export async function hasRemote(root: string): Promise<boolean | undefined> {
+  const run = await runGit(root, ["remote"], gitReadMs);
+  return run?.exitCode === 0 ? run.stdout.trim() !== "" : undefined;
+}
+
+export async function countUnpushed(root: string, branch: string): Promise<number | null> {
+  const run = await runGit(
+    root,
+    ["rev-list", "--count", `refs/heads/${branch}`, "--not", "--remotes", "--"],
+    gitReadMs,
+  );
+  return run?.exitCode === 0 ? parseCount(run.stdout) : null;
 }
 
 export function parseTrack(track: string): Tracking | null {

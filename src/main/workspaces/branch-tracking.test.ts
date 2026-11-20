@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseTrack, readTracking } from "./branch-tracking.ts";
+import { parseCount, parseTrack, readTracking } from "./branch-tracking.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -29,6 +29,18 @@ function gitEnvironment(config: string): Record<string, string> {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("parseCount", () => {
+  it("reads the count rev-list prints and nothing else", () => {
+    expect(parseCount("0\n")).toBe(0);
+    expect(parseCount("2\n")).toBe(2);
+    expect(parseCount("2")).toBe(2);
+    expect(parseCount(`${"9".repeat(400)}\n`)).toBe(1_000_000);
+    for (const unreadable of ["", "\n", "-1\n", "1.5\n", "two\n", "2\n3\n", " 2\n"]) {
+      expect(parseCount(unreadable)).toBeNull();
+    }
+  });
 });
 
 describe("parseTrack", () => {

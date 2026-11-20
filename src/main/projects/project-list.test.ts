@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -13,7 +13,14 @@ import type { StoredWorkspace } from "./projects-file.ts";
 const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
 const hung = vi.hoisted(() => {
   const release: (() => void)[] = [];
-  return { path: "", paths: new Set<string>(), calls: 0, writes: false, release };
+  return {
+    path: "",
+    paths: new Set<string>(),
+    calls: 0,
+    writes: false,
+    failWrites: false,
+    release,
+  };
 });
 const timers = vi.hoisted(() => ({ instant: true, real: false }));
 const git = vi.hoisted(() => ({ runs: 0, abandon: false, exits: false, olderThanNul: false }));
@@ -35,6 +42,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     },
     open: (...args: Parameters<typeof actual.open>) => {
       if (hung.writes && args[1] === "wx") return new Promise<never>(() => undefined);
+      if (hung.failWrites && args[1] === "wx") {
+        return Promise.reject(new Error("the disk refused the write"));
+      }
       return actual.open(...args);
     },
   };
@@ -107,7 +117,7 @@ function gitEnvironment(config: string): Record<string, string> {
   return { ...Object.fromEntries(kept), GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: "1" };
 }
 
-async function repoWithWorkspace() {
+async function repoWithWorkspace(options: { cloned?: boolean } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-project-workspaces-")));
   const config = join(base, "gitconfig");
   await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
@@ -117,12 +127,14 @@ async function repoWithWorkspace() {
   const home = join(base, "home");
   const gitIn = (folder: string, args: string[]) =>
     run("git", ["-C", folder, ...args], { env: gitEnvironment(config) });
-  await mkdir(repo);
+  const first = options.cloned === true ? join(base, "upstream") : repo;
+  await mkdir(first);
   await mkdir(home);
-  await gitIn(repo, ["init", "-q", "-b", "main"]);
-  await writeFile(join(repo, "a"), "a\n");
-  await gitIn(repo, ["add", "a"]);
-  await gitIn(repo, ["commit", "-q", "-m", "one"]);
+  await gitIn(first, ["init", "-q", "-b", "main"]);
+  await writeFile(join(first, "a"), "a\n");
+  await gitIn(first, ["add", "a"]);
+  await gitIn(first, ["commit", "-q", "-m", "one"]);
+  if (options.cloned === true) await gitIn(base, ["clone", "-q", first, repo]);
   await gitIn(repo, ["branch", "--no-track", "fix-login", "HEAD"]);
   const folder = join(home, "worktrees", "repo", "fix-login");
   await gitIn(repo, ["worktree", "add", "-q", folder, "fix-login"]);
@@ -140,7 +152,7 @@ async function repoWithWorkspace() {
     }),
   );
   timers.real = true;
-  return { home, repo, gitIn, workspace, projects: projectsIn(home) };
+  return { base, home, repo, gitIn, workspace, projects: projectsIn(home) };
 }
 
 const storedFile = z.object({
@@ -362,6 +374,61 @@ describe("createProjects", () => {
       await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
     ).toEqual({ forgotWorkspaces: 1 });
     expect(await storedWorkspaceIds(home)).toEqual([]);
+  });
+
+  it("counts commits on no remote as ahead when a branch has no upstream", async () => {
+    const { gitIn, workspace, projects } = await repoWithWorkspace({ cloned: true });
+    await gitIn(workspace.path, ["commit", "-q", "--allow-empty", "-m", "two"]);
+    await gitIn(workspace.path, ["commit", "-q", "--allow-empty", "-m", "three"]);
+    const answer = await projects.handlers["projects.list"]({}, owner);
+    expect(answer.projects[0]?.workspaces.map(({ ahead, behind }) => [ahead, behind])).toEqual([
+      [0, 0],
+      [2, null],
+    ]);
+  });
+
+  it("keeps a workspace git leaves out while its folder is still there", async () => {
+    const { home, repo, workspace, projects } = await repoWithWorkspace();
+    await rm(join(repo, ".git", "worktrees", "fix-login"), { recursive: true, force: true });
+    const answer = await projects.handlers["projects.list"]({}, owner);
+    expect(answer.dropped).toEqual([]);
+    expect(answer.projects[0]?.workspaces[1]).toMatchObject({ key: workspace.id, branch: null });
+    expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
+  });
+
+  it("keeps a workspace whose stored path differs from git's by a link or by case", async () => {
+    const { base, home, workspace } = await repoWithWorkspace();
+    await symlink(join(home, "worktrees"), join(base, "linked"));
+    const spellings = [
+      join(base, "linked", "repo", "fix-login"),
+      workspace.path.replace("fix-login", "FIX-LOGIN"),
+    ];
+    const stored = join(home, "projects.json");
+    const original = await readFile(stored, "utf8");
+    for (const path of spellings) {
+      await writeFile(
+        stored,
+        original.replace(JSON.stringify(workspace.path), JSON.stringify(path)),
+      );
+      expect(await readFile(stored, "utf8")).toContain(JSON.stringify(path));
+      const answer = await projectsIn(home).handlers["projects.list"]({}, owner);
+      expect(answer.dropped).toEqual([]);
+      expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
+    }
+  });
+
+  it("shows a dropped workspace again when its record could not be forgotten", async () => {
+    const { home, workspace, projects } = await repoWithWorkspace();
+    await rm(workspace.path, { recursive: true, force: true });
+    hung.failWrites = true;
+    try {
+      const answer = await projects.handlers["projects.list"]({}, owner);
+      expect(answer.dropped).toEqual([]);
+      expect(answer.projects[0]?.workspaces[1]).toMatchObject({ key: workspace.id, branch: null });
+    } finally {
+      hung.failWrites = false;
+    }
+    expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
   });
 
   it("never drops a workspace when git is too old to separate paths safely", async () => {

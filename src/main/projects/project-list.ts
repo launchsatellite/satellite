@@ -198,8 +198,8 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         ),
       workspaceSaveFailure,
     );
-  const forget = async (drops: readonly Drop[]): Promise<string[]> => {
-    if (drops.length === 0) return [];
+  const forget = async (drops: readonly Drop[]): Promise<Drop[]> => {
+    if (drops.length === 0 || !(await file.load()).writable) return [];
     let forgotten: Drop[] = [];
     try {
       await replace((latest) => {
@@ -218,12 +218,19 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
     } catch {
       return [];
     }
-    return forgotten.slice(0, droppedLimit).map((drop) => drop.sentence);
+    return forgotten;
   };
   const listAll = async (list: readonly StoredProject[]) => {
     const answers = await inBatches(list, projectReads, projectAnswer);
-    const dropped = await forget(answers.flatMap((answer) => answer.drops));
-    return { projects: answers.map((answer) => answer.view), dropped };
+    const forgotten = await forget(answers.flatMap((answer) => answer.drops));
+    const ids = new Set(forgotten.map((drop) => drop.workspaceId));
+    return {
+      projects: answers.map(({ view }) => ({
+        ...view,
+        workspaces: view.workspaces.filter((workspace) => !ids.has(workspace.key)),
+      })),
+      dropped: forgotten.slice(0, droppedLimit).map((drop) => drop.sentence),
+    };
   };
   const refuseWhileCreating = (project: StoredProject) => {
     if (!creating.has(project.id)) return;
@@ -331,6 +338,12 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           const project = latest.find((candidate) => candidate.id === projectId);
           if (project !== undefined) {
             refuseWhileCreating(project);
+            if (project.workspaces.length > count) {
+              throw new BridgeFailure(
+                "refused",
+                stillHas(projectName(project.path), project.workspaces.length),
+              );
+            }
             forgotWorkspaces = project.workspaces.length;
           }
           return latest.filter((candidate) => candidate.id !== projectId);

@@ -3,9 +3,10 @@ import { basename, dirname } from "node:path";
 import type { WorkspaceKey, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { samePath } from "../platform/paths.ts";
+import { isBranchName } from "../../shared/workspace-name.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { Slot } from "../projects/slots.ts";
-import { readTracking } from "./branch-tracking.ts";
+import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
@@ -14,11 +15,13 @@ export interface Drop {
   workspaceId: string;
   sentence: string;
 }
-interface KeptRecord {
+interface RecordRead {
   record: StoredWorkspace;
   branch: string | null;
   listed: boolean;
 }
+type Tracking = Awaited<ReturnType<typeof readTracking>>;
+type Status = Awaited<ReturnType<typeof readStatus>>;
 
 const branchLimit = 255;
 const sentenceLimit = 300;
@@ -88,18 +91,37 @@ function view(
   key: WorkspaceKey,
   name: string | null,
   branch: string | null,
-  tracking: Awaited<ReturnType<typeof readTracking>> | undefined,
-  status: Awaited<ReturnType<typeof readStatus>>,
+  tracking: Tracking | undefined,
+  unpushed: ReadonlyMap<string, number | null>,
+  status: Status,
 ): WorkspaceView {
   const track = branch === null ? undefined : tracking?.get(branch);
+  const ahead = track === null && branch !== null ? (unpushed.get(branch) ?? null) : null;
   return {
     key,
     name,
     branch,
-    ahead: track?.ahead ?? null,
+    ahead: track?.ahead ?? ahead,
     behind: track?.behind ?? null,
     changed: status === undefined ? null : Math.min(status.entries.length, changedCap),
   };
+}
+
+async function readUnpushed(
+  root: string,
+  branches: readonly string[],
+  inStatusSlot: Slot,
+): Promise<Map<string, number | null>> {
+  if (branches.length === 0) return new Map();
+  if ((await inStatusSlot(() => whenGitRuns(hasRemote(root)))) !== true) return new Map();
+  const counts = await Promise.all(
+    branches.map((branch) =>
+      inStatusSlot(() => whenGitRuns(countUnpushed(root, branch))).then(
+        (count): [string, number | null] => [branch, count ?? null],
+      ),
+    ),
+  );
+  return new Map(counts);
 }
 
 export function blankWorkspace(key: WorkspaceKey, name: string | null): WorkspaceView {
@@ -117,21 +139,21 @@ export async function readWorkspaces(
     listed === undefined
       ? await currentBranch(project.path)
       : shortBranch(listed.worktrees[0]?.branch);
-  const kept: KeptRecord[] = [];
+  const reads: RecordRead[] = [];
   const drops: Drop[] = [];
   for (const record of project.workspaces) {
     const worktree = listed?.worktrees.find((listedTree) => samePath(listedTree.path, record.path));
     if (worktree !== undefined && !worktree.prunable) {
-      kept.push({ record, branch: shortBranch(worktree.branch), listed: true });
+      reads.push({ record, branch: shortBranch(worktree.branch), listed: true });
       continue;
     }
+    reads.push({ record, branch: null, listed: false });
     if (
       listed === undefined ||
       listed.separator === "\n" ||
       busy.has(record.id) ||
-      (worktree !== undefined && !(await folderDeleted(record.path)))
+      !(await folderDeleted(record.path))
     ) {
-      kept.push({ record, branch: null, listed: false });
       continue;
     }
     drops.push({
@@ -141,7 +163,7 @@ export async function readWorkspaces(
       ),
     });
   }
-  const live = kept.filter((entry) => entry.listed);
+  const live = reads.filter((entry) => entry.listed);
   const branches = [mainBranch, ...live.map((entry) => entry.branch)].filter(
     (branch) => branch !== null,
   );
@@ -153,13 +175,17 @@ export async function readWorkspaces(
       ),
     ),
   ]);
+  const withoutUpstream = branches.filter(
+    (branch) => isBranchName(branch) && tracking?.get(branch) === null,
+  );
+  const unpushed = await readUnpushed(project.path, withoutUpstream, inStatusSlot);
   const statusOf = new Map(live.map((entry, index) => [entry.record.id, statuses[index]]));
   return {
     workspaces: [
-      view("main", null, mainBranch, tracking, mainStatus),
-      ...kept.map(({ record, branch, listed: isListed }) =>
+      view("main", null, mainBranch, tracking, unpushed, mainStatus),
+      ...reads.map(({ record, branch, listed: isListed }) =>
         isListed
-          ? view(record.id, record.name, branch, tracking, statusOf.get(record.id))
+          ? view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id))
           : blankWorkspace(record.id, record.name),
       ),
     ],
