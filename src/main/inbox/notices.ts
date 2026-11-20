@@ -82,13 +82,13 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     const [first, ...rest] = named;
     const target = named.at(-1);
     if (first === undefined || target === undefined) return false;
+    const keys = named.map(({ entry }) => placeKey(entry.workspace));
     closeShown();
     const notice = show(noticeText([first.subject, ...rest.map(({ subject }) => subject)]), () => {
-      open(target.entry);
+      const asking = keys.findLast((key) => needing.has(key));
+      open((asking === undefined ? undefined : needing.get(asking)) ?? target.entry);
     });
-    if (notice !== undefined) {
-      shown = { notice, keys: named.map(({ entry }) => placeKey(entry.workspace)) };
-    }
+    if (notice !== undefined) shown = { notice, keys };
     return true;
   };
   const flush = () => {

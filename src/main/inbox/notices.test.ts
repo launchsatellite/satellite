@@ -184,6 +184,23 @@ describe("createNotices", () => {
     expect(opened).toEqual([asking]);
   });
 
+  it("opens the newest workspace a gathered notification named that still needs you", async () => {
+    const { shown, opened, notices } = setup();
+    notices.update([need("1")]);
+    await settle();
+    notices.update([need("1"), need("2"), need("3")]);
+    await settle(noticeGapMs);
+    expect(shown[1]?.text.title).toBe("2 workspaces need you");
+    notices.update([need("1"), need("2")]);
+    shown[1]?.click();
+    notices.update([need("1"), need("2"), need("3", 4)]);
+    shown[1]?.click();
+    expect(opened.map(({ workspace, owner }) => [nameOf(workspace), owner.id])).toEqual([
+      ["2", 1],
+      ["3", 4],
+    ]);
+  });
+
   it("never announces a need that began while notifications were off", async () => {
     const { shown, notices } = setup();
     notices.setEnabled(false);
