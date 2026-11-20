@@ -47,6 +47,8 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `choose-folder=<target>` | sets what the next folder dialog answers. `repo` is the working repo, `cancel` cancels, anything else is `folders/<target>` in the temp folder, such as `alpha`, `alpha/src` or a folder that does not exist | |
 | `restart` | closes the app and launches it again on the same home, repo and log, so saved state can be read back | |
 
+The driver emulates `prefers-reduced-motion: reduce` from launch, so transitions are off and a screenshot never catches one halfway. Wait for a settled state with `wait-for` rather than a fixed `wait`, as `check-count` appears only once the first run check has answered.
+
 `consoleErrors` holds console errors, uncaught errors and unhandled rejections from the first render on, because the driver attaches before the page runs or, when the page already ran, the protocol replays what it buffered.
 
 `wait` gets its own length plus 15 seconds, and `wait-for` and `restart` get 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
@@ -111,7 +113,9 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 
 | Feature | Scenario | Journey |
 | --- | --- | --- |
-| 001 Foundation, the window and the tool readout | `default` | `launch` |
+| 001 Foundation, the three columns | `default` | `launch` |
+| 002 Shell and projects, the first run check with every tool ready | `default` | `launch` |
+| 002 Shell and projects, the first run check with Claude Code missing or gh signed out | `claude-missing`, `not-signed-in` | |
 | 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
 | 001 Foundation, the security boundary | `default` | `boundary` |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |

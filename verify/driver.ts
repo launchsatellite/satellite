@@ -356,7 +356,7 @@ async function startApp(
   running.browser = browser;
   for (const context of browser.contexts()) recordErrors(context, consoleErrors);
   const page = await findAppPage(browser, origin);
-  await page.emulateMedia({ colorScheme: null });
+  await page.emulateMedia({ colorScheme: null, reducedMotion: "reduce" });
   running.page = page;
   await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
   return page;
