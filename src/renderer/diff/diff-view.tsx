@@ -33,6 +33,7 @@ export function DiffView({
       renderOverviewRuler: false,
       overviewRulerLanes: 0,
       overviewRulerBorder: false,
+      scrollbar: { useShadows: false },
       fontFamily: '"Geist Mono Variable", monospace',
       fontSize: 13,
     });

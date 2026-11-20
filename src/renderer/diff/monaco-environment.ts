@@ -2,10 +2,16 @@ import { editor } from "monaco-editor/editor/editor.api";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
 
 const lowAlpha = "33";
+const sixDigitHex = /^#[0-9a-f]{6}$/;
 
 function hexToken(styles: CSSStyleDeclaration, paint: CanvasRenderingContext2D, name: string) {
-  paint.fillStyle = styles.getPropertyValue(`--${name}`).trim();
-  return paint.fillStyle;
+  const value = styles.getPropertyValue(`--${name}`).trim();
+  if (value === "") throw new Error(`The theme token --${name} is missing`);
+  paint.fillStyle = "#000000";
+  paint.fillStyle = value;
+  const hex = paint.fillStyle;
+  if (!sixDigitHex.test(hex)) throw new Error(`The theme token --${name} is not an opaque colour`);
+  return hex;
 }
 
 export function applyMonacoTheme(): void {
