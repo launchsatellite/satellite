@@ -129,7 +129,7 @@ const cells = statuses.flatMap((current) =>
 
 function run(start: SessionStatus, events: readonly SessionEvent[]): SessionStatus[] {
   const seen: SessionStatus[] = [];
-  let state: SessionState = { status: start, asker: mainThread };
+  let state: SessionState = { status: start, askers: [] };
   for (const event of events) {
     state = nextState(state, event);
     seen.push(state.status);
@@ -141,7 +141,7 @@ describe("nextState", () => {
   it.each(cells)(
     "moves through every status from every status, $current on $column $event",
     ({ current, event, expected }) => {
-      expect(nextState({ status: current, asker: mainThread }, event).status).toBe(expected);
+      expect(nextState({ status: current, askers: [] }, event).status).toBe(expected);
     },
   );
 
@@ -187,6 +187,29 @@ describe("nextState", () => {
       "needs-you",
       "working",
     ]);
+  });
+
+  it("keeps needs you until every agent that asked at once is answered", () => {
+    expect(
+      run("working", [
+        asked("agent-1"),
+        asked("agent-2"),
+        toolDone("agent-2"),
+        toolDone("agent-1"),
+      ]),
+    ).toEqual(["needs-you", "needs-you", "needs-you", "working"]);
+    expect(
+      run("working", [asked("agent-1"), asked(null), toolDone("agent-3"), toolDone("agent-1")]),
+    ).toEqual(["needs-you", "needs-you", "needs-you", "working"]);
+  });
+
+  it("remembers a bounded number of agents that ask", () => {
+    let state: SessionState = { status: "working", askers: [] };
+    for (let index = 0; index < 100; index += 1) {
+      state = nextState(state, asked(`agent-${String(index)}`));
+    }
+    expect(state.askers.length).toBeLessThanOrEqual(16);
+    expect(nextState(state, { name: "Stop" })).toEqual({ status: "done", askers: [] });
   });
 
   it("lets any finished tool end an ask that could not say who asked", () => {

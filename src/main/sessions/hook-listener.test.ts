@@ -235,10 +235,19 @@ describe("startHookListener", () => {
     ]);
   });
 
+  it("knows which agent finished a tool that wrote a large file", async () => {
+    const answer = await send({
+      path: `/hook/${launchId}/PostToolUse`,
+      body: JSON.stringify({ agent_id: "agent-1", tool_response: "x".repeat(512 * 1024) }),
+    });
+    expect(answer.status).toBe(204);
+    expect(events).toEqual([{ launchId, event: { name: "PostToolUse", agent: "agent-1" } }]);
+  });
+
   it("takes a tool event too large to read without knowing its agent", async () => {
     const answer = await send({
       path: `/hook/${launchId}/PostToolUse`,
-      body: JSON.stringify({ agent_id: "agent-1", tool_response: "x".repeat(1024 * 1024) }),
+      body: JSON.stringify({ agent_id: "agent-1", tool_response: "x".repeat(2 * 1024 * 1024) }),
     });
     expect(answer.status).toBe(204);
     expect(events).toEqual([{ launchId, event: { name: "PostToolUse", agent: null } }]);

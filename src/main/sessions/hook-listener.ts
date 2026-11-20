@@ -21,7 +21,8 @@ type HookBody = z.output<typeof hookBody>;
 
 const loopback = "127.0.0.1";
 const secretBytes = 32;
-const bodyLimit = 65536;
+const statusBodyLimit = 65536;
+const agentBodyLimit = 1_048_576;
 const eventsPerWindow = 100;
 const rateWindowMs = 1000;
 const hookPath =
@@ -75,16 +76,21 @@ function withinRate(launch: OpenLaunch, now: number): boolean {
   return launch.events <= eventsPerWindow;
 }
 
-function readBody(request: IncomingMessage, keep: boolean): Promise<BodyRead> {
+function bodyLimitOf(name: HookEventName): number {
+  if (statusEvents.has(name)) return statusBodyLimit;
+  return agentEvents.has(name) ? agentBodyLimit : 0;
+}
+
+function readBody(request: IncomingMessage, limit: number): Promise<BodyRead> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
     request.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (keep && size <= bodyLimit) chunks.push(chunk);
+      if (size <= limit) chunks.push(chunk);
     });
     request.once("end", () => {
-      if (size > bodyLimit && keep) resolve({ kind: "too-large" });
+      if (size > limit && limit > 0) resolve({ kind: "too-large" });
       else resolve({ kind: "body", text: Buffer.concat(chunks).toString("utf8") });
     });
     request.once("close", () => {
@@ -144,8 +150,9 @@ export async function startHookListener(
     if (!secretMatches(launch, authorization) || launch === undefined) return 401;
     if (!isJson(onlyValue(request, "content-type"))) return 415;
     if (!withinRate(launch, Date.now())) return 429;
-    const keep = statusEvents.has(name) || agentEvents.has(name);
-    const read = await readBody(request, keep);
+    const limit = bodyLimitOf(name);
+    const keep = limit > 0;
+    const read = await readBody(request, limit);
     if (read.kind === "failed") return undefined;
     if (read.kind === "too-large" && statusEvents.has(name)) return 413;
     const body = read.kind === "body" && keep ? parseBody(read.text) : undefined;
