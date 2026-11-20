@@ -1,5 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { defaultInterfaceState } from "../shared/bridge-contract.ts";
+import { invoke } from "./bridge/bridge-client.ts";
 import "./styles/app.css";
 import { AppWindow } from "./window/app-window.tsx";
 
@@ -11,13 +13,19 @@ const fontFamilies = [
   "Satellite Terminal Mono",
 ];
 
-await Promise.all(fontFamilies.map((family) => document.fonts.load(`13px "${family}"`, " \u2588")));
+const [, loaded] = await Promise.all([
+  Promise.all(fontFamilies.map((family) => document.fonts.load(`13px "${family}"`, " \u2588"))),
+  invoke("interface.load", {}),
+]);
 
 const rootElement = document.getElementById("root");
 if (rootElement === null) throw new Error("The root element is missing from index.html");
 
 createRoot(rootElement).render(
   <StrictMode>
-    <AppWindow />
+    <AppWindow
+      initial={loaded.ok ? loaded.value.state : defaultInterfaceState}
+      notice={loaded.ok ? loaded.value.notice : loaded.error.message}
+    />
   </StrictMode>,
 );

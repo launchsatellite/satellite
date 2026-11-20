@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
 import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -8,8 +8,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { endWindowsTree } from "../src/main/platform/process-tree.ts";
-import { buildRepo, withoutGitVariables } from "./repo-recipe.ts";
-import { loadScenario, type RepoStep } from "./scenario.ts";
+import { buildRepo, withoutGitVariables, writeInside } from "./repo-recipe.ts";
+import { loadScenario, type Scenario } from "./scenario.ts";
 import { readStandInEvents, type StandInEvent } from "./stand-ins/stand-in-log.ts";
 
 export type AppTarget =
@@ -25,17 +25,35 @@ export interface CloseResult {
   leftover?: string;
 }
 export interface AppSession {
-  page: Page;
+  readonly page: Page;
   home: string;
   repo: string;
+  gitEnv: Record<string, string>;
+  folder(name: string): string;
+  answerFolderDialog(path: string | undefined): Promise<void>;
+  dropFolder(path: string): Promise<void>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
+  relaunch(): Promise<void>;
   close(): Promise<CloseResult>;
 }
 export interface WindowTree {
   aria: string;
   testIds: { testId: string; visible: boolean; text: string }[];
+}
+interface RunningApp {
+  child?: ChildProcess;
+  browser?: Browser;
+  page?: Page;
+  output: string;
+}
+interface AppPaths {
+  home: string;
+  repo: string;
+  log: string;
+  dialog: string;
+  missingClaude: string | undefined;
 }
 interface AppCommand {
   file: string;
@@ -67,6 +85,7 @@ const stopSignals: NodeJS.Signals[] =
     ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
     : ["SIGINT", "SIGTERM", "SIGHUP"];
 const cleanups = new Set<() => Promise<unknown>>();
+const startedApps = new Set<ChildProcess>();
 let signalHandlersInstalled = false;
 let stopping = false;
 
@@ -76,6 +95,7 @@ const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 let lockHeld = false;
 
 export const outputDir = outputFolder;
+export const folderTarget = /^[a-z0-9-]+(?:\/[a-z0-9.-]+)*$/;
 
 async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
   if (stopping) return;
@@ -84,9 +104,27 @@ async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
   process.exit(128 + constants.signals[signal]);
 }
 
+function killStartedAppsNow(): void {
+  for (const child of startedApps) {
+    const pid = child.pid;
+    if (pid === undefined || hasExited(child)) continue;
+    if (process.platform === "win32") {
+      const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
+      spawnSync(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true });
+      continue;
+    }
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
+  }
+}
+
 function stopOnSignals(): void {
   if (signalHandlersInstalled) return;
   signalHandlersInstalled = true;
+  process.on("exit", killStartedAppsNow);
   for (const signal of stopSignals) {
     process.on(signal, () => {
       void stopForSignal(signal);
@@ -161,18 +199,20 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  home: string,
-  log: string,
+  { home, log, dialog, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
   );
   if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
   env["SATELLITE_HOME"] = home;
+  env["SATELLITE_VERIFY_DRIVER_PID"] = String(process.pid);
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
   env["SATELLITE_VERIFY_LOG"] = log;
+  env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
   env["SATELLITE_GH"] = standIn("gh");
-  if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
+  if (missingClaude !== undefined) env["SATELLITE_CLAUDE"] = JSON.stringify([missingClaude]);
+  else if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
   return env;
 }
 
@@ -238,24 +278,34 @@ function waitForDevTools(child: ChildProcess, output: () => string): Promise<str
   });
 }
 
+function recipeGitEnv(temp: string) {
+  return {
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: join(temp, "gitconfig"),
+    GIT_TERMINAL_PROMPT: "0",
+  };
+}
+
 async function prepareFolders(
   temp: string,
   home: string,
   repo: string,
-  steps: RepoStep[],
+  scenario: Scenario,
 ): Promise<void> {
-  const gitconfig = join(temp, "gitconfig");
+  const gitEnv = recipeGitEnv(temp);
   await mkdir(home);
   await mkdir(repo);
+  for (const file of scenario.home ?? []) await writeInside(home, file.path, file.content);
   await writeFile(
-    gitconfig,
+    gitEnv.GIT_CONFIG_GLOBAL,
     "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
   );
-  await buildRepo(repo, steps, {
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: gitconfig,
-    GIT_TERMINAL_PROMPT: "0",
-  });
+  await buildRepo(repo, scenario.repo, gitEnv);
+  for (const folder of scenario.folders ?? []) {
+    const target = join(temp, "folders", folder.name);
+    await mkdir(target, { recursive: true });
+    await buildRepo(target, folder.steps, gitEnv);
+  }
 }
 
 async function forceStop(child: ChildProcess): Promise<void> {
@@ -285,6 +335,7 @@ function appPage(browser: Browser, origin: string): Page | undefined {
 async function findAppPage(browser: Browser, origin: string): Promise<Page> {
   const deadline = Date.now() + startTimeoutMs;
   while (Date.now() < deadline) {
+    if (!browser.isConnected()) throw new Error("the app closed before its page appeared");
     const page = appPage(browser, origin);
     if (page !== undefined) return page;
     await delay(100);
@@ -302,6 +353,79 @@ function recordErrors(context: BrowserContext, consoleErrors: string[]): void {
   context.on("weberror", (error) => {
     record(error.error().message);
   });
+}
+
+async function startApp(
+  options: LaunchOptions,
+  paths: AppPaths,
+  running: RunningApp,
+  consoleErrors: string[],
+): Promise<Page> {
+  const { file, args, cwd, origin } = command(options.target, paths.repo);
+  running.output = "";
+  const child = spawn(file, args, {
+    cwd,
+    env: appEnvironment(options, paths),
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+    windowsHide: true,
+  });
+  running.child = child;
+  startedApps.add(child);
+  child.once("exit", () => {
+    startedApps.delete(child);
+  });
+  const collect = (chunk: Buffer): void => {
+    running.output = (running.output + chunk.toString()).slice(-outputTailLength);
+  };
+  child.stdout.on("data", collect);
+  child.stderr.on("data", collect);
+  const address = await waitForDevTools(child, () => running.output);
+  const browser = await chromium.connectOverCDP(address, { timeout: startTimeoutMs });
+  running.browser = browser;
+  for (const context of browser.contexts()) recordErrors(context, consoleErrors);
+  const page = await findAppPage(browser, origin);
+  await page.emulateMedia({ colorScheme: null, reducedMotion: "reduce" });
+  const protocol = await page.context().newCDPSession(page);
+  await protocol.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+  running.page = page;
+  await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
+  return page;
+}
+
+async function stopApp(running: RunningApp): Promise<boolean> {
+  const { child, browser, page } = running;
+  await withTimeout(
+    page?.evaluate(() => {
+      window.close();
+    }) ?? Promise.resolve(),
+    pageCallTimeoutMs,
+    "closing the window",
+  ).catch(() => undefined);
+  const exitedOnItsOwn = child === undefined ? true : await waitForExit(child, exitTimeoutMs);
+  if (child !== undefined) await forceStop(child);
+  await withTimeout(
+    browser?.close() ?? Promise.resolve(),
+    pageCallTimeoutMs,
+    "disconnecting",
+  ).catch(() => undefined);
+  return exitedOnItsOwn;
+}
+
+async function dropOnWindow(page: Page, path: string): Promise<void> {
+  const box = await page.getByTestId("column-repository").boundingBox();
+  if (box === null) throw new Error("the repository column is not on screen to drop on");
+  const x = Math.round(box.x + box.width / 2);
+  const y = Math.round(box.y + box.height / 2);
+  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  const protocol = await page.context().newCDPSession(page);
+  try {
+    for (const type of ["dragEnter", "dragOver", "drop"] as const) {
+      await protocol.send("Input.dispatchDragEvent", { type, x, y, data });
+    }
+  } finally {
+    await protocol.detach();
+  }
 }
 
 export class LaunchFailure extends Error {
@@ -388,92 +512,92 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const home = join(temp, "home");
   const repo = join(temp, "repo");
   const log = join(temp, "stand-ins.jsonl");
+  const dialog = join(temp, "folder-dialog.txt");
+  const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
+  const paths = { home, repo, log, dialog, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
   const consoleErrors: string[] = [];
-  let output = "";
-  let child: ChildProcess | undefined;
-  let browser: Browser | undefined;
-  let page: Page | undefined;
+  const running: RunningApp = { output: "" };
   const abandon = async (): Promise<string | undefined> => {
-    if (child !== undefined) await forceStop(child);
+    if (running.child !== undefined) await forceStop(running.child);
     await withTimeout(
-      browser?.close() ?? Promise.resolve(),
+      running.browser?.close() ?? Promise.resolve(),
       pageCallTimeoutMs,
       "disconnecting",
     ).catch(() => undefined);
     return removeTemp(temp, options.keep);
   };
   cleanups.add(abandon);
+  let page: Page;
   try {
-    await prepareFolders(temp, home, repo, scenario.repo);
-    const { file, args, cwd, origin } = command(options.target, repo);
-    child = spawn(file, args, {
-      cwd,
-      env: appEnvironment(options, home, log),
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
-      windowsHide: true,
-    });
-    const collect = (chunk: Buffer): void => {
-      output = (output + chunk.toString()).slice(-outputTailLength);
-    };
-    child.stdout?.on("data", collect);
-    child.stderr?.on("data", collect);
-    const address = await waitForDevTools(child, () => output);
-    browser = await chromium.connectOverCDP(address, { timeout: startTimeoutMs });
-    for (const context of browser.contexts()) recordErrors(context, consoleErrors);
-    page = await findAppPage(browser, origin);
-    await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
+    await prepareFolders(temp, home, repo, scenario);
+    page = await startApp(options, paths, running, consoleErrors);
   } catch (error) {
     const failure = new LaunchFailure(errorReason(error), { cause: error });
-    failure.output = output;
+    failure.output = running.output;
     failure.consoleErrors = consoleErrors;
     failure.tree =
-      page === undefined
+      running.page === undefined
         ? undefined
-        : await readTree(page).catch((treeError: unknown) => errorReason(treeError));
+        : await readTree(running.page).catch((treeError: unknown) => errorReason(treeError));
     failure.home = home;
     failure.repo = repo;
     await abandon();
     cleanups.delete(abandon);
     throw failure;
   }
-  const appPageReady = page;
-  const app = child;
-  const connection = browser;
   let closing: Promise<CloseResult> | undefined;
+  let relaunching: Promise<void> | undefined;
+  const relaunchOnce = async (): Promise<void> => {
+    await stopApp(running);
+    running.child = undefined;
+    running.browser = undefined;
+    running.page = undefined;
+    if (closing !== undefined) throw new Error("the app was closed during the restart");
+    page = await startApp(options, paths, running, consoleErrors);
+  };
   const closeOnce = async (): Promise<CloseResult> => {
-    await withTimeout(
-      appPageReady.evaluate(() => {
-        window.close();
-      }),
-      pageCallTimeoutMs,
-      "closing the window",
-    ).catch(() => undefined);
-    const exitedOnItsOwn = await waitForExit(app, exitTimeoutMs);
-    await forceStop(app);
-    await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
-      () => undefined,
-    );
+    const exitedOnItsOwn = await stopApp(running);
+    if (relaunching !== undefined) {
+      await relaunching.catch(() => undefined);
+      await stopApp(running);
+    }
     const leftover = await removeTemp(temp, options.keep);
     cleanups.delete(abandon);
     return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
   };
   return {
-    page: appPageReady,
+    get page() {
+      return page;
+    },
     home,
     repo,
+    gitEnv: recipeGitEnv(temp),
+    folder(name) {
+      const segments = name.split("/");
+      if (!folderTarget.test(name) || segments.some((part) => part === "." || part === "..")) {
+        throw new Error(`folder ${name} must be kebab-case segments joined by /`);
+      }
+      return join(temp, "folders", ...segments);
+    },
+    answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
+    dropFolder: (path) => dropOnWindow(page, path),
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
     async screenshot(name) {
       if (!shotName.test(name)) throw new Error(`screenshot name ${name} must be kebab-case`);
       const path = join(shots, `${name}.png`);
       await mkdir(shots, { recursive: true });
-      await appPageReady.screenshot({ path, timeout: startTimeoutMs });
+      await page.screenshot({ path, timeout: startTimeoutMs });
       return path;
+    },
+    relaunch() {
+      if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
+      relaunching = relaunchOnce();
+      return relaunching;
     },
     close() {
       closing ??= closeOnce();

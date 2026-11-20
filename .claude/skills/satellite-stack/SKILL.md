@@ -46,7 +46,7 @@ Names are `<feature>.<verb>`. In this order.
 5. **Call it.** The renderer calls `invoke("x.y", payload)` from `src/renderer/bridge/bridge-client.ts` and gets a `BridgeResult`. On `!result.ok` it shows `result.error.message`, a sentence written for people.
 
    ```ts
-   void invoke("tools.versions", {}).then(setVersions);
+   void invoke("tools.check", {}).then(setResult);
    ```
 
    React 19 ignores a state update after unmount, so a request whose answer only sets state needs no unmount guard. One that starts something, like `terminal.start`, has a matching cleanup in the effect.
@@ -56,15 +56,17 @@ Names are `<feature>.<verb>`. In this order.
 
 An event is the same, with `bridgeEvents` instead. The handler sends it with `owner.emit("x.done", payload)`, so it reaches only the page that owns it. Add the event's empty `Set` to `listeners` in `src/renderer/bridge/bridge-client.ts`, which typecheck asks for. The client holds one IPC listener for every subscriber, parses each event once, and drops and logs one that fails its schema, naming the event and the failing fields, never the payload. The renderer listens with `subscribe("x.done", listener)`, which returns the unsubscribe for the effect's cleanup. Subscribe before the request that makes the events, as `TerminalView` does before `terminal.start`.
 
-Never add an IPC channel, a preload function or an `ipcMain` handler. Everything goes through `satellite:bridge` and `satellite:event`.
+Never add an IPC channel or an `ipcMain` handler. Everything goes through `satellite:bridge` and `satellite:event`. `window.satellite` holds three functions, `invoke`, `onEvent` and `pathForFile`, which only reads a dropped file's path and sends nothing. A fourth is a security decision for the maintainer, recorded in the Bridge section of `ARCHITECTURE.md`.
 
 ## The platform module
 
-`src/main/platform/` is the only code that spawns a process, imports `node:child_process` or `node-pty`, finds an executable or branches on `process.platform`. The macOS app menu is the one other platform branch. A feature calls in.
+`src/main/platform/` is the only code that spawns a process, imports `node:child_process` or `node-pty`, finds an executable or branches on `process.platform`. Three small branches live elsewhere, the macOS app menu, quiet verification on macOS in `src/main/window/verification.ts`, and the interface's shortcut keys in `src/renderer/commands/shortcuts.ts`, which reads the system from the page's user agent because it has no other way to know it. A feature calls in.
 
-- `resolveTool("gh")` and `runTool("git", ["status", "--porcelain=v2"], { timeoutMs })` take a `Tool` and an argument array, never a shell string. `runTool` answers `{ exitCode, stdout, stderr }`, or `undefined` when the tool is missing, and throws when it runs past its time limit, 30 seconds unless the caller asks for less.
+- `resolveTool("gh")` and `runTool("git", ["status", "--porcelain=v2"], { timeoutMs })` take a `Tool` and an argument array, never a shell string. `runTool` answers `{ exitCode, stdout, stderr }`, or `undefined` when the tool is missing, and throws when it runs past its time limit, 30 seconds unless the caller asks for less, after ending the tool's whole process tree. When the tree does not end, it throws `AbandonedRun`, whose `exited` settles once the process really exits, so a caller never starts the same command again while the first still runs. A new git command on a project needs the programs its config can start and its optional index lock reviewed before it ships, as the Read only rule in `ARCHITECTURE.md` says.
+- `chooseFolder(window)` opens the native folder dialog, or reads the verify answer file, and answers a path or `undefined`. A path that reaches `git` always goes after `-C` in the argument array.
+- `installCommand(tool)` answers the fixed install step for a missing tool on this platform, a `command` or an `address`.
 - `childEnvironment()` is the user's login shell environment without `ELECTRON_` variables and the AppImage launch variables, with `XDG_CURRENT_DESKTOP` restored. Every child gets it.
-- `resolveInside(root, requested)` answers the real path inside `root`, symlinks followed, or `undefined`. Every path from the interface or a repo goes through it.
+- `resolveInside(root, requested)` answers the real path inside `root`, symlinks followed, or `undefined`. Every path from the interface or a repo that belongs inside a known folder goes through it. A folder to add as a project has no such root, so it goes through `checkRepository` in `src/main/projects/repository-check.ts` instead. `samePath(a, b)` compares two paths the way the platform does, case-insensitively on macOS and Windows, and `isInsidePath(parent, child)` asks whether one holds the other with the same case folding. `isFullyQualified` refuses Windows device paths, and `isNetworkPath` names a Windows share.
 - `spawnPty(command, { cwd, cols, rows, env })` answers a `PtyProcess` whose `kill()` ends the whole tree on every platform.
 - `satelliteHome()` and `prepareSatelliteHome()` own `~/.satellite` and `SATELLITE_HOME`. All state lives there, never in a user's repo.
 
@@ -76,12 +78,22 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 
 - Components use token utilities only, `bg-bg`, `bg-side`, `text-fg`, `text-dim`, `border-line`, `bg-pri-bg text-pri-fg`, `outline-accent`. A raw colour never appears in a component.
 - Type is `font-sans` (Funnel Sans, app text at 13px), `font-display`, `font-mono` (Geist Mono) and `font-pixel` (readouts, uppercase).
-- The colour scheme follows the system through CSS, so DOM parts need nothing. A part that takes colours as options, like the terminal and the diff editor, reads tokens with `getComputedStyle(document.documentElement).getPropertyValue("--bg")` and rebuilds on `matchMedia("(prefers-color-scheme: dark)")` `change`, as `terminal-theme.ts` and `monaco-environment.ts` do. Monaco needs six digit hex, so its theme passes each token through a canvas.
+- The colour scheme follows `prefers-color-scheme`, which the background process points at the saved theme choice, `system`, `light` or `dark`, through `nativeTheme.themeSource` at start and on every `interface.save`, so DOM parts need nothing and no part reads the choice itself. A part that takes colours as options, like the terminal and the diff editor, reads tokens with `getComputedStyle(document.documentElement).getPropertyValue("--bg")` and rebuilds on `matchMedia("(prefers-color-scheme: dark)")` `change`, as `terminal-theme.ts` and `monaco-environment.ts` do. Monaco needs six digit hex, so its theme passes each token through a canvas.
 - Fonts come from the `@fontsource` packages imported at the top of `app.css` and are bundled. `entry.tsx` waits for each family in `fontFamilies` before the first render, so a new family goes in that list. Nothing loads from the network.
 
 ## Interface parts
 
-`Button` in `src/renderer/ui/button.tsx` is the primary button, `{ children, onClick, testId? }`. To add a part, take its rules from the Components section of `DESIGN.md` and its drawing from `BRAND.html` chapter 08, then write one file in `src/renderer/ui/` with a named export, token utilities only, the focus ring `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent` on anything focusable, and a `testId` prop passed to `data-testid`. Test ids are kebab-case and are how verify finds things. State stays in the component with React hooks, and there is no state library. Copy follows the Voice section of `DESIGN.md`.
+`src/renderer/ui/` holds the shared parts, each a named export.
+
+- `Button`, the `primary`, `secondary` and `ghost` variants in the `default` and `small` sizes, with an optional `icon`, `shortcut` hint and `label` for an icon-only button. A disabled button keeps focus through `aria-disabled` and ignores clicks.
+- `Icon`, the line icons by `IconName`.
+- `KeyHint`, a key cap such as `⌘K`, framed or `plain`.
+- `StatusPixel`, the square status pixel, `idle`, `ready` or `needs-you`.
+- `PixelAvatar`, a project's generated avatar from a seed, its id.
+- `Toast`, an `info` or `error` notice with a dismiss button, raised through the `Notify` function the window passes down.
+- `withUniqueTestIds`, which suffixes repeated test ids with `-2`, `-3`, so two projects of one name stay apart.
+
+Every action is a command, so the button, the shortcut and the command menu all run the same thing. To add one, add its id to `CommandId` in `src/renderer/commands/command-registry.ts`, then one entry to the list `AppWindow` passes to `createCommandRegistry`, with `id`, a plain `title`, an optional `shortcut` such as `{ key: "o" }`, `available` and `run`. The registry refuses a repeated id or shortcut, and a `run` that throws or rejects shows a sentence in a toast. The command menu lists every available command but `palette.commands` itself. Draw its button with `CommandButton` from `src/renderer/commands/commands-context.tsx`, which takes the title, the shortcut hint and the availability from the registry. A shortcut names one key. It is Cmd plus that key on macOS and Ctrl+Shift plus that key on Windows and Linux, everywhere, the terminal included, never with Alt, so plain Ctrl keys always reach Claude Code. A held key runs a command once, nothing fires while an input method is composing, and a press for a command that is not available falls through to the focused element. To add a part, take its rules from the Components section of `DESIGN.md` and its drawing from `BRAND.html` chapter 08, then write one file in `src/renderer/ui/` with a named export, token utilities only, the focus ring `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent` on anything focusable, and a `testId` prop passed to `data-testid`. Test ids are kebab-case and are how verify finds things. State stays in the component with React hooks, and there is no state library. Copy follows the Voice section of `DESIGN.md`.
 
 ## Imports and TypeScript
 
@@ -113,7 +125,7 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 | `npm run build` | `electron-vite build` into `out/`, the renderer minified |
 | `npm run package` | `electron-builder --publish never`, packages for this machine from `out/` into `release/`. Build first |
 | `npm run verify -- <scenario> [step ...]` | Launches the real app in a scenario and prints JSON, skill `satellite-verify` |
-| `npm run journeys` | Builds once and runs `launch`, `boundary` and `quit` |
+| `npm run journeys` | Builds once and runs `launch`, `boundary`, `projects` and `quit` |
 | `npm run format`, `npm run format:check` | Prettier at 100 columns. Markdown and HTML are left alone |
 | `npm run lint` | ESLint, zero warnings |
 | `npm run typecheck` | `tsc` over the three projects |
@@ -125,7 +137,7 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 
 `npm run dev` opens the app with the user's real tools. Proof goes through the driver against the built app, `npm run --silent verify -- default`, which builds, launches with a temporary home and stand-ins, and prints the window as JSON with screenshots (skill `satellite-verify`). Built and dev runs share `out/`, so one run per checkout at a time.
 
-The app reads `SATELLITE_HOME`, an absolute path that replaces `~/.satellite`, and `SATELLITE_GH` and `SATELLITE_CLAUDE`, a JSON array with the executable then its leading arguments. `ELECTRON_RENDERER_URL` aims the window at the dev server only when the app is not packaged.
+The app reads `SATELLITE_HOME`, an absolute path that replaces `~/.satellite`, and `SATELLITE_GH` and `SATELLITE_CLAUDE`, a JSON array with the executable then its leading arguments. `ELECTRON_RENDERER_URL` aims the window at the dev server only when the app is not packaged. `SATELLITE_VERIFY_FOLDER_DIALOG`, the absolute path of a file, answers the folder dialog with that file's content, which is how verify adds a project.
 
 ## Native modules and packaging
 

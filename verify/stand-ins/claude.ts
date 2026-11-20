@@ -29,7 +29,9 @@ function startStubbornChild(): void {
   if (child.pid !== undefined) appendStandInEvent({ type: "child", pid: child.pid });
 }
 
-async function play(step: Scenario["claude"]["script"][number]): Promise<void> {
+type ClaudeStep = Extract<Scenario["claude"], { script: unknown }>["script"][number];
+
+async function play(step: ClaudeStep): Promise<void> {
   if ("print" in step) process.stdout.write(step.print);
   else if ("wait" in step) await delay(step.wait);
   else if ("flood" in step) await flood(step.flood);
@@ -38,9 +40,15 @@ async function play(step: Scenario["claude"]["script"][number]): Promise<void> {
 
 async function main(): Promise<void> {
   const { scenario } = await loadScenario(process.env["SATELLITE_VERIFY_SCENARIO"] ?? "");
+  const claude = scenario.claude;
+  if ("missing" in claude) {
+    process.stderr.write("stand-in claude started for a scenario where Claude Code is missing\n");
+    process.exitCode = 1;
+    return;
+  }
   const args = process.argv.slice(2);
   if (args.includes("--version")) {
-    process.stdout.write(`${scenario.claude.version}\n`);
+    process.stdout.write(`${claude.version}\n`);
     return;
   }
   appendStandInEvent({ type: "start", tool: "claude", pid: process.pid, args });
@@ -52,7 +60,7 @@ async function main(): Promise<void> {
     });
   });
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
-  for (const step of scenario.claude.script) await play(step);
+  for (const step of claude.script) await play(step);
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (data: string) => {
     appendStandInEvent({ type: "input", data });

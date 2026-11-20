@@ -6,12 +6,12 @@ import type { RepoStep } from "./scenario.ts";
 
 const run = promisify(execFile);
 
-async function writeInside(target: string, path: string, content: string): Promise<void> {
+export async function writeInside(target: string, path: string, content: string): Promise<void> {
   const file = resolve(target, path);
   const fromTarget = relative(target, file);
   const climbsOut = fromTarget === ".." || fromTarget.startsWith(`..${sep}`);
   if (fromTarget === "" || climbsOut || isAbsolute(fromTarget)) {
-    throw new Error(`repo step writes ${path}, which is outside the repo`);
+    throw new Error(`a scenario step writes ${path}, which is outside its folder`);
   }
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, content);

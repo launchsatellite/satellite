@@ -1,0 +1,27 @@
+{
+  "description": "A fresh repo where gh is installed and signed out.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stderr": "You are not logged into any GitHub hosts. To log in, run: gh auth login\n",
+      "exitCode": 1
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

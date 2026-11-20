@@ -1,14 +1,43 @@
 import { describe, expect, it, vi } from "vitest";
+import { defaultInterfaceState, type ToolCheck } from "../../shared/bridge-contract.ts";
 import type { BridgeHandler, BridgeHandlers, BridgeOwner } from "./registry.ts";
 import { BridgeFailure, createBridgeRouter } from "./registry.ts";
 
 const terminalId = "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6";
+const toolCheck: ToolCheck = {
+  git: { state: "ready", version: "2.50.1" },
+  gh: { state: "signed-out", reason: "none" },
+  claude: {
+    state: "missing",
+    fix: { kind: "command", text: "curl -fsSL https://claude.ai/install.sh | bash" },
+  },
+};
 
 function spies() {
   const handlers = {
-    "tools.versions": vi.fn<BridgeHandler<"tools.versions">>(() =>
-      Promise.resolve({ git: "git version 2.50.1", gh: null, claude: null }),
+    "tools.check": vi.fn<BridgeHandler<"tools.check">>(() => Promise.resolve(toolCheck)),
+    "interface.load": vi.fn<BridgeHandler<"interface.load">>(() =>
+      Promise.resolve({ state: defaultInterfaceState, notice: null }),
     ),
+    "interface.save": vi.fn<BridgeHandler<"interface.save">>(() => Promise.resolve({})),
+    "projects.list": vi.fn<BridgeHandler<"projects.list">>(() =>
+      Promise.resolve({ projects: [], notice: null }),
+    ),
+    "projects.choose": vi.fn<BridgeHandler<"projects.choose">>(() =>
+      Promise.resolve({ outcome: "canceled" }),
+    ),
+    "projects.drop": vi.fn<BridgeHandler<"projects.drop">>(() =>
+      Promise.resolve({
+        project: {
+          id: terminalId,
+          name: "alpha",
+          parent: "folders",
+          missing: null,
+          workspaces: [{ key: "main", branch: "main" }],
+        },
+      }),
+    ),
+    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -84,6 +113,37 @@ describe("createBridgeRouter", () => {
     noHandlerRan(handlers);
   });
 
+  it("refuses a project id that is not a uuid", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const payloads = [
+      { projectId: "../../etc" },
+      { projectId: "/Users/<name>/repo" },
+      { projectId: terminalId.toUpperCase().replace("6F1C", "ZZZZ") },
+      { projectId: terminalId, path: "/Users/<name>/repo" },
+      {},
+    ];
+    for (const payload of payloads) {
+      const result = await route("projects.remove", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const channel of ["projects.choose", "projects.list"]) {
+      const result = await route(channel, { path: "/Users/<name>/repo" }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
+  it("refuses a dropped path that is empty or too long", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    for (const path of ["", "/".repeat(4097), 42]) {
+      const result = await route("projects.drop", { path }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
   it("refuses an ack that is not a positive count within one output event", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);
@@ -102,6 +162,25 @@ describe("createBridgeRouter", () => {
     noHandlerRan(handlers);
   });
 
+  it("refuses interface state out of bounds", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const columns = defaultInterfaceState.columns;
+    const states = [
+      { ...defaultInterfaceState, columns: { ...columns, left: 199 } },
+      { ...defaultInterfaceState, columns: { ...columns, left: 361 } },
+      { ...defaultInterfaceState, columns: { ...columns, right: 641 } },
+      { ...defaultInterfaceState, theme: "sepia" },
+      { ...defaultInterfaceState, selected: { projectId: terminalId, workspace: "other" } },
+      { ...defaultInterfaceState, extra: true },
+    ];
+    for (const state of states) {
+      const result = await route("interface.save", { state }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
   it("passes a valid request to its handler and returns its value", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);
@@ -109,10 +188,7 @@ describe("createBridgeRouter", () => {
     const result = await route("terminal.resize", request, owner);
     expect(result).toEqual({ ok: true, value: {} });
     expect(handlers["terminal.resize"]).toHaveBeenCalledWith(request, owner);
-    expect(await route("tools.versions", {}, owner)).toEqual({
-      ok: true,
-      value: { git: "git version 2.50.1", gh: null, claude: null },
-    });
+    expect(await route("tools.check", {}, owner)).toEqual({ ok: true, value: toolCheck });
   });
 
   it("turns a BridgeFailure into its code and message and any other error into failed without its stack", async () => {

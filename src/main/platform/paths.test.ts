@@ -2,7 +2,14 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resolveInside } from "./paths.ts";
+import {
+  isDevicePath,
+  isFullyQualified,
+  isInsidePath,
+  isNetworkPath,
+  resolveInside,
+  samePath,
+} from "./paths.ts";
 
 const isWindows = process.platform === "win32";
 
@@ -57,5 +64,47 @@ describe("resolveInside", () => {
     expect(await resolveInside(root, "space folder/zoë.txt")).toBe(
       await realpath(join(root, "space folder", "zoë.txt")),
     );
+  });
+});
+
+describe("samePath", () => {
+  it("treats two spellings of one folder as the same", () => {
+    expect(samePath("/srv/repo", "/srv/repo/", "linux")).toBe(true);
+    expect(samePath("/srv/repo", "/srv/./tools/../repo", "linux")).toBe(true);
+    expect(samePath("/srv/Repo", "/srv/repo", "linux")).toBe(false);
+    expect(samePath("/Users/<name>/Repo", "/users/<name>/repo/", "darwin")).toBe(true);
+    expect(samePath("/Users/<name>/repo", "/Users/<name>/repo2", "darwin")).toBe(false);
+    expect(samePath("C:\\Users\\<name>\\Repo", "c:/users/<name>/repo/", "win32")).toBe(true);
+    expect(samePath("C:\\Users\\<name>\\repo", "D:\\Users\\<name>\\repo", "win32")).toBe(false);
+  });
+
+  it("counts a Windows path as fully qualified only with a drive or a share", () => {
+    expect(isFullyQualified("C:\\repo", "win32")).toBe(true);
+    expect(isFullyQualified("\\\\server\\share\\repo", "win32")).toBe(true);
+    expect(isFullyQualified("\\repo", "win32")).toBe(false);
+    expect(isFullyQualified("C:repo", "win32")).toBe(false);
+    expect(isFullyQualified("/repo", "linux")).toBe(true);
+  });
+
+  it("refuses Windows device paths and names network paths", () => {
+    expect(isFullyQualified("\\\\?\\C:\\repo", "win32")).toBe(false);
+    expect(isFullyQualified("\\\\.\\PIPE\\x", "win32")).toBe(false);
+    expect(isFullyQualified("//?/C:/repo", "win32")).toBe(false);
+    expect(isNetworkPath("\\\\server\\share\\repo", "win32")).toBe(true);
+    expect(isNetworkPath("C:\\repo", "win32")).toBe(false);
+    expect(isNetworkPath("//server/share", "linux")).toBe(false);
+    expect(isDevicePath("\\\\?\\C:\\repo", "win32")).toBe(true);
+    expect(isDevicePath("\\\\server\\share", "win32")).toBe(false);
+    expect(isDevicePath("//?/C:/repo", "linux")).toBe(false);
+  });
+
+  it("finds a folder inside another with the case folding of samePath", () => {
+    expect(isInsidePath("/Users/<name>/.satellite", "/USERS/<name>/.Satellite/app", "darwin")).toBe(
+      true,
+    );
+    expect(isInsidePath("/srv/home", "/srv/Home/app", "linux")).toBe(false);
+    expect(isInsidePath("C:\\Home", "c:/home/app", "win32")).toBe(true);
+    expect(isInsidePath("/srv/home", "/srv/home-2", "linux")).toBe(false);
+    expect(isInsidePath("/srv/home", "/srv/home", "linux")).toBe(true);
   });
 });

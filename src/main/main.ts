@@ -2,10 +2,17 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
+import { chooseFolder } from "./platform/folder-dialog.ts";
 import { treeKillBoundMs } from "./platform/process-tree.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import { createProjects, type Projects } from "./projects/project-list.ts";
+import {
+  createInterfaceFile,
+  interfaceHandlers,
+  type InterfaceFile,
+} from "./state/interface-file.ts";
 import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
-import { toolVersions } from "./tools/tool-versions.ts";
+import { checkTools } from "./tools/tool-check.ts";
 import {
   appOrigin,
   handleAppProtocol,
@@ -14,7 +21,9 @@ import {
 } from "./window/app-protocol.ts";
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
-import { createMainWindow } from "./window/main-window.ts";
+import { createMainWindow, mainWindow } from "./window/main-window.ts";
+import { prepareVerification } from "./window/verification.ts";
+import { applyThemeChoice } from "./window/theme.ts";
 
 const terminals = createTerminalSessions();
 const quitBoundMs = treeKillBoundMs + 500;
@@ -32,8 +41,9 @@ function focusMainWindow(): void {
   window.focus();
 }
 
-async function start(): Promise<void> {
+async function start(interfaceFile: InterfaceFile, projects: Projects): Promise<void> {
   await app.whenReady();
+  applyThemeChoice((await interfaceFile.load()).state.theme);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
   hardenSession(session.defaultSession);
@@ -41,7 +51,9 @@ async function start(): Promise<void> {
   handleAppProtocol(join(app.getAppPath(), "out/renderer"));
   registerBridge(
     {
-      "tools.versions": toolVersions,
+      "tools.check": checkTools,
+      ...interfaceHandlers(interfaceFile, applyThemeChoice),
+      ...projects.handlers,
       ...terminals.handlers,
     },
     allowedOrigin(entryUrl),
@@ -55,22 +67,27 @@ function failStart(error: unknown): void {
   app.exit(1);
 }
 
-function prepareHome(): boolean {
+function prepareHome(): string | undefined {
   try {
-    app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
-    return true;
+    const home = prepareSatelliteHome();
+    app.setPath("userData", join(home, "app-data"));
+    return home;
   } catch (error) {
     failStart(error);
-    return false;
+    return undefined;
   }
 }
 
-const homeReady = prepareHome();
-if (homeReady && app.requestSingleInstanceLock()) {
+prepareVerification();
+const home = prepareHome();
+const interfaceFile = home === undefined ? undefined : createInterfaceFile(home);
+const projects =
+  home === undefined ? undefined : createProjects({ home, chooseFolder, window: mainWindow });
+if (interfaceFile !== undefined && projects !== undefined && app.requestSingleInstanceLock()) {
   registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start().catch(failStart);
-} else if (homeReady) {
+  start(interfaceFile, projects).catch(failStart);
+} else if (home !== undefined) {
   app.exit(0);
 }
 
@@ -78,7 +95,8 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   event.preventDefault();
-  void Promise.race([terminals.closeAll(), delay(quitBoundMs)]).finally(() => {
+  const settled = Promise.all([terminals.closeAll(), interfaceFile?.flush(), projects?.flush()]);
+  void Promise.race([settled, delay(quitBoundMs)]).finally(() => {
     app.quit();
   });
 });

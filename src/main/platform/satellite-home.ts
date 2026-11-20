@@ -1,12 +1,7 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, posix } from "node:path";
-
-const windowsFullyQualified = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
-
-function isFullyQualified(path: string, platform: NodeJS.Platform): boolean {
-  return platform === "win32" ? windowsFullyQualified.test(path) : posix.isAbsolute(path);
-}
+import { join } from "node:path";
+import { isFullyQualified } from "./paths.ts";
 
 export function userHomeFolder(): string {
   return homedir();

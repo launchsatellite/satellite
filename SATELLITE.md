@@ -29,7 +29,7 @@ Every spec is checked against these. When two conflict, the earlier one wins.
 | Term | Meaning |
 | --- | --- |
 | Project | A git repository you added to Satellite. It stays where it already is on disk. |
-| Workspace | One piece of work inside a project, with its own worktree, branch and sessions. Every view shows the selected workspace. |
+| Workspace | One piece of work inside a project, with its own branch and sessions. The main workspace is the project's own folder on its current branch, and every other workspace has its own worktree. Every view shows the selected workspace. |
 | Session | One Claude Code process running in a workspace, shown in the agent pane. |
 | Needs you | Anything you must act on. An agent question or permission request, failed checks, requested changes or conflicts. |
 | Inbox | Every workspace that needs you, across all projects, in one list. |
@@ -46,6 +46,8 @@ Three columns that never move.
 | Right | The real Claude Code sessions of the selected workspace. |
 
 Selecting a workspace switches the centre and the right column together. Sessions in other workspaces keep running.
+
+Every action is one command, reached from its button, its shortcut or the command menu on Cmd+K, or Ctrl+Shift+K on Windows and Linux. The quick switcher on Cmd+P, or Ctrl+Shift+P, jumps to any workspace in any project. On first run Satellite checks `git`, `gh` and `claude` for real and names the step that fixes whatever is missing.
 
 ## Decisions
 

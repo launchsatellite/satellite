@@ -58,8 +58,11 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
 | `signal` | `#FF5A1F` | `#FF5A1F` | Needs you, destructive actions |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
+| `volt` / `volt-edge` | `#DCFF3D` / `#DCFF3D` | `#DCFF3D` / `#6B7800` | Ready and passing, with the inner edge that keeps a volt pixel visible on light |
+| `lilac` / `lilac-edge` | `#C7B9FF` / `#C7B9FF` | `#C7B9FF` / `#8066D6` | Merged, approved, secondary state, with the darker lilac that keeps a small lilac shape visible on light |
+| `shadow` | `0 16px 40px rgb(0 0 0 / 0.55)` | `0 16px 40px rgb(10 10 11 / 0.12)` | The one shadow, on menus, the palette, dialogs and toasts |
 
-Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets a `#6B7800` inner edge so it stays visible.
+Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets a `#6B7800` inner edge so it stays visible. Shapes too small for an edge, like the cells of a project avatar, draw volt and lilac in their edge colours, `volt-edge` and `lilac-edge`, which pass 3 to 1 against `side` and `sel` in both themes.
 
 ## Type
 
@@ -102,7 +105,7 @@ The signature texture. A field of square blocks in a fixed mix of ultraviolet, p
 BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner for network work, block progress and readouts. Molecules are sidebar rows, tabs, segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
 
 - Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
-- Selection is a grey fill. The menu hover is the one place ultraviolet fills a row.
+- Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
 - Status is a square pixel, never a dot.
 - One primary action per view.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
@@ -110,6 +113,8 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 ## App
 
 The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops.
+
+The theme follows the system unless the user chooses light or dark from the command menu, and the choice is remembered. The terminal, the diff and the native dialogs switch with it.
 
 ## Motion
 

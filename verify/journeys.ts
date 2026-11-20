@@ -9,6 +9,7 @@ import {
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { launchJourney } from "./journeys/launch.ts";
+import { projectsJourney } from "./journeys/projects.ts";
 import { quitJourney } from "./journeys/quit.ts";
 
 export interface Journey {
@@ -21,7 +22,7 @@ interface Outcome {
   screenshots: string[];
 }
 
-const journeys: Journey[] = [launchJourney, boundaryJourney, quitJourney];
+const journeys: Journey[] = [launchJourney, boundaryJourney, projectsJourney, quitJourney];
 const journeyTimeoutMs = 180_000;
 const stepTimeoutMs = 15_000;
 
@@ -43,7 +44,19 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
   }
   const screenshots: string[] = [];
   const recorded: AppSession = {
-    ...session,
+    get page() {
+      return session.page;
+    },
+    home: session.home,
+    repo: session.repo,
+    gitEnv: session.gitEnv,
+    folder: (name) => session.folder(name),
+    answerFolderDialog: (path) => session.answerFolderDialog(path),
+    dropFolder: (path) => session.dropFolder(path),
+    consoleErrors: session.consoleErrors,
+    standInEvents: () => session.standInEvents(),
+    relaunch: () => session.relaunch(),
+    close: () => session.close(),
     async screenshot(name) {
       const path = await session.screenshot(name);
       screenshots.push(path);

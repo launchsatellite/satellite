@@ -67,8 +67,56 @@ async function checkNoNode(page: Page): Promise<void> {
   });
   assert.deepEqual(
     keys,
-    ["invoke", "onEvent"],
-    `window.satellite should expose only invoke and onEvent, it exposes ${JSON.stringify(keys)}`,
+    ["invoke", "onEvent", "pathForFile"],
+    `window.satellite should expose only invoke, onEvent and pathForFile, it exposes ${JSON.stringify(keys)}`,
+  );
+}
+
+async function checkPathForFile(page: Page): Promise<void> {
+  const answers = await page.evaluate(() => {
+    const api: unknown = Reflect.get(window, "satellite");
+    const pathForFile: unknown =
+      typeof api === "object" && api !== null ? Reflect.get(api, "pathForFile") : undefined;
+    const ask = (value: unknown) => {
+      if (typeof pathForFile !== "function") return "missing";
+      try {
+        return JSON.stringify(Reflect.apply(pathForFile, api, [value]));
+      } catch (error) {
+        return `threw ${String(error)}`;
+      }
+    };
+    return { madeUp: ask(new File(["x"], "x.txt")), text: ask("/etc") };
+  });
+  assert.equal(answers.madeUp, '""', `pathForFile of a made-up file answered ${answers.madeUp}`);
+  assert.equal(answers.text, '""', `pathForFile of the text /etc answered ${answers.text}`);
+}
+
+async function projectCount(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const api: unknown = Reflect.get(window, "satellite");
+    const invoke: unknown =
+      typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+    if (typeof invoke !== "function") return -1;
+    const answer: unknown = await Reflect.apply(invoke, api, ["projects.list", {}]);
+    const value: unknown =
+      typeof answer === "object" && answer !== null ? Reflect.get(answer, "value") : undefined;
+    const projects: unknown =
+      typeof value === "object" && value !== null ? Reflect.get(value, "projects") : undefined;
+    return Array.isArray(projects) ? projects.length : -1;
+  });
+}
+
+async function checkRelativeDrop(page: Page): Promise<void> {
+  const before = await projectCount(page);
+  for (const path of ["relative/folder", "."]) {
+    const code = await bridgeCode(page, "projects.drop", { path });
+    assert.equal(code, "refused", `projects.drop of ${path} answered ${code}, not refused`);
+  }
+  const after = await projectCount(page);
+  assert.equal(
+    after,
+    before,
+    `a relative drop changed the projects from ${String(before)} to ${String(after)}`,
   );
 }
 
@@ -202,6 +250,8 @@ async function run(session: AppSession): Promise<void> {
   await checkPermissions(page);
   await checkPaths(page);
   await checkBridge(page);
+  await checkPathForFile(page);
+  await checkRelativeDrop(page);
   await session.screenshot("boundary");
   const pid = await startClaude(session, 1);
   await checkLeaving(page, appUrl, reached);
