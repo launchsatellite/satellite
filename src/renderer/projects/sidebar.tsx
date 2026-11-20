@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ProjectView,
   WorkspaceKey,
@@ -22,6 +23,7 @@ interface SidebarProps {
   onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
+  inbox: ReactNode;
 }
 interface ProjectRow {
   project: ProjectView;
@@ -214,6 +216,7 @@ export function Sidebar({
   onNewWorkspace,
   focusProjectId,
   pixelFor,
+  inbox,
 }: SidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
@@ -229,6 +232,7 @@ export function Sidebar({
         text="Go to a workspace"
         testId="open-switcher"
       />
+      {inbox}
       <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
         Projects
         <CommandButton

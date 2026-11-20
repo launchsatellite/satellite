@@ -18,6 +18,7 @@ export interface SessionTab {
   resume: boolean;
   status: SessionStatus;
   ready: boolean;
+  needsSince: number | null;
 }
 export interface Sessions {
   tabsOf: (ref: WorkspaceRef) => SessionTab[];
@@ -58,6 +59,17 @@ function inPlace(tab: SessionTab, place: string): boolean {
   return placeOf(tab.workspace) === place;
 }
 
+function needsSince(
+  tab: SessionTab,
+  status: SessionStatus,
+  asked: { current: number },
+): number | null {
+  if (status !== "needs-you") return null;
+  if (tab.status === "needs-you" && tab.needsSince !== null) return tab.needsSince;
+  asked.current += 1;
+  return asked.current;
+}
+
 function withoutTabs(state: State, dropped: (tab: SessionTab) => boolean): State {
   const gone = state.tabs.filter(dropped);
   if (gone.length === 0) return state;
@@ -83,6 +95,7 @@ export function useSessions(notify: Notify): Sessions {
   const [state, setState] = useState<State>({ tabs: [], active: new Map() });
   const numbers = useRef(new Map<string, number>());
   const count = useRef(0);
+  const asked = useRef(0);
   useEffect(() => {
     count.current = state.tabs.length;
   }, [state.tabs.length]);
@@ -96,7 +109,9 @@ export function useSessions(notify: Notify): Sessions {
             ? {
                 ...current,
                 tabs: current.tabs.map((tab) =>
-                  tab.terminalId === id ? { ...tab, status, ready } : tab,
+                  tab.terminalId === id
+                    ? { ...tab, status, ready, needsSince: needsSince(tab, status, asked) }
+                    : tab,
                 ),
               }
             : current,
@@ -122,6 +137,7 @@ export function useSessions(notify: Notify): Sessions {
         resume,
         status: "idle",
         ready: false,
+        needsSince: null,
       };
       setState((current) => ({
         tabs: [...current.tabs, tab],
@@ -135,7 +151,16 @@ export function useSessions(notify: Notify): Sessions {
     setState((current) => ({
       ...current,
       tabs: current.tabs.map((tab) =>
-        tab.key === key ? { ...tab, terminalId, resume: false, status: "idle", ready: false } : tab,
+        tab.key === key
+          ? {
+              ...tab,
+              terminalId,
+              resume: false,
+              status: "idle",
+              ready: false,
+              needsSince: null,
+            }
+          : tab,
       ),
     }));
   }, []);

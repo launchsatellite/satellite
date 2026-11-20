@@ -9,12 +9,15 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
+import { InboxList } from "../inbox/inbox-list.tsx";
+import { inboxReasons, inboxRows } from "../inbox/inbox.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
+import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { useSessions } from "../sessions/use-sessions.ts";
@@ -264,6 +267,35 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null || asking !== null;
+  const inbox = useMemo(
+    () =>
+      inboxRows(inboxReasons(allSessions), ({ projectId, workspace }) =>
+        (projects ?? []).some(
+          (project) =>
+            project.id === projectId &&
+            project.workspaces.some((listed) => listed.key === workspace),
+        ),
+      ),
+    [allSessions, projects],
+  );
+  const newestInInbox = inbox[0]?.workspace;
+  const openFromInbox = useCallback(
+    (ref: WorkspaceRef) => {
+      if (modal) return;
+      select(ref);
+      const longest = inbox.find(
+        ({ workspace }) =>
+          workspace.projectId === ref.projectId && workspace.workspace === ref.workspace,
+      )?.reasons[0];
+      const asking = sessions
+        .tabsOf(ref)
+        .find((tab) => tab.number === longest?.session && tab.status === "needs-you");
+      if (asking === undefined) return;
+      activateSession(asking.key);
+      focusSession(asking.terminalId);
+    },
+    [modal, select, inbox, sessions, activateSession],
+  );
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -421,6 +453,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "inbox.newest",
+            title: "Go to the newest workspace that needs you",
+            available: newestInInbox !== undefined,
+            run: () => {
+              if (newestInInbox !== undefined) openFromInbox(newestInInbox);
+            },
+          },
+          {
             id: "palette.switcher",
             title: "Go to a workspace",
             shortcut: { key: "p" },
@@ -487,6 +527,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     forgetProject,
+    newestInInbox,
+    openFromInbox,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -537,6 +579,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
             pixelFor={sessions.pixelFor}
+            inbox={
+              projects === undefined ? null : (
+                <InboxList
+                  rows={inbox}
+                  projects={projects}
+                  selected={state.selected}
+                  onOpen={openFromInbox}
+                />
+              )
+            }
           />
           <ColumnDivider
             side="left"

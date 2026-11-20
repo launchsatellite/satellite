@@ -5,6 +5,7 @@ import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
+import { focusSessionEvent, focusedTerminal } from "./focus-session.ts";
 import {
   leavesFocusAlone,
   sendToClaudeCodeEvent,
@@ -172,6 +173,19 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
     window.addEventListener(sendToClaudeCodeEvent, receive);
     return () => {
       window.removeEventListener(sendToClaudeCodeEvent, receive);
+    };
+  }, []);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const terminalId = focusedTerminal(event);
+      if (terminalId === undefined) return;
+      setTimeout(() => {
+        targets.current.get(terminalId)?.focus();
+      });
+    };
+    window.addEventListener(focusSessionEvent, receive);
+    return () => {
+      window.removeEventListener(focusSessionEvent, receive);
     };
   }, []);
   const offerTarget = useCallback((id: string, target: PromptTarget) => {
