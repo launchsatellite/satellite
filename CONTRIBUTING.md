@@ -4,11 +4,14 @@ Satellite is built by people and by coding agents working for them, under the sa
 
 ## Setup
 
-Clone, then switch on the Git hooks. Claude Code does this by itself at the start of every session.
+Clone, then switch on the Git hooks. Claude Code does this by itself at the start of every session. Then install with Node 24, the version in `.nvmrc`.
 
 ```sh
 git config core.hooksPath .githooks
+npm ci
 ```
+
+`npm run dev` starts the app. [AGENTS.md](AGENTS.md) lists every command.
 
 ## How work happens
 

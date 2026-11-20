@@ -68,7 +68,7 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 - **Limits.** 16 terminals at once. Input is split into writes of at most 65536 characters and sent through one queue per terminal, so a large paste arrives whole and in order. Scrollback keeps 5000 lines.
 - **Output flow.** The background process gathers output for 8 milliseconds and sends it in events of at most 65536 characters. The interface acknowledges each event once xterm.js has drawn it. With more than 256 KiB of output unacknowledged the pseudo terminal is paused, and it resumes once that falls to 32 KiB, so a flood of output never piles up in memory. A terminal that ends is resumed first, so a page that is gone never holds a process paused.
 - **Failures.** A failed start or an ended session shows one sentence and a button that starts a fresh terminal. A spawn failure says that Claude Code couldn't start and nothing in the project changed.
-- **Links.** Links in terminal output do nothing yet, so output can never open a dialog or a window.
+- **Links.** A click on a link in terminal output does nothing, so output can never open a dialog, a window or the browser.
 - **Environment.** Claude Code starts in the app's working folder, or the home folder when that is not a folder, with the user's environment plus `TERM=xterm-256color` and `COLORTERM=truecolor`.
 - **DOM renderer.** xterm.js draws with its default DOM renderer. A GPU renderer would need another dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text.
 - **Terminal font.** The DOM renderer draws block and box characters from the font, and Geist Mono's block glyphs are shorter than its line box, which leaves seams between rows in Claude Code's logo. The terminal uses Geist Mono under its own family name with ascent and descent overrides that match the block glyphs, so blocks join with no gap and lines sit tight. A taller line height was rejected because it brings the seams back.
@@ -102,7 +102,7 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 
 | Path | What |
 | --- | --- |
-| `src/main/main.ts` | Startup order. Home, scheme, hardening, protocol, bridge, window |
+| `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, menu, hardening, protocol, bridge, window, and the quit that waits for terminals |
 | `src/main/bridge/` | The router that validates every request, the sender check, the per-page owners and the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
 | `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the pseudo terminal and ending process trees |
@@ -121,5 +121,32 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
 | `electron-builder.yml` | Packages `out/` into `release/` with the fuses |
 | `packaging/` | The app icon electron-builder turns into each platform's format |
+| `verify/` | The driver, the scenarios, the stand-ins for `gh` and `claude`, and the journeys (skill `satellite-verify`) |
+| `lint/` | The `no-comments` lint rule and its test |
+| `scripts/check` | The green checkpoint, guards, format, lint, typecheck and tests |
+| `scripts/postinstall.ts` | Restores the spawn helper's executable bit and installs the Electron binary |
 | `scripts/checksums.ts` | Writes the checksum file for a folder of packages |
+| `.github/workflows/ci.yml` | Runs `./scripts/check` on Linux for every pull request and every push to `main` |
 | `.github/workflows/release.yml` | Packages and proves the three platforms, and drafts a release for a tag |
+
+## Decisions
+
+| Chosen | Rejected | Why |
+| --- | --- | --- |
+| electron-vite | Plain Vite, the Vite plugin of Electron Forge | One config builds main, preload and renderer with hot reload, keeps runtime dependencies out of the main bundle and bundles the sandboxed preload as CommonJS. Plain Vite needs that setup built by hand, and the Forge plugin ties the build to Forge. |
+| electron-builder | Electron Forge | It makes the dmg, zip, NSIS installer, AppImage and deb itself, flips the fuses and ad-hoc signs from one file. Forge has no first-party AppImage maker. |
+| node-pty 1.1, stable, with the spawn helper fix in postinstall | The node-pty 1.2 beta, forks of node-pty | A stable N-API release with builds for macOS and Windows that runs in Node and Electron alike. The beta is a beta, and a fork adds another party to trust in a native module. |
+| xterm.js's DOM renderer | The WebGL renderer | No extra dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text. |
+| The unicode11 addon | The graphemes addon | It gives the cell widths Claude Code expects, and the graphemes addon is experimental. |
+| A driver over the Chrome DevTools Protocol, `--remote-debugging-port=0` | Playwright's `_electron.launch` | `_electron.launch` waits for the Node inspector, which the inspect arguments fuse turns off, so it could never drive the packaged app the release proves. |
+| The `app://` protocol | `file://` | A standard, secure scheme with one handler that confines every path to `out/renderer` and sets the policy on every response. `file://` reaches the whole disk and has no real origin for the sender check. |
+| TypeScript 6 | TypeScript 7 | Typed lint needs the JavaScript compiler API, and typescript-eslint supports TypeScript only below 6.1. |
+| Terminal ids chosen by the interface, which subscribes before it starts | The background process buffering early output until the interface asks | Nothing is lost and nothing has to be held or bounded in between. |
+| Output batching with `terminal.ack` and a paused pseudo terminal | Streaming output with no flow control | It is the only way to bound memory when a command floods the terminal. |
+| Only `.exe` and `.com` on Windows | Running `.cmd` and `.bat` shims | A batch file needs a shell that re-parses its arguments, so a branch or file name could become a command. A shim install shows as missing. |
+| React state | A state library | The window holds a few independent parts that each own their state, and the bridge client is the only thing they share. |
+| Links in terminal output do nothing | Opening them | Opening one needs the scheme and host check before the system browser, which belongs to spec 004 with the sessions. |
+| One instance per Satellite home | Several windows on the same home | Two apps on one home would fight over its state, and the lock also stops node-pty's forking kill helper from opening a second window. |
+| Ad-hoc signing on macOS, no signature on Windows and Linux | Unsigned macOS builds, paid certificates | An arm64 Mac refuses a modified binary with no signature, and Satellite loads no remote content and holds no credentials, so nothing depends on a certificate. |
+| The cookie encryption fuse off | On | Satellite stores no cookies, and an ad-hoc signature that changes with every build can make macOS ask about the keychain item. |
+| The renderer minified, main and preload readable | Everything minified, nothing minified | The renderer carries Monaco and is large, while main and preload are small and their stack traces land in logs. |
