@@ -125,6 +125,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (workspace) => workspace.key === state.selected?.workspace,
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
+  const removableId = removable?.id;
+  const removableName = removable?.name;
   const registry = useMemo(() => {
     const theme = (choice: ThemeChoice) => () => {
       update((current) => ({ ...current, theme: choice }), true);
@@ -157,13 +159,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "project.remove",
             title: "Remove project",
-            available: removable !== undefined,
+            available: removableId !== undefined,
             run: async () => {
-              if (removable === undefined) return;
-              if (!(await remove(removable.id))) return;
-              update((current) => ({ ...current, selected: null }), true);
+              if (removableId === undefined) return;
+              if (!(await remove(removableId))) return;
+              update(
+                (current) => ({
+                  ...current,
+                  selected: current.selected?.projectId === removableId ? null : current.selected,
+                }),
+                true,
+              );
               refresh();
-              notify(`Satellite forgot ${removable.name}. Its folder is untouched.`, "info");
+              notify(`Satellite forgot ${String(removableName)}. Its folder is untouched.`, "info");
             },
           },
           {
@@ -195,7 +203,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         notify,
       ),
     );
-  }, [update, add, remove, refresh, removable, select, notify, dismissToast]);
+  }, [update, add, remove, refresh, removableId, removableName, select, notify, dismissToast]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };

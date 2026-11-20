@@ -22,6 +22,7 @@ export function useProjects(notify: Notify): {
   const listingSince = useRef<number | undefined>(undefined);
   const latest = useRef(0);
   const changes = useRef(0);
+  const removing = useRef(new Set<string>());
   const refresh = useCallback(() => {
     const since = listingSince.current;
     if (since !== undefined && Date.now() - since < listStaleMs) return;
@@ -68,7 +69,11 @@ export function useProjects(notify: Notify): {
   }, [notify]);
   const remove = useCallback(
     async (projectId: string) => {
-      const result = await invoke("projects.remove", { projectId });
+      if (removing.current.has(projectId)) return false;
+      removing.current.add(projectId);
+      const result = await invoke("projects.remove", { projectId }).finally(() => {
+        removing.current.delete(projectId);
+      });
       if (!result.ok) {
         notify(result.error.message, "error");
         return false;
