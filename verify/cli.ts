@@ -177,6 +177,15 @@ function parseStep(raw: string): Step {
       }
       return step(({ session }) => session.answerFolderDialog(chosenFolder(session, target)));
     }
+    case "drop": {
+      const target = needsValue();
+      if (!folderTarget.test(target) || target === "cancel") {
+        throw new Error("step drop needs repo or a folder like alpha/src");
+      }
+      return step(({ session }) =>
+        session.dropFolder(target === "repo" ? session.repo : session.folder(target)),
+      );
+    }
     case "log":
       return step(({ session }) => session.standInEvents());
     case "restart":

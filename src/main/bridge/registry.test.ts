@@ -26,6 +26,17 @@ function spies() {
     "projects.choose": vi.fn<BridgeHandler<"projects.choose">>(() =>
       Promise.resolve({ outcome: "canceled" }),
     ),
+    "projects.drop": vi.fn<BridgeHandler<"projects.drop">>(() =>
+      Promise.resolve({
+        project: {
+          id: terminalId,
+          name: "alpha",
+          parent: "folders",
+          missing: null,
+          workspaces: [{ key: "main", branch: "main" }],
+        },
+      }),
+    ),
     "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
@@ -118,6 +129,16 @@ describe("createBridgeRouter", () => {
     }
     for (const channel of ["projects.choose", "projects.list"]) {
       const result = await route(channel, { path: "/Users/<name>/repo" }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
+  it("refuses a dropped path that is empty or too long", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    for (const path of ["", "/".repeat(4097), 42]) {
+      const result = await route("projects.drop", { path }, owner);
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);

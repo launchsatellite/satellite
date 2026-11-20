@@ -18,7 +18,10 @@ interface ProjectsOptions {
   window: () => BrowserWindow | undefined;
 }
 export interface Projects {
-  handlers: Pick<BridgeHandlers, "projects.list" | "projects.choose" | "projects.remove">;
+  handlers: Pick<
+    BridgeHandlers,
+    "projects.list" | "projects.choose" | "projects.drop" | "projects.remove"
+  >;
   add(folder: string): Promise<ProjectView>;
   flush(): Promise<void>;
 }
@@ -170,6 +173,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         if (folder === undefined) return { outcome: "canceled" };
         return { outcome: "added", project: await add(folder) };
       },
+      "projects.drop": async ({ path }) => ({ project: await add(path) }),
       "projects.remove": async ({ projectId }) => {
         const list = await current();
         const removed = list.find((project) => project.id === projectId);

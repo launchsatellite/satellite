@@ -125,6 +125,10 @@ export const bridgeRequests = {
       z.strictObject({ outcome: z.literal("canceled") }),
     ]),
   },
+  "projects.drop": {
+    request: z.strictObject({ path: z.string().min(1).max(4096) }),
+    response: z.strictObject({ project: projectView }),
+  },
   "projects.remove": {
     request: z.strictObject({ projectId: z.uuid() }),
     response: empty,

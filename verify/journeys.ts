@@ -52,6 +52,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     gitEnv: session.gitEnv,
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),
+    dropFolder: (path) => session.dropFolder(path),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: () => session.relaunch(),

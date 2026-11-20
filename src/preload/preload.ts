@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron";
 import { bridgeIpc, type SatelliteApi } from "../shared/satellite-api.ts";
 
 const api: SatelliteApi = {
@@ -13,6 +13,14 @@ const api: SatelliteApi = {
     return () => {
       ipcRenderer.removeListener(bridgeIpc.event, forward);
     };
+  },
+  pathForFile(file) {
+    if (!(file instanceof File)) return "";
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return "";
+    }
   },
 };
 

@@ -31,6 +31,7 @@ export interface AppSession {
   gitEnv: Record<string, string>;
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
+  dropFolder(path: string): Promise<void>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
@@ -385,6 +386,22 @@ async function stopApp(running: RunningApp): Promise<boolean> {
   return exitedOnItsOwn;
 }
 
+async function dropOnWindow(page: Page, path: string): Promise<void> {
+  const box = await page.getByTestId("column-repository").boundingBox();
+  if (box === null) throw new Error("the repository column is not on screen to drop on");
+  const x = Math.round(box.x + box.width / 2);
+  const y = Math.round(box.y + box.height / 2);
+  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  const protocol = await page.context().newCDPSession(page);
+  try {
+    for (const type of ["dragEnter", "dragOver", "drop"] as const) {
+      await protocol.send("Input.dispatchDragEvent", { type, x, y, data });
+    }
+  } finally {
+    await protocol.detach();
+  }
+}
+
 export class LaunchFailure extends Error {
   output = "";
   consoleErrors: string[] = [];
@@ -541,6 +558,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       return join(temp, "folders", ...segments);
     },
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
+    dropFolder: (path) => dropOnWindow(page, path),
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
     async screenshot(name) {

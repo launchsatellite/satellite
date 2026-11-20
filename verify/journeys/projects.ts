@@ -194,7 +194,7 @@ async function run(session: AppSession): Promise<void> {
 
   await addWithShortcut(session, "alpha");
   await workspaceReads(session, "alpha", "main");
-  await addWithShortcut(session, "beta");
+  await session.dropFolder(session.folder("beta"));
   await workspaceReads(session, "beta", "develop");
   await addWithShortcut(session, "alpha");
   await toastReads(session, "alpha is already in Satellite.", "after adding alpha twice");

@@ -15,6 +15,7 @@ export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): 
 export function useProjects(notify: Notify): {
   projects: ProjectView[] | undefined;
   add: () => Promise<WorkspaceRef | undefined>;
+  drop: (path: string) => Promise<WorkspaceRef | undefined>;
   remove: (projectId: string) => Promise<boolean>;
   refresh: () => void;
 } {
@@ -54,6 +55,12 @@ export function useProjects(notify: Notify): {
       window.removeEventListener("focus", refresh);
     };
   }, [refresh]);
+  const added = useCallback((project: ProjectView) => {
+    changes.current += 1;
+    setProjects((current) => [...(current ?? []), project]);
+    const ref: WorkspaceRef = { projectId: project.id, workspace: "main" };
+    return ref;
+  }, []);
   const add = useCallback(async () => {
     const result = await invoke("projects.choose", {});
     if (!result.ok) {
@@ -61,12 +68,19 @@ export function useProjects(notify: Notify): {
       return undefined;
     }
     if (result.value.outcome === "canceled") return undefined;
-    const { project } = result.value;
-    changes.current += 1;
-    setProjects((current) => [...(current ?? []), project]);
-    const added: WorkspaceRef = { projectId: project.id, workspace: "main" };
-    return added;
-  }, [notify]);
+    return added(result.value.project);
+  }, [notify, added]);
+  const drop = useCallback(
+    async (path: string) => {
+      const result = await invoke("projects.drop", { path });
+      if (!result.ok) {
+        notify(result.error.message, "error");
+        return undefined;
+      }
+      return added(result.value.project);
+    },
+    [notify, added],
+  );
   const remove = useCallback(
     async (projectId: string) => {
       if (removing.current.has(projectId)) return false;
@@ -84,5 +98,5 @@ export function useProjects(notify: Notify): {
     },
     [notify],
   );
-  return { projects, add, remove, refresh };
+  return { projects, add, drop, remove, refresh };
 }

@@ -8,6 +8,7 @@ import {
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
+import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { useProjects } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
@@ -73,9 +74,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
-  const { projects, add, remove, refresh } = useProjects(notify);
+  const { projects, add, drop, remove, refresh } = useProjects(notify);
   const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
+  const projectsRef = useRef<HTMLElement>(null);
+  const repositoryRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
   useEffect(() => {
     const element = windowRef.current;
@@ -107,6 +110,28 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     },
     [update],
   );
+  const open = useCallback(
+    (ref: WorkspaceRef | undefined) => {
+      if (ref === undefined) return;
+      setAdded(ref.projectId);
+      select(ref);
+    },
+    [select],
+  );
+  const acceptsDrop = useCallback(
+    (target: EventTarget | null) =>
+      target instanceof Node &&
+      [projectsRef, repositoryRef].some((column) => column.current?.contains(target) === true),
+    [],
+  );
+  const dropFolder = useCallback(
+    (path: string) => {
+      dismissToast();
+      void drop(path).then(open);
+    },
+    [dismissToast, drop, open],
+  );
+  const dragging = useFolderDrop({ accepts: acceptsDrop, onFolder: dropFolder, notify });
   const switcher = useMemo<SwitcherItem[]>(
     () =>
       (projects ?? [])
@@ -150,10 +175,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: true,
             run: async () => {
               dismissToast();
-              const ref = await add();
-              if (ref === undefined) return;
-              setAdded(ref.projectId);
-              select(ref);
+              open(await add());
             },
           },
           {
@@ -203,7 +225,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         notify,
       ),
     );
-  }, [update, add, remove, refresh, removableId, removableName, select, notify, dismissToast]);
+  }, [update, add, open, remove, refresh, removableId, removableName, notify, dismissToast]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };
@@ -233,10 +255,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       <div
         ref={windowRef}
         data-testid="app-window"
-        className="grid h-full bg-bg text-fg"
+        className="relative grid h-full bg-bg text-fg"
         style={{ gridTemplateColumns: `${String(left)}px minmax(0,1fr) ${String(right)}px` }}
       >
         <section
+          ref={projectsRef}
           data-testid="column-projects"
           aria-label="Sidebar"
           className="relative flex min-h-0 flex-col border-r border-line bg-side"
@@ -258,6 +281,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         </section>
         <section
+          ref={repositoryRef}
           data-testid="column-repository"
           aria-label="Repository"
           className="relative flex min-h-0 min-w-0 flex-col border-r border-line"
@@ -276,6 +300,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
           <ClaudePane />
         </section>
+        {dragging && <DropOverlay />}
         {palette !== null && (
           <Palette
             mode={palette}

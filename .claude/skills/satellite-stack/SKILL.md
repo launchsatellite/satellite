@@ -56,7 +56,7 @@ Names are `<feature>.<verb>`. In this order.
 
 An event is the same, with `bridgeEvents` instead. The handler sends it with `owner.emit("x.done", payload)`, so it reaches only the page that owns it. Add the event's empty `Set` to `listeners` in `src/renderer/bridge/bridge-client.ts`, which typecheck asks for. The client holds one IPC listener for every subscriber, parses each event once, and drops and logs one that fails its schema, naming the event and the failing fields, never the payload. The renderer listens with `subscribe("x.done", listener)`, which returns the unsubscribe for the effect's cleanup. Subscribe before the request that makes the events, as `TerminalView` does before `terminal.start`.
 
-Never add an IPC channel, a preload function or an `ipcMain` handler. Everything goes through `satellite:bridge` and `satellite:event`.
+Never add an IPC channel, a preload function or an `ipcMain` handler. Everything goes through `satellite:bridge` and `satellite:event`. The one preload function beside them, `pathForFile`, only reads a dropped file's path and sends nothing.
 
 ## The platform module
 
