@@ -15,6 +15,7 @@ import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
+import { createHeldKeyGate } from "./held-keys.ts";
 import { linkFollow } from "./link-follow.ts";
 import "./terminal-font.css";
 import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
@@ -198,7 +199,16 @@ export function TerminalView({
     element.addEventListener("paste", pasteImage, true);
     element.addEventListener("dragover", dragOver);
     element.addEventListener("drop", drop);
+    const held = createHeldKeyGate();
+    const tookFocus = () => {
+      held.focused();
+    };
+    element.addEventListener("focusin", tookFocus);
     terminal.attachCustomKeyEventHandler((event) => {
+      if (!held.allows(event)) {
+        event.preventDefault();
+        return false;
+      }
       if (!isShiftEnter(event)) return true;
       if (event.type === "keydown") send(newlineSequence);
       return false;
@@ -235,6 +245,7 @@ export function TerminalView({
       element.removeEventListener("paste", pasteImage, true);
       element.removeEventListener("dragover", dragOver);
       element.removeEventListener("drop", drop);
+      element.removeEventListener("focusin", tookFocus);
       darkScheme.removeEventListener("change", retheme);
       observer.disconnect();
       cancelAnimationFrame(frame);
