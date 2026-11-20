@@ -62,7 +62,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     dropFolder: (path) => session.dropFolder(path),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
-    relaunch: () => session.relaunch(),
+    relaunch: (whileClosed) => session.relaunch(whileClosed),
     close: () => session.close(),
     async screenshot(name) {
       const path = await session.screenshot(name);

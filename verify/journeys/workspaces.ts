@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AppSession } from "../driver.ts";
@@ -135,6 +135,20 @@ async function textOf(session: AppSession, testId: string): Promise<string> {
   return session.page.getByTestId(testId).innerText();
 }
 
+async function linkOutside(session: AppSession, folder: string): Promise<string> {
+  const outside = session.folder("linked-from-a-workspace");
+  await mkdir(join(outside, "src"), { recursive: true });
+  await writeFile(join(outside, "src", "keep.md"), "Mine.\n");
+  await mkdir(join(folder, "node_modules"), { recursive: true });
+  await symlink(outside, join(folder, "node_modules", "shared-lib"), "junction");
+  return outside;
+}
+
+async function checkOutsideKept(outside: string): Promise<void> {
+  const kept = await readFile(join(outside, "src", "keep.md"), "utf8").catch(() => undefined);
+  assert.equal(kept, "Mine.\n", "archive reached the folder a link inside the workspace points to");
+}
+
 async function archiveThroughDialog(session: AppSession, folder: string): Promise<void> {
   await writeFile(join(folder, "KEEP.md"), "Kept by the branch.\n");
   await git(session, folder, ["add", "KEEP.md"]);
@@ -206,9 +220,18 @@ async function run(session: AppSession): Promise<void> {
 
   await page.getByTestId("workspace-repo-first-look").click();
   await selectedRow(session, "first-look", "before second-look was deleted");
-  await deleteOutsideSatellite(session, second);
-  await git(session, session.repo, ["worktree", "add", "-q", "-b", "left-behind", adopted, "HEAD"]);
-  await session.relaunch();
+  await session.relaunch(async () => {
+    await deleteOutsideSatellite(session, second);
+    await git(session, session.repo, [
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "left-behind",
+      adopted,
+      "HEAD",
+    ]);
+  });
   await visible(session, "workspace-repo-first-look", "after the restart", promptTimeoutMs);
   await gone(session, "workspace-repo-second-look", "after its folder was deleted and a restart");
   await toastReads(
@@ -220,8 +243,10 @@ async function run(session: AppSession): Promise<void> {
   await visible(session, "workspace-repo-left-behind", "after a worktree with no record was left");
   await session.screenshot("workspaces-restarted");
 
+  const outside = await linkOutside(session, first);
   await archiveThroughDialog(session, first);
   await checkArchived(session, first);
+  await checkOutsideKept(outside);
 
   assert.equal(
     session.consoleErrors.length,

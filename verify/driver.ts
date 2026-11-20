@@ -36,7 +36,7 @@ export interface AppSession {
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
-  relaunch(): Promise<void>;
+  relaunch(whileClosed?: () => Promise<void>): Promise<void>;
   close(): Promise<CloseResult>;
 }
 export interface WindowTree {
@@ -578,11 +578,12 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   }
   let closing: Promise<CloseResult> | undefined;
   let relaunching: Promise<void> | undefined;
-  const relaunchOnce = async (): Promise<void> => {
+  const relaunchOnce = async (whileClosed?: () => Promise<void>): Promise<void> => {
     await stopApp(running);
     running.child = undefined;
     running.browser = undefined;
     running.page = undefined;
+    await whileClosed?.();
     if (closing !== undefined) throw new Error("the app was closed during the restart");
     page = await startApp(options, paths, running, consoleErrors);
   };
@@ -621,9 +622,9 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await page.screenshot({ path, timeout: startTimeoutMs });
       return path;
     },
-    relaunch() {
+    relaunch(whileClosed) {
       if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
-      relaunching = relaunchOnce();
+      relaunching = relaunchOnce(whileClosed);
       return relaunching;
     },
     close() {
