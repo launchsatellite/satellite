@@ -11,7 +11,7 @@ import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import { createTerminalSessions } from "./terminal-sessions.ts";
 
-vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn() }));
+vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn(), windowsPty: () => null }));
 vi.mock("../platform/tools.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../platform/tools.ts")>();
   return {

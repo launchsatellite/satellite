@@ -137,7 +137,10 @@ export function TerminalView({
       cols: sent.cols,
       rows: sent.rows,
     }).then((result) => {
-      if (result.ok) return;
+      if (result.ok) {
+        if (result.value.windowsPty !== null) terminal.options.windowsPty = result.value.windowsPty;
+        return;
+      }
       if (result.error.code === "tool-missing") outward.current.onMissing(result.error.message);
       else end(result.error.message);
     });

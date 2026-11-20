@@ -122,6 +122,11 @@ const toolReady = z.strictObject({
   state: z.literal("ready"),
   version: z.string().min(1).max(200),
 });
+const windowsPty = z.strictObject({
+  backend: z.enum(["conpty", "winpty"]),
+  buildNumber: z.number().int().positive(),
+});
+export type WindowsPty = z.output<typeof windowsPty>;
 export const installFix = z.strictObject({
   kind: z.enum(["command", "address"]),
   text: z.string().min(1).max(200),
@@ -255,7 +260,7 @@ export const bridgeRequests = {
       cols,
       rows,
     }),
-    response: empty,
+    response: z.strictObject({ windowsPty: windowsPty.nullable() }),
   },
   "terminal.write": {
     request: z.strictObject({

@@ -9,7 +9,7 @@ import {
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { isInsidePath } from "../platform/paths.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
-import { spawnPty, type PtyProcess } from "../platform/pty.ts";
+import { spawnPty, windowsPty, type PtyProcess } from "../platform/pty.ts";
 import { childEnvironment, claudeEnvironment, resolveTool } from "../platform/tools.ts";
 import { claudeArgs, hookSettings, type ClaudeStart } from "../sessions/claude-launch.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
@@ -370,7 +370,7 @@ export function createTerminalSessions({
       settle(session);
       tellExit(session, 0, "ended");
     }
-    return {};
+    return { windowsPty: windowsPty() };
   };
 
   return {

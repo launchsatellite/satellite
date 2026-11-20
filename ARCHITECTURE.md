@@ -153,6 +153,7 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 - **Unicode 11.** The unicode11 addon is active, so emoji and wide characters take the same cell widths Claude Code expects. The graphemes addon was rejected because it is experimental.
 - **Shift+Enter.** xterm.js has no kitty keyboard protocol, so Shift+Enter with no other modifier sends ESC then CR, the sequence Claude Code reads as a new line, and the key's own events are swallowed.
 - **The spawn helper.** node-pty ships its macOS `spawn-helper` without the executable bit, which fails every spawn with `posix_spawnp failed`. The postinstall step restores the bit. `npm rebuild node-pty` does not, and the node-pty beta that fixes it was rejected because it is a beta. node-pty stays out of the bundle because it is a runtime dependency, and `src/main/platform/pty.ts` is the only file that imports it.
+- **Windows pseudo terminal.** On Windows `terminal.start` answers with the backend node-pty uses, ConPTY from build 18309 and winpty before it, and the Windows build number from `os.release()`. The terminal view hands both to xterm's `windowsPty` option, which xterm's docs ask for when the pty runs on Windows, so xterm applies its ConPTY handling when rows grow and turns reflow off where ConPTY can't reflow. Elsewhere the answer is null.
 
 ## Sessions
 

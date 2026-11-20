@@ -86,7 +86,9 @@ function spies() {
       Promise.resolve({ resumable: false }),
     ),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
-    "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
+    "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
+      Promise.resolve({ windowsPty: null }),
+    ),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
     "terminal.close": vi.fn<BridgeHandler<"terminal.close">>(() => Promise.resolve({})),
