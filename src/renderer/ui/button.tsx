@@ -19,14 +19,14 @@ export interface ButtonProps {
 }
 
 const base =
-  "inline-flex items-center justify-center gap-[7px] rounded-[6px] border border-transparent font-sans font-semibold whitespace-nowrap transition-[background-color,filter] duration-[120ms] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>kbd]:ml-1";
+  "inline-flex items-center justify-center gap-[7px] rounded-[6px] border font-sans font-semibold whitespace-nowrap transition-[background-color,filter] duration-[120ms] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>kbd]:ml-1";
 const variants: Record<ButtonVariant, { look: string; hover: string }> = {
   primary: {
-    look: "bg-pri-bg text-pri-fg [&>kbd]:border-current [&>kbd]:text-current [&>kbd]:opacity-55",
+    look: "border-transparent bg-pri-bg text-pri-fg [&>kbd]:border-current [&>kbd]:text-current [&>kbd]:opacity-55",
     hover: "hover:brightness-110 active:brightness-90",
   },
   secondary: { look: "border-ctl bg-bg text-fg", hover: "hover:bg-hover" },
-  ghost: { look: "text-fg2", hover: "hover:bg-hover" },
+  ghost: { look: "border-transparent text-fg2", hover: "hover:bg-hover" },
 };
 const sizes: Record<ButtonSize, { text: string; square: string }> = {
   default: { text: "h-7 px-3 text-[13px]", square: "h-7 w-7" },

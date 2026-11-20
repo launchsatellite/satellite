@@ -58,6 +58,9 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
 | `signal` | `#FF5A1F` | `#FF5A1F` | Needs you, destructive actions |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
+| `volt` / `volt-edge` | `#DCFF3D` / `#DCFF3D` | `#DCFF3D` / `#6B7800` | Ready and passing, with the inner edge that keeps a volt pixel visible on light |
+| `lilac` | `#C7B9FF` | `#C7B9FF` | Merged, approved, secondary state |
+| `shadow` | `0 16px 40px rgb(0 0 0 / 0.55)` | `0 16px 40px rgb(10 10 11 / 0.12)` | The one shadow, on menus, the palette, dialogs and toasts |
 
 Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets a `#6B7800` inner edge so it stays visible.
 
