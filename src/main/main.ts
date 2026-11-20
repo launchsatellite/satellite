@@ -153,11 +153,7 @@ app.on("before-quit", (event) => {
   const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
   const settled = Promise.all([
     bounded(
-      Promise.all([
-        parts?.terminals.closeAll(),
-        parts?.last.flush(),
-        parts?.interfaceFile.flush(),
-      ]),
+      Promise.all([parts?.terminals.closeAll(), parts?.last.flush(), parts?.interfaceFile.flush()]),
     ),
     (parts?.workspaces.stopAll() ?? Promise.resolve()).then(() =>
       bounded(parts?.projects.flush() ?? Promise.resolve()),
