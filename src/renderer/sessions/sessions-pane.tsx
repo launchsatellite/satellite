@@ -24,7 +24,7 @@ interface SessionsPaneProps {
 const noSession = "Start a Claude Code session in this workspace first.";
 const answerFirst = "Answer Claude Code first, then send this again.";
 const notReady =
-  "Claude Code hasn't told Satellite it's ready yet. Answer what it shows first, or type the request yourself.";
+  "Satellite can send here once Claude Code has taken your first request and reported it. Type this one yourself.";
 
 function EmptyWorkspace({
   workspace,
