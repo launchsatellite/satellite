@@ -306,4 +306,24 @@ describe("createNotices", () => {
     expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
     expect(shown[0]?.close).not.toHaveBeenCalled();
   });
+
+  it("tells the same workspace of two projects apart and opens the first page that asked", async () => {
+    const { shown, badges, opened, notices } = setup();
+    const otherProject = {
+      ...need("main", 2),
+      workspace: { ...ref("main"), projectId: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d" },
+    };
+    notices.update([need("main"), otherProject]);
+    await settle();
+    expect(badges).toEqual([2]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
+    notices.update([]);
+    await settle(noticeGapMs);
+    const first = need("1", 1);
+    notices.update([first, need("1", 2)]);
+    await settle();
+    shown[1]?.click();
+    expect(opened).toEqual([first]);
+    expect(opened[0]?.owner.id).toBe(1);
+  });
 });
