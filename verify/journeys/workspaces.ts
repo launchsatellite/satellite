@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AppSession } from "../driver.ts";
@@ -189,6 +189,48 @@ async function checkArchived(session: AppSession, folder: string): Promise<void>
   assert.equal(tip, keptCommit, `the branch first-look ends at "${tip}" after archive`);
 }
 
+function shellWord(path: string): string {
+  return JSON.stringify(path.split("\\").join("/"));
+}
+
+async function undoAfterHookLinked(session: AppSession): Promise<void> {
+  const { page } = session;
+  const outside = session.folder("linked-by-a-hook");
+  await mkdir(join(outside, "src"), { recursive: true });
+  await writeFile(join(outside, "src", "keep.md"), "Mine.\n");
+  const hook = join(session.repo, ".git", "hooks", "post-checkout");
+  const linkScript = `require("node:fs").symlinkSync(process.argv[1], "linked", "junction")`;
+  await writeFile(
+    hook,
+    `#!/bin/sh\n${shellWord(process.execPath)} -e '${linkScript}' ${shellWord(outside)}\nexit 1\n`,
+    { mode: 0o755 },
+  );
+  try {
+    await openNewWorkspace(session, () => page.getByTestId("new-workspace-repo").click());
+    await page.getByTestId("workspace-name").fill("hooked");
+    await page.keyboard.press("Enter");
+    await visible(session, "workspace-failure", "after the hook linked a folder and failed");
+    const failure = await textOf(session, "workspace-failure");
+    assert.ok(
+      failure.endsWith("Satellite removed what it had made, so nothing changed."),
+      `the undone creation said "${failure}"`,
+    );
+    await session.screenshot("workspaces-undone");
+    await page.getByTestId("close-workspace-dialog").click();
+  } finally {
+    await unlink(hook);
+  }
+  const kept = await readFile(join(outside, "src", "keep.md"), "utf8").catch(() => undefined);
+  assert.equal(kept, "Mine.\n", "undoing the creation reached the folder the hook linked");
+  assert.ok(
+    !(await exists(worktreeFolder(session, "hooked"))),
+    "hooked's folder is still there after the undo",
+  );
+  assert.ok(!(await isListed(session, "hooked")), "git still lists hooked after the undo");
+  const branches = await git(session, session.repo, ["branch", "--list", "hooked"]);
+  assert.equal(branches.trim(), "", "the branch hooked is still there after the undo");
+}
+
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   const first = worktreeFolder(session, "first-look");
@@ -247,6 +289,7 @@ async function run(session: AppSession): Promise<void> {
   await archiveThroughDialog(session, first);
   await checkArchived(session, first);
   await checkOutsideKept(outside);
+  await undoAfterHookLinked(session);
 
   assert.equal(
     session.consoleErrors.length,
