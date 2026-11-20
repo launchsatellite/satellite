@@ -122,6 +122,47 @@ describe("claudeEnvironment", () => {
     });
   });
 
+  it("never hands Claude Code the identity of what started Satellite", () => {
+    const kept = {
+      PATH: "/usr/bin",
+      HOME: "/Users/<name>",
+      CLAUDE_CONFIG_DIR: "/Users/<name>/.claude",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      LANG: "en_US.UTF-8",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "",
+      TERM_PROGRAM_SETTING: "kept",
+    };
+    expect(
+      claudeEnvironment({
+        ...kept,
+        CLAUDE_CODE_SSE_PORT: "51234",
+        CLAUDE_CODE_ENTRYPOINT: "claude-vscode",
+        CLAUDE_CODE_BRIDGE_SESSION_ID: "session_x",
+        CLAUDE_CODE_SESSION_ID: "x",
+        CLAUDE_CODE_MESSAGING_SOCKET: "/tmp/x.sock",
+        CLAUDE_CODE_MESSAGING_TOKEN: "x",
+        CLAUDE_EFFORT: "high",
+        CLAUDE_JOB_DIR: "/tmp/x",
+        TERM_PROGRAM: "vscode",
+        TERM_PROGRAM_VERSION: "1.0",
+        TERM_SESSION_ID: "w0t0p0",
+        ITERM_SESSION_ID: "w0t0p0",
+        LC_TERMINAL: "iTerm2",
+        KITTY_WINDOW_ID: "1",
+        KITTY_PID: "1",
+        KITTY_LISTEN_ON: "unix:/tmp/kitty",
+        KITTY_PUBLIC_KEY: "x",
+        WT_SESSION: "x",
+        TMUX: "/tmp/tmux-501/default,1,0",
+        TMUX_PANE: "%1",
+        STY: "1.pts-0",
+        VSCODE_SHELL_INTEGRATION: "1",
+        VSCODE_GIT_IPC_HANDLE: "/tmp/vscode-git.sock",
+      }),
+    ).toEqual(kept);
+  });
+
   it("drops the markers in any case on Windows only", () => {
     const env = { Path: "C:\\Windows", ClaudeCode: "1", claude_code_child_session: "1" };
     expect(claudeEnvironment(env, "win32")).toEqual({ Path: "C:\\Windows" });

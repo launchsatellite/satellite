@@ -81,7 +81,32 @@ const proxyKeys = [
   "all_proxy",
 ];
 const noProxyKeys = ["NO_PROXY", "no_proxy"];
-const claudeNestingKeys = new Set(["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION"]);
+const claudeHostKeys = new Set([
+  "CLAUDECODE",
+  "CLAUDE_CODE_CHILD_SESSION",
+  "CLAUDE_CODE_SSE_PORT",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_BRIDGE_SESSION_ID",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_EFFORT",
+  "CLAUDE_JOB_DIR",
+  "TERM_PROGRAM",
+  "TERM_PROGRAM_VERSION",
+  "TERM_SESSION_ID",
+  "ITERM_SESSION_ID",
+  "LC_TERMINAL",
+  "KITTY_WINDOW_ID",
+  "KITTY_PID",
+  "KITTY_LISTEN_ON",
+  "KITTY_PUBLIC_KEY",
+  "WT_SESSION",
+  "TMUX",
+  "TMUX_PANE",
+  "STY",
+]);
+const editorPrefix = "VSCODE_";
 const loopback = "127.0.0.1";
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
@@ -123,7 +148,10 @@ export function claudeEnvironment(
 ): Record<string, string> {
   const nameOf = (key: string) => (platform === "win32" ? key.toUpperCase() : key);
   const kept = Object.fromEntries(
-    Object.entries(env).filter(([key]) => !claudeNestingKeys.has(nameOf(key))),
+    Object.entries(env).filter(([key]) => {
+      const name = nameOf(key);
+      return !claudeHostKeys.has(name) && !name.startsWith(editorPrefix);
+    }),
   );
   if (!proxyKeys.some((key) => (env[key] ?? "") !== "")) return kept;
   for (const key of noProxyKeys) kept[key] = withLoopback(env[key]);
