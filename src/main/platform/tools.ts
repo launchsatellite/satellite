@@ -101,8 +101,14 @@ export function parseToolOverride(
 
 export async function resolveTool(tool: Tool): Promise<ResolvedCommand | undefined> {
   const variable = toolOverrideVariables[tool];
-  const override =
-    variable === undefined ? undefined : parseToolOverride(variable, process.env[variable]);
+  let override: ResolvedCommand | undefined;
+  try {
+    override =
+      variable === undefined ? undefined : parseToolOverride(variable, process.env[variable]);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : `${tool} has a malformed override`);
+    return undefined;
+  }
   if (override !== undefined) return override;
   const file = await findExecutable(tool, await userEnvironment());
   return file === undefined ? undefined : { file, args: [] };

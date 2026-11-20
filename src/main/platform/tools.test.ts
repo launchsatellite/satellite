@@ -63,6 +63,14 @@ describe("parseToolOverride", () => {
 });
 
 describe("runTool", () => {
+  it("reads a tool with a malformed override as missing and logs the variable", async () => {
+    vi.stubEnv("SATELLITE_GH", "/opt/tools/bin/gh");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(runTool("gh", ["--version"])).resolves.toBeUndefined();
+    expect(logged).toHaveBeenCalledWith(expect.stringMatching(/^SATELLITE_GH must be/));
+    logged.mockRestore();
+  });
+
   it("ends the whole process tree of a tool that runs past its time limit", async () => {
     const folder = await mkdtemp(join(tmpdir(), "satellite-tools-"));
     const pidFile = join(folder, "child.pid");
