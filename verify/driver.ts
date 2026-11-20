@@ -28,6 +28,7 @@ export interface AppSession {
   readonly page: Page;
   home: string;
   repo: string;
+  gitEnv: Record<string, string>;
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
   standInEvents(): Promise<StandInEvent[]>;
@@ -256,25 +257,28 @@ function waitForDevTools(child: ChildProcess, output: () => string): Promise<str
   });
 }
 
+function recipeGitEnv(temp: string) {
+  return {
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: join(temp, "gitconfig"),
+    GIT_TERMINAL_PROMPT: "0",
+  };
+}
+
 async function prepareFolders(
   temp: string,
   home: string,
   repo: string,
   scenario: Scenario,
 ): Promise<void> {
-  const gitconfig = join(temp, "gitconfig");
+  const gitEnv = recipeGitEnv(temp);
   await mkdir(home);
   await mkdir(repo);
   for (const file of scenario.home ?? []) await writeInside(home, file.path, file.content);
   await writeFile(
-    gitconfig,
+    gitEnv.GIT_CONFIG_GLOBAL,
     "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
   );
-  const gitEnv = {
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: gitconfig,
-    GIT_TERMINAL_PROMPT: "0",
-  };
   await buildRepo(repo, scenario.repo, gitEnv);
   for (const folder of scenario.folders ?? []) {
     const target = join(temp, "folders", folder.name);
@@ -528,6 +532,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     home,
     repo,
+    gitEnv: recipeGitEnv(temp),
     folder(name) {
       const segments = name.split("/");
       if (!folderTarget.test(name) || segments.some((part) => part === "." || part === "..")) {
