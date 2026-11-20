@@ -44,10 +44,11 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `wait-for=<testid>` | waits up to 60 seconds for an element to be visible | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
+| `restart` | closes the app and launches it again on the same home, repo and log, so saved state can be read back | |
 
 `consoleErrors` holds console errors, uncaught errors and unhandled rejections from the first render on, because the driver attaches before the page runs or, when the page already ran, the protocol replays what it buffered.
 
-`wait` gets its own length plus 15 seconds and `wait-for` gets 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
+`wait` gets its own length plus 15 seconds, and `wait-for` and `restart` get 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
 
 The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, output?, tree? }], consoleErrors, screenshots, leftover? }`. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch`, and a failed launch adds the app's last output and the window tree when one exists. `home` and `repo` are `null` until the temp folder exists. A failed close adds a `close` entry, and `leftover` names a temp folder that could not be deleted. The exit code is 1 when any step failed or something was left over. It does not count `consoleErrors`, so read them.
 
@@ -57,6 +58,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 
 - `description` says what world it sets up.
 - `repo` builds the throwaway repo in order. `{ "write": { "path", "content" } }` writes a file inside it and `{ "git": [args] }` runs the real `git` there, with no system config and a global config naming `Satellite Verify`.
+- `home` optionally lists `{ path, content }` files written inside the Satellite home before launch, with the same confinement as the repo's writes, such as a cut off `interface.json`.
 - `gh` lists canned answers, `{ args, stdout?, stderr?, exitCode? }`. The stand-in answers the first entry whose `args` equal its own exactly.
 - `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`.
 
@@ -79,7 +81,7 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## In code
 
-`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. A second `close()` answers the first one's result. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason`, `outputDir`, `isProcessAlive(pid)`, which counts a process it may not signal as alive, `pasteIntoFocus(page, text)` and `generatedText(size)`, the text `paste-size` sends. Journeys use it directly.
+`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)`, `relaunch()` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. `relaunch()` closes the app and launches it again in the same temp folder, after which `page` answers the new page, so a wrapper forwards `page` with a getter rather than copying it. A second `close()` answers the first one's result. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason`, `outputDir`, `isProcessAlive(pid)`, which counts a process it may not signal as alive, `pasteIntoFocus(page, text)` and `generatedText(size)`, the text `paste-size` sends. Journeys use it directly.
 
 ## Journeys
 
@@ -110,4 +112,5 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 001 Foundation, the window and the tool readout | `default` | `launch` |
 | 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
 | 001 Foundation, the security boundary | `default` | `boundary` |
+| 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |

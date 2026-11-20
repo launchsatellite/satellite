@@ -43,7 +43,15 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
   }
   const screenshots: string[] = [];
   const recorded: AppSession = {
-    ...session,
+    get page() {
+      return session.page;
+    },
+    home: session.home,
+    repo: session.repo,
+    consoleErrors: session.consoleErrors,
+    standInEvents: () => session.standInEvents(),
+    relaunch: () => session.relaunch(),
+    close: () => session.close(),
     async screenshot(name) {
       const path = await session.screenshot(name);
       screenshots.push(path);

@@ -53,6 +53,7 @@ const textLimit = 2000;
 const pasteLimit = 1_000_000;
 const waitLimitMs = 60_000;
 const stepTimeoutMs = 15_000;
+const restartTimeoutMs = 75_000;
 
 const noFocus = "nothing in the window has focus, click an element first";
 
@@ -164,6 +165,11 @@ function parseStep(raw: string): Step {
     }
     case "log":
       return step(({ session }) => session.standInEvents());
+    case "restart":
+      return step(async ({ session }) => {
+        await session.relaunch();
+        session.page.setDefaultTimeout(stepTimeoutMs);
+      }, restartTimeoutMs);
     default:
       throw new Error(`unknown step ${raw}`);
   }
