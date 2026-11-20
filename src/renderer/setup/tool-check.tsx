@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BridgeResult, GhState, ToolCheck, ToolState } from "../../shared/bridge-contract.ts";
+import type {
+  BridgeResult,
+  GhState,
+  InstallFix,
+  ToolCheck,
+  ToolState,
+} from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Button } from "../ui/button.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 
 type CheckedTool = keyof ToolCheck;
-type Row = { ready: true; detail: string } | { ready: false; detail: string; fix: string };
+type Row =
+  | { ready: true; detail: string }
+  | { ready: false; detail: string; fix?: { lead: string; text: string } };
 
 interface ToolCheckCardProps {
   firstRun: boolean;
@@ -23,22 +31,61 @@ const missingDetail: Record<CheckedTool, string> = {
   gh: "GitHub CLI is not installed, or Satellite cannot find it.",
   claude: "Claude Code is not installed, or Satellite cannot find it.",
 };
+const brokenDetail: Record<CheckedTool, string> = {
+  git: "git is installed, but Satellite couldn't run it.",
+  gh: "GitHub CLI is installed, but Satellite couldn't run it.",
+  claude: "Claude Code is installed, but Satellite couldn't run it.",
+};
 const signedOutDetail = {
   none: "GitHub CLI is not signed in.",
   failed: "GitHub CLI couldn't confirm its sign-in. Check the connection, or sign in again.",
 };
+const leads = {
+  command: "Run this in a terminal, then check again.",
+  address: "Follow the steps at this address, then check again.",
+  diagnose: "Run this in a terminal to see why.",
+};
+
+function installRow(tool: CheckedTool, fix: InstallFix): Row {
+  return {
+    ready: false,
+    detail: missingDetail[tool],
+    fix: { lead: leads[fix.kind], text: fix.text },
+  };
+}
 
 function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
-  if (state.state === "missing")
-    return { ready: false, detail: missingDetail[tool], fix: state.fix };
-  if (state.state === "signed-out") {
-    return { ready: false, detail: signedOutDetail[state.reason], fix: state.fix };
+  switch (state.state) {
+    case "missing":
+      return installRow(tool, state.fix);
+    case "broken":
+      return {
+        ready: false,
+        detail: brokenDetail[tool],
+        fix: { lead: leads.diagnose, text: `${tool} --version` },
+      };
+    case "signed-out":
+      return {
+        ready: false,
+        detail: signedOutDetail[state.reason],
+        fix: { lead: leads.command, text: "gh auth login" },
+      };
+    case "token-refused":
+      return {
+        ready: false,
+        detail: `GitHub CLI refused the token in ${state.variable}. Replace it, or remove it from your environment, then check again.`,
+      };
+    case "ready":
+      if (!("account" in state)) return { ready: true, detail: `${state.version} found` };
+      if (state.account === null) return { ready: true, detail: "Signed in" };
+      return {
+        ready: true,
+        detail:
+          state.host === null
+            ? `Signed in as ${state.account}`
+            : `Signed in as ${state.account} on ${state.host}`,
+      };
   }
-  if (!("account" in state)) return { ready: true, detail: `${state.version} found` };
-  return {
-    ready: true,
-    detail: state.account === null ? "Signed in" : `Signed in as ${state.account}`,
-  };
 }
 
 function CheckRow({
@@ -66,11 +113,11 @@ function CheckRow({
           <span className="font-semibold">{name}</span>
           <span className="text-[12.5px] text-dim">{row?.detail ?? "Checking"}</span>
         </p>
-        {failing && (
+        {failing && row.fix !== undefined && (
           <>
-            <p className="text-[12.5px] text-fg2">Run this in a terminal, then check again.</p>
+            <p className="text-[12.5px] text-fg2">{row.fix.lead}</p>
             <code className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-all text-fg select-all">
-              {row.fix}
+              {row.fix.text}
             </code>
           </>
         )}
@@ -83,6 +130,7 @@ function CheckRow({
 export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
   const [result, setResult] = useState<BridgeResult<ToolCheck>>();
   const latest = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
   const request = useCallback(() => {
     latest.current += 1;
     const asked = latest.current;
@@ -91,10 +139,14 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
     });
   }, []);
   useEffect(request, [request]);
+  useEffect(() => {
+    if (!firstRun) heading.current?.focus();
+  }, [firstRun]);
   const checkAgain = () => {
     setResult(undefined);
     request();
   };
+  const settled = result !== undefined;
   const rows = result?.ok === true ? result.value : undefined;
   const readyCount = tools.filter(
     ({ tool }) => rows !== undefined && rowOf(tool, rows[tool]).ready,
@@ -106,7 +158,11 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
           data-testid="tool-check"
           className="flex w-[min(500px,100%)] flex-col gap-[18px] rounded-[12px] border border-line bg-bg px-[34px] pt-[34px] pb-[30px]"
         >
-          <h2 className="font-display text-[40px] leading-[0.95] font-bold tracking-[-0.045em]">
+          <h2
+            ref={heading}
+            tabIndex={-1}
+            className="font-display text-[40px] leading-[0.95] font-bold tracking-[-0.045em] outline-none"
+          >
             {firstRun ? "welcome to satellite" : "your tools"}
           </h2>
           <p className="-mt-2 text-[14px] text-fg2">
@@ -114,7 +170,11 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
               ? "Three checks, then add your first project."
               : "Satellite runs your own git, gh and Claude Code."}
           </p>
-          <div aria-live="polite" className="overflow-hidden rounded-[10px] border border-line">
+          <div
+            aria-live="polite"
+            aria-busy={!settled}
+            className="overflow-hidden rounded-[10px] border border-line"
+          >
             {result?.ok === false ? (
               <p className="px-3 py-3 text-[12.5px] text-fg2">{result.error.message}</p>
             ) : (
@@ -130,13 +190,19 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
             )}
           </div>
           <div className="flex items-center gap-[10px]">
-            <span
-              aria-label={`${String(readyCount)} of 3 tools ready`}
-              className="mr-auto font-pixel text-[13px] text-dim uppercase"
-            >
-              {`0${String(readyCount)} / 03`}
+            <span data-testid={settled ? "check-count" : undefined} className="mr-auto">
+              <span aria-hidden className="font-pixel text-[13px] text-dim uppercase">
+                {`0${String(readyCount)} / 03`}
+              </span>
+              <span className="sr-only">{`${String(readyCount)} of 3 tools ready`}</span>
             </span>
-            <Button variant="ghost" icon="refresh" onClick={checkAgain} testId="check-again">
+            <Button
+              variant="ghost"
+              icon="refresh"
+              onClick={checkAgain}
+              disabled={!settled}
+              testId="check-again"
+            >
               Check again
             </Button>
             {firstRun ? (

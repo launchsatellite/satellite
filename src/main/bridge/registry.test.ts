@@ -6,8 +6,11 @@ import { BridgeFailure, createBridgeRouter } from "./registry.ts";
 const terminalId = "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6";
 const toolCheck: ToolCheck = {
   git: { state: "ready", version: "2.50.1" },
-  gh: { state: "signed-out", reason: "none", fix: "gh auth login" },
-  claude: { state: "missing", fix: "curl -fsSL https://claude.ai/install.sh | bash" },
+  gh: { state: "signed-out", reason: "none" },
+  claude: {
+    state: "missing",
+    fix: { kind: "command", text: "curl -fsSL https://claude.ai/install.sh | bash" },
+  },
 };
 
 function spies() {

@@ -1,23 +1,27 @@
+import type { InstallFix } from "../../shared/bridge-contract.ts";
 import type { Tool } from "./tools.ts";
 
-const claudeScript = "curl -fsSL https://claude.ai/install.sh | bash";
-const macos: Record<Tool, string> = {
-  git: "xcode-select --install",
-  gh: "brew install gh",
+const claudeScript: InstallFix = {
+  kind: "command",
+  text: "curl -fsSL https://claude.ai/install.sh | bash",
+};
+const macos: Record<Tool, InstallFix> = {
+  git: { kind: "command", text: "xcode-select --install" },
+  gh: { kind: "command", text: "brew install gh" },
   claude: claudeScript,
 };
-const windows: Record<Tool, string> = {
-  git: "winget install --id Git.Git -e --source winget",
-  gh: "winget install --id GitHub.cli --source winget",
-  claude: "winget install Anthropic.ClaudeCode",
+const windows: Record<Tool, InstallFix> = {
+  git: { kind: "command", text: "winget install --id Git.Git -e --source winget" },
+  gh: { kind: "command", text: "winget install --id GitHub.cli --source winget" },
+  claude: { kind: "command", text: "winget install Anthropic.ClaudeCode" },
 };
-const linux: Record<Tool, string> = {
-  git: "sudo apt install git",
-  gh: "sudo apt install gh",
+const linux: Record<Tool, InstallFix> = {
+  git: { kind: "command", text: "sudo apt install git" },
+  gh: { kind: "address", text: "https://github.com/cli/cli/blob/trunk/docs/install_linux.md" },
   claude: claudeScript,
 };
 
-export function installCommand(tool: Tool): string {
+export function installCommand(tool: Tool): InstallFix {
   if (process.platform === "darwin") return macos[tool];
   if (process.platform === "win32") return windows[tool];
   return linux[tool];

@@ -18,6 +18,8 @@ export type ProjectView = z.output<typeof projectView>;
 export type ToolState = z.output<typeof toolState>;
 export type GhState = z.output<typeof ghState>;
 export type ToolCheck = z.output<typeof toolCheck>;
+export type GhTokenVariable = z.output<typeof ghTokenVariable>;
+export type InstallFix = z.output<typeof installFix>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -57,28 +59,35 @@ export const projectView = z.strictObject({
   missing: z.boolean(),
   workspaces: z.array(workspaceView).max(1),
 });
+export const ghLogin = /^[A-Za-z0-9-]{1,39}$/;
+export const ghHost =
+  /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*(?::\d{1,5})?$/;
+export const ghTokenVariable = z.enum([
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_ENTERPRISE_TOKEN",
+  "GITHUB_ENTERPRISE_TOKEN",
+]);
 const toolReady = z.strictObject({
   state: z.literal("ready"),
   version: z.string().min(1).max(200),
 });
-const toolMissing = z.strictObject({
-  state: z.literal("missing"),
-  fix: z.string().min(1).max(200),
+export const installFix = z.strictObject({
+  kind: z.enum(["command", "address"]),
+  text: z.string().min(1).max(200),
 });
-export const toolState = z.discriminatedUnion("state", [toolReady, toolMissing]);
+const toolMissing = z.strictObject({ state: z.literal("missing"), fix: installFix });
+const toolBroken = z.strictObject({ state: z.literal("broken") });
+export const toolState = z.discriminatedUnion("state", [toolReady, toolMissing, toolBroken]);
 export const ghState = z.discriminatedUnion("state", [
   toolReady.extend({
-    account: z
-      .string()
-      .regex(/^[A-Za-z0-9-]{1,39}$/)
-      .nullable(),
+    account: z.string().regex(ghLogin).nullable(),
+    host: z.string().regex(ghHost).nullable(),
   }),
   toolMissing,
-  z.strictObject({
-    state: z.literal("signed-out"),
-    reason: z.enum(["none", "failed"]),
-    fix: z.literal("gh auth login"),
-  }),
+  toolBroken,
+  z.strictObject({ state: z.literal("signed-out"), reason: z.enum(["none", "failed"]) }),
+  z.strictObject({ state: z.literal("token-refused"), variable: ghTokenVariable }),
 ]);
 export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: toolState });
 export const defaultInterfaceState: InterfaceState = {

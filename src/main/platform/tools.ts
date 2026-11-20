@@ -51,6 +51,7 @@ const ghQuiet = {
   GH_PROMPT_DISABLED: "1",
   GH_NO_UPDATE_NOTIFIER: "1",
   GH_NO_EXTENSION_UPDATE_NOTIFIER: "1",
+  GH_TELEMETRY: "false",
   NO_COLOR: "1",
 };
 const gitLocale = { LC_ALL: "C" };
