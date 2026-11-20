@@ -86,7 +86,11 @@ async function recorded(
     timeoutMs,
     () => `${when} the recorder held ${JSON.stringify(shownOf(lines))}`,
   );
-  assert.deepEqual(shownOf(lines), expected, `${when} the recorder held other notifications`);
+  assert.deepEqual(
+    shownOf(lines),
+    expected,
+    `${when} the recorder held ${JSON.stringify(shownOf(lines))}`,
+  );
   return lines;
 }
 
@@ -279,6 +283,8 @@ async function switchedOff(session: AppSession): Promise<void> {
   await commandMenu(session);
   await page.getByTestId("command-notifications-off").click();
   await toastReads(session, turnedOff, "after turning notifications off,");
+  await select(session, "alpha");
+  await terminalShows(session, "Allow Bash again", "with alpha already shown");
   await answer(session, "alpha", "Allowed again.");
   await lastCount(session, 0, "after alpha was answered again,");
   await page.keyboard.press("Enter");
