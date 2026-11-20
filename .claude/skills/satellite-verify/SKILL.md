@@ -112,5 +112,5 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 001 Foundation, the window and the tool readout | `default` | `launch` |
 | 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
 | 001 Foundation, the security boundary | `default` | `boundary` |
-| 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |
+| 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |

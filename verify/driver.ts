@@ -293,6 +293,7 @@ function appPage(browser: Browser, origin: string): Page | undefined {
 async function findAppPage(browser: Browser, origin: string): Promise<Page> {
   const deadline = Date.now() + startTimeoutMs;
   while (Date.now() < deadline) {
+    if (!browser.isConnected()) throw new Error("the app closed before its page appeared");
     const page = appPage(browser, origin);
     if (page !== undefined) return page;
     await delay(100);
@@ -483,8 +484,21 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     throw failure;
   }
   let closing: Promise<CloseResult> | undefined;
+  let relaunching: Promise<void> | undefined;
+  const relaunchOnce = async (): Promise<void> => {
+    await stopApp(running);
+    running.child = undefined;
+    running.browser = undefined;
+    running.page = undefined;
+    if (closing !== undefined) throw new Error("the app was closed during the restart");
+    page = await startApp(options, paths, running, consoleErrors);
+  };
   const closeOnce = async (): Promise<CloseResult> => {
     const exitedOnItsOwn = await stopApp(running);
+    if (relaunching !== undefined) {
+      await relaunching.catch(() => undefined);
+      await stopApp(running);
+    }
     const leftover = await removeTemp(temp, options.keep);
     cleanups.delete(abandon);
     return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
@@ -504,13 +518,10 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await page.screenshot({ path, timeout: startTimeoutMs });
       return path;
     },
-    async relaunch() {
-      if (closing !== undefined) throw new Error("the app is already closed");
-      await stopApp(running);
-      running.child = undefined;
-      running.browser = undefined;
-      running.page = undefined;
-      page = await startApp(options, paths, running, consoleErrors);
+    relaunch() {
+      if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
+      relaunching = relaunchOnce();
+      return relaunching;
     },
     close() {
       closing ??= closeOnce();
