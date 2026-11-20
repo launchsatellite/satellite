@@ -4,7 +4,9 @@ import type { Page } from "playwright-core";
 import {
   buildApp,
   errorReason,
+  generatedText,
   launchApp,
+  pasteIntoFocus,
   LaunchFailure,
   readTree,
   withTimeout,
@@ -51,7 +53,8 @@ const textLimit = 2000;
 const pasteLimit = 1_000_000;
 const waitLimitMs = 60_000;
 const stepTimeoutMs = 15_000;
-const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+const noFocus = "nothing in the window has focus, click an element first";
 
 function boundedInt(text: string, step: string, min: number, max: number): number {
   const value = Number(text);
@@ -60,8 +63,6 @@ function boundedInt(text: string, step: string, min: number, max: number): numbe
   }
   return value;
 }
-
-const noFocus = "nothing in the window has focus, click an element first";
 
 async function focusedTestId(page: Page): Promise<string> {
   const testId = await page.evaluate(() => {
@@ -74,17 +75,8 @@ async function focusedTestId(page: Page): Promise<string> {
 }
 
 async function paste(page: Page, text: string): Promise<string> {
-  const target = await page.evaluate((data) => {
-    const active = document.activeElement;
-    if (active === null || active === document.body) return null;
-    const transfer = new DataTransfer();
-    transfer.setData("text/plain", data);
-    active.dispatchEvent(
-      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
-    );
-    return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
-  }, text);
-  if (target === null) throw new Error(noFocus);
+  const target = await pasteIntoFocus(page, text);
+  if (target === undefined) throw new Error(noFocus);
   return target;
 }
 
@@ -132,8 +124,7 @@ function parseStep(raw: string): Step {
     }
     case "paste-size": {
       const size = boundedInt(needsValue(), name, 1, pasteLimit);
-      const text = pasteAlphabet.repeat(Math.ceil(size / pasteAlphabet.length)).slice(0, size);
-      return step(({ session }) => paste(session.page, text));
+      return step(({ session }) => paste(session.page, generatedText(size)));
     }
     case "resize": {
       const match = /^(\d+)x(\d+)$/.exec(needsValue());

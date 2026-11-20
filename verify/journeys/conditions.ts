@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type { AppSession } from "../driver.ts";
+import { isProcessAlive, type AppSession } from "../driver.ts";
 
 const pollMs = 100;
 
@@ -7,12 +7,7 @@ export const promptTimeoutMs = 60_000;
 export const goneTimeoutMs = process.platform === "win32" ? 15_000 : 5_000;
 
 export function processGone(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch {
-    return true;
-  }
+  return !isProcessAlive(pid);
 }
 
 export async function waitUntil(

@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { z } from "zod";
 import { resolveInside } from "../src/main/platform/paths.ts";
 
+export type Scenario = z.infer<typeof scenarioSchema>;
+export type RepoStep = z.infer<typeof repoStepSchema>;
+
+const kebabCase = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const scenariosRoot = join(import.meta.dirname, "scenarios");
 const repoStepSchema = z.union([
   z.strictObject({ write: z.strictObject({ path: z.string().min(1), content: z.string() }) }),
   z.strictObject({ git: z.array(z.string()).min(1) }),
@@ -27,19 +32,19 @@ export const scenarioSchema = z.strictObject({
   claude: z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
 });
 
-export type Scenario = z.infer<typeof scenarioSchema>;
-export type RepoStep = z.infer<typeof repoStepSchema>;
-
-const kebabCase = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const scenariosRoot = join(import.meta.dirname, "scenarios");
-
 export async function loadScenario(
   name: string,
 ): Promise<{ dir: string; file: string; scenario: Scenario }> {
   const dir = kebabCase.test(name) ? await resolveInside(scenariosRoot, name) : undefined;
   if (dir === undefined) throw new Error(`no scenario named ${name} in verify/scenarios`);
   const file = join(dir, "scenario.json");
-  const parsed = scenarioSchema.safeParse(JSON.parse(await readFile(file, "utf8")));
+  let json: unknown;
+  try {
+    json = JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    throw new Error(`scenario ${name} is not valid JSON. ${String(error)}`, { cause: error });
+  }
+  const parsed = scenarioSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error(`scenario ${name} is invalid\n${z.prettifyError(parsed.error)}`);
   }

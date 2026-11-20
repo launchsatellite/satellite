@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { Page } from "playwright-core";
-import type { AppSession } from "../driver.ts";
+import { generatedText, pasteIntoFocus, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
   goneTimeoutMs,
@@ -17,23 +17,9 @@ interface TerminalSize {
 
 const columns = ["column-projects", "column-repository", "column-sessions"];
 const pasteSize = 100_000;
-const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 const newlineSequence = "\u001b\r";
 const shrinkPx = 200;
 const smallestHeight = 300;
-
-async function pasteIntoFocus(page: Page, text: string): Promise<boolean> {
-  return page.evaluate((data) => {
-    const active = document.activeElement;
-    if (active === null || active === document.body) return false;
-    const transfer = new DataTransfer();
-    transfer.setData("text/plain", data);
-    active.dispatchEvent(
-      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
-    );
-    return true;
-  }, text);
-}
 
 async function receivedInput(session: AppSession): Promise<string> {
   return (await session.standInEvents())
@@ -79,13 +65,14 @@ async function checkWindow(page: Page): Promise<void> {
 }
 
 async function checkInput(session: AppSession): Promise<void> {
-  const pasted = pasteAlphabet
-    .repeat(Math.ceil(pasteSize / pasteAlphabet.length))
-    .slice(0, pasteSize);
+  const pasted = generatedText(pasteSize);
   const expected = `hello${newlineSequence}${pasted}`;
   await session.page.keyboard.type("hello");
   await session.page.keyboard.press("Shift+Enter");
-  assert.ok(await pasteIntoFocus(session.page, pasted), "nothing had focus to paste into");
+  assert.ok(
+    (await pasteIntoFocus(session.page, pasted)) !== undefined,
+    "nothing had focus to paste into",
+  );
   let received = "";
   await waitUntil(
     async () => {

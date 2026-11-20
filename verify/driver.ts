@@ -1,4 +1,4 @@
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
 import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { endWindowsTree } from "../src/main/platform/process-tree.ts";
 import { buildRepo, withoutGitVariables } from "./repo-recipe.ts";
 import { loadScenario, type RepoStep } from "./scenario.ts";
 import { readStandInEvents, type StandInEvent } from "./stand-ins/stand-in-log.ts";
@@ -69,10 +70,12 @@ const cleanups = new Set<() => Promise<unknown>>();
 let signalHandlersInstalled = false;
 let stopping = false;
 
-export const outputDir = join(repoRoot, "verify-output");
-
-const lockFile = join(outputDir, "run.lock");
+const outputFolder = join(repoRoot, "verify-output");
+const lockFile = join(outputFolder, "run.lock");
+const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 let lockHeld = false;
+
+export const outputDir = outputFolder;
 
 async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
   if (stopping) return;
@@ -88,15 +91,6 @@ function stopOnSignals(): void {
     process.on(signal, () => {
       void stopForSignal(signal);
     });
-  }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
   }
 }
 
@@ -125,7 +119,7 @@ async function holdCheckoutLock(): Promise<void> {
   await mkdir(outputDir, { recursive: true });
   if (!(await takeLock())) {
     const owner = Number(await readFile(lockFile, "utf8").catch(() => ""));
-    if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
+    if (Number.isInteger(owner) && owner > 0 && isProcessAlive(owner)) {
       throw new Error(
         `another verify run (process ${String(owner)}) is using this checkout. Wait for it to finish or run from your own worktree.`,
       );
@@ -198,8 +192,7 @@ function killTree(child: ChildProcess): void {
     return;
   }
   if (hasExited(child)) return;
-  const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
-  execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+  void endWindowsTree(pid);
 }
 
 async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -487,4 +480,31 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       return closing;
     },
   };
+}
+
+export function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
+}
+
+export function generatedText(size: number): string {
+  return pasteAlphabet.repeat(Math.ceil(size / pasteAlphabet.length)).slice(0, size);
+}
+
+export async function pasteIntoFocus(page: Page, text: string): Promise<string | undefined> {
+  const target = await page.evaluate((data) => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return null;
+    const transfer = new DataTransfer();
+    transfer.setData("text/plain", data);
+    active.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+    );
+    return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
+  }, text);
+  return target ?? undefined;
 }
