@@ -18,6 +18,33 @@ vi.mock("../platform/user-environment.ts", () => ({
     ),
 }));
 
+const older = vi.hoisted(() => ({ on: false, calls: new Array<string[]>() }));
+
+vi.mock("../platform/tools.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../platform/tools.ts")>();
+  return {
+    ...actual,
+    runTool: (...args: Parameters<typeof actual.runTool>) => {
+      if (!older.on) return actual.runTool(...args);
+      const [, toolArgs] = args;
+      older.calls.push([...toolArgs]);
+      if (toolArgs.includes("-z")) {
+        return Promise.resolve({
+          exitCode: 129,
+          stdout: "",
+          stderr: "error: unknown switch `z'\nusage: git worktree list [<options>]\n",
+        });
+      }
+      return Promise.resolve({
+        exitCode: 0,
+        stdout:
+          "worktree /Users/<name>/repo\nHEAD 1234abc1234abc1234abc1234abc1234abc1234a\nbranch refs/heads/main\n\nworktree /Users/<name>/wt/w1\nHEAD 5678abc5678abc5678abc5678abc5678abc5678c\nbranch refs/heads/w1\nprunable gitdir file points to non-existent location\n\n",
+        stderr: "",
+      });
+    },
+  };
+});
+
 const run = promisify(execFile);
 const manualExample = [
   ["worktree /path/to/bare-source", "bare"],
@@ -196,5 +223,25 @@ describe("listWorktrees", () => {
       true,
     );
     expect(listed?.worktrees[0]?.head).toMatch(/^[0-9a-f]{40,64}$/);
+  });
+});
+
+describe("listWorktrees on a git older than 2.36", () => {
+  it("asks once with -z, then reads newline records for the rest of the run", async () => {
+    older.on = true;
+    try {
+      const first = await listWorktrees("/Users/<name>/repo");
+      expect(first?.separator).toBe("\n");
+      expect(
+        first?.worktrees.map(({ path, branch, prunable }) => [path, branch, prunable]),
+      ).toEqual([
+        ["/Users/<name>/repo", "main", false],
+        ["/Users/<name>/wt/w1", "w1", true],
+      ]);
+      await listWorktrees("/Users/<name>/repo");
+      expect(older.calls.map((args) => args.includes("-z"))).toEqual([true, false, false]);
+    } finally {
+      older.on = false;
+    }
   });
 });
