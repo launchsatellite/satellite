@@ -107,7 +107,8 @@ function ProjectRows({
       </div>
       <ul aria-label={project.name} className="flex flex-col gap-px">
         {project.workspaces.map((workspace, index) => {
-          const current = selected?.projectId === project.id;
+          const current =
+            selected?.projectId === project.id && selected.workspace === workspace.key;
           return (
             <li key={workspace.key}>
               <button
