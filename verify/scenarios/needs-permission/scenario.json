@@ -33,7 +33,6 @@
       },
       { "print": "Hidden https://example.com\u001b[8m.evil.example/login\u001b[28m tail\r\n" },
       { "print": "\u001b[?2004h" },
-      { "hook": "SessionStart", "fields": { "source": "startup" } },
       { "print": "> " },
       { "await": "\r" },
       { "hook": "UserPromptSubmit" },

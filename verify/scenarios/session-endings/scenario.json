@@ -25,7 +25,6 @@
     "resumeFails": true,
     "script": [
       { "print": "Claude Code stand-in\r\n" },
-      { "hook": "SessionStart", "fields": { "source": "startup" } },
       { "print": "> " },
       { "await": "\r" },
       { "hook": "UserPromptSubmit" },

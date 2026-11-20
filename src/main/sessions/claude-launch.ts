@@ -12,7 +12,6 @@ interface HttpHook {
 }
 
 export const hookEvents = [
-  "SessionStart",
   "UserPromptSubmit",
   "PermissionRequest",
   "PostToolUse",
@@ -55,7 +54,6 @@ export function hookSettings(
   ];
   return {
     hooks: {
-      SessionStart: entry("SessionStart"),
       UserPromptSubmit: entry("UserPromptSubmit"),
       PermissionRequest: entry("PermissionRequest"),
       PostToolUse: entry("PostToolUse"),

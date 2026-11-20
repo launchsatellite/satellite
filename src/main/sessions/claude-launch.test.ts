@@ -51,7 +51,15 @@ describe("hookSettings", () => {
     const baseUrl = "http://127.0.0.1:43210/hook/9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
     const secret = "ab".repeat(32);
     const settings = hookSettings(baseUrl, secret);
-    expect(Object.keys(settings.hooks)).toEqual([...hookEvents]);
+    expect(Object.keys(settings.hooks)).toEqual([
+      "UserPromptSubmit",
+      "PermissionRequest",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "Notification",
+      "Stop",
+      "StopFailure",
+    ]);
     for (const event of hookEvents) {
       expect(settings.hooks[event]).toEqual([
         {

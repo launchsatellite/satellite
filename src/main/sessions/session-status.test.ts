@@ -11,18 +11,8 @@ const notification = (type: string | null): SessionEvent => ({
 });
 const asked = (agent: string | null): SessionEvent => ({ name: "PermissionRequest", agent });
 const toolDone = (agent: string | null): SessionEvent => ({ name: "PostToolUse", agent });
-const sessionStart = (source: string | null): SessionEvent => ({
-  name: "SessionStart",
-  source,
-  sessionId: null,
-});
 
 const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
-  {
-    label: "start",
-    events: ["startup", "resume", "clear", "fork", "unheard", null].map(sessionStart),
-  },
-  { label: "compact", events: [sessionStart("compact")] },
   { label: "UserPromptSubmit", events: [{ name: "UserPromptSubmit" }] },
   { label: "PermissionRequest", events: [asked(mainThread)] },
   {
@@ -49,22 +39,8 @@ const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
 ];
 
 const table: Record<SessionStatus, readonly SessionStatus[]> = {
-  idle: [
-    "idle",
-    "idle",
-    "working",
-    "needs-you",
-    "working",
-    "needs-you",
-    "idle",
-    "idle",
-    "idle",
-    "done",
-    "stopped",
-  ],
+  idle: ["working", "needs-you", "working", "needs-you", "idle", "idle", "idle", "done", "stopped"],
   working: [
-    "idle",
-    "working",
     "working",
     "needs-you",
     "working",
@@ -76,8 +52,6 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "stopped",
   ],
   "needs-you": [
-    "idle",
-    "needs-you",
     "working",
     "needs-you",
     "working",
@@ -88,22 +62,8 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "done",
     "stopped",
   ],
-  done: [
-    "idle",
-    "done",
-    "working",
-    "needs-you",
-    "working",
-    "needs-you",
-    "done",
-    "done",
-    "done",
-    "done",
-    "stopped",
-  ],
+  done: ["working", "needs-you", "working", "needs-you", "done", "done", "done", "done", "stopped"],
   stopped: [
-    "stopped",
-    "stopped",
     "stopped",
     "stopped",
     "stopped",

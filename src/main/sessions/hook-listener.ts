@@ -28,7 +28,7 @@ const rateWindowMs = 1000;
 const hookPath =
   /^\/hook\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([A-Za-z]+)$/;
 const bearer = /^Bearer ([0-9a-f]{64})$/;
-const statusEvents = new Set<HookEventName>(["SessionStart", "Notification"]);
+const statusEvents = new Set<HookEventName>(["Notification"]);
 const agentEvents = new Set<HookEventName>([
   "PermissionRequest",
   "PostToolUse",
@@ -37,10 +37,8 @@ const agentEvents = new Set<HookEventName>([
 const hookBody = z.object({
   session_id: z.string().max(100).optional(),
   agent_id: z.unknown().optional(),
-  source: z.string().max(64).optional(),
   notification_type: z.string().max(64).optional(),
 });
-const sessionIdSchema = z.uuid();
 const agentIdSchema = z.string().min(1).max(128).optional();
 const unknownLaunchSecret = randomBytes(secretBytes);
 
@@ -115,14 +113,6 @@ function agentOf(body: HookBody | undefined): Agent {
 }
 
 function eventOf(name: HookEventName, body: HookBody | undefined): SessionEvent {
-  if (name === "SessionStart") {
-    const sessionId = sessionIdSchema.safeParse(body?.session_id);
-    return {
-      name,
-      source: body?.source ?? null,
-      sessionId: sessionId.success ? sessionId.data : null,
-    };
-  }
   if (name === "Notification") {
     return { name, type: body?.notification_type ?? null, agent: agentOf(body) };
   }

@@ -275,7 +275,9 @@ async function tabs(session: AppSession): Promise<void> {
   await page.getByTestId("new-session").click();
   await visible(session, "session-tab-2", "after a new session");
   const pid = await nextPid(session, 3);
-  await hooksReach(session, "SessionStart", 3);
+  await terminalShows(session, "Claude Code stand-in", "in beta's second tab");
+  await page.keyboard.press("Enter");
+  await hooksReach(session, "UserPromptSubmit", 3);
   await send(page, secondTabSend);
   await terminalShows(session, secondTabSend, "in beta's second tab");
   await page.getByTestId("session-tab-1").click();
@@ -459,6 +461,9 @@ async function endings(session: AppSession, resumedPid: number, sendFrom: number
   await terminalShows(session, ended, "after Ctrl+D");
   await stateIs(session, "session-tab-1", "stopped", "in beta after Ctrl+D");
   await select(session, "alpha");
+  await page.getByTestId("terminal").locator("textarea").focus();
+  await page.keyboard.press("Enter");
+  await hooksReach(session, "UserPromptSubmit", 4);
   process.kill(resumedPid, "SIGKILL");
   await terminalShows(session, unexpected, "after the stand-in was killed");
   await stateIs(session, "session-tab-1", "stopped", "in alpha after the kill");
@@ -476,7 +481,6 @@ async function run(session: AppSession): Promise<void> {
   await imageAndDrop(session);
   await session.screenshot("sessions");
   const resumedPid = await restart(session, alphaPid);
-  await hooksReach(session, "SessionStart", 4);
   await endings(session, resumedPid, sendFrom);
   const answers = (await session.standInEvents()).flatMap((event) =>
     event.type === "hook" ? [`${event.event} ${String(event.status)}`] : [],

@@ -296,22 +296,18 @@ describe("createTerminalSessions", () => {
       sent.mock.calls.flatMap(([, event, payload]) =>
         event === "sessions.status" ? [payload] : [],
       );
-    const started = "3e4f5a6b-7c8d-4e9f-8a1b-2c3d4e5f6a7b";
-    sessions.hookEvent(launchId, { name: "SessionStart", source: "startup", sessionId: started });
+    const started = vi.mocked(spawnPty).mock.calls[0]?.[1][1];
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
     expect(last.set).toHaveBeenCalledWith(main, started);
     sessions.hookEvent("4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", { name: "Stop" });
     await vi.waitFor(() => {
-      expect(statuses()).toEqual([
-        { id, status: "idle", ready: true },
-        { id, status: "working", ready: true },
-      ]);
+      expect(statuses()).toEqual([{ id, status: "working", ready: true }]);
     });
     sessions.hookEvent(launchId, { name: "PermissionRequest", agent: "" });
     await vi.waitFor(() => {
       expect(statuses().at(-1)).toEqual({ id, status: "needs-you", ready: true });
     });
-    expect(statuses()).toHaveLength(3);
+    expect(statuses()).toHaveLength(2);
     ptys[0]?.exit(0);
     expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
@@ -424,8 +420,6 @@ describe("createTerminalSessions", () => {
     const { mine } = owners();
     await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
     const launchId = listener.open.mock.calls[0]?.[0] ?? "";
-    const started = "3e4f5a6b-7c8d-4e9f-8a1b-2c3d4e5f6a7b";
-    sessions.hookEvent(launchId, { name: "SessionStart", source: "startup", sessionId: started });
     const quitting = sessions.closeAll();
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
     ptys[0]?.exit(0, 1);

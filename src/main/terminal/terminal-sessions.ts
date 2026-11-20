@@ -418,9 +418,6 @@ export function createTerminalSessions({
       const session = launches.get(launchId);
       if (session === undefined || session.ended) return;
       session.hooked = true;
-      if (event.name === "SessionStart" && event.sessionId !== null) {
-        session.sessionId = event.sessionId;
-      }
       if (event.name === "UserPromptSubmit" && session.sessionId !== undefined) {
         void last.set(session.workspace, session.sessionId);
       }

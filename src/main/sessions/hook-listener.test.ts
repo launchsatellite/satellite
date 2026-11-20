@@ -76,8 +76,8 @@ function openSocket(): Promise<{ socket: Socket; closed: Promise<number> }> {
   });
 }
 
-function sessionStart(body: unknown): Promise<Answer> {
-  return send({ path: `/hook/${launchId}/SessionStart`, body: JSON.stringify(body) });
+function notification(body: unknown): Promise<Answer> {
+  return send({ path: `/hook/${launchId}/Notification`, body: JSON.stringify(body) });
 }
 
 beforeEach(async () => {
@@ -168,6 +168,7 @@ describe("startHookListener", () => {
   it("refuses a path it does not know", async () => {
     const paths = [
       `/hook/${launchId}/PreToolUse`,
+      `/hook/${launchId}/SessionStart`,
       "/other",
       `/hook/${launchId}/Stop?x=1`,
       `/hook/${launchId.toUpperCase()}/Stop`,
@@ -178,8 +179,8 @@ describe("startHookListener", () => {
   });
 
   it("refuses a body that is too large or not JSON", async () => {
-    const large = JSON.stringify({ source: "startup", padding: "x".repeat(70_000) });
-    expect((await sessionStart(JSON.parse(large))).status).toBe(413);
+    const large = JSON.stringify({ notification_type: "idle_prompt", padding: "x".repeat(70_000) });
+    expect((await notification(JSON.parse(large))).status).toBe(413);
     expect(
       (
         await send({
@@ -189,36 +190,20 @@ describe("startHookListener", () => {
         })
       ).status,
     ).toBe(413);
-    expect((await send({ path: `/hook/${launchId}/SessionStart`, body: "{" })).status).toBe(400);
-    expect((await sessionStart({ source: "x".repeat(65) })).status).toBe(400);
-    expect((await sessionStart(["startup"])).status).toBe(400);
+    expect((await send({ path: `/hook/${launchId}/Notification`, body: "{" })).status).toBe(400);
+    expect((await notification({ notification_type: "x".repeat(65) })).status).toBe(400);
+    expect((await notification(["idle_prompt"])).status).toBe(400);
     expect(events).toEqual([]);
   });
 
-  it("reads the session id and source of a session start", async () => {
-    const sessionId = randomUUID();
-    const answer = await sessionStart({
-      session_id: sessionId,
-      source: "resume",
-      cwd: "/Users/<name>/project",
+  it("reads the type of a notification", async () => {
+    const answer = await notification({
+      notification_type: "permission_prompt",
+      message: "Allow?",
     });
     expect(answer.status).toBe(204);
-    await send({
-      path: `/hook/${launchId}/Notification`,
-      body: JSON.stringify({ notification_type: "permission_prompt", message: "Allow?" }),
-    });
     expect(events.map((entry) => entry.event)).toEqual([
-      { name: "SessionStart", source: "resume", sessionId },
       { name: "Notification", type: "permission_prompt", agent: mainThread },
-    ]);
-  });
-
-  it("drops a session id that is not a UUID", async () => {
-    await sessionStart({ session_id: "../../etc", source: "startup" });
-    await sessionStart({});
-    expect(events.map((entry) => entry.event)).toEqual([
-      { name: "SessionStart", source: "startup", sessionId: null },
-      { name: "SessionStart", source: null, sessionId: null },
     ]);
   });
 

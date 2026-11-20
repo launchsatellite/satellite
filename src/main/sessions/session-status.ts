@@ -7,10 +7,9 @@ export interface SessionState {
   readonly askers: readonly Agent[];
 }
 export type SessionEvent =
-  | { name: "SessionStart"; source: string | null; sessionId: string | null }
   | { name: "Notification"; type: string | null; agent: Agent }
   | { name: AgentEventName; agent: Agent }
-  | { name: Exclude<HookEventName, "SessionStart" | "Notification" | AgentEventName> }
+  | { name: Exclude<HookEventName, "Notification" | AgentEventName> }
   | { name: "Exit" };
 type AgentEventName = "PermissionRequest" | "PostToolUse" | "PostToolUseFailure";
 
@@ -57,8 +56,6 @@ export function nextState(current: SessionState, event: SessionEvent): SessionSt
   switch (event.name) {
     case "Exit":
       return { status: "stopped", askers: [] };
-    case "SessionStart":
-      return event.source === "compact" ? current : { status: "idle", askers: [] };
     case "Notification":
       return afterNotification(current, event.type, event.agent);
     case "PostToolUse":
