@@ -31,17 +31,17 @@ The interface is treated as untrusted. Whatever it shows can never run a command
 
 The preload exposes two functions on `window.satellite` and nothing else. `invoke(channel, payload)` sends one request over the IPC channel `satellite:bridge` and `onEvent(listener)` receives pushes from `satellite:event`. `src/shared/bridge-contract.ts` holds a zod schema for every request, answer and event.
 
-- **Sender check.** The background process answers only its own window's main frame, and only while that frame shows the app origin, `app://satellite` or the dev server in development. Anything else gets `refused-sender`.
+- **Sender check.** The background process answers only its own window's main frame, and only while that frame shows the app origin, `app://satellite` or the dev server in development, with no user info in the URL. Anything else, including a frame that is already gone, gets `refused-sender`.
 - **Validation first.** Channels are looked up in a `Map`, so names like `__proto__` or `constructor` find nothing. Every payload is parsed with its strict schema before the handler runs, so a wrong type, a missing field or an extra key is refused with `invalid-request`.
 - **Errors.** A handler throws `BridgeFailure` for outcomes the user sees. Any other error is logged in the background process and answered as `failed` with no stack.
 - **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect.
-- **Lifetime.** Each window is one bridge owner, told when the window is destroyed, its renderer dies or it reloads, so whatever it started can end with it.
+- **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or it reloads, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. So nothing a page started outlives it, even when a request was still in flight.
 
 The terminal channels are in the contract and validated, and their handlers answer `not-found` until the terminal is wired.
 
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
-| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing | Empty request, each answer at most 200 characters | Takes no input. The tools run with fixed arguments and no shell. |
+| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters | Takes no input. The tools run with fixed arguments and no shell. |
 | `terminal.start` | Starts Claude Code in a terminal with a given id and size | Program must be `claude`, id a UUID, 2 to 500 columns, 1 to 300 rows, 16 terminals | The interface names no executable, path or argument. The background process resolves `claude` itself. |
 | `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches the terminal it was started for, the same as typing. |
 | `terminal.resize` | Resizes a terminal | 2 to 500 columns, 1 to 300 rows | Bounded integers only. |
@@ -54,16 +54,16 @@ The terminal channels are in the contract and validated, and their handlers answ
 `src/main/platform/` is the only code that knows about executables, shells and platform differences.
 
 - **Overrides.** `SATELLITE_GH` and `SATELLITE_CLAUDE` hold a JSON array of strings, the executable then its leading arguments, and replace the search for that tool. Anything else is refused with an error that names the variable. `git` has no override.
-- **Login shell environment.** An app started from the Dock, Finder or a desktop menu inherits a minimal `PATH`. On macOS and Linux Satellite runs the user's login shell once, interactive with a 5 second limit, reads its environment between two markers and merges it over its own. Any failure falls back to the app's own environment. Windows uses the app's environment as it is.
-- **Search.** Tools are found by walking `PATH` and skipping empty and relative entries, so the current folder is never searched. On Windows only `.exe` and `.com` files count, because batch files need a shell that re-parses arguments.
-- **Running.** Tools run with an argument array and no shell, a 30 second default limit, a 16 MiB output limit and the user's environment without any `ELECTRON_` variable.
+- **Login shell environment.** An app started from the Dock, Finder or a desktop menu inherits a minimal `PATH`. On macOS and Linux Satellite runs the user's login shell once, interactive with a 5 second limit, reads its environment between two markers and merges it over its own. Whenever both markers come back the block is used, even if the shell exits with an error. Otherwise Satellite falls back to the app's own environment. Windows uses the app's environment as it is.
+- **Search.** Tools are found by walking `PATH` and skipping empty and relative entries, so the current folder is never searched. A match must be a regular file, and executable on macOS and Linux. On Windows surrounding quotes are stripped, an entry needs a drive letter or a network share, and only `.exe` and `.com` files count, because batch files need a shell that re-parses arguments.
+- **Running.** Tools run with an argument array and no shell, a 16 MiB output limit and the user's environment without any `ELECTRON_` variable. Past its time limit, 30 seconds unless the caller asks for less, a tool gets `SIGTERM` and two seconds later `SIGKILL`. On Windows its whole process tree is ended at once. Errors name the tool or the override variable, never its arguments.
 
 ## Folder layout
 
 | Path | What |
 | --- | --- |
 | `src/main/main.ts` | Startup order. Home, scheme, hardening, protocol, bridge, window |
-| `src/main/bridge/` | The router that validates every request and the IPC wiring with the sender check |
+| `src/main/bridge/` | The router that validates every request, the sender check, the per-page owners and the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
 | `src/main/platform/` | The Satellite home, path confinement, the login shell environment and finding and running tools |
 | `src/main/tools/` | Tool versions for the left column |

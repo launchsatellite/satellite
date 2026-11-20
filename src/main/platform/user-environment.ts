@@ -31,8 +31,8 @@ function readLoginEnvironment(): Promise<Record<string, string>> {
       loginShell(),
       ["-i", "-l", "-c", `printf ${marker}; command env -0; printf ${marker}`],
       { encoding: "utf8", timeout: 5000, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 },
-      (error, stdout) => {
-        const parsed = error === null ? parseEnvironmentBlock(stdout) : undefined;
+      (_error, stdout) => {
+        const parsed = parseEnvironmentBlock(stdout);
         resolve(parsed === undefined ? inherited : { ...inherited, ...parsed });
       },
     );

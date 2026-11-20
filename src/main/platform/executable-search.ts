@@ -7,6 +7,14 @@ function windowsPathValue(env: Record<string, string | undefined>): string | und
   return key === undefined ? undefined : env[key];
 }
 
+function searchFolders(searchPath: string, windows: boolean): string[] {
+  if (!windows) return searchPath.split(":").filter((folder) => posix.isAbsolute(folder));
+  return searchPath
+    .split(";")
+    .map((folder) => folder.replace(/^"(.*)"$/, "$1"))
+    .filter((folder) => /^(?:[a-zA-Z]:[\\/]|\\\\)/.test(folder));
+}
+
 async function isRunnableFile(path: string): Promise<boolean> {
   try {
     if (!(await stat(path)).isFile()) return false;
@@ -26,10 +34,9 @@ export function executableCandidates(
   const paths = windows ? win32 : posix;
   const searchPath = (windows ? windowsPathValue(env) : env["PATH"]) ?? "";
   const fileNames = windows ? [`${name}.exe`, `${name}.com`] : [name];
-  return searchPath
-    .split(windows ? ";" : ":")
-    .filter((folder) => folder !== "" && paths.isAbsolute(folder))
-    .flatMap((folder) => fileNames.map((fileName) => paths.join(folder, fileName)));
+  return searchFolders(searchPath, windows).flatMap((folder) =>
+    fileNames.map((fileName) => paths.join(folder, fileName)),
+  );
 }
 
 export async function findExecutable(

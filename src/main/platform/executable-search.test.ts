@@ -40,4 +40,26 @@ describe("executableCandidates", () => {
     ]);
     expect(executableCandidates("git", "linux", {})).toEqual([]);
   });
+
+  it("skips root-relative Windows entries without a drive", () => {
+    expect(
+      executableCandidates("gh", "win32", { PATH: "\\tools;/tools;C:\\A;\\\\server\\share\\bin" }),
+    ).toEqual([
+      "C:\\A\\gh.exe",
+      "C:\\A\\gh.com",
+      "\\\\server\\share\\bin\\gh.exe",
+      "\\\\server\\share\\bin\\gh.com",
+    ]);
+  });
+
+  it("strips surrounding quotes from Windows entries", () => {
+    expect(
+      executableCandidates("git", "win32", { PATH: '"C:\\Program Files\\Git\\cmd";C:\\B' }),
+    ).toEqual([
+      "C:\\Program Files\\Git\\cmd\\git.exe",
+      "C:\\Program Files\\Git\\cmd\\git.com",
+      "C:\\B\\git.exe",
+      "C:\\B\\git.com",
+    ]);
+  });
 });

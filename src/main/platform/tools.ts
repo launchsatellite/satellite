@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
+import { join } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
 import { userEnvironment } from "./user-environment.ts";
@@ -19,7 +20,22 @@ export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
   claude: "SATELLITE_CLAUDE",
 };
 
+const forceKillGraceMs = 2000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
+
+function stopChild(child: ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+  if (process.platform === "win32") {
+    const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
+    execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+    return;
+  }
+  child.kill("SIGTERM");
+  setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }, forceKillGraceMs).unref();
+}
 
 function parseJson(text: string): unknown {
   try {
@@ -69,7 +85,8 @@ export async function runTool(
   if (command === undefined) return undefined;
   const env = await childEnvironment();
   return new Promise((resolve, reject) => {
-    execFile(
+    let timedOut = false;
+    const child = execFile(
       command.file,
       [...command.args, ...args],
       {
@@ -78,15 +95,20 @@ export async function runTool(
         shell: false,
         windowsHide: true,
         encoding: "utf8",
-        timeout: options.timeoutMs ?? 30_000,
         maxBuffer: 16 * 1024 * 1024,
       },
       (error, stdout, stderr) => {
-        if (error === null) resolve({ exitCode: 0, stdout, stderr });
+        clearTimeout(timer);
+        if (timedOut) reject(new Error(`${tool} did not finish in time`));
+        else if (error === null) resolve({ exitCode: 0, stdout, stderr });
         else if (typeof error.code === "number") resolve({ exitCode: error.code, stdout, stderr });
         else if (error.code === "ENOENT") resolve(undefined);
-        else reject(new Error(`${tool} did not finish`, { cause: error }));
+        else reject(new Error(`${tool} did not finish (${String(error.code ?? error.signal)})`));
       },
     );
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stopChild(child);
+    }, options.timeoutMs ?? 30_000);
   });
 }
