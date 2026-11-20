@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdir, stat } from "node:fs/promises";
+import { readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
@@ -39,6 +39,7 @@ const hyperlink = "https://example.com/real";
 const noSession = "Start a Claude Code session in this workspace first.";
 const answerFirst = "Answer Claude Code first, then send this again.";
 const ended = "Claude Code ended.";
+const betaGone = "Claude Code stopped in beta, since its folder is gone.";
 const unexpected = "Claude Code stopped unexpectedly. The workspace and its changes are safe.";
 const edgePx = 8;
 const narrow = { width: 900, height: 700 };
@@ -498,6 +499,22 @@ async function endings(session: AppSession, resumedPid: number, sendFrom: number
   await session.screenshot("sessions-endings");
 }
 
+async function workspaceLeaves(session: AppSession): Promise<void> {
+  const { page } = session;
+  await select(session, "beta");
+  await page.getByTestId("new-session").click();
+  const pid = await nextPid(session, (await claudePids(session)).length + 1);
+  const folder = join(session.home, "worktrees", "repo", "beta");
+  await rename(folder, join(session.home, "beta-moved-away"));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await toastReads(session, betaGone, "after beta's folder moved away,");
+  await waitUntil(
+    () => processGone(pid),
+    goneTimeoutMs,
+    `beta's stand-in (pid ${String(pid)}) still ran after its folder moved away`,
+  );
+}
+
 async function run(session: AppSession): Promise<void> {
   const alphaPid = await firstPrompt(session);
   await secondWorkspace(session, alphaPid);
@@ -510,6 +527,7 @@ async function run(session: AppSession): Promise<void> {
   await session.screenshot("sessions");
   const resumedPid = await restart(session, alphaPid);
   await endings(session, resumedPid, sendFrom);
+  if (process.platform !== "win32") await workspaceLeaves(session);
   const answers = (await session.standInEvents()).flatMap((event) =>
     event.type === "hook" ? [`${event.event} ${String(event.status)}`] : [],
   );

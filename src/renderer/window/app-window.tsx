@@ -107,6 +107,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     close: closeSession,
     activate: activateSession,
     forgetWorkspace,
+    forgetGone,
     forgetProject,
   } = sessions;
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
@@ -150,17 +151,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     );
   }, [projects, selectedId, selectedKey, update]);
   const allSessions = sessions.all;
+  const listedNames = useRef(new Map<string, string | null>());
   useEffect(() => {
     if (projects === undefined) return;
-    const listed = new Set(
+    const listed = new Map(
       projects.flatMap((project) =>
-        project.workspaces.map((workspace) => `${project.id}/${workspace.key}`),
+        project.workspaces.map((workspace) => [`${project.id}/${workspace.key}`, workspace.name]),
       ),
     );
+    const gone = new Map<string, { ref: WorkspaceRef; name: string | null }>();
     for (const { workspace } of allSessions) {
-      if (!listed.has(`${workspace.projectId}/${workspace.workspace}`)) forgetWorkspace(workspace);
+      const place = `${workspace.projectId}/${workspace.workspace}`;
+      if (listed.has(place)) continue;
+      const projectListed = projects.some((project) => project.id === workspace.projectId);
+      const name = projectListed ? (listedNames.current.get(place) ?? null) : null;
+      gone.set(place, { ref: workspace, name });
     }
-  }, [projects, allSessions, forgetWorkspace]);
+    listedNames.current = listed;
+    if (gone.size > 0) forgetGone([...gone.values()]);
+  }, [projects, allSessions, forgetGone]);
   const { left, right } = fitColumns(state.columns, width);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);

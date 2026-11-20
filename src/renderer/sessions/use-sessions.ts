@@ -28,6 +28,7 @@ export interface Sessions {
   close: (key: string) => void;
   activate: (key: string) => void;
   forgetWorkspace: (ref: WorkspaceRef) => void;
+  forgetGone: (gone: readonly { ref: WorkspaceRef; name: string | null }[]) => void;
   forgetProject: (projectId: string) => void;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
 }
@@ -38,6 +39,16 @@ interface State {
 
 const tabLimit = bridgeLimits.terminals;
 const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
+
+function stoppedSentence(names: readonly string[]): string {
+  if (names.length === 1)
+    return `Claude Code stopped in ${names.join("")}, since its folder is gone.`;
+  const named =
+    names.length > 3
+      ? `${String(names.length)} workspaces`
+      : `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+  return `Claude Code stopped in ${named}, since their folders are gone.`;
+}
 
 function placeOf(ref: WorkspaceRef): string {
   return `${ref.projectId}/${ref.workspace}`;
@@ -143,6 +154,14 @@ export function useSessions(notify: Notify): Sessions {
     numbers.current.delete(place);
     setState((current) => withoutTabs(current, (tab) => inPlace(tab, place)));
   }, []);
+  const forgetGone = useCallback(
+    (gone: readonly { ref: WorkspaceRef; name: string | null }[]) => {
+      for (const { ref } of gone) forgetWorkspace(ref);
+      const names = gone.flatMap(({ name }) => (name === null ? [] : [name]));
+      if (names.length > 0) notify(stoppedSentence(names), "info");
+    },
+    [forgetWorkspace, notify],
+  );
   const forgetProject = useCallback((projectId: string) => {
     for (const place of numbers.current.keys()) {
       if (place.startsWith(`${projectId}/`)) numbers.current.delete(place);
@@ -160,9 +179,10 @@ export function useSessions(notify: Notify): Sessions {
       close,
       activate,
       forgetWorkspace,
+      forgetGone,
       forgetProject,
       pixelFor: (projectId, workspace) =>
         mostUrgent(tabsOf({ projectId, workspace }).map((tab) => tab.status)),
     };
-  }, [state, open, restart, close, activate, forgetWorkspace, forgetProject]);
+  }, [state, open, restart, close, activate, forgetWorkspace, forgetGone, forgetProject]);
 }
