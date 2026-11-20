@@ -3,7 +3,6 @@ import { setTimeout as delay } from "node:timers/promises";
 import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
-import { treeKillBoundMs } from "./platform/process-tree.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
 import { createProjects, type Projects } from "./projects/project-list.ts";
 import { startHookListener, type HookListener } from "./sessions/hook-listener.ts";
@@ -15,7 +14,11 @@ import {
   type InterfaceFile,
 } from "./state/interface-file.ts";
 import { linkHandlers } from "./terminal/link-handlers.ts";
-import { createTerminalSessions, type TerminalSessions } from "./terminal/terminal-sessions.ts";
+import {
+  createTerminalSessions,
+  quitBoundMs,
+  type TerminalSessions,
+} from "./terminal/terminal-sessions.ts";
 import { checkTools } from "./tools/tool-check.ts";
 import {
   appOrigin,
@@ -30,7 +33,6 @@ import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handl
 import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
-const quitBoundMs = treeKillBoundMs + 500;
 let quitting = false;
 
 function allowedOrigin(entryUrl: string): string {

@@ -79,6 +79,7 @@ const spawnFailed =
 const statusGapMs = 100;
 const exitGraceMs = 1000;
 const stopBoundMs = treeKillBoundMs + exitGraceMs + 500;
+export const quitBoundMs = stopBoundMs + 500;
 
 function answered(act: () => void): Promise<Record<string, never>> {
   return Promise.resolve().then(() => {
