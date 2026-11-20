@@ -7,7 +7,11 @@ import type { BridgeOwner } from "../bridge/registry.ts";
 import { createProjects } from "./project-list.ts";
 
 const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
-const hung = vi.hoisted(() => ({ path: "", paths: new Set<string>(), calls: 0, writes: false }));
+const hung = vi.hoisted(() => {
+  const release: (() => void)[] = [];
+  return { path: "", paths: new Set<string>(), calls: 0, writes: false, release };
+});
+const timers = vi.hoisted(() => ({ instant: true }));
 const git = vi.hoisted(() => ({ runs: 0, abandon: false }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -18,7 +22,11 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       const path = String(args[0]);
       if (path !== hung.path && !hung.paths.has(path)) return actual.stat(...args);
       hung.calls += 1;
-      return new Promise<never>(() => undefined);
+      return new Promise<never>((_resolve, reject) => {
+        hung.release.push(() => {
+          reject(new Error("the share went away"));
+        });
+      });
     },
     open: (...args: Parameters<typeof actual.open>) => {
       if (hung.writes && args[1] === "wx") return new Promise<never>(() => undefined);
@@ -41,7 +49,14 @@ vi.mock("../platform/tools.ts", async (importOriginal) => {
   };
 });
 
-vi.mock("node:timers/promises", () => ({ setTimeout: () => Promise.resolve() }));
+vi.mock("node:timers/promises", () => ({
+  setTimeout: () =>
+    timers.instant
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          setTimeout(resolve, 200);
+        }),
+}));
 
 async function homeWith(paths: string[]): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), "satellite-project-list-"));
@@ -61,17 +76,30 @@ function projectsIn(home: string) {
 }
 
 describe("createProjects", () => {
-  it("lets hung folders hold at most two file reads, whatever the list holds", async () => {
+  it("keeps healthy projects healthy while folders hang, and bounds the hung reads", async () => {
     const base = await mkdtemp(join(tmpdir(), "satellite-project-hung-"));
-    const folders = ["a", "b", "c", "d", "e"].map((name) => join(base, name));
-    hung.paths = new Set(folders.slice(0, 4));
+    const stuck = ["a", "b", "c"].map((name) => join(base, name));
+    const healthy = ["d", "e"].map((name) => join(base, name));
+    for (const folder of healthy) await mkdir(folder);
+    hung.paths = new Set(stuck);
     hung.calls = 0;
-    const { handlers } = projectsIn(await homeWith(folders));
-    const { projects } = await handlers["projects.list"]({}, owner);
-    expect(projects.map((project) => project.missing)).toEqual(Array(5).fill("folder"));
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(hung.calls).toBe(2);
-    hung.paths = new Set();
+    hung.release = [];
+    timers.instant = false;
+    try {
+      const { handlers } = projectsIn(await homeWith([...stuck, ...healthy]));
+      const states = async () =>
+        (await handlers["projects.list"]({}, owner)).projects.map((project) => project.missing);
+      expect(await states()).toEqual(["folder", "folder", "folder", "repository", "repository"]);
+      expect(hung.calls).toBe(3);
+      for (const release of hung.release.splice(0)) release();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(await states()).toEqual(["folder", "folder", "folder", "repository", "repository"]);
+      expect(hung.calls).toBe(5);
+    } finally {
+      timers.instant = true;
+      hung.paths = new Set();
+      for (const release of hung.release.splice(0)) release();
+    }
   });
 
   it("settles a change whose save never finishes, and the next change too", async () => {

@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
-import { isNetworkPath, samePath } from "../platform/paths.ts";
+import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
 import { createProjectsFile, projectLimit, type StoredProject } from "./projects-file.ts";
 import { answerWithin, checkRepository, folderReadMs } from "./repository-check.ts";
 import { mainWorkspace } from "./workspaces.ts";
@@ -30,6 +30,8 @@ const folderReadSlots = 2;
 const saveBoundMs = 10_000;
 const nameLimit = 255;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
+const deviceDrop =
+  "That's a Windows device path, not a folder. Drop the repository's folder instead.";
 const networkDrop =
   "Network folders can't be dropped on Satellite. Use Add a project to choose this one.";
 
@@ -89,12 +91,8 @@ async function readProject(project: StoredProject, inSlot: Slot): Promise<Projec
   };
 }
 
-async function boundedView(
-  project: StoredProject,
-  read: Promise<ProjectView>,
-): Promise<ProjectView> {
-  const answer = await answerWithin(read, folderReadMs);
-  return answer === "late" ? unavailable(project) : answer;
+function direct<T>(work: () => Promise<T>): Promise<T> {
+  return work();
 }
 
 async function inBatches<T, R>(items: readonly T[], size: number, map: (item: T) => Promise<R>) {
@@ -114,16 +112,24 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let changing: Promise<unknown> = Promise.resolve();
   let listing: { list: StoredProject[]; views: Promise<ProjectView[]> } | undefined;
   const pendingReads = new Map<string, Promise<ProjectView>>();
-  const inSlot = createSlots(folderReadSlots);
-  const projectView = (project: StoredProject) => {
+  const inHungSlot = createSlots(folderReadSlots);
+  const timedOut = new Set<string>();
+  const projectView = async (project: StoredProject) => {
     let read = pendingReads.get(project.id);
     if (read === undefined) {
+      const inSlot = timedOut.has(project.id) ? inHungSlot : direct;
       read = readProject(project, inSlot).finally(() => {
         pendingReads.delete(project.id);
       });
       pendingReads.set(project.id, read);
     }
-    return boundedView(project, read);
+    const answer = await answerWithin(read, folderReadMs);
+    if (answer === "late") {
+      timedOut.add(project.id);
+      return unavailable(project);
+    }
+    timedOut.delete(project.id);
+    return answer;
   };
   const current = async () => {
     const loaded = await file.load();
@@ -202,6 +208,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         return { outcome: "added", project: await addOne(folder) };
       },
       "projects.drop": async ({ path }) => {
+        if (isDevicePath(path)) throw new BridgeFailure("refused", deviceDrop);
         if (isNetworkPath(path)) throw new BridgeFailure("refused", networkDrop);
         return { project: await addOne(path) };
       },
