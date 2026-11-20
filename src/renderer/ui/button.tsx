@@ -53,9 +53,9 @@ export function Button({
       type="button"
       data-testid={testId}
       autoFocus={autoFocus}
-      disabled={disabled}
+      aria-disabled={disabled || undefined}
       aria-label={iconOnly ? label : undefined}
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       className={`${base} ${look} ${state} ${iconOnly ? sizes[size].square : sizes[size].text}`}
     >
       {icon !== undefined && <Icon name={icon} />}
