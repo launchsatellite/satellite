@@ -178,13 +178,16 @@ export function createTerminalSessions({
       });
   };
 
+  const alive = () =>
+    new Set([...running, ...[...unsettled].filter((session) => session.pty === undefined)]);
+
   const inside = (folder: string) =>
-    [...sessions].filter(
-      ([, session]) => session.cwd !== undefined && isInsidePath(folder, session.cwd),
+    [...alive()].filter(
+      (session) => session.cwd !== undefined && isInsidePath(folder, session.cwd),
     );
 
   const holds = (sessionId: string) =>
-    [...sessions.values()].some((session) => session.sessionId === sessionId);
+    [...alive()].some((session) => session.sessionId === sessionId);
 
   const held = (id: string, owner: BridgeOwner): Session => {
     const session = sessions.get(id);
@@ -378,8 +381,8 @@ export function createTerminalSessions({
       countInside: (folder) => inside(folder).length,
       async stopInside(folder) {
         const stopping = inside(folder);
-        for (const [id, session] of stopping) end(id, session);
-        await settled(stopping.map(([, session]) => session));
+        for (const session of stopping) end(session.id, session);
+        await settled(stopping);
       },
     },
     hookEvent(launchId, event) {

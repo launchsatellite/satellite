@@ -170,6 +170,21 @@ describe("createTerminalSessions", () => {
     expect(ptys).toHaveLength(1);
   });
 
+  it("refuses to resume a session still being ended", async () => {
+    const { handlers } = create({ listener: fakeListener(), last: fakeLast(recorded) });
+    const { mine } = owners();
+    await handlers["terminal.start"]({ id: terminalId(1), ...size, resume: true }, mine);
+    ptys[0]?.kill.mockImplementation(() => new Promise<void>(() => undefined));
+    await handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    expect(await handlers["sessions.resumable"]({ workspace: main }, mine)).toEqual({
+      resumable: false,
+    });
+    await expect(
+      handlers["terminal.start"]({ id: terminalId(2), ...size, resume: true }, mine),
+    ).rejects.toMatchObject({ code: "refused" });
+    expect(ptys).toHaveLength(1);
+  });
+
   it("refuses to resume where nothing is recorded", async () => {
     const { handlers } = create({ last: fakeLast() });
     const { mine } = owners();
@@ -492,5 +507,29 @@ describe("createTerminalSessions", () => {
     expect(ptys[1]?.kill).not.toHaveBeenCalled();
     expect(sessions.sessionsInside.countInside(workspace)).toBe(0);
     expect(sessions.sessionsInside.countInside(folders.get("main") ?? "")).toBe(1);
+  });
+
+  it("counts and waits for a terminal in a folder that is still being ended", async () => {
+    const sessions = create();
+    const { mine } = owners();
+    const workspace = folders.get(otherWorkspace) ?? "";
+    await sessions.handlers["terminal.start"](
+      { id: terminalId(1), ...size, workspace: other },
+      mine,
+    );
+    const killed = Promise.withResolvers<undefined>();
+    ptys[0]?.kill.mockImplementation(() => killed.promise);
+    await sessions.handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    expect(sessions.sessionsInside.countInside(workspace)).toBe(1);
+    let stopped = false;
+    const stopping = sessions.sessionsInside.stopInside(workspace).then(() => {
+      stopped = true;
+    });
+    await delay(50);
+    expect(stopped).toBe(false);
+    ptys[0]?.exit(0, 1);
+    killed.resolve(undefined);
+    await stopping;
+    expect(sessions.sessionsInside.countInside(workspace)).toBe(0);
   });
 });
