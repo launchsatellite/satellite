@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { request } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startHookListener, type HookListener } from "./hook-listener.ts";
-import type { SessionEvent } from "./session-status.ts";
+import { mainThread, type SessionEvent } from "./session-status.ts";
 
 interface Sent {
   method?: string;
@@ -190,7 +190,7 @@ describe("startHookListener", () => {
     });
     expect(events.map((entry) => entry.event)).toEqual([
       { name: "SessionStart", source: "resume", sessionId },
-      { name: "Notification", type: "permission_prompt" },
+      { name: "Notification", type: "permission_prompt", agent: mainThread },
     ]);
   });
 
@@ -205,11 +205,37 @@ describe("startHookListener", () => {
 
   it("never reads the body of other events", async () => {
     const answer = await send({
-      path: `/hook/${launchId}/PostToolUse`,
+      path: `/hook/${launchId}/Stop`,
       body: Buffer.alloc(1024 * 1024, "x"),
     });
     expect(answer.status).toBe(204);
-    expect(events).toEqual([{ launchId, event: { name: "PostToolUse" } }]);
+    expect(events).toEqual([{ launchId, event: { name: "Stop" } }]);
+  });
+
+  it("tells which agent asked and which finished a tool", async () => {
+    const post = (name: string, body: unknown) =>
+      send({ path: `/hook/${launchId}/${name}`, body: JSON.stringify(body) });
+    await post("PermissionRequest", { agent_id: "agent-1", tool_name: "Bash" });
+    await post("PostToolUse", { tool_name: "Bash" });
+    await post("PostToolUseFailure", { agent_id: 7 });
+    await post("PostToolUse", { agent_id: "a".repeat(129) });
+    await post("PostToolUse", { agent_id: "" });
+    expect(events.map((entry) => entry.event)).toEqual([
+      { name: "PermissionRequest", agent: "agent-1" },
+      { name: "PostToolUse", agent: mainThread },
+      { name: "PostToolUseFailure", agent: null },
+      { name: "PostToolUse", agent: null },
+      { name: "PostToolUse", agent: null },
+    ]);
+  });
+
+  it("takes a tool event too large to read without knowing its agent", async () => {
+    const answer = await send({
+      path: `/hook/${launchId}/PostToolUse`,
+      body: JSON.stringify({ agent_id: "agent-1", tool_response: "x".repeat(1024 * 1024) }),
+    });
+    expect(answer.status).toBe(204);
+    expect(events).toEqual([{ launchId, event: { name: "PostToolUse", agent: null } }]);
   });
 
   it("refuses a launch that sends too many events at once", async () => {

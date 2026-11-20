@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { z } from "zod";
 import { hookEvents, type HookEventName } from "./claude-launch.ts";
-import type { SessionEvent } from "./session-status.ts";
+import { mainThread, type Agent, type SessionEvent } from "./session-status.ts";
 
 export interface HookListener {
   readonly port: number;
@@ -17,6 +17,7 @@ interface OpenLaunch {
   events: number;
 }
 type BodyRead = { kind: "body"; text: string } | { kind: "too-large" } | { kind: "failed" };
+type HookBody = z.output<typeof hookBody>;
 
 const loopback = "127.0.0.1";
 const secretBytes = 32;
@@ -26,13 +27,20 @@ const rateWindowMs = 1000;
 const hookPath =
   /^\/hook\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([A-Za-z]+)$/;
 const bearer = /^Bearer ([0-9a-f]{64})$/;
-const bodyEvents = new Set<HookEventName>(["SessionStart", "Notification"]);
+const statusEvents = new Set<HookEventName>(["SessionStart", "Notification"]);
+const agentEvents = new Set<HookEventName>([
+  "PermissionRequest",
+  "PostToolUse",
+  "PostToolUseFailure",
+]);
 const hookBody = z.object({
   session_id: z.string().max(100).optional(),
+  agent_id: z.unknown().optional(),
   source: z.string().max(64).optional(),
   notification_type: z.string().max(64).optional(),
 });
 const sessionIdSchema = z.uuid();
+const agentIdSchema = z.string().min(1).max(128).optional();
 const unknownLaunchSecret = randomBytes(secretBytes);
 
 function answer(response: ServerResponse, status: number): void {
@@ -85,7 +93,7 @@ function readBody(request: IncomingMessage, keep: boolean): Promise<BodyRead> {
   });
 }
 
-function parseBody(text: string): z.output<typeof hookBody> | undefined {
+function parseBody(text: string): HookBody | undefined {
   try {
     const parsed = hookBody.safeParse(JSON.parse(text));
     return parsed.success ? parsed.data : undefined;
@@ -94,16 +102,27 @@ function parseBody(text: string): z.output<typeof hookBody> | undefined {
   }
 }
 
-function eventOf(name: HookEventName, body: z.output<typeof hookBody>): SessionEvent {
+function agentOf(body: HookBody | undefined): Agent {
+  if (body === undefined) return null;
+  const agent = agentIdSchema.safeParse(body.agent_id);
+  return agent.success ? (agent.data ?? mainThread) : null;
+}
+
+function eventOf(name: HookEventName, body: HookBody | undefined): SessionEvent {
   if (name === "SessionStart") {
-    const sessionId = sessionIdSchema.safeParse(body.session_id);
+    const sessionId = sessionIdSchema.safeParse(body?.session_id);
     return {
       name,
-      source: body.source ?? null,
+      source: body?.source ?? null,
       sessionId: sessionId.success ? sessionId.data : null,
     };
   }
-  if (name === "Notification") return { name, type: body.notification_type ?? null };
+  if (name === "Notification") {
+    return { name, type: body?.notification_type ?? null, agent: agentOf(body) };
+  }
+  if (name === "PermissionRequest" || name === "PostToolUse" || name === "PostToolUseFailure") {
+    return { name, agent: agentOf(body) };
+  }
   return { name };
 }
 
@@ -125,12 +144,12 @@ export async function startHookListener(
     if (!secretMatches(launch, authorization) || launch === undefined) return 401;
     if (!isJson(onlyValue(request, "content-type"))) return 415;
     if (!withinRate(launch, Date.now())) return 429;
-    const keep = bodyEvents.has(name);
+    const keep = statusEvents.has(name) || agentEvents.has(name);
     const read = await readBody(request, keep);
     if (read.kind === "failed") return undefined;
-    if (read.kind === "too-large") return 413;
-    const body = keep ? parseBody(read.text) : {};
-    if (body === undefined) return 400;
+    if (read.kind === "too-large" && statusEvents.has(name)) return 413;
+    const body = read.kind === "body" && keep ? parseBody(read.text) : undefined;
+    if (read.kind === "body" && keep && body === undefined) return 400;
     if (launches.get(launchId) !== launch) return 401;
     try {
       onEvent(launchId, eventOf(name, body));

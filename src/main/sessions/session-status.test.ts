@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { SessionStatus } from "../../shared/bridge-contract.ts";
-import { nextStatus, type SessionEvent } from "./session-status.ts";
+import { mainThread, nextState, type SessionEvent, type SessionState } from "./session-status.ts";
 
 const statuses: readonly SessionStatus[] = ["idle", "working", "needs-you", "done", "stopped"];
 
-const notification = (type: string | null): SessionEvent => ({ name: "Notification", type });
+const notification = (type: string | null): SessionEvent => ({
+  name: "Notification",
+  type,
+  agent: mainThread,
+});
+const asked = (agent: string | null): SessionEvent => ({ name: "PermissionRequest", agent });
+const toolDone = (agent: string | null): SessionEvent => ({ name: "PostToolUse", agent });
 const sessionStart = (source: string | null): SessionEvent => ({
   name: "SessionStart",
   source,
@@ -18,8 +24,11 @@ const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
   },
   { label: "compact", events: [sessionStart("compact")] },
   { label: "UserPromptSubmit", events: [{ name: "UserPromptSubmit" }] },
-  { label: "PermissionRequest", events: [{ name: "PermissionRequest" }] },
-  { label: "post", events: [{ name: "PostToolUse" }, { name: "PostToolUseFailure" }] },
+  { label: "PermissionRequest", events: [asked(mainThread)] },
+  {
+    label: "post",
+    events: [toolDone(mainThread), { name: "PostToolUseFailure", agent: mainThread }],
+  },
   {
     label: "ask",
     events: [
@@ -120,19 +129,19 @@ const cells = statuses.flatMap((current) =>
 
 function run(start: SessionStatus, events: readonly SessionEvent[]): SessionStatus[] {
   const seen: SessionStatus[] = [];
-  let status = start;
+  let state: SessionState = { status: start, asker: mainThread };
   for (const event of events) {
-    status = nextStatus(status, event);
-    seen.push(status);
+    state = nextState(state, event);
+    seen.push(state.status);
   }
   return seen;
 }
 
-describe("nextStatus", () => {
+describe("nextState", () => {
   it.each(cells)(
     "moves through every status from every status, $current on $column $event",
     ({ current, event, expected }) => {
-      expect(nextStatus(current, event)).toBe(expected);
+      expect(nextState({ status: current, asker: mainThread }, event).status).toBe(expected);
     },
   );
 
@@ -140,9 +149,9 @@ describe("nextStatus", () => {
     expect(
       run("idle", [
         { name: "UserPromptSubmit" },
-        { name: "PermissionRequest" },
+        asked(mainThread),
         notification("permission_prompt"),
-        { name: "PostToolUse" },
+        toolDone(mainThread),
         { name: "Stop" },
       ]),
     ).toEqual(["working", "needs-you", "needs-you", "working", "done"]);
@@ -150,12 +159,38 @@ describe("nextStatus", () => {
 
   it("lets go of a declined permission once the turn has gone quiet", () => {
     expect(
-      run("idle", [
-        { name: "UserPromptSubmit" },
-        { name: "PermissionRequest" },
-        notification("idle_prompt"),
-      ]),
+      run("idle", [{ name: "UserPromptSubmit" }, asked(mainThread), notification("idle_prompt")]),
     ).toEqual(["working", "needs-you", "done"]);
+  });
+
+  it("keeps needs you while other agents finish their tools", () => {
+    expect(
+      run("working", [
+        asked("agent-1"),
+        toolDone("agent-2"),
+        toolDone(mainThread),
+        notification("permission_prompt"),
+        { name: "PostToolUseFailure", agent: "agent-2" },
+        toolDone("agent-1"),
+      ]),
+    ).toEqual(["needs-you", "needs-you", "needs-you", "needs-you", "needs-you", "working"]);
+    expect(run("working", [asked(mainThread), toolDone("agent-1"), toolDone(mainThread)])).toEqual([
+      "needs-you",
+      "needs-you",
+      "working",
+    ]);
+  });
+
+  it("keeps needs you when a finished tool cannot say which agent ran it", () => {
+    expect(run("working", [asked(mainThread), toolDone(null), toolDone(mainThread)])).toEqual([
+      "needs-you",
+      "needs-you",
+      "working",
+    ]);
+  });
+
+  it("lets any finished tool end an ask that could not say who asked", () => {
+    expect(run("working", [asked(null), toolDone("agent-1")])).toEqual(["needs-you", "working"]);
   });
 
   it("stays done when the idle notice arrives late", () => {
@@ -166,10 +201,7 @@ describe("nextStatus", () => {
   });
 
   it("works again when a blocked Stop lets Claude Code carry on", () => {
-    expect(run("working", [{ name: "Stop" }, { name: "PostToolUse" }])).toEqual([
-      "done",
-      "working",
-    ]);
+    expect(run("working", [{ name: "Stop" }, toolDone(mainThread)])).toEqual(["done", "working"]);
   });
 
   it("keeps its status through duplicated events", () => {
@@ -177,8 +209,8 @@ describe("nextStatus", () => {
       run("idle", [
         { name: "UserPromptSubmit" },
         { name: "UserPromptSubmit" },
-        { name: "PermissionRequest" },
-        { name: "PermissionRequest" },
+        asked(mainThread),
+        asked(mainThread),
         { name: "Stop" },
         { name: "Stop" },
       ]),
