@@ -1,3 +1,4 @@
+import { linkRefusal } from "../../shared/bridge-contract.ts";
 import { openInBrowser } from "../platform/browser.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { checkedLink } from "./link-check.ts";
@@ -10,10 +11,7 @@ export function linkHandlers(): Pick<BridgeHandlers, "links.open"> {
     "links.open": async ({ url }) => {
       const link = checkedLink(url);
       if (link === null) {
-        throw new BridgeFailure(
-          "refused",
-          "Satellite opens only web addresses that start with http or https.",
-        );
+        throw new BridgeFailure("refused", linkRefusal);
       }
       const now = performance.now();
       if (now - lastOpen < openGapMs) {

@@ -31,6 +31,8 @@ export type InstallFix = z.output<typeof installFix>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
+export const linkRefusal =
+  "Satellite opens only plain web addresses, http or https with a real host and no sign-in or hidden characters.";
 export const bridgeLimits = {
   terminalWriteChars: 65536,
   terminalOutputChars: 65536,
