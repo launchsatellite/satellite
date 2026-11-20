@@ -44,6 +44,12 @@ describe("promptText", () => {
   });
 });
 
+describe("promptText bounds", () => {
+  it("reads only a bounded start of a huge input", () => {
+    expect(promptText(`${"\u{7}".repeat(20_000)}c`)).toBe("");
+  });
+});
+
 describe("holdsHiddenText", () => {
   it("finds every character a prompt would lose", () => {
     for (const text of [

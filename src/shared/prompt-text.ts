@@ -1,4 +1,5 @@
 const promptTextLimit = 800;
+const readLimit = promptTextLimit * 16;
 
 const lineBreaks = /\r\n|[\r\n\t\u{2028}\u{2029}]/gu;
 const hidden =
@@ -13,6 +14,6 @@ export function holdsHiddenText(text: string): boolean {
 }
 
 export function promptText(raw: string): string {
-  const clean = withoutHidden(raw.replace(lineBreaks, " "));
+  const clean = withoutHidden(raw.slice(0, readLimit).replace(lineBreaks, " "));
   return withoutHidden(clean.slice(0, promptTextLimit));
 }

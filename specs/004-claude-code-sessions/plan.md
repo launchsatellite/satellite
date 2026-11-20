@@ -76,7 +76,7 @@ Every task is bound by `.superpowers/sdd/global-constraints.md`, `AGENTS.md`, `.
 - **Hook URL.** `http://127.0.0.1:<port>/hook/<launch id>/<event name>`.
 - **Session events.** `hookEvents = ["SessionStart", "UserPromptSubmit", "PermissionRequest", "PostToolUse", "PostToolUseFailure", "Notification", "Stop", "StopFailure"] as const`.
 - **Last sessions.** At most 4200 entries, 200 projects of 21 workspaces. Setting a new entry beyond that drops the oldest.
-- **Send.** `promptTextLimit = 800` characters, cut on a code point boundary. Claude Code folds a paste of more than 800 characters or more than three lines into a `[Pasted text #N]` placeholder (code.claude.com/docs/en/terminal-config, Paste large content), and sent text is always one line.
+- **Send.** `promptTextLimit = 800` characters, cut on a code point boundary, from at most the first 12800 characters of the input. Claude Code folds a paste of more than 800 characters or more than three lines into a `[Pasted text #N]` placeholder (code.claude.com/docs/en/terminal-config, Paste large content), and sent text is always one line.
 - **Links.** At most 2048 characters, one opened per 1000 milliseconds across the app.
 - **Drops.** At most 20 files at a time, each path at most 4096 characters.
 - **Terminals.** 16 at once as today, sessions of every workspace together.
