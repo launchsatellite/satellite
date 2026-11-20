@@ -34,6 +34,7 @@ interface PaletteOption {
   title: string;
   hint?: string;
   detail?: string;
+  pixel?: boolean;
   run: () => void;
 }
 
@@ -88,6 +89,7 @@ function switcherOptions(
       testId: `switch-${item.project}-${item.ref.workspace}`,
       title: item.label,
       detail: item.project,
+      pixel: true,
       run: () => {
         onOpenWorkspace(item.ref);
       },
@@ -241,6 +243,9 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
                     runOption(option);
                   }}
                 >
+                  {option.pixel === true && (
+                    <span className="size-[6px] flex-none rounded-[2px] bg-dim" />
+                  )}
                   <span
                     className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
                   >
