@@ -17,6 +17,7 @@ export const bridgeLimits = {
   terminalWriteChars: 65536,
   terminalOutputChars: 65536,
   terminals: 16,
+  messageChars: 1000,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
 };
@@ -65,7 +66,13 @@ export const bridgeEvents = {
     id: terminalId,
     data: z.string().min(1).max(bridgeLimits.terminalOutputChars),
   }),
-  "terminal.exit": z.strictObject({ id: terminalId, exitCode: z.int() }),
+  "terminal.exit": z.strictObject({
+    id: terminalId,
+    exitCode: z
+      .int()
+      .min(-(2 ** 31))
+      .max(2 ** 32 - 1),
+  }),
 };
 
 const bridgeErrorCode = z.enum([
@@ -83,7 +90,10 @@ export function bridgeResultSchema<T extends z.ZodType>(value: T) {
     z.strictObject({ ok: z.literal(true), value }),
     z.strictObject({
       ok: z.literal(false),
-      error: z.strictObject({ code: bridgeErrorCode, message: z.string() }),
+      error: z.strictObject({
+        code: bridgeErrorCode,
+        message: z.string().max(bridgeLimits.messageChars),
+      }),
     }),
   ]);
 }

@@ -45,7 +45,7 @@ The renderer imports only from `src/renderer/` and `src/shared/`. Main never imp
 
 Names are `<feature>.<verb>`. In this order.
 
-1. **Contract.** Add the entry to `bridgeRequests` in `src/shared/bridge-contract.ts`. Request and response are `z.strictObject`, every string has a `max`, every number is a bounded `z.int()`, ids are `z.uuid()`, a choice is `z.literal` or `z.enum`. A path or a name from the interface is data that the handler confines, never a value it runs.
+1. **Contract.** Add the entry to `bridgeRequests` in `src/shared/bridge-contract.ts`. Request and response are `z.strictObject`, every string has a `max`, every number is a bounded `z.int()`, ids are `z.uuid()`, a choice is `z.literal` or `z.enum`. A limit both processes use, like `terminalWriteChars`, goes in `bridgeLimits` and the schema reads it from there. A path or a name from the interface is data that the handler confines, never a value it runs.
 
    ```ts
    "terminal.resize": {
@@ -54,7 +54,7 @@ Names are `<feature>.<verb>`. In this order.
    },
    ```
 
-2. **Handler.** In the feature folder, typed `BridgeHandler<"x.y">`, or `Pick<BridgeHandlers, ...>` for a group. It gets the parsed request and the page's `BridgeOwner`. Throw `BridgeFailure(code, sentence)` for an outcome the user sees, with a code from `bridgeErrorCode`. Any other throw is logged and answered `failed`. Anything the handler starts for a page ends in `owner.onGone(...)`, and anything it holds for one page answers `not-found` to every other page.
+2. **Handler.** In the feature folder, typed `BridgeHandler<"x.y">`, or `Pick<BridgeHandlers, ...>` for a group. `BridgeHandler`, `BridgeHandlers`, `BridgeOwner` and `BridgeFailure` live in `src/main/bridge/registry.ts`. It gets the parsed request and the page's `BridgeOwner`. Throw `BridgeFailure(code, sentence)` for an outcome the user sees. The code is one of the `bridgeErrorCode` enum in the contract, and a new kind of outcome adds its code there. Any other throw is logged and answered `failed`. Anything the handler starts for a page ends in `owner.onGone(...)`, and anything it holds for one page answers `not-found` to every other page.
 
    ```ts
    throw new BridgeFailure("not-found", "That terminal is not running.");
@@ -68,10 +68,12 @@ Names are `<feature>.<verb>`. In this order.
    void invoke("tools.versions", {}).then(setVersions);
    ```
 
+   React 19 ignores a state update after unmount, so a request whose answer only sets state needs no unmount guard. One that starts something, like `terminal.start`, has a matching cleanup in the effect.
+
 6. **Record it.** One row in the Bridge table of `ARCHITECTURE.md`, with what it does, its limits and why it is safe. Ask what a page that runs hostile script could do with exactly this message. If the answer is more than the row says, narrow the schema or the handler.
 7. **Prove it** in the app (skill `satellite-verify`). A new kind of refusal gets a case in the `boundary` journey.
 
-An event is the same, with `bridgeEvents` instead. The handler sends it with `owner.emit("x.done", payload)`, so it reaches only the page that owns it. The renderer listens with `subscribe("x.done", listener)`, which drops a payload that fails its schema and returns the unsubscribe for the effect's cleanup. Subscribe before the request that makes the events, as `TerminalView` does before `terminal.start`.
+An event is the same, with `bridgeEvents` instead. The handler sends it with `owner.emit("x.done", payload)`, so it reaches only the page that owns it. Add the event's empty `Set` to `listeners` in `src/renderer/bridge/bridge-client.ts`, which typecheck asks for. The client holds one IPC listener for every subscriber, parses each event once, and drops and logs one that fails its schema, naming the event and the failing fields, never the payload. The renderer listens with `subscribe("x.done", listener)`, which returns the unsubscribe for the effect's cleanup. Subscribe before the request that makes the events, as `TerminalView` does before `terminal.start`.
 
 Never add an IPC channel, a preload function or an `ipcMain` handler. Everything goes through `satellite:bridge` and `satellite:event`.
 

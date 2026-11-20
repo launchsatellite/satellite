@@ -35,7 +35,7 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 - **Sender check.** The background process answers only its own window's main frame, and only while that frame shows the app origin, `app://satellite` or the dev server in development, with no user info in the URL. Anything else, including a frame that is already gone, gets `refused-sender`.
 - **Validation first.** Channels are looked up in a `Map`, so names like `__proto__` or `constructor` find nothing. Every payload is parsed with its strict schema before the handler runs, so a wrong type, a missing field or an extra key is refused with `invalid-request`.
 - **Errors.** A handler throws `BridgeFailure` for outcomes the user sees. Any other error is logged in the background process and answered as `failed` with no stack.
-- **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect.
+- **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect. One that fails is dropped and logged to the console with its channel or event name and the failing fields, never its payload, so the journeys catch contract drift. Error messages are at most 1000 characters.
 - **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or a new document commits in its main frame, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. A navigation the hardening refuses never commits, so the page and everything it started keep running. A request the old page sends while a reload is still loading lands on the old owner, so nothing a page started outlives it.
 
 | Channel or event | What it does | Limits | Why it is safe |
@@ -47,7 +47,7 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 | `terminal.close` | Ends a terminal | UUID id | An id is data, never a path or a name. |
 | `terminal.ack` | Tells the background process how much output the terminal has drawn | UUID id, 1 to 65536 characters | Only lowers the count of unacknowledged output for a terminal the same page owns, clamped at what was sent, so a wrong ack can at worst resume output early. |
 | `terminal.data` event | Streams terminal output to the window that owns it | 1 to 65536 characters per event | Shown as text by the terminal and never run. |
-| `terminal.exit` event | Tells the window a terminal ended, with its exit code | Integer exit code | Data only. |
+| `terminal.exit` event | Tells the window a terminal ended, with its exit code | Integer exit code, from -2147483648 to 4294967295 | Data only. |
 
 ## Platform
 
