@@ -58,6 +58,8 @@ jobs:
         run: xvfb-run -a npm run journeys -- --app "${{ matrix.app }}"
       - if: runner.os != 'Linux'
         run: npm run journeys -- --app "${{ matrix.app }}"
+      - if: runner.os == 'macOS'
+        run: npm run journeys -- --app release/mac/Satellite.app/Contents/MacOS/Satellite
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
