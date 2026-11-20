@@ -447,6 +447,33 @@ describe("createProjects", () => {
     }
   });
 
+  it("adopts a worktree left in its own folder with no record, but never while one is made", async () => {
+    const { home, repo, gitIn, projects } = await repoWithWorkspace();
+    const leftover = join(home, "worktrees", "repo", "left-over");
+    await gitIn(repo, ["worktree", "add", "-q", "-b", "left-over", leftover]);
+    const first = await projects.handlers["projects.list"]({}, owner);
+    const projectId = first.projects[0]?.id ?? "";
+    expect(first.projects[0]?.workspaces.map((workspace) => workspace.name)).toEqual([
+      null,
+      "fix-login",
+      "left-over",
+    ]);
+    const stored = await storedWorkspaceIds(home);
+    expect(stored).toHaveLength(2);
+    const again = await projectsIn(home).handlers["projects.list"]({}, owner);
+    expect(again.projects[0]?.workspaces.map((workspace) => workspace.key).slice(1)).toEqual(
+      stored,
+    );
+    const making = join(home, "worktrees", "repo", "being-made");
+    await gitIn(repo, ["worktree", "add", "-q", "-b", "being-made", making]);
+    projects.store.creating.add(projectId);
+    const during = await projects.handlers["projects.list"]({}, owner);
+    expect(during.projects[0]?.workspaces.map((workspace) => workspace.name)).not.toContain(
+      "being-made",
+    );
+    expect(await storedWorkspaceIds(home)).toEqual(stored);
+  });
+
   it("shows a dropped workspace again when its record could not be forgotten", async () => {
     const { home, workspace, projects } = await repoWithWorkspace();
     await rm(workspace.path, { recursive: true, force: true });

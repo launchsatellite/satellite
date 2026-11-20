@@ -5,7 +5,12 @@ import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
-import { blankWorkspace, readWorkspaces, type Drop } from "../workspaces/workspace-reads.ts";
+import {
+  blankWorkspace,
+  readWorkspaces,
+  type Adoption,
+  type Drop,
+} from "../workspaces/workspace-reads.ts";
 import {
   createProjectsFile,
   projectLimit,
@@ -26,6 +31,7 @@ interface ProjectsOptions {
 interface ProjectAnswer {
   view: ProjectView;
   drops: Drop[];
+  adoptions: Adoption[];
 }
 interface ProjectRead {
   checked: Promise<Missing | null>;
@@ -141,10 +147,17 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   const startRead = (project: StoredProject): ProjectRead => {
     const checked = folderChecks(project, timedOut.has(project.id) ? inHungSlot : direct);
     const answer = checked.then(async (missing): Promise<ProjectAnswer> => {
-      if (missing !== null) return { view: unread(project, missing), drops: [] };
+      if (missing !== null) return { view: unread(project, missing), drops: [], adoptions: [] };
       const name = projectName(project.path);
-      const read = await readWorkspaces(project, name, busy, inStatusSlot);
-      return { view: { ...unread(project, null), workspaces: read.workspaces }, drops: read.drops };
+      const read = await readWorkspaces(project, name, busy, inStatusSlot, {
+        home,
+        blocked: () => creating.has(project.id),
+      });
+      return {
+        view: { ...unread(project, null), workspaces: read.workspaces },
+        drops: read.drops,
+        adoptions: read.adoptions,
+      };
     });
     const read = { checked, answer };
     pendingReads.set(project.id, read);
@@ -163,9 +176,11 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   };
   const projectAnswer = async (project: StoredProject): Promise<ProjectAnswer> => {
     const { read, checked } = await checkedWithin(project);
-    if (checked === "late") return { view: unread(project, "folder"), drops: [] };
+    if (checked === "late") return { view: unread(project, "folder"), drops: [], adoptions: [] };
     const answer = await answerWithin(read.answer, workspaceReadMs);
-    return answer === "late" ? { view: unread(project, checked), drops: [] } : answer;
+    return answer === "late"
+      ? { view: unread(project, checked), drops: [], adoptions: [] }
+      : answer;
   };
   const current = async () => {
     const loaded = await file.load();
@@ -225,10 +240,45 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
     }
     return forgotten;
   };
+  const adopt = async (adoptions: readonly Adoption[]): Promise<Set<string>> => {
+    const kept = new Set<string>();
+    if (adoptions.length === 0 || !(await file.load()).writable) return kept;
+    try {
+      await replace((latest) => {
+        kept.clear();
+        const paths = latest.flatMap((project) => [
+          project.path,
+          ...project.workspaces.map((workspace) => workspace.path),
+        ]);
+        return latest.map((project) => {
+          if (creating.has(project.id)) return project;
+          const added = adoptions
+            .filter(
+              ({ projectId, workspace }) =>
+                projectId === project.id && !paths.some((path) => samePath(path, workspace.path)),
+            )
+            .slice(0, Math.max(0, workspaceLimit - project.workspaces.length))
+            .map(({ workspace }) => workspace);
+          for (const workspace of added) kept.add(workspace.id);
+          return added.length === 0
+            ? project
+            : { ...project, workspaces: [...project.workspaces, ...added] };
+        });
+      });
+    } catch {
+      kept.clear();
+    }
+    return kept;
+  };
   const listAll = async (list: readonly StoredProject[]) => {
     const answers = await inBatches(list, projectReads, projectAnswer);
     const forgotten = await forget(answers.flatMap((answer) => answer.drops));
-    const ids = new Set(forgotten.map((drop) => drop.workspaceId));
+    const adoptions = answers.flatMap((answer) => answer.adoptions);
+    const adopted = await adopt(adoptions);
+    const ids = new Set([
+      ...forgotten.map((drop) => drop.workspaceId),
+      ...adoptions.map(({ workspace }) => workspace.id).filter((id) => !adopted.has(id)),
+    ]);
     return {
       projects: answers.map(({ view }) => ({
         ...view,

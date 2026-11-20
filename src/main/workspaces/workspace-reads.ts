@@ -1,19 +1,40 @@
-import { lstat, stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import { lstat, realpath, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import type { WorkspaceKey, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { samePath } from "../platform/paths.ts";
-import { isBranchName } from "../../shared/workspace-name.ts";
-import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
+import { isBranchName, workspaceNameProblem } from "../../shared/workspace-name.ts";
+import {
+  workspaceLimit,
+  type StoredProject,
+  type StoredWorkspace,
+} from "../projects/projects-file.ts";
 import type { Slot } from "../projects/slots.ts";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
+import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
 import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
 
 export interface Drop {
   workspaceId: string;
   sentence: string;
+}
+export interface Adoption {
+  projectId: string;
+  workspace: StoredWorkspace;
+}
+export interface AdoptionRule {
+  home: string;
+  blocked: () => boolean;
+}
+export interface AdoptionInput {
+  listed: Listed;
+  recorded: readonly string[];
+  room: number;
+  segmentFolder: string;
+  blocked: boolean;
 }
 interface RecordRead {
   record: StoredWorkspace;
@@ -22,6 +43,7 @@ interface RecordRead {
 }
 type Tracking = Awaited<ReturnType<typeof readTracking>>;
 type Status = Awaited<ReturnType<typeof readStatus>>;
+type Listed = Awaited<ReturnType<typeof listWorktrees>>;
 
 const branchLimit = 255;
 const sentenceLimit = 300;
@@ -124,6 +146,60 @@ async function readUnpushed(
   return new Map(counts);
 }
 
+async function adoptedWorkspaces(
+  project: StoredProject,
+  listed: Listed,
+  busy: ReadonlySet<string>,
+  rule: AdoptionRule,
+): Promise<StoredWorkspace[]> {
+  let realHome: string;
+  try {
+    realHome = await realpath(rule.home);
+  } catch {
+    return [];
+  }
+  const realRecords = await Promise.all(
+    project.workspaces.map((record) => realpath(record.path).catch(() => record.path)),
+  );
+  const candidates = adoptable({
+    listed,
+    recorded: [...project.workspaces.map((record) => record.path), ...realRecords],
+    room: workspaceLimit - project.workspaces.length,
+    segmentFolder: join(worktreesRoot(realHome), projectSegment(project.path)),
+    blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
+  });
+  const adopted: StoredWorkspace[] = [];
+  for (const candidate of candidates) {
+    if (await isWorktreeFolder(rule.home, candidate.path)) {
+      adopted.push({ id: randomUUID(), ...candidate });
+    }
+  }
+  return rule.blocked() ? [] : adopted;
+}
+
+export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
+  const { listed, recorded, room, segmentFolder, blocked } = input;
+  if (blocked || listed?.separator !== "\0" || room <= 0) return [];
+  const found: Omit<StoredWorkspace, "id">[] = [];
+  for (const worktree of listed.worktrees.slice(1)) {
+    const { path, branch } = worktree;
+    const name = basename(path);
+    if (
+      worktree.bare ||
+      worktree.prunable ||
+      branch === null ||
+      !isBranchName(branch) ||
+      !samePath(dirname(path), segmentFolder) ||
+      workspaceNameProblem(name) !== null ||
+      recorded.some((recordedPath) => samePath(recordedPath, path))
+    ) {
+      continue;
+    }
+    found.push({ name, path, branch });
+  }
+  return found.slice(0, room);
+}
+
 export function blankWorkspace(key: WorkspaceKey, name: string | null): WorkspaceView {
   return { key, name, branch: null, ahead: null, behind: null, changed: null };
 }
@@ -133,7 +209,8 @@ export async function readWorkspaces(
   projectName: string,
   busy: ReadonlySet<string>,
   inStatusSlot: Slot,
-): Promise<{ workspaces: WorkspaceView[]; drops: Drop[] }> {
+  rule: AdoptionRule,
+): Promise<{ workspaces: WorkspaceView[]; drops: Drop[]; adoptions: Adoption[] }> {
   const listed = await whenGitRuns(listWorktrees(project.path));
   const mainBranch =
     listed === undefined
@@ -163,6 +240,8 @@ export async function readWorkspaces(
       ),
     });
   }
+  const adopted = await adoptedWorkspaces(project, listed, busy, rule);
+  for (const record of adopted) reads.push({ record, branch: record.branch, listed: true });
   const live = reads.filter((entry) => entry.listed);
   const branches = [mainBranch, ...live.map((entry) => entry.branch)].filter(
     (branch) => branch !== null,
@@ -190,5 +269,6 @@ export async function readWorkspaces(
       ),
     ],
     drops,
+    adoptions: adopted.map((workspace) => ({ projectId: project.id, workspace })),
   };
 }
