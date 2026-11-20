@@ -373,13 +373,14 @@ describe("createProjects", () => {
     expect(reread.notice).toBeNull();
   });
 
-  it("keeps every workspace while Satellite's worktrees folder doesn't answer", async () => {
-    const { home, workspace, projects } = await repoWithWorkspace();
+  it("drops a workspace when Satellite's whole worktrees folder was deleted", async () => {
+    const { home, projects } = await repoWithWorkspace();
     await rm(join(home, "worktrees"), { recursive: true, force: true });
     const answer = await projects.handlers["projects.list"]({}, owner);
-    expect(answer.dropped).toEqual([]);
-    expect(answer.projects[0]?.workspaces[1]).toMatchObject({ key: workspace.id, branch: null });
-    expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
+    expect(answer.dropped).toEqual([
+      "fix-login left repo because its folder was deleted outside Satellite. git still counts fix-login as checked out there until you run git worktree prune.",
+    ]);
+    expect(await storedWorkspaceIds(home)).toEqual([]);
   });
 
   it("explains a dropped workspace whose branch is checked out elsewhere", async () => {

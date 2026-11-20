@@ -89,8 +89,7 @@ async function folderDeleted(path: string, home: string): Promise<boolean> {
   if (!gone) return false;
   const realHome = await realpathOrUndefined(home);
   if (realHome === undefined) return false;
-  const root = worktreesRoot(realHome);
-  return answersAsFolder(isInsidePath(root, path) ? root : dirname(path));
+  return answersAsFolder(isInsidePath(worktreesRoot(realHome), path) ? realHome : dirname(path));
 }
 
 function bounded(sentence: string): string {
