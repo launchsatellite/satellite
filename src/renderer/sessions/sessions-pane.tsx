@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
+import { promptText } from "../../shared/prompt-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
+import { sendToClaudeCodeEvent, sentText, type PromptTarget } from "./send-to-claude-code.ts";
 import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
 import type { Sessions } from "./use-sessions.ts";
 
@@ -13,6 +15,9 @@ interface SessionsPaneProps {
   onAskLink: (address: string) => void;
   notify: Notify;
 }
+
+const noSession = "Start a Claude Code session in this workspace first.";
+const answerFirst = "Answer Claude Code first, then send this again.";
 
 function EmptyWorkspace({
   workspace,
@@ -88,6 +93,44 @@ function EmptyWorkspace({
 export function SessionsPane({ sessions, selected, onAskLink, notify }: SessionsPaneProps) {
   const tabs = selected === null ? [] : sessions.tabsOf(selected);
   const active = selected === null ? undefined : sessions.activeOf(selected);
+  const shownTab = tabs.find((tab) => tab.key === active);
+  const targets = useRef(new Map<string, PromptTarget>());
+  const latest = useRef({ shownTab, notify });
+  useEffect(() => {
+    latest.current = { shownTab, notify };
+  }, [shownTab, notify]);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const raw = sentText(event);
+      if (raw === undefined) return;
+      const text = promptText(raw);
+      if (text === "") return;
+      const { shownTab: tab, notify: tell } = latest.current;
+      const target = tab === undefined ? undefined : targets.current.get(tab.terminalId);
+      if (tab === undefined || target === undefined) {
+        tell(noSession, "error");
+        return;
+      }
+      if (tab.status === "needs-you") {
+        tell(answerFirst, "error");
+        return;
+      }
+      target.paste(text);
+      setTimeout(() => {
+        targets.current.get(tab.terminalId)?.focus();
+      });
+    };
+    window.addEventListener(sendToClaudeCodeEvent, receive);
+    return () => {
+      window.removeEventListener(sendToClaudeCodeEvent, receive);
+    };
+  }, []);
+  const offerTarget = useCallback((id: string, target: PromptTarget) => {
+    targets.current.set(id, target);
+    return () => {
+      if (targets.current.get(id) === target) targets.current.delete(id);
+    };
+  }, []);
   const top = () => {
     if (selected === null) {
       return (
@@ -143,6 +186,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
                   sessions.restart(tab.key);
                 }}
                 onAskLink={onAskLink}
+                onPromptTarget={offerTarget}
                 notify={notify}
               />
             </div>

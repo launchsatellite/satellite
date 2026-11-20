@@ -1,4 +1,5 @@
-const unsafeCharacter = /[\p{Cc}\p{Zl}\p{Zp}؜‎‏‪-‮⁦-⁩]/u;
+import { holdsHiddenText } from "../../shared/prompt-text.ts";
+
 const plainPath = /^[A-Za-z0-9._/\\:@%+=,~-]+$/;
 const quoteOrEnd = /(\\*)("|$)/g;
 
@@ -12,6 +13,6 @@ function quoted(path: string): string {
 }
 
 export function droppedPaths(paths: readonly string[]): string | null {
-  if (paths.some((path) => path === "" || unsafeCharacter.test(path))) return null;
+  if (paths.some((path) => path === "" || holdsHiddenText(path))) return null;
   return `${paths.map(quoted).join(" ")} `;
 }

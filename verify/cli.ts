@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
+import { sendToClaudeCodeEvent } from "../src/renderer/sessions/send-to-claude-code.ts";
 import {
   buildApp,
   errorReason,
@@ -173,6 +174,17 @@ function parseStep(raw: string): Step {
     case "paste": {
       const text = needsValue();
       return step(({ session }) => paste(session.page, text));
+    }
+    case "send": {
+      const text = needsValue();
+      return step(({ session }) =>
+        session.page.evaluate(
+          ({ name, detail }) => {
+            window.dispatchEvent(new CustomEvent(name, { detail }));
+          },
+          { name: sendToClaudeCodeEvent, detail: { text } },
+        ),
+      );
     }
     case "paste-size": {
       const size = boundedInt(needsValue(), name, 1, pasteLimit);

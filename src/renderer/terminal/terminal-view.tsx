@@ -13,6 +13,7 @@ import {
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { openLink } from "../sessions/link-dialog.tsx";
+import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
@@ -28,6 +29,7 @@ interface TerminalViewProps {
   shown: boolean;
   onRestart: () => void;
   onAskLink: (address: string) => void;
+  onPromptTarget: (id: string, target: PromptTarget) => () => void;
   notify: Notify;
 }
 
@@ -60,11 +62,13 @@ export function TerminalView({
   shown,
   onRestart,
   onAskLink,
+  onPromptTarget,
   notify,
 }: TerminalViewProps) {
   const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
   const show = useRef<() => void>(undefined);
+  const prompt = useRef<PromptTarget>(undefined);
   const noticedNow = useRef(false);
   const outward = useRef({ onAskLink, notify });
   const [notice, setNotice] = useState<string>();
@@ -203,6 +207,14 @@ export function TerminalView({
       sendSize();
       if (!noticedNow.current) terminal.focus();
     };
+    prompt.current = {
+      paste: (text) => {
+        terminal.paste(text);
+      },
+      focus: () => {
+        terminal.focus();
+      },
+    };
 
     const darkScheme = matchMedia("(prefers-color-scheme: dark)");
     const retheme = () => {
@@ -212,6 +224,7 @@ export function TerminalView({
 
     return () => {
       show.current = undefined;
+      prompt.current = undefined;
       element.removeEventListener("paste", pasteImage, true);
       element.removeEventListener("dragover", dragOver);
       element.removeEventListener("drop", drop);
@@ -229,6 +242,12 @@ export function TerminalView({
   useEffect(() => {
     noticedNow.current = noticed;
   }, [noticed]);
+
+  useEffect(() => {
+    const target = prompt.current;
+    if (noticed || target === undefined) return;
+    return onPromptTarget(terminalId, target);
+  }, [terminalId, projectId, key, resume, noticed, onPromptTarget]);
 
   useEffect(() => {
     outward.current = { onAskLink, notify };
