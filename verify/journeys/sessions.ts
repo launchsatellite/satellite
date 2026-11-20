@@ -31,6 +31,8 @@ const mark = "alpha-first-terminal";
 const hostileSend = "fix it\r\nnow\u001b[201~\u0007 ‮";
 const cleanSend = "\u001b[200~fix it now[201~ \u001b[201~";
 const secondTabSend = "for the second tab";
+const menuSend = "while the menu is open";
+const menuShortcut = process.platform === "darwin" ? "Meta+K" : "Control+Shift+K";
 const plainLink = "https://example.com/docs";
 const hyperlink = "https://example.com/real";
 const noSession = "Start a Claude Code session in this workspace first.";
@@ -104,6 +106,12 @@ async function send(page: Page, text: string): Promise<void> {
       window.dispatchEvent(new CustomEvent(name, { detail }));
     },
     { name: sendToClaudeCodeEvent, detail: { text } },
+  );
+}
+
+async function focusedTestId(page: Page): Promise<string> {
+  return page.evaluate(
+    () => document.activeElement?.closest("[data-testid]")?.getAttribute("data-testid") ?? "",
   );
 }
 
@@ -315,7 +323,29 @@ async function sendClean(session: AppSession): Promise<number> {
     prompts,
     "a prompt was submitted after the send",
   );
+  assert.equal(await focusedTestId(page), "terminal", "a send left focus off the terminal");
   return before;
+}
+
+async function sendWhileTyping(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.keyboard.press(menuShortcut);
+  await visible(session, "palette-input", "after the command menu shortcut");
+  const before = (await session.standInEvents()).length;
+  await send(page, menuSend);
+  await waitUntil(
+    async () => (await standInInput(session, before)).includes(menuSend),
+    promptTimeoutMs,
+    "a send while the command menu was open never reached the prompt",
+  );
+  const focused = await focusedTestId(page);
+  assert.equal(focused, "palette-input", `a send took focus from the command menu to ${focused}`);
+  await page.keyboard.press("Escape");
+  await waitUntil(
+    async () => (await page.getByTestId("palette").count()) === 0,
+    promptTimeoutMs,
+    "the command menu stayed open after Escape",
+  );
 }
 
 async function imageAndDrop(session: AppSession): Promise<void> {
@@ -372,8 +402,10 @@ async function links(session: AppSession): Promise<void> {
   await visible(session, "link-dialog", "after a modifier click on a hyperlink");
   const address = await page.getByTestId("link-address").innerText();
   assert.equal(address, hyperlink, "the dialog named another address than the hyperlink's");
-  await page.getByTestId("link-cancel").click();
-  await dialogClosed(session, "after cancelling");
+  const focused = await focusedTestId(page);
+  assert.equal(focused, "link-cancel", `the link dialog opened with focus on ${focused}`);
+  await page.keyboard.press("Enter");
+  await dialogClosed(session, "after Enter on its cancelling action");
   await openedAre(session, [plainLink], "after cancelling the hyperlink");
   await clickLink(session, "docs", true, true);
   await visible(session, "link-dialog", "after a second click on the hyperlink");
@@ -439,6 +471,7 @@ async function run(session: AppSession): Promise<void> {
   await backAndForth(session);
   await tabs(session);
   const sendFrom = await sendClean(session);
+  await sendWhileTyping(session);
   await links(session);
   await imageAndDrop(session);
   await session.screenshot("sessions");
