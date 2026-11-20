@@ -1,6 +1,7 @@
 import type { Rule } from "eslint";
 
-const directivePrefixes = ["eslint-disable", "eslint-enable", "@ts-expect-error"];
+const directive = /^(?:eslint-disable(?:-next-line|-line)?|eslint-enable|@ts-expect-error)(?:\s|$)/;
+const reasonSeparator = " -- ";
 
 function isShebang(comment: { type: string }): boolean {
   return comment.type === "Shebang";
@@ -8,9 +9,11 @@ function isShebang(comment: { type: string }): boolean {
 
 function isReasonedDirective(text: string): boolean {
   const trimmed = text.trim();
-  return (
-    directivePrefixes.some((prefix) => trimmed.startsWith(prefix)) && / -- \s*\S/.test(trimmed)
-  );
+  const separator = trimmed.indexOf(reasonSeparator);
+  if (separator === -1) return false;
+  const head = trimmed.slice(0, separator);
+  const reason = trimmed.slice(separator + reasonSeparator.length).trim();
+  return directive.test(head) && !head.includes("satellite/no-comments") && reason !== "";
 }
 
 export const noComments: Rule.RuleModule = {

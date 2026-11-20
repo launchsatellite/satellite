@@ -5,3 +5,6 @@ out
 release
 verify-output
 .superpowers
+.claude/settings.json
+guards/
+.githooks/

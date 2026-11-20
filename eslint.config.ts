@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 import { noComments } from "./lint/no-comments.ts";
 
 export default defineConfig(
-  { ignores: ["out/", "release/", "verify-output/", "node_modules/"] },
+  { ignores: ["out/", "release/", "verify-output/", "node_modules/", ".claude/", ".superpowers/"] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
@@ -22,6 +22,10 @@ export default defineConfig(
         "error",
         { selector: "ExportDefaultDeclaration", message: "Use a named export." },
         { selector: 'ExportSpecifier[exported.name="default"]', message: "Use a named export." },
+        {
+          selector: 'ExportAllDeclaration[exported.name="default"]',
+          message: "Use a named export.",
+        },
       ],
       "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
       "check-file/filename-naming-convention": [
