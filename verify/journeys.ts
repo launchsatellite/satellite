@@ -11,6 +11,7 @@ import { boundaryJourney } from "./journeys/boundary.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { projectsJourney } from "./journeys/projects.ts";
 import { quitJourney } from "./journeys/quit.ts";
+import { workspacesJourney } from "./journeys/workspaces.ts";
 
 export interface Journey {
   name: string;
@@ -22,7 +23,13 @@ interface Outcome {
   screenshots: string[];
 }
 
-const journeys: Journey[] = [launchJourney, boundaryJourney, projectsJourney, quitJourney];
+const journeys: Journey[] = [
+  launchJourney,
+  boundaryJourney,
+  projectsJourney,
+  workspacesJourney,
+  quitJourney,
+];
 const journeyTimeoutMs = 180_000;
 const stepTimeoutMs = 15_000;
 

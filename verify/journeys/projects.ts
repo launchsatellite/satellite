@@ -8,7 +8,7 @@ import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { interfaceLimits } from "../../src/shared/bridge-contract.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
-import { promptTimeoutMs, waitUntil } from "./conditions.ts";
+import { gone, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
 interface Entry {
   path: string;
@@ -62,19 +62,6 @@ function compareSnapshots(before: Entry[], after: Entry[]): void {
   const beforePaths = new Set(before.map((entry) => entry.path));
   const added = after.find((entry) => !beforePaths.has(entry.path));
   assert.ok(added === undefined, `alpha gained ${added?.path ?? ""} while it was in Satellite`);
-}
-
-async function toastReads(session: AppSession, expected: string, when: string): Promise<void> {
-  const toast = session.page.getByTestId("toast");
-  let shown = "";
-  await waitUntil(
-    async () => {
-      shown = (await toast.count()) === 0 ? "" : await toast.innerText();
-      return shown.includes(expected);
-    },
-    waitMs,
-    () => `${when} the toast read "${shown}" instead of "${expected}"`,
-  );
 }
 
 async function addWithShortcut(session: AppSession, name: string): Promise<void> {
@@ -183,23 +170,6 @@ async function centreReads(session: AppSession, title: string, when: string): Pr
     waitMs,
     () => `folder-missing read "${shown}" ${when} instead of "${title}"`,
   );
-}
-
-async function gone(session: AppSession, testId: string, when: string): Promise<void> {
-  await waitUntil(
-    async () => (await session.page.getByTestId(testId).count()) === 0,
-    waitMs,
-    `${testId} was still listed ${when}`,
-  );
-}
-
-async function visible(session: AppSession, testId: string, when: string): Promise<void> {
-  await session.page
-    .getByTestId(testId)
-    .waitFor({ timeout: waitMs })
-    .catch(() => {
-      throw new Error(`${testId} did not appear ${when}`);
-    });
 }
 
 async function run(session: AppSession): Promise<void> {
