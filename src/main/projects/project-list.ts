@@ -230,6 +230,7 @@ export function createProjects({
   const forget = async (drops: readonly Drop[]): Promise<Drop[]> => {
     if (drops.length === 0 || !(await file.load()).writable) return [];
     let forgotten: Drop[] = [];
+    let folders: string[] = [];
     try {
       await replace((latest) => {
         const stored = new Set(
@@ -239,6 +240,9 @@ export function createProjects({
           (drop) => stored.has(drop.workspaceId) && !busy.has(drop.workspaceId),
         );
         const ids = new Set(forgotten.map((drop) => drop.workspaceId));
+        folders = latest.flatMap((project) =>
+          project.workspaces.filter((workspace) => ids.has(workspace.id)).map(({ path }) => path),
+        );
         return latest.map((project) => ({
           ...project,
           workspaces: project.workspaces.filter((workspace) => !ids.has(workspace.id)),
@@ -246,6 +250,11 @@ export function createProjects({
       });
     } catch {
       return [];
+    }
+    for (const folder of folders) {
+      stopSessions(folder).catch((error: unknown) => {
+        console.error("The sessions of a dropped workspace could not be stopped", error);
+      });
     }
     return forgotten;
   };

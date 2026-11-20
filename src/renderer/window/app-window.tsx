@@ -149,6 +149,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       true,
     );
   }, [projects, selectedId, selectedKey, update]);
+  const allSessions = sessions.all;
+  useEffect(() => {
+    if (projects === undefined) return;
+    const listed = new Set(
+      projects.flatMap((project) =>
+        project.workspaces.map((workspace) => `${project.id}/${workspace.key}`),
+      ),
+    );
+    for (const { workspace } of allSessions) {
+      if (!listed.has(`${workspace.projectId}/${workspace.workspace}`)) forgetWorkspace(workspace);
+    }
+  }, [projects, allSessions, forgetWorkspace]);
   const { left, right } = fitColumns(state.columns, width);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);

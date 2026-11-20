@@ -344,6 +344,20 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toEqual([]);
   });
 
+  it("stops the sessions of a workspace it drops, so no claude runs on in a deleted folder", async () => {
+    const { home, workspace } = await repoWithWorkspace();
+    const stopSessions = vi.fn((folder: string) => {
+      expect(folder).toBeTypeOf("string");
+      return Promise.resolve();
+    });
+    const projects = projectsIn(home, stopSessions);
+    await projects.handlers["projects.list"]({}, owner);
+    expect(stopSessions).not.toHaveBeenCalled();
+    await rm(workspace.path, { recursive: true, force: true });
+    await projects.handlers["projects.list"]({}, owner);
+    expect(stopSessions.mock.calls).toEqual([[workspace.path]]);
+  });
+
   it("drops every workspace of a project whose worktrees folder was deleted, in one sentence", async () => {
     const { home, repo, gitIn, workspace } = await repoWithWorkspace();
     const more: StoredWorkspace[] = [];
