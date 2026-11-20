@@ -92,7 +92,7 @@ On macOS a run is quiet by default, which needs the driver's own process alive, 
 
 ## Real Claude Code
 
-`--real-claude` leaves `SATELLITE_CLAUDE` and `CLAUDE_CONFIG_DIR` out, so the app runs the user's own Claude Code with its own sign-in, which updates its own state in the user's home. Ask the user every time before using it, and only in a throwaway scenario repo.
+`--real-claude` leaves `SATELLITE_CLAUDE` and `CLAUDE_CONFIG_DIR` out, so the app runs the user's own Claude Code with its own sign-in, which updates its own state in the user's home. Ask the user every time before using it, and only in a throwaway scenario repo. Its trust question for the new folder starts on No, exit, so press the down arrow, once Claude Code shows the question and takes keys, and read that Yes is selected before Enter. Claude Code posts no HTTP hook for `SessionStart`, so the pixel and Send to Claude Code wake at the first prompt.
 
 ## In code
 
