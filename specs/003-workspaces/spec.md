@@ -1,6 +1,6 @@
 # 003 Workspaces
 
-Status **Approved** · Depends on **002**
+Status **In progress** · Depends on **002**
 
 ## Why
 
