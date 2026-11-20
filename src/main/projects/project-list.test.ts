@@ -165,12 +165,15 @@ async function storedWorkspaceIds(home: string): Promise<string[]> {
   return file.projects.flatMap((project) => project.workspaces.map((workspace) => workspace.id));
 }
 
-function projectsIn(home: string) {
+function projectsIn(
+  home: string,
+  stopSessions: (folder: string) => Promise<void> = () => Promise.resolve(),
+) {
   return createProjects({
     home,
     chooseFolder: () => Promise.resolve(undefined),
     window: () => undefined,
-    stopSessions: () => Promise.resolve(),
+    stopSessions,
   });
 }
 
@@ -435,8 +438,13 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toHaveLength(1);
   });
 
-  it("forgets a missing project with its workspaces", async () => {
-    const { home, repo, projects } = await repoWithWorkspace();
+  it("forgets a missing project with its workspaces and stops the sessions in each", async () => {
+    const { home, repo, workspace } = await repoWithWorkspace();
+    const stopSessions = vi.fn((folder: string) => {
+      expect(folder).toBeTypeOf("string");
+      return Promise.resolve();
+    });
+    const projects = projectsIn(home, stopSessions);
     await rm(repo, { recursive: true, force: true });
     const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
     expect(project?.missing).toBe("folder");
@@ -444,6 +452,9 @@ describe("createProjects", () => {
       await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
     ).toEqual({ forgotWorkspaces: 1 });
     expect(await storedWorkspaceIds(home)).toEqual([]);
+    expect(stopSessions.mock.calls.map(([folder]) => folder).sort()).toEqual(
+      [repo, workspace.path].sort(),
+    );
   });
 
   it("counts commits on no remote as ahead when a branch has no upstream", async () => {
