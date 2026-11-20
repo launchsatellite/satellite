@@ -14,8 +14,9 @@ import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
-import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
+import { SessionsPane } from "../sessions/sessions-pane.tsx";
+import { useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
@@ -99,6 +100,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const { state, update } = useInterfaceState(initial, notify);
   const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
     useProjects(notify);
+  const sessions = useSessions(notify);
+  const { open: openSession, close: closeSession, forgetWorkspace, forgetProject } = sessions;
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
@@ -208,6 +211,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       ? selectedProject
       : undefined;
   const archivableWorkspace = archivable === undefined ? undefined : selectedWorkspace;
+  const hereId = selectedProject?.id;
+  const hereKey = selectedWorkspace?.key;
+  const sessionHere = useMemo<WorkspaceRef | undefined>(
+    () =>
+      hereId === undefined || hereKey === undefined
+        ? undefined
+        : { projectId: hereId, workspace: hereKey },
+    [hereId, hereKey],
+  );
+  const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null;
   const closeNewWorkspace = useCallback(() => {
@@ -250,6 +263,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     const projectId = archiving.project.id;
     const { key, name, branch } = archiving.workspace;
     dropWorkspace(projectId, key);
+    forgetWorkspace({ projectId, workspace: key });
     update(
       (current) =>
         current.selected?.projectId === projectId && current.selected.workspace === key
@@ -295,6 +309,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (removableId === undefined) return;
               const forgot = await remove(removableId);
               if (forgot === undefined) return;
+              forgetProject(removableId);
               update(
                 (current) => ({
                   ...current,
@@ -325,6 +340,23 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             run: () => {
               if (archivable === undefined || archivableWorkspace === undefined) return;
               setArchiving({ project: archivable, workspace: archivableWorkspace });
+            },
+          },
+          {
+            id: "session.new",
+            title: "New Claude Code session",
+            shortcut: { key: "t" },
+            available: sessionHere !== undefined,
+            run: () => {
+              if (sessionHere !== undefined) openSession(sessionHere, false);
+            },
+          },
+          {
+            id: "session.close",
+            title: "Close this session",
+            available: activeSession !== undefined,
+            run: () => {
+              if (activeSession !== undefined) closeSession(activeSession);
             },
           },
           {
@@ -372,6 +404,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     notify,
     dismissToast,
     focusSidebarIfLost,
+    sessionHere,
+    activeSession,
+    openSession,
+    closeSession,
+    forgetProject,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -421,6 +458,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onSelect={select}
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
+            pixelFor={sessions.pixelFor}
           />
           <ColumnDivider
             side="left"
@@ -449,15 +487,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             testId="divider-right"
           />
         </section>
-        <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
-          <ClaudePane
-            key={
-              state.selected === null
-                ? "none"
-                : `${state.selected.projectId}/${state.selected.workspace}`
-            }
-            workspace={state.selected}
-          />
+        <section
+          data-testid="column-sessions"
+          aria-label="Sessions"
+          className="relative min-h-0 bg-bg"
+        >
+          <SessionsPane sessions={sessions} selected={sessionHere ?? null} />
         </section>
         {dragging && <DropOverlay />}
         {palette !== null && (

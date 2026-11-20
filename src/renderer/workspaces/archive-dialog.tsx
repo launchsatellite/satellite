@@ -287,8 +287,8 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
           {view.sessions > 0 && (
             <Row pixel="idle" testId="archive-sessions">
               {view.sessions === 1
-                ? "1 Claude Code terminal running here stops first."
-                : `${String(view.sessions)} Claude Code terminals running here stop first.`}
+                ? "1 Claude Code session running here stops first."
+                : `${String(view.sessions)} Claude Code sessions running here stop first.`}
             </Row>
           )}
           <Row pixel="idle">

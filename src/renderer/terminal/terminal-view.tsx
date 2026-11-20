@@ -3,14 +3,34 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
-import { bridgeLimits, type WorkspaceRef } from "../../shared/bridge-contract.ts";
+import {
+  bridgeLimits,
+  type InstallFix,
+  type SessionEnding,
+  type WorkspaceRef,
+} from "../../shared/bridge-contract.ts";
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
+import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
 import "./terminal-font.css";
 import { terminalTheme } from "./terminal-theme.ts";
 
+interface TerminalViewProps {
+  terminalId: string;
+  workspace: WorkspaceRef;
+  resume: boolean;
+  shown: boolean;
+  onRestart: () => void;
+}
+
 const newlineSequence = "\u001b\r";
+const endings: Record<SessionEnding, string> = {
+  ended: "Claude Code ended.",
+  unexpected: "Claude Code stopped unexpectedly. The workspace and its changes are safe.",
+  "resume-failed":
+    "Claude Code couldn't resume that session, so Satellite let it go. Start a new one.",
+};
 
 function isShiftEnter(event: KeyboardEvent): boolean {
   return (
@@ -19,20 +39,23 @@ function isShiftEnter(event: KeyboardEvent): boolean {
 }
 
 export function TerminalView({
+  terminalId,
   workspace,
+  resume,
+  shown,
   onRestart,
-}: {
-  workspace: WorkspaceRef;
-  onRestart: () => void;
-}) {
+}: TerminalViewProps) {
   const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
+  const show = useRef<() => void>(undefined);
+  const noticedNow = useRef(false);
   const [notice, setNotice] = useState<string>();
+  const [missingFix, setMissingFix] = useState<InstallFix>();
+  const noticed = notice !== undefined;
 
   useEffect(() => {
     const element = host.current;
     if (element === null) return;
-    const terminalId = crypto.randomUUID();
     const terminal = new Terminal({
       fontFamily: '"Satellite Terminal Mono", monospace',
       fontSize: 13,
@@ -47,8 +70,13 @@ export function TerminalView({
     terminal.loadAddon(new Unicode11Addon());
     terminal.unicode.activeVersion = "11";
     terminal.open(element);
-    fit.fit();
-    terminal.focus();
+    const fitted = () => {
+      if (element.clientWidth === 0 || element.clientHeight === 0) return false;
+      fit.fit();
+      return true;
+    };
+    fitted();
+    let sent = { cols: terminal.cols, rows: terminal.rows };
 
     const stopData = subscribe("terminal.data", ({ id, data }) => {
       if (id !== terminalId) return;
@@ -56,23 +84,34 @@ export function TerminalView({
         void invoke("terminal.ack", { id, chars: data.length });
       });
     });
-    const stopExit = subscribe("terminal.exit", ({ id }) => {
-      if (id === terminalId) setNotice("Claude Code ended.");
+    const stopExit = subscribe("terminal.exit", ({ id, ending }) => {
+      if (id === terminalId) setNotice(endings[ending]);
     });
     let queue: Promise<unknown> = invoke("terminal.start", {
       id: terminalId,
       program: "claude",
       workspace: { projectId, workspace: key },
-      resume: false,
-      cols: terminal.cols,
-      rows: terminal.rows,
-    }).then((result) => {
-      if (!result.ok) setNotice(result.error.message);
+      resume,
+      cols: sent.cols,
+      rows: sent.rows,
+    }).then(async (result) => {
+      if (result.ok) return;
+      setNotice(result.error.message);
+      if (result.error.code !== "tool-missing") return;
+      const check = await invoke("tools.check", {});
+      if (check.ok && check.value.claude.state === "missing") setMissingFix(check.value.claude.fix);
     });
     const send = (data: string) => {
       for (const chunk of textChunks(data, bridgeLimits.terminalWriteChars)) {
         queue = queue.then(() => invoke("terminal.write", { id: terminalId, data: chunk }));
       }
+    };
+    const sendSize = () => {
+      if (!fitted()) return;
+      const { cols, rows } = terminal;
+      if (cols === sent.cols && rows === sent.rows) return;
+      sent = { cols, rows };
+      queue = queue.then(() => invoke("terminal.resize", { id: terminalId, cols, rows }));
     };
 
     const input = terminal.onData(send);
@@ -85,15 +124,13 @@ export function TerminalView({
     let frame = 0;
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const { cols, rows } = terminal;
-        fit.fit();
-        if (terminal.cols === cols && terminal.rows === rows) return;
-        const size = { id: terminalId, cols: terminal.cols, rows: terminal.rows };
-        queue = queue.then(() => invoke("terminal.resize", size));
-      });
+      frame = requestAnimationFrame(sendSize);
     });
     observer.observe(element);
+    show.current = () => {
+      sendSize();
+      if (!noticedNow.current) terminal.focus();
+    };
 
     const darkScheme = matchMedia("(prefers-color-scheme: dark)");
     const retheme = () => {
@@ -102,6 +139,7 @@ export function TerminalView({
     darkScheme.addEventListener("change", retheme);
 
     return () => {
+      show.current = undefined;
       darkScheme.removeEventListener("change", retheme);
       observer.disconnect();
       cancelAnimationFrame(frame);
@@ -111,21 +149,47 @@ export function TerminalView({
       terminal.dispose();
       void invoke("terminal.close", { id: terminalId });
     };
-  }, [projectId, key]);
+  }, [terminalId, projectId, key, resume]);
+
+  useEffect(() => {
+    noticedNow.current = noticed;
+  }, [noticed]);
+
+  useEffect(() => {
+    if (shown) show.current?.();
+  }, [shown]);
 
   return (
-    <div data-testid="terminal" className="flex h-full min-h-0 flex-col bg-bg p-2">
+    <div
+      data-testid={shown ? "terminal" : undefined}
+      className="flex h-full min-h-0 flex-col bg-bg p-2"
+    >
       <div ref={host} className="min-h-0 flex-1" />
-      <div className={`flex items-center gap-3 px-1 ${notice === undefined ? "" : "pt-2"}`}>
-        <p role="status" data-testid="terminal-notice" className="text-[13px] text-fg2">
-          {notice}
-        </p>
-        {notice !== undefined && (
-          <Button testId="start-claude" onClick={onRestart} autoFocus>
-            Start Claude Code
-          </Button>
-        )}
-      </div>
+      {shown && (
+        <div className={`flex flex-col gap-2 px-1 ${noticed ? "pt-2" : ""}`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <p role="status" data-testid="terminal-notice" className="text-[13px] text-fg2">
+              {notice}
+            </p>
+            {noticed && (
+              <Button testId="start-claude" onClick={onRestart} autoFocus>
+                Start Claude Code
+              </Button>
+            )}
+          </div>
+          {missingFix !== undefined && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[12.5px] text-fg2">{leads[missingFix.kind]}</p>
+              <code
+                data-testid="claude-missing-fix"
+                className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all"
+              >
+                {missingFix.text}
+              </code>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

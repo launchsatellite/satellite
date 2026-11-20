@@ -32,7 +32,7 @@ const signedOutDetail = {
   none: "Not signed in.",
   failed: "Couldn't confirm its sign-in. Check the connection, or sign in again.",
 };
-const leads = {
+export const leads = {
   command: "Run this in a terminal, then check again.",
   address: "Follow the steps at this address, then check again.",
   diagnose: "Run this in a terminal to see why.",

@@ -92,6 +92,22 @@ async function waitForText(page: Page, testId: string, text: string): Promise<vo
   }
 }
 
+async function waitForState(page: Page, testId: string, state: string): Promise<void> {
+  const element = page.getByTestId(testId);
+  const deadline = Date.now() + waitLimitMs;
+  for (;;) {
+    const read =
+      (await element.count()) === 0 ? null : await element.first().getAttribute("data-state");
+    if (read === state) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${testId} did not reach the state ${JSON.stringify(state)} within ${String(waitLimitMs / 1000)} seconds, it last read ${JSON.stringify(read)}`,
+      );
+    }
+    await delay(waitPollMs);
+  }
+}
+
 async function paste(page: Page, text: string): Promise<string> {
   const target = await pasteIntoFocus(page, text);
   if (target === undefined) throw new Error(noFocus);
@@ -200,6 +216,21 @@ function parseStep(raw: string): Step {
       }
       return step(
         ({ session }) => waitForText(session.page, testId, text),
+        waitLimitMs + stepTimeoutMs,
+      );
+    }
+    case "wait-state": {
+      const target = needsValue();
+      const separator = target.indexOf(":");
+      const testId = target.slice(0, separator);
+      const state = target.slice(separator + 1);
+      if (separator === -1 || testId === "" || state === "") {
+        throw new Error(
+          "step wait-state needs <testid>:<state>, as in wait-state=session-tab-1:working",
+        );
+      }
+      return step(
+        ({ session }) => waitForState(session.page, testId, state),
         waitLimitMs + stepTimeoutMs,
       );
     }
