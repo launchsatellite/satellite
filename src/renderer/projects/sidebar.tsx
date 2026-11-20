@@ -21,6 +21,7 @@ interface ProjectRow {
   showParent: boolean;
 }
 
+const countCap = 1_000_000;
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -57,29 +58,39 @@ function CommandRow({
   );
 }
 
+function counted(count: number | null): string | undefined {
+  if (count === null || count <= 0) return undefined;
+  return count >= countCap ? `${String(countCap)}+` : String(count);
+}
+
 function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: string | undefined }) {
-  const { ahead, behind, changed } = workspace;
+  const ahead = counted(workspace.ahead);
+  const behind = counted(workspace.behind);
+  const changed = counted(workspace.changed);
   const parts = [
-    ahead !== null && ahead > 0 ? `${String(ahead)} ahead` : undefined,
-    behind !== null && behind > 0 ? `${String(behind)} behind` : undefined,
-    changed !== null && changed > 0 ? `${String(changed)} changed files` : undefined,
+    ahead === undefined ? undefined : `${ahead} ahead`,
+    behind === undefined ? undefined : `${behind} behind`,
+    changed === undefined ? undefined : `${changed} changed files`,
   ].filter((part) => part !== undefined);
   if (parts.length === 0) return null;
   return (
-    <span
-      data-testid={testId === undefined ? undefined : `${testId}-meta`}
-      aria-label={parts.join(", ")}
-      className="ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase"
-    >
-      {ahead !== null && ahead > 0 && <span aria-hidden="true">↑{ahead}</span>}
-      {behind !== null && behind > 0 && <span aria-hidden="true">↓{behind}</span>}
-      {changed !== null && changed > 0 && (
-        <span aria-hidden="true" className="flex items-center gap-[3px]">
-          <Icon name="folder" size={12} />
-          {changed}
-        </span>
-      )}
-    </span>
+    <>
+      <span className="sr-only">{parts.join(", ")}</span>
+      <span
+        data-testid={testId === undefined ? undefined : `${testId}-meta`}
+        aria-hidden="true"
+        className="ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase"
+      >
+        {ahead !== undefined && <span>↑{ahead}</span>}
+        {behind !== undefined && <span>↓{behind}</span>}
+        {changed !== undefined && (
+          <span className="flex items-center gap-[3px]">
+            <Icon name="folder" size={12} />
+            {changed}
+          </span>
+        )}
+      </span>
+    </>
   );
 }
 
