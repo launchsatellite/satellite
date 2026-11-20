@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { spawn } from "node-pty";
 import { endUnixTree, endWindowsTree } from "./process-tree.ts";
 import type { ResolvedCommand } from "./tools.ts";
@@ -36,6 +37,7 @@ export function spawnPty(
   let killing: Promise<void> | undefined;
   const endWindows = async () => {
     await endWindowsTree(pty.pid);
+    await Promise.race([exited, delay(forceKillGraceMs)]);
     if (!ended) pty.kill();
   };
   return {

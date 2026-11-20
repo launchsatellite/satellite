@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { app, session } from "electron";
+import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
 import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
@@ -17,6 +17,14 @@ import { createMainWindow } from "./window/main-window.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
+}
+
+function focusMainWindow(): void {
+  const [window] = BrowserWindow.getAllWindows();
+  if (window === undefined) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
 }
 
 const terminals = createTerminalSessions();
@@ -43,11 +51,16 @@ async function start(): Promise<void> {
 app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
 registerAppScheme();
 
-start().catch((error: unknown) => {
-  const reason = error instanceof Error ? error.message : String(error);
-  console.error(`Satellite could not open its window and is quitting. ${reason}`);
-  app.exit(1);
-});
+if (app.requestSingleInstanceLock()) {
+  app.on("second-instance", focusMainWindow);
+  start().catch((error: unknown) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`Satellite could not open its window and is quitting. ${reason}`);
+    app.exit(1);
+  });
+} else {
+  app.exit(0);
+}
 
 app.on("before-quit", (event) => {
   if (quitting) return;
