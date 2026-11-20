@@ -16,7 +16,7 @@ interface SidebarProps {
 interface ProjectRow {
   project: ProjectView;
   testId: string;
-  workspaceTestId: string;
+  workspaceTestIds: string[];
   showParent: boolean;
 }
 
@@ -63,17 +63,24 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
     projects.map((project) => ({ project, testId: `project-${project.name}` })),
   );
   const workspaceIds = withUniqueTestIds(
-    projects.map((project) => ({ testId: `workspace-${project.name}-main` })),
+    projects.flatMap((project) =>
+      project.workspaces.map((workspace) => ({
+        projectId: project.id,
+        testId: `workspace-${project.name}-${workspace.key}`,
+      })),
+    ),
   );
-  return rows.map((row, index) => ({
+  return rows.map((row) => ({
     ...row,
-    workspaceTestId: workspaceIds[index]?.testId ?? row.testId,
+    workspaceTestIds: workspaceIds
+      .filter((workspace) => workspace.projectId === row.project.id)
+      .map((workspace) => workspace.testId),
     showParent: (counts.get(row.project.name) ?? 0) > 1 && row.project.parent !== "",
   }));
 }
 
 function ProjectRows({
-  row: { project, testId, workspaceTestId, showParent },
+  row: { project, testId, workspaceTestIds, showParent },
   selected,
   onSelect,
   focus,
@@ -99,13 +106,13 @@ function ProjectRows({
         )}
       </div>
       <ul aria-label={project.name} className="flex flex-col gap-px">
-        {project.workspaces.map((workspace) => {
+        {project.workspaces.map((workspace, index) => {
           const current = selected?.projectId === project.id;
           return (
             <li key={workspace.key}>
               <button
                 type="button"
-                data-testid={workspaceTestId}
+                data-testid={workspaceTestIds[index]}
                 autoFocus={focus}
                 aria-current={current ? "true" : undefined}
                 onClick={() => {
