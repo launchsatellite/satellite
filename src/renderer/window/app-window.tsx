@@ -101,7 +101,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
     useProjects(notify);
   const sessions = useSessions(notify);
-  const { open: openSession, close: closeSession, forgetWorkspace, forgetProject } = sessions;
+  const {
+    open: openSession,
+    close: closeSession,
+    activate: activateSession,
+    forgetWorkspace,
+    forgetProject,
+  } = sessions;
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
@@ -221,6 +227,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
+  const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
+  const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
+  const neighbour = (step: number) =>
+    tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
+  const nextSession = neighbour(1);
+  const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null;
   const closeNewWorkspace = useCallback(() => {
@@ -360,6 +372,22 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "session.next",
+            title: "Go to the next session",
+            available: nextSession !== undefined,
+            run: () => {
+              if (nextSession !== undefined) activateSession(nextSession);
+            },
+          },
+          {
+            id: "session.previous",
+            title: "Go to the previous session",
+            available: previousSession !== undefined,
+            run: () => {
+              if (previousSession !== undefined) activateSession(previousSession);
+            },
+          },
+          {
             id: "palette.switcher",
             title: "Go to a workspace",
             shortcut: { key: "p" },
@@ -406,8 +434,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     focusSidebarIfLost,
     sessionHere,
     activeSession,
+    nextSession,
+    previousSession,
     openSession,
     closeSession,
+    activateSession,
     forgetProject,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {

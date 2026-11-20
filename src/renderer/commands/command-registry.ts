@@ -14,6 +14,8 @@ export type CommandId =
   | "workspace.archive"
   | "session.new"
   | "session.close"
+  | "session.next"
+  | "session.previous"
   | "tools.check"
   | "theme.system"
   | "theme.light"

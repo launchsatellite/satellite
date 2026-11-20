@@ -133,7 +133,7 @@ Kept, every test id from spec 003. `terminal`, `terminal-notice` and `start-clau
 
 ### Commands
 
-`session.new` "New Claude Code session", shortcut `{ key: "t" }`, available when a workspace is selected. `session.close` "Close this session", no shortcut, available when the selected workspace has a session tab. The registry list in `AppWindow` becomes `palette.commands`, `project.add`, `project.remove`, `workspace.new`, `workspace.archive`, `session.new`, `session.close`, `palette.switcher`, `tools.check`, `theme.system`, `theme.light`, `theme.dark`.
+`session.new` "New Claude Code session", shortcut `{ key: "t" }`, available when a workspace is selected. `session.close` "Close this session", no shortcut, available when the selected workspace has a session tab. `session.next` "Go to the next session" and `session.previous` "Go to the previous session", no shortcut, available when the selected workspace has two tabs or more, wrap around. The registry list in `AppWindow` becomes `palette.commands`, `project.add`, `project.remove`, `workspace.new`, `workspace.archive`, `session.new`, `session.close`, `session.next`, `session.previous`, `palette.switcher`, `tools.check`, `theme.system`, `theme.light`, `theme.dark`.
 
 ### Copy
 
