@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { matchesShortcut, shortcutLabel, type KeyPress } from "./shortcuts.ts";
 
 const modK = { key: "k" };
-const shiftModK = { key: "k", shift: true };
 
 function press(overrides: Partial<KeyPress>): KeyPress {
   return {
@@ -18,35 +17,40 @@ function press(overrides: Partial<KeyPress>): KeyPress {
 }
 
 describe("matchesShortcut", () => {
-  it("matches Cmd+K on macOS and not Ctrl+K", () => {
+  it("matches Cmd+K on macOS and not Ctrl+K or Cmd+Shift+K", () => {
     expect(matchesShortcut(press({ metaKey: true }), modK, "mac")).toBe(true);
     expect(matchesShortcut(press({ ctrlKey: true }), modK, "mac")).toBe(false);
+    expect(matchesShortcut(press({ key: "K", metaKey: true, shiftKey: true }), modK, "mac")).toBe(
+      false,
+    );
   });
 
-  it("matches Ctrl+K elsewhere and not Meta+K", () => {
-    expect(matchesShortcut(press({ ctrlKey: true }), modK, "other")).toBe(true);
-    expect(matchesShortcut(press({ metaKey: true }), modK, "other")).toBe(false);
+  it("matches Ctrl+Shift+K on Windows and Linux and leaves plain Ctrl+K to the focused element", () => {
+    expect(matchesShortcut(press({ key: "K", ctrlKey: true, shiftKey: true }), modK, "other")).toBe(
+      true,
+    );
+    expect(matchesShortcut(press({ ctrlKey: true }), modK, "other")).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, shiftKey: true }), modK, "other")).toBe(false);
   });
 
   it("never matches with Alt held, so AltGr on Windows fires nothing", () => {
-    expect(matchesShortcut(press({ ctrlKey: true, altKey: true }), modK, "other")).toBe(false);
-  });
-
-  it("refuses a missing or extra Shift", () => {
-    expect(matchesShortcut(press({ ctrlKey: true }), shiftModK, "other")).toBe(false);
-    expect(matchesShortcut(press({ ctrlKey: true, shiftKey: true }), modK, "other")).toBe(false);
-  });
-
-  it("matches an uppercase key from Shift", () => {
     expect(
-      matchesShortcut(press({ key: "K", metaKey: true, shiftKey: true }), shiftModK, "mac"),
-    ).toBe(true);
+      matchesShortcut(press({ ctrlKey: true, shiftKey: true, altKey: true }), modK, "other"),
+    ).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, altKey: true }), modK, "mac")).toBe(false);
   });
 
   it("falls back to the physical key on a non-Latin layout", () => {
     expect(matchesShortcut(press({ key: "л", code: "KeyK", metaKey: true }), modK, "mac")).toBe(
       true,
     );
+    expect(
+      matchesShortcut(
+        press({ key: "Л", code: "KeyK", ctrlKey: true, shiftKey: true }),
+        modK,
+        "other",
+      ),
+    ).toBe(true);
     expect(matchesShortcut(press({ key: "k", code: "KeyL", metaKey: true }), modK, "mac")).toBe(
       true,
     );
@@ -54,7 +58,9 @@ describe("matchesShortcut", () => {
 
   it("never fires while an input method is composing", () => {
     expect(matchesShortcut(press({ metaKey: true, isComposing: true }), modK, "mac")).toBe(false);
-    expect(matchesShortcut(press({ ctrlKey: true, isComposing: true }), modK, "other")).toBe(false);
+    expect(
+      matchesShortcut(press({ ctrlKey: true, shiftKey: true, isComposing: true }), modK, "other"),
+    ).toBe(false);
   });
 
   it("matches a shortcut written in uppercase", () => {
@@ -65,8 +71,6 @@ describe("matchesShortcut", () => {
 describe("shortcutLabel", () => {
   it("labels shortcuts for each platform", () => {
     expect(shortcutLabel(modK, "mac")).toBe("⌘K");
-    expect(shortcutLabel(shiftModK, "mac")).toBe("⌘⇧K");
-    expect(shortcutLabel(modK, "other")).toBe("Ctrl+K");
-    expect(shortcutLabel(shiftModK, "other")).toBe("Ctrl+Shift+K");
+    expect(shortcutLabel(modK, "other")).toBe("Ctrl+Shift+K");
   });
 });

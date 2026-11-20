@@ -36,7 +36,7 @@ export function createCommandRegistry(commands: readonly Command[]): CommandRegi
     if (byId.has(command.id)) throw new Error(`Two commands share the id ${command.id}.`);
     byId.set(command.id, command);
     if (command.shortcut === undefined) continue;
-    const key = `${command.shortcut.shift === true ? "shift+" : ""}${command.shortcut.key.toLowerCase()}`;
+    const key = command.shortcut.key.toLowerCase();
     if (shortcuts.has(key)) throw new Error(`Two commands share the shortcut ${key}.`);
     shortcuts.add(key);
   }

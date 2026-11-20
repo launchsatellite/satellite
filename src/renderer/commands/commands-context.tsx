@@ -17,10 +17,6 @@ interface CommandButtonProps {
 const platform = keyboardPlatform();
 const CommandsContext = createContext<CommandRegistry | null>(null);
 
-function insideTerminal(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(".xterm") !== null;
-}
-
 export function commandShortcut(command: Command): string | undefined {
   return command.shortcut === undefined ? undefined : shortcutLabel(command.shortcut, platform);
 }
@@ -34,7 +30,6 @@ export function CommandsProvider({
 }) {
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
-      if (platform === "other" && insideTerminal(event.target)) return;
       const command = registry.forKey(event, platform);
       if (!command?.available) return;
       event.preventDefault();

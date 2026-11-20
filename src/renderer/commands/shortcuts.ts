@@ -2,7 +2,6 @@ export type KeyboardPlatform = "mac" | "other";
 
 export interface Shortcut {
   key: string;
-  shift?: boolean;
 }
 
 export interface KeyPress {
@@ -32,15 +31,16 @@ export function matchesShortcut(
 ): boolean {
   if (press.isComposing) return false;
   const key = shortcut.key.toLowerCase();
-  const mod =
-    platform === "mac" ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey;
-  if (!mod || press.altKey || press.shiftKey !== (shortcut.shift ?? false)) return false;
+  const held =
+    platform === "mac"
+      ? press.metaKey && !press.ctrlKey && !press.shiftKey
+      : press.ctrlKey && press.shiftKey && !press.metaKey;
+  if (!held || press.altKey) return false;
   if (press.key.toLowerCase() === key) return true;
   return !latinKey.test(press.key) && press.code === physicalCode(key);
 }
 
 export function shortcutLabel(shortcut: Shortcut, platform: KeyboardPlatform): string {
   const key = shortcut.key.toUpperCase();
-  if (platform === "mac") return `⌘${shortcut.shift === true ? "⇧" : ""}${key}`;
-  return `Ctrl+${shortcut.shift === true ? "Shift+" : ""}${key}`;
+  return platform === "mac" ? `⌘${key}` : `Ctrl+Shift+${key}`;
 }
