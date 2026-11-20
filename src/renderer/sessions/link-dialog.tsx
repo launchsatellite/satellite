@@ -12,7 +12,7 @@ interface LinkDialogProps {
 const label = "text-[12px] text-dim";
 const mono = "font-mono text-[12px] break-all text-fg select-all";
 
-export async function openLink(url: string, notify: Notify): Promise<boolean> {
+async function openLink(url: string, notify: Notify): Promise<boolean> {
   const result = await invoke("links.open", { url });
   if (!result.ok) notify(result.error.message, "error");
   return result.ok;
