@@ -83,7 +83,7 @@ In `src/shared/bridge-contract.ts`.
 
 Recorded in `ARCHITECTURE.md` in Task 6, decided here.
 
-- **Raise a notification with text it chose.** No. There is no channel that shows one. The background process decides from its own session states, with its fixed sentences, the workspace record's name and the project folder's cleaned name.
+- **Raise a notification with text it chose.** Only within names. There is no channel that shows one. The background process decides from its own session states, with its fixed sentences, the workspace record's name and the project folder's cleaned name. A page can create a workspace with a name it picks within the name rule, or add an existing repository by its path, and so choose those characters, which is less than typing into a session already allows.
 - **Raise notifications without bound.** No. The worst it can do is drive a session through `terminal.write` into asking for permission again and again, which it can already do, and the controller shows at most one notification every 5 seconds whatever the number of workspaces.
 - **Set an arbitrary badge.** No. The badge is the size of the needing set, at most 16, set only when it changes.
 - **Steal focus.** No. Focus moves only on a click the system delivers on a notification Satellite showed. `notices.open` is an event the page receives and can never send.
