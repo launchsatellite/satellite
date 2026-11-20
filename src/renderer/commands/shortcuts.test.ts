@@ -12,6 +12,7 @@ function press(overrides: Partial<KeyPress>): KeyPress {
     ctrlKey: false,
     altKey: false,
     shiftKey: false,
+    isComposing: false,
     ...overrides,
   };
 }
@@ -49,6 +50,15 @@ describe("matchesShortcut", () => {
     expect(matchesShortcut(press({ key: "k", code: "KeyL", metaKey: true }), modK, "mac")).toBe(
       true,
     );
+  });
+
+  it("never fires while an input method is composing", () => {
+    expect(matchesShortcut(press({ metaKey: true, isComposing: true }), modK, "mac")).toBe(false);
+    expect(matchesShortcut(press({ ctrlKey: true, isComposing: true }), modK, "other")).toBe(false);
+  });
+
+  it("matches a shortcut written in uppercase", () => {
+    expect(matchesShortcut(press({ metaKey: true }), { key: "K" }, "mac")).toBe(true);
   });
 });
 

@@ -19,6 +19,15 @@ describe("createCommandRegistry", () => {
     ).toThrow();
   });
 
+  it("refuses two commands with one shortcut in different case", () => {
+    expect(() =>
+      createCommandRegistry([
+        command("palette.commands", { key: "k" }),
+        command("palette.switcher", { key: "K" }),
+      ]),
+    ).toThrow();
+  });
+
   it("finds the command for a key press", () => {
     const registry = createCommandRegistry([
       command("palette.commands", { key: "k" }),
@@ -26,7 +35,15 @@ describe("createCommandRegistry", () => {
       command("theme.dark"),
     ]);
     const found = registry.forKey(
-      { key: "p", code: "KeyP", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false },
+      {
+        key: "p",
+        code: "KeyP",
+        metaKey: true,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        isComposing: false,
+      },
       "mac",
     );
     expect(found?.id).toBe("palette.switcher");

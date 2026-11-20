@@ -1,5 +1,14 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
@@ -20,6 +29,7 @@ interface PaletteProps {
   onOpenWorkspace: (ref: WorkspaceRef) => void;
 }
 interface PaletteOption {
+  key: string;
   testId: string;
   title: string;
   hint?: string;
@@ -27,6 +37,8 @@ interface PaletteOption {
   run: () => void;
 }
 
+const queryLimit = 200;
+const activeRow = "bg-sel outline-1 -outline-offset-1 outline-accent";
 const copy = {
   commands: {
     label: "Command menu",
@@ -42,6 +54,47 @@ const copy = {
   },
 };
 
+function withUniqueTestIds(options: PaletteOption[]): PaletteOption[] {
+  const seen = new Map<string, number>();
+  return options.map((option) => {
+    const count = (seen.get(option.testId) ?? 0) + 1;
+    seen.set(option.testId, count);
+    return count === 1 ? option : { ...option, testId: `${option.testId}-${String(count)}` };
+  });
+}
+
+function commandOptions(query: string, commands: readonly Command[]): PaletteOption[] {
+  const listed = commands.filter(
+    (command) => command.available && command.id !== "palette.commands",
+  );
+  return rankMatches(query, listed, (command) => command.title).map((command) => ({
+    key: command.id,
+    testId: `command-${command.id.replaceAll(".", "-")}`,
+    title: command.title,
+    hint: commandShortcut(command),
+    run: command.run,
+  }));
+}
+
+function switcherOptions(
+  query: string,
+  switcher: readonly SwitcherItem[],
+  onOpenWorkspace: (ref: WorkspaceRef) => void,
+): PaletteOption[] {
+  const ranked = rankMatches(query, switcher, (item) => `${item.label} ${item.project}`);
+  return withUniqueTestIds(
+    ranked.map((item) => ({
+      key: `${item.ref.projectId}/${item.ref.workspace}`,
+      testId: `switch-${item.project}-${item.ref.workspace}`,
+      title: item.label,
+      detail: item.project,
+      run: () => {
+        onOpenWorkspace(item.ref);
+      },
+    })),
+  );
+}
+
 function FooterHint({ keys, action }: { keys: string; action: string }) {
   return (
     <span className="inline-flex items-center gap-[5px]">
@@ -54,6 +107,7 @@ function FooterHint({ keys, action }: { keys: string; action: string }) {
 export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PaletteProps) {
   const { commands } = useCommands();
   const listId = useId();
+  const groupLabelId = useId();
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<Element | null>(null);
   const restored = useRef(false);
@@ -83,29 +137,17 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
     return restoreFocus;
   }, []);
   useEffect(() => {
+    restored.current = false;
     input.current?.focus();
   }, [mode]);
 
-  const options: PaletteOption[] =
-    mode === "commands"
-      ? rankMatches(
-          query,
-          commands.filter((command) => command.available && command.id !== "palette.commands"),
-          (command) => command.title,
-        ).map((command) => ({
-          testId: `command-${command.id.replaceAll(".", "-")}`,
-          title: command.title,
-          hint: commandShortcut(command),
-          run: command.run,
-        }))
-      : rankMatches(query, switcher, (item) => `${item.label} ${item.project}`).map((item) => ({
-          testId: `switch-${item.project}-${item.ref.workspace}`,
-          title: item.label,
-          detail: item.project,
-          run: () => {
-            onOpenWorkspace(item.ref);
-          },
-        }));
+  const options = useMemo(
+    () =>
+      mode === "commands"
+        ? commandOptions(query, commands)
+        : switcherOptions(query, switcher, onOpenWorkspace),
+    [mode, query, commands, switcher, onOpenWorkspace],
+  );
   const optionId = (index: number) => `${listId}-${String(index)}`;
   const activeOption = options[active];
 
@@ -118,6 +160,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
     option.run();
   };
   const press = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (options.length === 0) return;
@@ -162,6 +205,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
             placeholder={text.placeholder}
             spellCheck={false}
             autoComplete="off"
+            maxLength={queryLimit}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -172,53 +216,57 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
           />
           <KeyHint keys="Esc" />
         </div>
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={text.group}
-          className="max-h-[360px] overflow-y-auto p-[6px]"
-        >
-          <div
-            role="presentation"
-            className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase"
-          >
-            {text.group}
-          </div>
-          {options.map((option, index) => (
-            <div
-              key={option.testId}
-              id={optionId(index)}
-              role="option"
-              aria-selected={index === active}
-              data-testid={option.testId}
-              className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? "bg-sel" : ""}`}
-              onMouseMove={() => {
-                if (index !== active) setActive(index);
-              }}
-              onClick={() => {
-                runOption(option);
-              }}
-            >
-              <span className={`truncate text-fg ${index === active ? "font-semibold" : ""}`}>
-                {option.title}
-              </span>
-              {option.detail !== undefined && (
-                <span className="ml-auto font-pixel text-[12px] text-dim uppercase">
-                  {option.detail}
-                </span>
-              )}
-              {option.hint !== undefined && (
-                <span className="ml-auto">
-                  <KeyHint keys={option.hint} plain />
-                </span>
-              )}
+        <div className="max-h-[360px] overflow-y-auto p-[6px]">
+          <div id={listId} role="listbox" aria-label={text.group}>
+            <div role="group" aria-labelledby={groupLabelId}>
+              <div
+                id={groupLabelId}
+                role="presentation"
+                className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase"
+              >
+                {text.group}
+              </div>
+              {options.map((option, index) => (
+                <div
+                  key={option.key}
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={index === active}
+                  data-testid={option.testId}
+                  className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
+                  onMouseMove={() => {
+                    if (index !== active) setActive(index);
+                  }}
+                  onClick={() => {
+                    runOption(option);
+                  }}
+                >
+                  <span
+                    className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
+                  >
+                    {option.title}
+                  </span>
+                  {option.detail !== undefined && (
+                    <span className="ml-auto max-w-[45%] flex-none truncate font-pixel text-[12px] text-dim uppercase">
+                      {option.detail}
+                    </span>
+                  )}
+                  {option.hint !== undefined && (
+                    <span className="ml-auto flex-none">
+                      <KeyHint keys={option.hint} plain />
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-          {options.length === 0 && (
-            <p data-testid="palette-empty" className="px-[9px] py-2 text-[13px] text-dim">
-              Nothing matches that.
-            </p>
-          )}
+          </div>
+          <div role="status">
+            {options.length === 0 && (
+              <p data-testid="palette-empty" className="px-[9px] py-2 text-[13px] text-dim">
+                Nothing matches that.
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex gap-[14px] border-t border-line px-[14px] py-2 text-[11px] text-dim">
           <FooterHint keys="↑↓" action="Move" />

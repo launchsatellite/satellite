@@ -6,7 +6,7 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { createCommandRegistry } from "../commands/command-registry.ts";
 import { commandShortcut, CommandsProvider } from "../commands/commands-context.tsx";
-import { Palette } from "../palette/palette.tsx";
+import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolReadout } from "../proving/tool-readout.tsx";
@@ -21,6 +21,12 @@ type PaletteMode = "commands" | "switcher";
 interface AppWindowProps {
   initial: InterfaceState;
   notice: string | null;
+}
+
+const noWorkspaces: readonly SwitcherItem[] = [];
+
+function openWorkspace(): void {
+  return undefined;
 }
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
@@ -52,6 +58,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         available: true,
         run: () => {
           setPalette((open) => (open === "commands" ? null : "commands"));
+        },
+      },
+      {
+        id: "palette.switcher",
+        title: "Go to a workspace",
+        shortcut: { key: "p" },
+        available: true,
+        run: () => {
+          setPalette((open) => (open === "switcher" ? null : "switcher"));
         },
       },
       {
@@ -145,8 +160,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onClose={() => {
               setPalette(null);
             }}
-            switcher={[]}
-            onOpenWorkspace={() => undefined}
+            switcher={noWorkspaces}
+            onOpenWorkspace={openWorkspace}
           />
         )}
       </div>

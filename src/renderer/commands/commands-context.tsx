@@ -10,6 +10,7 @@ interface CommandButtonProps {
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   icon?: IconName;
+  label?: string;
   testId?: string;
 }
 
@@ -38,7 +39,7 @@ export function CommandsProvider({
       if (!command?.available) return;
       event.preventDefault();
       event.stopPropagation();
-      command.run();
+      if (!event.repeat) command.run();
     };
     window.addEventListener("keydown", press, { capture: true });
     return () => {
@@ -60,6 +61,7 @@ export function CommandButton({
   variant,
   size,
   icon,
+  label,
   testId,
 }: CommandButtonProps) {
   const found = useCommands().get(command);
@@ -73,8 +75,9 @@ export function CommandButton({
       icon={icon}
       shortcut={commandShortcut(found)}
       disabled={!found.available}
+      label={label}
     >
-      {children ?? found.title}
+      {label === undefined ? (children ?? found.title) : children}
     </Button>
   );
 }

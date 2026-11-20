@@ -12,6 +12,7 @@ export interface KeyPress {
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
+  isComposing: boolean;
 }
 
 const latinKey = /^[a-z0-9]$/i;
@@ -29,11 +30,13 @@ export function matchesShortcut(
   shortcut: Shortcut,
   platform: KeyboardPlatform,
 ): boolean {
+  if (press.isComposing) return false;
+  const key = shortcut.key.toLowerCase();
   const mod =
     platform === "mac" ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey;
   if (!mod || press.altKey || press.shiftKey !== (shortcut.shift ?? false)) return false;
-  if (press.key.toLowerCase() === shortcut.key) return true;
-  return !latinKey.test(press.key) && press.code === physicalCode(shortcut.key);
+  if (press.key.toLowerCase() === key) return true;
+  return !latinKey.test(press.key) && press.code === physicalCode(key);
 }
 
 export function shortcutLabel(shortcut: Shortcut, platform: KeyboardPlatform): string {
