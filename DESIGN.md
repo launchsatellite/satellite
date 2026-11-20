@@ -119,7 +119,7 @@ The agent pane always shows the real Claude Code, untouched. Satellite draws onl
 - Sessions are tabs in a 40px bar on `side` above the terminal, each named Session and its number, with its status pixel, a close button and a plus at the end that starts another. The arrow keys, Home and End move between tabs and Delete closes one.
 - A session's pixel is ultraviolet while it works, signal while it needs you, lilac when it is done and grey while it is idle or stopped. A workspace row shows the most urgent of its sessions, needs you before working before done.
 - A link from the terminal opens a small dialog first, Open this link, with the site above the full address in Geist Mono, Cancel on the left with focus and Open in browser on the right.
-- A moment Satellite draws is one sentence in the pane on `bg`, in `fg2`, with one button that starts a fresh session.
+- A moment Satellite draws is one sentence in the pane on `bg`, in `fg2`, above the button that starts a fresh session. The resume offer pairs Resume session with a secondary Start a new session. When Claude Code is missing no tab or terminal is drawn, and the install step sits between the sentence and Start Claude Code.
 
 The theme follows the system unless the user chooses light or dark from the command menu, and the choice is remembered. The terminal, the diff and the native dialogs switch with it.
 

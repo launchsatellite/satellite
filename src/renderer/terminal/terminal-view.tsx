@@ -6,14 +6,12 @@ import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import {
   bridgeLimits,
-  type InstallFix,
   type SessionEnding,
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
-import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
@@ -28,6 +26,7 @@ interface TerminalViewProps {
   resume: boolean;
   shown: boolean;
   onRestart: () => void;
+  onMissing: (sentence: string) => void;
   onAskLink: (address: string) => void;
   onPromptTarget: (id: string, target: PromptTarget) => () => void;
   notify: Notify;
@@ -61,6 +60,7 @@ export function TerminalView({
   resume,
   shown,
   onRestart,
+  onMissing,
   onAskLink,
   onPromptTarget,
   notify,
@@ -70,9 +70,8 @@ export function TerminalView({
   const show = useRef<() => void>(undefined);
   const prompt = useRef<PromptTarget>(undefined);
   const noticedNow = useRef(false);
-  const outward = useRef({ onAskLink, notify });
+  const outward = useRef({ onAskLink, notify, onMissing });
   const [notice, setNotice] = useState<string>();
-  const [missingFix, setMissingFix] = useState<InstallFix>();
   const noticed = notice !== undefined;
 
   useEffect(() => {
@@ -132,12 +131,10 @@ export function TerminalView({
       resume,
       cols: sent.cols,
       rows: sent.rows,
-    }).then(async (result) => {
+    }).then((result) => {
       if (result.ok) return;
-      setNotice(result.error.message);
-      if (result.error.code !== "tool-missing") return;
-      const check = await invoke("tools.check", {});
-      if (check.ok && check.value.claude.state === "missing") setMissingFix(check.value.claude.fix);
+      if (result.error.code === "tool-missing") outward.current.onMissing(result.error.message);
+      else setNotice(result.error.message);
     });
     const send = (data: string) => {
       for (const chunk of textChunks(data, bridgeLimits.terminalWriteChars)) {
@@ -249,8 +246,8 @@ export function TerminalView({
   }, [terminalId, projectId, key, resume, noticed, onPromptTarget]);
 
   useEffect(() => {
-    outward.current = { onAskLink, notify };
-  }, [onAskLink, notify]);
+    outward.current = { onAskLink, notify, onMissing };
+  }, [onAskLink, notify, onMissing]);
 
   useEffect(() => {
     if (shown) show.current?.();
@@ -274,17 +271,6 @@ export function TerminalView({
               </Button>
             )}
           </div>
-          {missingFix !== undefined && (
-            <div className="flex flex-col gap-1">
-              <p className="text-[12.5px] text-fg2">{leads[missingFix.kind]}</p>
-              <code
-                data-testid="claude-missing-fix"
-                className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all"
-              >
-                {missingFix.text}
-              </code>
-            </div>
-          )}
         </div>
       )}
     </div>

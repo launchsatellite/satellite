@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { InstallFix, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { promptText } from "../../shared/prompt-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
@@ -25,12 +25,45 @@ const noSession = "Start a Claude Code session in this workspace first.";
 const answerFirst = "Answer Claude Code first, then send this again.";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
+const missingLeads: Record<InstallFix["kind"], string> = {
+  command: "Run this in a terminal, then start Claude Code again.",
+  address: "Follow the steps at this address, then start Claude Code again.",
+};
+
+function InstallStep() {
+  const [fix, setFix] = useState<InstallFix>();
+  useEffect(() => {
+    let current = true;
+    void invoke("tools.check", {}).then((check) => {
+      if (current && check.ok && check.value.claude.state === "missing") {
+        setFix(check.value.claude.fix);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (fix === undefined) return null;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <p className="text-[12.5px] text-fg2">{missingLeads[fix.kind]}</p>
+      <code
+        data-testid="claude-missing-fix"
+        className="rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all"
+      >
+        {fix.text}
+      </code>
+    </div>
+  );
+}
 
 function EmptyWorkspace({
   workspace,
+  missing,
   onOpen,
 }: {
   workspace: WorkspaceRef;
+  missing: string | undefined;
   onOpen: (resume: boolean) => void;
 }) {
   const { projectId, workspace: key } = workspace;
@@ -57,10 +90,12 @@ function EmptyWorkspace({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
       <p role="status" data-testid="sessions-empty" className="text-[13px] text-fg2">
-        {resumable
-          ? "Your last session here can pick up where it left off."
-          : "No Claude Code session here yet."}
+        {missing ??
+          (resumable
+            ? "Your last session here can pick up where it left off."
+            : "No Claude Code session here yet.")}
       </p>
+      {missing !== undefined && <InstallStep />}
       <div ref={actions} className="flex flex-wrap items-center justify-center gap-[10px]">
         {resumable ? (
           <>
@@ -102,6 +137,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
   const active = selected === null ? undefined : sessions.activeOf(selected);
   const shownTab = tabs.find((tab) => tab.key === active);
   const targets = useRef(new Map<string, PromptTarget>());
+  const [missing, setMissing] = useState<string>();
   const pane = useRef<HTMLDivElement>(null);
   const latest = useRef({ shownTab, notify });
   useEffect(() => {
@@ -159,7 +195,9 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
         <EmptyWorkspace
           key={`${selected.projectId}/${selected.workspace}`}
           workspace={selected}
+          missing={missing}
           onOpen={(resume) => {
+            setMissing(undefined);
             sessions.open(selected, resume);
           }}
         />
@@ -197,6 +235,10 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
                 shown={shown}
                 onRestart={() => {
                   sessions.restart(tab.key);
+                }}
+                onMissing={(sentence) => {
+                  setMissing(sentence);
+                  sessions.close(tab.key);
                 }}
                 onAskLink={onAskLink}
                 onPromptTarget={offerTarget}
