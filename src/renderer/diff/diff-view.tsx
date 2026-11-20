@@ -3,15 +3,7 @@ import "monaco-editor/features/codicon/register";
 import { useEffect, useRef } from "react";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 
-export function DiffView({
-  original,
-  modified,
-  language,
-}: {
-  original: string;
-  modified: string;
-  language?: string;
-}) {
+export function DiffView({ original, modified }: { original: string; modified: string }) {
   const host = useRef<HTMLDivElement>(null);
   const diffEditor = useRef<editor.IStandaloneDiffEditor>(null);
 
@@ -56,14 +48,13 @@ export function DiffView({
     const created = diffEditor.current;
     if (created === null) return;
     const previous = created.getModel();
-    const languageId = language ?? "plaintext";
     created.setModel({
-      original: editor.createModel(original, languageId),
-      modified: editor.createModel(modified, languageId),
+      original: editor.createModel(original, "plaintext"),
+      modified: editor.createModel(modified, "plaintext"),
     });
     previous?.original.dispose();
     previous?.modified.dispose();
-  }, [original, modified, language]);
+  }, [original, modified]);
 
   return <div ref={host} data-testid="diff" className="h-full min-h-0" />;
 }
