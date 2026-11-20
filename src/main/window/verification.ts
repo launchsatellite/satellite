@@ -21,6 +21,10 @@ function liveDriver(): number | undefined {
   return isAlive(pid) ? pid : undefined;
 }
 
+export function drivenByVerify(): boolean {
+  return liveDriver() !== undefined;
+}
+
 export function runsQuietly(): boolean {
   return (
     process.platform === "darwin" &&
