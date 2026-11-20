@@ -72,7 +72,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
-  const { projects, add } = useProjects(notify);
+  const { projects, add, remove, refresh } = useProjects(notify);
   const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
@@ -109,7 +109,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const switcher = useMemo<SwitcherItem[]>(
     () =>
       (projects ?? [])
-        .filter((project) => !project.missing)
+        .filter((project) => project.missing === null)
         .flatMap((project) =>
           project.workspaces.map((workspace) => ({
             ref: { projectId: project.id, workspace: workspace.key },
@@ -119,6 +119,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         ),
     [projects],
   );
+  const selectedProject = projects?.find((project) => project.id === selectedId);
+  const selectedWorkspace = selectedProject?.workspaces.find(
+    (workspace) => workspace.key === state.selected?.workspace,
+  );
+  const removable = selectedWorkspace === undefined ? undefined : selectedProject;
   const registry = useMemo(() => {
     const theme = (choice: ThemeChoice) => () => {
       update((current) => ({ ...current, theme: choice }), true);
@@ -146,6 +151,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (ref === undefined) return;
               setAdded(ref.projectId);
               select(ref);
+            },
+          },
+          {
+            id: "project.remove",
+            title: "Remove project",
+            available: removable !== undefined,
+            run: async () => {
+              if (removable === undefined) return;
+              if (!(await remove(removable.id))) return;
+              update((current) => ({ ...current, selected: null }), true);
+              refresh();
+              notify(`Satellite forgot ${removable.name}. Its folder is untouched.`, "info");
             },
           },
           {
@@ -177,14 +194,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         notify,
       ),
     );
-  }, [update, add, select, notify, dismissToast]);
+  }, [update, add, remove, refresh, removable, select, notify, dismissToast]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };
-  const selectedProject = projects?.find((project) => project.id === selectedId);
-  const selectedWorkspace = selectedProject?.workspaces.find(
-    (workspace) => workspace.key === state.selected?.workspace,
-  );
   const centre = () => {
     if (checking) return <ToolCheckCard key="revisit" firstRun={false} onClose={closeCheck} />;
     if (projects === undefined) return null;
@@ -195,8 +208,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     return (
       <>
         <WorkspaceHeader project={selectedProject} workspace={selectedWorkspace} />
-        {selectedProject.missing ? (
-          <FolderMissing name={selectedProject.name} />
+        {selectedProject.missing !== null ? (
+          <FolderMissing name={selectedProject.name} missing={selectedProject.missing} />
         ) : (
           <div className="min-h-0 flex-1">
             <SampleDiff />

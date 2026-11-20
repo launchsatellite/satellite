@@ -56,7 +56,7 @@ export const projectView = z.strictObject({
   id: z.uuid(),
   name: z.string().min(1).max(255),
   parent: z.string().max(255),
-  missing: z.boolean(),
+  missing: z.enum(["folder", "repository"]).nullable(),
   workspaces: z.array(workspaceView).max(1),
 });
 export const ghLogin = /^[A-Za-z0-9-]{1,39}$/;

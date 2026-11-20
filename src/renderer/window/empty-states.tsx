@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 
 function Centred({
@@ -34,11 +35,24 @@ export function NothingSelected() {
   );
 }
 
-export function FolderMissing({ name }: { name: string }) {
-  return (
+export function FolderMissing({
+  name,
+  missing,
+}: {
+  name: string;
+  missing: NonNullable<ProjectView["missing"]>;
+}) {
+  return missing === "folder" ? (
     <Centred testId="folder-missing" title={`${name} isn't where it was`}>
       <p className="mt-1 text-[13px] text-fg2">
         Put the folder back and Satellite finds it again, or remove the project.
+      </p>
+    </Centred>
+  ) : (
+    <Centred testId="folder-missing" title={`${name} isn't a repository anymore`}>
+      <p className="mt-1 text-[13px] text-fg2">
+        The folder is still there, but it is no longer a git repository. Make it one again and
+        Satellite finds it, or remove the project.
       </p>
     </Centred>
   );

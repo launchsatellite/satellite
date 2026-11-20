@@ -1,4 +1,5 @@
 import type { ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { workspaceLabel } from "./use-projects.ts";
 
@@ -20,6 +21,14 @@ export function WorkspaceHeader({
       </span>
       <span className="truncate font-mono text-[12px] text-dim">
         {workspaceLabel(project, workspace)}
+      </span>
+      <span className="ml-auto flex-none">
+        <CommandButton
+          command="project.remove"
+          variant="ghost"
+          size="small"
+          testId="remove-project"
+        />
       </span>
     </header>
   );

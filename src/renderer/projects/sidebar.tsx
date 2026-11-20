@@ -89,12 +89,12 @@ function ProjectRows({
         data-testid={testId}
         className="flex h-7 flex-none items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg"
       >
-        <PixelAvatar seed={project.name} />
+        <PixelAvatar seed={project.id} />
         <span className="min-w-0 truncate">{project.name}</span>
         {showParent && (
           <span className="min-w-0 truncate font-medium text-dim">{project.parent}</span>
         )}
-        {project.missing && (
+        {project.missing !== null && (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
         )}
       </div>

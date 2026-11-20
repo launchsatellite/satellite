@@ -8,7 +8,7 @@ const listFailure =
   "Satellite couldn't read the project list. It tries again when the window gets focus.";
 
 export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): string {
-  if (project.missing) return "unavailable";
+  if (project.missing !== null) return "unavailable";
   return workspace.branch ?? "detached";
 }
 

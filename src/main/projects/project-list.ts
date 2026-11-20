@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { lstat, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
@@ -9,6 +9,8 @@ import { samePath } from "../platform/paths.ts";
 import { createProjectsFile, projectLimit, type StoredProject } from "./projects-file.ts";
 import { checkRepository } from "./repository-check.ts";
 import { mainWorkspace } from "./workspaces.ts";
+
+type Missing = NonNullable<ProjectView["missing"]>;
 
 interface ProjectsOptions {
   home: string;
@@ -37,21 +39,29 @@ async function isFolder(path: string): Promise<boolean> {
   );
 }
 
-function unavailable(project: StoredProject): ProjectView {
+async function exists(path: string): Promise<boolean> {
+  return lstat(path).then(
+    () => true,
+    () => false,
+  );
+}
+
+function unavailable(project: StoredProject, missing: Missing = "folder"): ProjectView {
   return {
     id: project.id,
     name: projectName(project.path),
     parent: projectName(dirname(project.path)),
-    missing: true,
+    missing,
     workspaces: [{ key: "main", branch: null }],
   };
 }
 
 async function readProject(project: StoredProject): Promise<ProjectView> {
   if (!(await isFolder(project.path))) return unavailable(project);
+  if (!(await exists(join(project.path, ".git")))) return unavailable(project, "repository");
   return {
     ...unavailable(project),
-    missing: false,
+    missing: null,
     workspaces: [await mainWorkspace(project.path)],
   };
 }
