@@ -105,7 +105,7 @@ The signature texture. A field of square blocks in a fixed mix of ultraviolet, p
 BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner for network work, block progress and readouts. Molecules are sidebar rows, tabs, segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
 
 - Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
-- Selection is a grey fill. The menu hover is the one place ultraviolet fills a row.
+- Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
 - Status is a square pixel, never a dot.
 - One primary action per view.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
@@ -113,6 +113,8 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 ## App
 
 The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops.
+
+The theme follows the system unless the user chooses light or dark from the command menu, and the choice is remembered. The terminal, the diff and the native dialogs switch with it.
 
 ## Motion
 

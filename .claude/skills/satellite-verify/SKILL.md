@@ -65,7 +65,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - `home` optionally lists `{ path, content }` files written inside the Satellite home before launch, with the same confinement as the repo's writes, such as a cut off `interface.json`. A scenario seeds `interface.json` with `"theme": "light"` unless its description says otherwise, so its screenshots never depend on the machine's own setting.
 - `folders` optionally lists `{ name, steps }`, each built like `repo` in `folders/<name>` beside it, with a kebab-case name. They are the folders a `choose-folder` step can pick.
 - `gh` lists canned answers, `{ args, stdout?, stderr?, exitCode? }`. The stand-in answers the first entry whose `args` equal its own exactly.
-- `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`.
+- `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`. `{ "missing": true }` instead points `SATELLITE_CLAUDE` at a path that does not exist, so the app finds no Claude Code.
 
 ## Stand-ins
 
@@ -90,7 +90,7 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## Journeys
 
-Journeys are fixed scripts over the driver that prove the first run and the security boundary. They run against the built app here and against each packaged app in the release workflow.
+Journeys are fixed scripts over the driver that prove the first run, the security boundary, projects and quitting. They run against the built app here and against each packaged app in the release workflow.
 
 ```sh
 npm run --silent journeys -- [--app <executable>]
@@ -104,6 +104,7 @@ It builds once for the built target, runs every journey in order, each in a fres
 | --- | --- | --- |
 | `launch` | `default` | three columns, the first run check reading the git version and the gh account, the working repo added through the folder dialog, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
 | `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke`, `onEvent` and `pathForFile`, `pathForFile` answering an empty string for a made-up file and for text, `projects.drop` refusing a relative path and adding nothing, the content security policy refusing an inline script, a `data:` fetch, a remote fetch, image and frame, microphone, camera and notifications reading denied, no path escaping the `app://` root, the bridge refusing a bad payload and an unknown channel, no new window or navigation reaching a remote address, and Claude Code still running and echoing after those refused navigations |
+| `projects` | `two-projects` | a plain folder refused with its sentence, alpha added with `ControlOrMeta+O` and beta by a drop, a second add of alpha refused, the left column widened from the keyboard, the switcher selecting alpha, a branch switched outside Satellite shown on focus, the projects, the selection and the width restored after a restart, alpha removed from the command menu with its folder byte for byte unchanged, beta without its `.git` shown as no longer a repository and found again once `.git` is back, beta moved away shown as missing and removed, and no console errors |
 | `quit` | `flood` | quitting mid flood ends the stand-in and its child that ignores hangup |
 
 A journey is `{ name, scenario, run(session) }` in `verify/journeys/<name>.ts`, listed in `verify/journeys.ts`. It asserts with `node:assert/strict` and a message that says what went wrong, and waits on conditions with `waitUntil` from `verify/journeys/conditions.ts`, never on fixed sleeps, because CI runners and Windows are slower. A check that something stays refused is the one place a short settle is right. The boundary journey routes `https://example.com` to a local empty reply, so a guard that lets a request through is caught at once with no network, and a refusal is read from a `securitypolicyviolation` event or a permission state rather than from a failed load. Process checks use `processGone`, which works on all three platforms. Keep the suite short, since it runs three times per release.
@@ -115,10 +116,11 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | Feature | Scenario | Journey |
 | --- | --- | --- |
 | 001 Foundation, the three columns | `default` | `launch` |
-| 002 Shell and projects, the first run check with every tool ready | `default` | `launch` |
-| 002 Shell and projects, the first run check with Claude Code missing or gh signed out | `claude-missing`, `not-signed-in` | |
 | 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
 | 001 Foundation, the security boundary | `default` | `boundary` |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |
+| 002 Shell and projects, the first run check with every tool ready | `default` | `launch` |
+| 002 Shell and projects, the first run check with Claude Code missing or gh signed out | `claude-missing`, `not-signed-in` | |
+| 002 Shell and projects, `window.satellite` holding three functions and `projects.drop` refusing a forged relative path | `default` | `boundary` |
 | 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
 | 002 Shell and projects, adding repositories through the dialog and by a drop, refusing other folders and duplicates, the quick switcher, restoring the selection and column width, removing a project with its folder byte for byte unchanged, and a project whose `.git` or whole folder moved away | `two-projects` | `projects` |
