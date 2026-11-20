@@ -82,7 +82,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
             <div
               key={tab.key}
               role="presentation"
-              className={`flex h-[26px] flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+              className={`group flex h-[26px] flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
             >
               <button
                 type="button"
@@ -111,7 +111,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
                 onClick={() => {
                   close(tab.key);
                 }}
-                className={`mr-1 flex size-5 items-center justify-center rounded-[4px] text-dim hover:bg-hover hover:text-fg ${focusRing}`}
+                className={`mr-1 flex size-5 items-center justify-center rounded-[4px] text-dim hover:bg-hover hover:text-fg ${selected ? "" : "opacity-0 group-hover:opacity-100"} ${focusRing}`}
               >
                 <Icon name="close" size={12} />
               </button>
