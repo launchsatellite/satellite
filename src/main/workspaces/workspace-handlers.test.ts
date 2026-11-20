@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -48,6 +48,11 @@ async function repository(name: string): Promise<StoredProject> {
 function fakeStore(projects: StoredProject[]): ProjectStore {
   return {
     busy: new Set(),
+    available: (project) =>
+      stat(project.path).then(
+        (info) => info.isDirectory(),
+        () => false,
+      ),
     creating: new Set(),
     project(projectId) {
       const found = projects.find((project) => project.id === projectId);

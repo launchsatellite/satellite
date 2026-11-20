@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { BridgeOwner } from "../bridge/registry.ts";
+import { workspaceHandlers } from "../workspaces/workspace-handlers.ts";
 import { createProjects } from "./project-list.ts";
 import type { StoredWorkspace } from "./projects-file.ts";
 
@@ -254,6 +255,35 @@ describe("createProjects", () => {
       const answer = handlers["projects.list"]({}, owner);
       const { projects } = await answer;
       expect(projects[0]?.missing).toBe("folder");
+    }
+    expect(hung.calls).toBe(1);
+  });
+
+  it("lets workspace requests on a folder that never answers hold one read", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-project-list-"));
+    const projectId = "8a6e0804-2bd0-4e1f-9b5a-6b1b6c3c2f10";
+    hung.path = join(home, "hung");
+    hung.calls = 0;
+    await writeFile(
+      join(home, "projects.json"),
+      JSON.stringify({ version: 1, projects: [{ id: projectId, path: hung.path }] }),
+    );
+    const { store } = projectsIn(home);
+    const { handlers } = workspaceHandlers({ home, store });
+    const unavailable = {
+      code: "refused",
+      message: "hung isn't available right now, so Satellite can't make a workspace in it.",
+    };
+    for (let request = 0; request < 3; request += 1) {
+      await expect(handlers["workspaces.prepare"]({ projectId }, owner)).rejects.toMatchObject(
+        unavailable,
+      );
+      await expect(
+        handlers["workspaces.create"](
+          { operationId: randomUUID(), projectId, name: "fix", start: { kind: "default" } },
+          owner,
+        ),
+      ).rejects.toMatchObject(unavailable);
     }
     expect(hung.calls).toBe(1);
   });

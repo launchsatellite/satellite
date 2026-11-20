@@ -1,5 +1,3 @@
-import { lstat, stat } from "node:fs/promises";
-import { join } from "node:path";
 import type { StartChoice } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import {
@@ -12,7 +10,7 @@ import {
   type StoredProject,
   type StoredWorkspace,
 } from "../projects/projects-file.ts";
-import { answerWithin, folderReadMs } from "../projects/repository-check.ts";
+import { answerWithin } from "../projects/repository-check.ts";
 import { creationSteps, failureSentence, nameTaken, prepareWorkspace } from "./create-steps.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
@@ -35,25 +33,11 @@ const creationStopMs = 20_000;
 
 const detailLimit = 300;
 
-async function isRepositoryFolder(path: string): Promise<boolean> {
-  try {
-    if (!(await stat(path)).isDirectory()) return false;
-    await lstat(join(path, ".git"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function availableName(project: StoredProject): Promise<string> {
-  const name = projectName(project.path);
-  if ((await answerWithin(isRepositoryFolder(project.path), folderReadMs)) !== true) {
-    throw new BridgeFailure(
-      "refused",
-      `${name} isn't available right now, so Satellite can't make a workspace in it.`,
-    );
-  }
-  return name;
+function unavailable(name: string): BridgeFailure {
+  return new BridgeFailure(
+    "refused",
+    `${name} isn't available right now, so Satellite can't make a workspace in it.`,
+  );
 }
 
 function clipped(detail: string | null): string | null {
@@ -63,6 +47,11 @@ function clipped(detail: string | null): string | null {
 
 export function workspaceHandlers({ home, store }: WorkspaceOptions): Workspaces {
   const quitting = new AbortController();
+  const availableName = async (project: StoredProject) => {
+    const name = projectName(project.path);
+    if (!(await store.available(project))) throw unavailable(name);
+    return name;
+  };
   const running = new Set<Promise<unknown>>();
   const create = async (
     project: StoredProject,

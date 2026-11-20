@@ -33,6 +33,7 @@ interface ProjectRead {
 }
 export interface ProjectStore {
   project(projectId: string): Promise<StoredProject>;
+  available(project: StoredProject): Promise<boolean>;
   addWorkspace(projectId: string, workspace: StoredWorkspace): Promise<void>;
   removeWorkspace(projectId: string, workspaceId: string): Promise<void>;
   busy: Set<string>;
@@ -246,6 +247,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   const store: ProjectStore = {
     busy,
     creating,
+    available: async (project) => (await checkedWithin(project)).checked === null,
     async project(projectId) {
       const found = (await current()).find((project) => project.id === projectId);
       if (found === undefined) throw new BridgeFailure("not-found", notInSatellite);
