@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { BridgeOwner } from "../bridge/registry.ts";
 import { workspaceHandlers } from "../workspaces/workspace-handlers.ts";
 import { createProjects } from "./project-list.ts";
-import type { StoredWorkspace } from "./projects-file.ts";
+import type { StoredProject, StoredWorkspace } from "./projects-file.ts";
 
 const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
 const hung = vi.hoisted(() => {
@@ -573,5 +573,27 @@ describe("createProjects", () => {
     expect(answer.dropped).toEqual([]);
     expect(answer.projects[0]?.workspaces[0]?.branch).toBe("main");
     expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
+  });
+
+  it("reports the recorded list only when projects.json was really read", async () => {
+    const readHome = await homeWith([]);
+    const setAsideHome = await mkdtemp(join(tmpdir(), "satellite-project-list-"));
+    await writeFile(join(setAsideHome, "projects.json"), "{ not json");
+    const missingHome = await mkdtemp(join(tmpdir(), "satellite-project-list-"));
+    const reported = async (home: string) => {
+      const recorded = vi.fn<(projects: readonly StoredProject[]) => void>();
+      const projects = createProjects({
+        home,
+        chooseFolder: () => Promise.resolve(undefined),
+        window: () => undefined,
+        stopSessions: () => Promise.resolve(),
+        recorded,
+      });
+      await projects.handlers["projects.list"]({}, owner);
+      return recorded.mock.calls.length;
+    };
+    expect(await reported(readHome)).toBe(1);
+    expect(await reported(setAsideHome)).toBe(0);
+    expect(await reported(missingHome)).toBe(0);
   });
 });

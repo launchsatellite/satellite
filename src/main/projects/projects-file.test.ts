@@ -39,6 +39,7 @@ describe("createProjectsFile", { timeout: 20_000 }, () => {
       projects: [{ ...project, workspaces: [] }],
       notice: null,
       writable: true,
+      read: true,
     });
   });
 

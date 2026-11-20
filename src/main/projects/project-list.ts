@@ -196,7 +196,7 @@ export function createProjects({
     const loaded = await file.load();
     if (projects === undefined) {
       projects = [...loaded.projects];
-      if (loaded.writable) recorded(projects);
+      if (loaded.read) recorded(projects);
     }
     return projects;
   };
@@ -217,7 +217,7 @@ export function createProjects({
         console.error("Satellite could not write projects.json", error);
         throw new BridgeFailure("failed", failure);
       }
-      recorded(projects);
+      if ((await file.load()).read) recorded(projects);
     });
     changing = run.catch(() => undefined);
     return run;
