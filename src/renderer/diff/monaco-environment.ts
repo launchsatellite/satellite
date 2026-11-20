@@ -42,6 +42,10 @@ export function applyMonacoTheme(): void {
       "diffEditor.removedLineBackground": token("del"),
       "diffEditor.insertedTextBackground": token("addfg") + lowAlpha,
       "diffEditor.removedTextBackground": token("delfg") + lowAlpha,
+      "diffEditor.diagonalFill": token("line"),
+      "editor.selectionBackground": token("sel"),
+      "editor.inactiveSelectionBackground": token("sel"),
+      focusBorder: token("accent"),
     },
   });
   editor.setTheme("satellite");

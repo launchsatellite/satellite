@@ -84,7 +84,7 @@ The centre column shows a read-only side by side diff of two texts with Monaco's
 - **The worker.** The editor worker is bundled by Vite as its own file and served from `app://satellite` like every other asset, so it loads under the production policy's `worker-src 'self'` with no fallback to the main thread.
 - **Read only.** Both sides are read only, the DOM included, and the revert gutter menu is off, so the diff can show changes but never make them.
 - **Always side by side.** The diff stays in two columns at any width, because the editor's narrow-width inline view would hide which side a line belongs to.
-- **Theme.** The `satellite` theme reads the app tokens, `bg`, `fg`, `dim`, `add` and `del` for lines and `addfg` and `delfg` at low alpha for changed words and `ctl` for scrollbars, and is rebuilt on every colour scheme change. Each token goes through a canvas to come back as six digit hex, because the built stylesheet shortens colours like `#ffffff` to `#fff` and Monaco accepts only the long form.
+- **Theme.** The `satellite` theme reads the app tokens, `bg`, `fg`, `dim`, `add` and `del` for lines, `addfg` and `delfg` at low alpha for changed words, `ctl` for scrollbars, `line` for the fill where a side has no line, `sel` for selection and `accent` for the focus border, and is rebuilt on every colour scheme change. Each token goes through a canvas to come back as six digit hex, because the built stylesheet shortens colours like `#ffffff` to `#fff` and Monaco accepts only the long form.
 - **Models.** Each text becomes a model, replaced when the texts change and disposed with the editor.
 
 ## Packaging and fuses
