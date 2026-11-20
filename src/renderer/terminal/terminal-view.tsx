@@ -121,8 +121,13 @@ export function TerminalView({
         void invoke("terminal.ack", { id, chars: data.length });
       });
     });
+    const end = (sentence: string) => {
+      terminal.options.cursorInactiveStyle = "none";
+      terminal.options.disableStdin = true;
+      setNotice(sentence);
+    };
     const stopExit = subscribe("terminal.exit", ({ id, ending }) => {
-      if (id === terminalId) setNotice(endings[ending]);
+      if (id === terminalId) end(endings[ending]);
     });
     let queue: Promise<unknown> = invoke("terminal.start", {
       id: terminalId,
@@ -134,7 +139,7 @@ export function TerminalView({
     }).then((result) => {
       if (result.ok) return;
       if (result.error.code === "tool-missing") outward.current.onMissing(result.error.message);
-      else setNotice(result.error.message);
+      else end(result.error.message);
     });
     const send = (data: string) => {
       for (const chunk of textChunks(data, bridgeLimits.terminalWriteChars)) {
