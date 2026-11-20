@@ -19,11 +19,11 @@ interface LoadedInterface {
   writable: boolean;
 }
 
+const version2 = interfaceState.extend({ version: z.literal(2) });
 const version1 = interfaceState
   .omit({ notifications: true })
   .extend({ version: z.literal(1) })
-  .transform((file) => ({ ...file, version: 2, notifications: true }));
-const version2 = interfaceState.extend({ version: z.literal(2) });
+  .transform((file): z.output<typeof version2> => ({ ...file, version: 2, notifications: true }));
 const fileSchema = z.union([version1, version2]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
