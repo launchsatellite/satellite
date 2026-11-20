@@ -1,6 +1,6 @@
 # 005 Inbox and notifications
 
-Status **Approved** · Depends on **004**
+Status **In progress** · Depends on **004**
 
 ## Why
 
