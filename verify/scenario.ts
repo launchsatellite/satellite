@@ -36,6 +36,7 @@ const claudeStepSchema = z.union([
   }),
   z.strictObject({ await: z.string().min(1) }),
   z.strictObject({ trust: z.literal(true) }),
+  z.strictObject({ exit: z.int().min(0).max(255) }),
 ]);
 
 export const scenarioSchema = z.strictObject({
@@ -50,7 +51,11 @@ export const scenarioSchema = z.strictObject({
     .optional(),
   gh: z.array(ghAnswerSchema),
   claude: z.union([
-    z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
+    z.strictObject({
+      version: z.string(),
+      resumeFails: z.literal(true).optional(),
+      script: z.array(claudeStepSchema),
+    }),
     z.strictObject({ missing: z.literal(true) }),
   ]),
 });

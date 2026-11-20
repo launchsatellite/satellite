@@ -120,6 +120,7 @@ async function play(step: ClaudeStep, settings: Settings | undefined): Promise<v
   else if ("wait" in step) await delay(step.wait);
   else if ("flood" in step) await flood(step.flood);
   else if ("await" in step) await awaitInput(step.await);
+  else if ("exit" in step) process.exit(step.exit);
   else if ("trust" in step) {
     process.stdout.write(trustQuestion);
     await awaitInput("\r");
@@ -165,6 +166,10 @@ async function main(): Promise<void> {
   trusted = !claude.script.some((step) => "trust" in step);
   listen();
   const resumed = valueAfter("--resume");
+  if (resumed !== undefined && claude.resumeFails === true) {
+    process.stdout.write(`No conversation found with session ID: ${resumed}\r\n`);
+    process.exit(1);
+  }
   if (resumed !== undefined) process.stdout.write(`Resumed session ${resumed}\r\n`);
   for (const step of claude.script) await play(step, settings);
 }
