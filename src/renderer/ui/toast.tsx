@@ -22,7 +22,7 @@ export function Toast({ message, tone, onDismiss }: ToastProps) {
     return () => {
       clearTimeout(timer);
     };
-  }, [paused, onDismiss]);
+  }, [paused, onDismiss, message]);
   return (
     <div
       data-testid="toast"

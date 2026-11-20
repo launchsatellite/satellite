@@ -61,8 +61,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     setToasts((queue) => {
       const shown = { id: Math.max(0, ...queue.map((queued) => queued.id)) + 1, message, tone };
       if (tone === "error") {
-        const waiting = queue[0]?.tone === "error" ? queue.slice(1) : queue;
-        return [shown, ...waiting].slice(0, toastQueueLimit);
+        const replaced = queue[0]?.tone === "error" ? queue[0] : undefined;
+        if (replaced === undefined) return [shown, ...queue].slice(0, toastQueueLimit);
+        return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
       }
       return queue.length >= toastQueueLimit ? queue : [...queue, shown];
     });
