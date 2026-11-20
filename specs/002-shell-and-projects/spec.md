@@ -16,7 +16,7 @@ Work is spread over several repositories, each in its own editor window. Satelli
 - One command registry. Every action is registered once with a plain title, and the command menu, shortcuts and buttons all call it.
 - The command menu on Cmd or Ctrl+K lists every command. The quick switcher jumps to any workspace in any project by typing part of its name.
 - Light and dark, following the system, with a command to switch.
-- A first run check for `git`, `gh` and `claude`. Each is checked for real, and a missing or signed-out tool shows what is wrong and the command that fixes it.
+- A first run check for `git`, `gh` and `claude`. Each is checked for real, and each failing row shows what is wrong and the next step that fixes it, a command where one exists.
 - Empty states for no projects and for a project with nothing selected.
 
 ## Decisions
@@ -37,5 +37,5 @@ Worktree workspaces belong to spec 003. The agent pane belongs to spec 004.
 - [ ] Removing a project leaves its folder byte for byte unchanged. Proof, a journey that compares the folder before and after.
 - [ ] Every command in the registry appears in the command menu and runs from it. Proof, the driver.
 - [ ] The quick switcher reaches a workspace in another project. Proof, the driver.
-- [ ] With `claude` missing or `gh` signed out, the first run check names the problem and the fix. Proof, scenarios `claude-missing` and `not-signed-in`.
+- [ ] With `claude` missing or `gh` signed out, the first run check names the problem and the next step that fixes it. Proof, scenarios `claude-missing` and `not-signed-in`.
 - [ ] A corrupt state file never stops the app from starting. Proof, a unit test on the reader.
