@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BrowserWindow, app, session } from "electron";
+import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
@@ -64,7 +65,10 @@ async function start({
 }: Parts): Promise<void> {
   await app.whenReady();
   await listening;
-  applyThemeChoice((await interfaceFile.load()).state.theme);
+  const applyInterface = (state: InterfaceState) => {
+    applyThemeChoice(state.theme);
+  };
+  applyInterface((await interfaceFile.load()).state);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
   hardenSession(session.defaultSession);
@@ -73,7 +77,7 @@ async function start({
   registerBridge(
     {
       "tools.check": checkTools,
-      ...interfaceHandlers(interfaceFile, applyThemeChoice),
+      ...interfaceHandlers(interfaceFile, applyInterface),
       ...projects.handlers,
       ...workspaces.handlers,
       ...terminals.handlers,

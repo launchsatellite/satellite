@@ -69,6 +69,7 @@ export const interfaceState = z.strictObject({
     right: z.int().min(interfaceLimits.right.min).max(interfaceLimits.right.max),
   }),
   theme: themeChoice,
+  notifications: z.boolean(),
 });
 export const workspaceView = z.strictObject({
   key: workspaceKey,
@@ -149,6 +150,7 @@ export const defaultInterfaceState: InterfaceState = {
   selected: null,
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
   theme: "system",
+  notifications: true,
 };
 
 const terminalId = z.uuid();

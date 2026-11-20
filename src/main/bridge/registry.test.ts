@@ -350,6 +350,8 @@ describe("createBridgeRouter", () => {
       { ...defaultInterfaceState, theme: "sepia" },
       { ...defaultInterfaceState, selected: { projectId: terminalId, workspace: "other" } },
       { ...defaultInterfaceState, extra: true },
+      { ...defaultInterfaceState, notifications: "yes" },
+      { selected: null, columns, theme: "system" },
     ];
     for (const state of states) {
       const result = await route("interface.save", { state }, owner);

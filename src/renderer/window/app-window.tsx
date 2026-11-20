@@ -42,6 +42,8 @@ interface ShownToast {
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
 const toastQueueLimit = 32;
+const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
+const notificationsOn = "Notifications are on for every workspace that needs you.";
 
 function forgotSentence(name: string, workspaces: number): string {
   if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
@@ -318,6 +320,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     const theme = (choice: ThemeChoice) => () => {
       update((current) => ({ ...current, theme: choice }), true);
     };
+    const notifications = (on: boolean) => () => {
+      update((current) => ({ ...current, notifications: on }), true);
+      notify(on ? notificationsOn : notificationsOff, "info");
+    };
     return createCommandRegistry(
       guarded(
         [
@@ -439,6 +445,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           },
           { id: "theme.light", title: "Use the light theme", available: true, run: theme("light") },
           { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
+          {
+            id: "notifications.off",
+            title: "Turn notifications off",
+            available: state.notifications,
+            run: notifications(false),
+          },
+          {
+            id: "notifications.on",
+            title: "Turn notifications on",
+            available: !state.notifications,
+            run: notifications(true),
+          },
         ],
         notify,
         modal,
@@ -446,6 +464,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     );
   }, [
     modal,
+    state.notifications,
     newWorkspaceIn,
     archivable,
     archivableWorkspace,
