@@ -25,6 +25,7 @@ const ghAnswerSchema = z.strictObject({
   stderr: z.string().optional(),
   exitCode: z.int().min(0).max(255).optional(),
 });
+const seededFileSchema = z.strictObject({ path: z.string().min(1), content: z.string() });
 const claudeStepSchema = z.union([
   z.strictObject({ print: z.string() }),
   z.strictObject({ wait: z.int().min(0).max(60_000) }),
@@ -42,7 +43,8 @@ const claudeStepSchema = z.union([
 export const scenarioSchema = z.strictObject({
   description: z.string(),
   repo: z.array(repoStepSchema),
-  home: z.array(z.strictObject({ path: z.string().min(1), content: z.string() })).optional(),
+  home: z.array(seededFileSchema).optional(),
+  claudeConfig: z.array(seededFileSchema).optional(),
   folders: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),

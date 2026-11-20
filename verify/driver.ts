@@ -29,6 +29,7 @@ export interface AppSession {
   readonly page: Page;
   home: string;
   repo: string;
+  claudeConfig: string;
   gitEnv: Record<string, string>;
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
@@ -54,6 +55,7 @@ interface RunningApp {
 interface AppPaths {
   home: string;
   repo: string;
+  claudeConfig: string;
   gitConfig: string;
   log: string;
   dialog: string;
@@ -204,7 +206,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, gitConfig, log, dialog, links, missingClaude }: AppPaths,
+  { home, claudeConfig, gitConfig, log, dialog, links, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
@@ -219,6 +221,7 @@ function appEnvironment(
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
   env["SATELLITE_VERIFY_LINKS"] = links;
   env["SATELLITE_GH"] = standIn("gh");
+  if (options.realClaude !== true) env["CLAUDE_CONFIG_DIR"] = claudeConfig;
   if (missingClaude !== undefined) env["SATELLITE_CLAUDE"] = JSON.stringify([missingClaude]);
   else if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
   return env;
@@ -296,14 +299,17 @@ function recipeGitEnv(temp: string) {
 
 async function prepareFolders(
   temp: string,
-  home: string,
-  repo: string,
+  { home, repo, claudeConfig }: AppPaths,
   scenario: Scenario,
 ): Promise<void> {
   const gitEnv = recipeGitEnv(temp);
   await mkdir(home);
   await mkdir(repo);
+  await mkdir(claudeConfig);
   for (const file of scenario.home ?? []) await writeInside(home, file.path, file.content);
+  for (const file of scenario.claudeConfig ?? []) {
+    await writeInside(claudeConfig, file.path, file.content);
+  }
   await writeFile(
     gitEnv.GIT_CONFIG_GLOBAL,
     "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
@@ -541,12 +547,13 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const temp = await realpath(await mkdtemp(join(tmpdir(), "satellite-verify-")));
   const home = join(temp, "home");
   const repo = join(temp, "repo");
+  const claudeConfig = join(temp, "claude-config");
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
   const links = join(temp, "links.txt");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
   const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
-  const paths = { home, repo, gitConfig, log, dialog, links, missingClaude };
+  const paths = { home, repo, claudeConfig, gitConfig, log, dialog, links, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -565,7 +572,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   cleanups.add(abandon);
   let page: Page;
   try {
-    await prepareFolders(temp, home, repo, scenario);
+    await prepareFolders(temp, paths, scenario);
     page = await startApp(options, paths, running, consoleErrors);
   } catch (error) {
     const failure = new LaunchFailure(errorReason(error), { cause: error });
@@ -608,6 +615,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     home,
     repo,
+    claudeConfig,
     gitEnv: recipeGitEnv(temp),
     folder(name) {
       const segments = name.split("/");

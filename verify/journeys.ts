@@ -11,6 +11,8 @@ import { boundaryJourney } from "./journeys/boundary.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { projectsJourney } from "./journeys/projects.ts";
 import { quitJourney } from "./journeys/quit.ts";
+import { sessionsJourney } from "./journeys/sessions.ts";
+import { settingsJourney } from "./journeys/settings.ts";
 import { workspacesJourney } from "./journeys/workspaces.ts";
 
 export interface Journey {
@@ -28,6 +30,8 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   workspacesJourney,
+  sessionsJourney,
+  settingsJourney,
   quitJourney,
 ];
 const journeyTimeoutMs = 180_000;
@@ -56,6 +60,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     },
     home: session.home,
     repo: session.repo,
+    claudeConfig: session.claudeConfig,
     gitEnv: session.gitEnv,
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),

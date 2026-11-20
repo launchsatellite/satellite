@@ -1,13 +1,25 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { stat, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import { z } from "zod";
+import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import { processGone, promptTimeoutMs, startClaude, waitUntil } from "./conditions.ts";
+import {
+  bridgeAnswer,
+  bridgeCode,
+  claudePids,
+  processGone,
+  promptTimeoutMs,
+  settingsFileOf,
+  standInInput,
+  startClaude,
+  toastReads,
+  waitUntil,
+} from "./conditions.ts";
 
 interface PolicyProbe {
   inlineScriptRan: boolean;
@@ -22,7 +34,20 @@ const settleMs = 1_000;
 const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
 const madeUpFingerprint = "0".repeat(64);
-const refusedAnswer = z.object({ ok: z.literal(false), error: z.object({ code: z.string() }) });
+const notReady =
+  "Claude Code hasn't told Satellite it's ready yet. Answer what it shows first, or type the request yourself.";
+const hookSettings = z.object({
+  hooks: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        hooks: z.array(
+          z.object({ url: z.string(), headers: z.record(z.string(), z.string()).optional() }),
+        ),
+      }),
+    ),
+  ),
+});
 const escapingPaths = [
   "app://satellite/%2e%2e/%2e%2e/package.json",
   "app://satellite/..%2f..%2fpackage.json",
@@ -37,26 +62,6 @@ function openPages(page: Page): number {
       ?.contexts()
       .reduce((count, context) => count + context.pages().length, 0) ?? 0
   );
-}
-
-async function bridgeAnswer(page: Page, channel: string, payload: unknown): Promise<unknown> {
-  return page.evaluate(
-    async ([name, data]) => {
-      const api: unknown = Reflect.get(window, "satellite");
-      const invoke: unknown =
-        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
-      if (typeof invoke !== "function") return "window.satellite.invoke is missing";
-      const result: unknown = await Reflect.apply(invoke, api, [name, data]);
-      return result;
-    },
-    [channel, payload],
-  );
-}
-
-async function bridgeCode(page: Page, channel: string, payload: unknown): Promise<string> {
-  const answer = await bridgeAnswer(page, channel, payload);
-  const parsed = refusedAnswer.safeParse(answer);
-  return parsed.success ? parsed.data.error.code : `answered ${JSON.stringify(answer)}`;
 }
 
 async function checkNoNode(page: Page): Promise<void> {
@@ -342,6 +347,83 @@ async function checkTerminalSurvives(session: AppSession, pid: number): Promise<
   );
 }
 
+async function startsRefused(session: AppSession, projectId: string): Promise<void> {
+  const { page } = session;
+  const starts = (await claudePids(session)).length;
+  const request = {
+    id: randomUUID(),
+    program: "claude",
+    workspace: { projectId, workspace: "main" },
+    resume: false,
+    cols: 80,
+    rows: 24,
+  };
+  await refusedWith(page, "terminal.start", { ...request, program: "sh" }, "invalid-request");
+  await refusedWith(page, "terminal.start", { ...request, args: ["--help"] }, "invalid-request");
+  await refusedWith(page, "terminal.start", { ...request, cwd: "/" }, "invalid-request");
+  const elsewhere = { ...request, workspace: { projectId: randomUUID(), workspace: "main" } };
+  await refusedWith(page, "terminal.start", elsewhere, "not-found");
+  await refusedWith(page, "terminal.start", { ...request, resume: true }, "not-found");
+  await refusedWith(page, "links.open", { url: "javascript:alert(1)" }, "refused");
+  assert.equal(
+    (await claudePids(session)).length,
+    starts,
+    "a refused terminal.start started Claude Code",
+  );
+}
+
+async function forgedHooks(session: AppSession, pid: number): Promise<void> {
+  const file = await settingsFileOf(session, pid);
+  const settings = hookSettings.parse(JSON.parse(await readFile(file, "utf8")));
+  const hook = settings.hooks["UserPromptSubmit"]?.[0]?.hooks[0];
+  assert.ok(hook !== undefined, "the settings file holds no UserPromptSubmit hook");
+  const pixel = session.page.getByTestId("workspace-repo-main-status");
+  const before = await pixel.getAttribute("data-state");
+  const body = JSON.stringify({ session_id: randomUUID(), hook_event_name: "UserPromptSubmit" });
+  const json = { "Content-Type": "application/json" };
+  const forgeries = [
+    { what: "without a secret", headers: json, expected: 401 },
+    {
+      what: "with a wrong secret",
+      headers: { ...json, Authorization: `Bearer ${madeUpFingerprint}` },
+      expected: 401,
+    },
+    {
+      what: "with an Origin",
+      headers: { ...json, ...hook.headers, Origin: remote },
+      expected: 403,
+    },
+  ];
+  for (const { what, headers, expected } of forgeries) {
+    const response: Response = await fetch(hook.url, { method: "POST", headers, body });
+    await response.arrayBuffer();
+    assert.equal(response.status, expected, `a hook ${what} got ${String(response.status)}`);
+  }
+  await delay(settleMs);
+  const after = await pixel.getAttribute("data-state");
+  assert.equal(
+    after,
+    before,
+    `forged hooks moved the pixel from ${String(before)} to ${String(after)}`,
+  );
+}
+
+async function sendsBeforeStart(session: AppSession): Promise<void> {
+  const before = (await session.standInEvents()).length;
+  await session.page.evaluate(
+    ({ name, detail }) => {
+      window.dispatchEvent(new CustomEvent(name, { detail }));
+    },
+    { name: sendToClaudeCodeEvent, detail: { text: "typed into a question" } },
+  );
+  await toastReads(session, notReady, "after a send before Claude Code started,");
+  assert.equal(
+    await standInInput(session, before),
+    "",
+    "a send typed into Claude Code before it reported its start",
+  );
+}
+
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   const appUrl = page.url();
@@ -357,13 +439,17 @@ async function run(session: AppSession): Promise<void> {
   await checkBridge(page);
   await checkPathForFile(page);
   await checkRelativeDrop(page);
-  await checkFingerprint(session, await checkWorkspaceRequests(session));
+  const projectId = await checkWorkspaceRequests(session);
+  await checkFingerprint(session, projectId);
+  await startsRefused(session, projectId);
   await session.screenshot("boundary");
   await page.reload();
   await page.getByTestId("workspace-repo-main").click();
   const pid = await startClaude(session, 1);
   await checkLeaving(page, appUrl, reached);
   await checkTerminalSurvives(session, pid);
+  await forgedHooks(session, pid);
+  await sendsBeforeStart(session);
 }
 
 export const boundaryJourney: Journey = { name: "boundary", scenario: "default", run };
