@@ -7,6 +7,7 @@ import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
 import {
   blankWorkspace,
+  droppedSentences,
   readWorkspaces,
   type Adoption,
   type Drop,
@@ -41,6 +42,7 @@ export interface ProjectStore {
   project(projectId: string): Promise<StoredProject>;
   available(project: StoredProject): Promise<boolean>;
   addWorkspace(projectId: string, workspace: StoredWorkspace): Promise<void>;
+  writable(): Promise<boolean>;
   removeWorkspace(projectId: string, workspaceId: string): Promise<void>;
   busy: Set<string>;
   creating: Set<string>;
@@ -196,6 +198,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       projects = change(list);
       try {
         if ((await answerWithin(file.save(projects), saveBoundMs)) === "late") {
+          file.save(list).catch(() => undefined);
           throw new Error(`projects.json took longer than ${String(saveBoundMs)} ms to save`);
         }
       } catch (error) {
@@ -250,13 +253,15 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           project.path,
           ...project.workspaces.map((workspace) => workspace.path),
         ]);
+        const isNew = (path: string) => {
+          if (paths.some((known) => samePath(known, path))) return false;
+          paths.push(path);
+          return true;
+        };
         return latest.map((project) => {
           if (creating.has(project.id)) return project;
           const added = adoptions
-            .filter(
-              ({ projectId, workspace }) =>
-                projectId === project.id && !paths.some((path) => samePath(path, workspace.path)),
-            )
+            .filter(({ projectId, workspace }) => projectId === project.id && isNew(workspace.path))
             .slice(0, Math.max(0, workspaceLimit - project.workspaces.length))
             .map(({ workspace }) => workspace);
           for (const workspace of added) kept.add(workspace.id);
@@ -284,7 +289,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         ...view,
         workspaces: view.workspaces.filter((workspace) => !ids.has(workspace.key)),
       })),
-      dropped: forgotten.slice(0, droppedLimit).map((drop) => drop.sentence),
+      dropped: droppedSentences(forgotten).slice(0, droppedLimit),
     };
   };
   const refuseWhileCreating = (project: StoredProject) => {
@@ -298,6 +303,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
     busy,
     creating,
     available: async (project) => (await checkedWithin(project)).checked === null,
+    writable: async () => (await file.load()).writable,
     async project(projectId) {
       const found = (await current()).find((project) => project.id === projectId);
       if (found === undefined) throw new BridgeFailure("not-found", notInSatellite);
@@ -305,12 +311,22 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
     },
     async addWorkspace(projectId, workspace) {
       await store.project(projectId);
-      await changeWorkspaces(projectId, (project) => {
-        if (project.workspaces.length >= workspaceLimit) {
-          throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
+      await replace((latest) => {
+        if (latest.some((project) => samePath(project.path, workspace.path))) {
+          throw new BridgeFailure("failed", workspaceSaveFailure);
         }
-        return [...project.workspaces, workspace];
-      });
+        const withoutStale = latest.map((project) => ({
+          ...project,
+          workspaces: project.workspaces.filter((stored) => !samePath(stored.path, workspace.path)),
+        }));
+        return withoutStale.map((project) => {
+          if (project.id !== projectId) return project;
+          if (project.workspaces.length >= workspaceLimit) {
+            throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
+          }
+          return { ...project, workspaces: [...project.workspaces, workspace] };
+        });
+      }, workspaceSaveFailure);
     },
     removeWorkspace: (projectId, workspaceId) =>
       changeWorkspaces(projectId, (project) =>

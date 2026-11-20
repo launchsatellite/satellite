@@ -65,34 +65,30 @@ describe("createProjectsFile", () => {
     expect(await setAsideFiles(home)).toHaveLength(1);
   });
 
-  it("sets aside a file with two workspaces on one path", async () => {
+  it("keeps the first record of a folder written twice and drops the rest", async () => {
+    const alpha = userPath("code/alpha");
     const path = userPath(".satellite/worktrees/alpha/fix-login");
-    const fileWith = (otherPath: string) => ({
+    const first = workspace("fix-login", path);
+    const kept = workspace("other", `${path}-2`);
+    const home = await homeWith({
       version: 2,
       projects: [
         {
           id: randomUUID(),
-          path: userPath("code/alpha"),
-          workspaces: [workspace("fix-login", path), workspace("other", otherPath)],
+          path: alpha,
+          workspaces: [first, workspace("fix-login", path), workspace("alpha", alpha), kept],
         },
+        { id: randomUUID(), path: userPath("code/beta"), workspaces: [workspace("again", path)] },
       ],
     });
-    const home = await homeWith(fileWith(path));
     const loaded = await createProjectsFile(home).load();
-    expect(loaded.projects).toEqual([]);
-    expect(loaded.notice).toBe(setAsideNotice);
-    expect(await setAsideFiles(home)).toHaveLength(1);
-    const apart = await homeWith(fileWith(`${path}-2`));
-    expect((await createProjectsFile(apart).load()).projects[0]?.workspaces).toHaveLength(2);
+    expect(loaded.notice).toBeNull();
+    expect(loaded.projects.map((project) => project.workspaces)).toEqual([[first, kept], []]);
+    expect(await setAsideFiles(home)).toHaveLength(0);
   });
 
-  it("sets aside a file that holds one folder twice under another spelling", async () => {
+  it("sets aside a file that holds one project twice under another spelling", async () => {
     const alpha = userPath("code/alpha");
-    const onProject = await homeWith({
-      version: 2,
-      projects: [{ id: randomUUID(), path: alpha, workspaces: [workspace("fix-login", alpha)] }],
-    });
-    expect((await createProjectsFile(onProject).load()).notice).toBe(setAsideNotice);
     const cased = await homeWith({
       version: 1,
       projects: [

@@ -49,6 +49,14 @@ describe("adoptable", () => {
     expect(adoptable(input(skipped, { recorded: [`${segment}/recorded`] }))).toEqual([]);
   });
 
+  it("adopts a folder git lists twice only once", () => {
+    const twice = [
+      worktree(`${segment}/left-over`, "left-over"),
+      worktree(`${segment}/left-over`, "left-over"),
+    ];
+    expect(adoptable(input(twice))).toHaveLength(1);
+  });
+
   it("never adopts the main worktree even inside the folder", () => {
     const main = worktree(`${segment}/main-here`, "main");
     expect(adoptable({ ...input([]), listed: { worktrees: [main], separator: "\0" } })).toEqual([]);

@@ -3,7 +3,8 @@ import { lstat, realpath, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { WorkspaceKey, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
-import { samePath } from "../platform/paths.ts";
+import { isMissing } from "../platform/file-system.ts";
+import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
 import { isBranchName, workspaceNameProblem } from "../../shared/workspace-name.ts";
 import {
   workspaceLimit,
@@ -19,6 +20,10 @@ import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
 
 export interface Drop {
   workspaceId: string;
+  projectId: string;
+  name: string;
+  project: string;
+  prunable: boolean;
   sentence: string;
 }
 export interface Adoption {
@@ -69,20 +74,23 @@ async function currentBranch(path: string): Promise<string | null> {
   return run?.exitCode === 0 ? shortBranch(run.stdout.trim()) : null;
 }
 
-function isMissing(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
+async function answersAsFolder(path: string): Promise<boolean> {
+  return stat(path).then(
+    (entry) => entry.isDirectory(),
+    () => false,
+  );
 }
 
-async function folderDeleted(path: string): Promise<boolean> {
+async function folderDeleted(path: string, home: string): Promise<boolean> {
   const gone = await lstat(path).then(
     () => false,
     (error: unknown) => isMissing(error),
   );
   if (!gone) return false;
-  return stat(dirname(path)).then(
-    (parent) => parent.isDirectory(),
-    () => false,
-  );
+  const realHome = await realpathOrUndefined(home);
+  if (realHome === undefined) return false;
+  const root = worktreesRoot(realHome);
+  return answersAsFolder(isInsidePath(root, path) ? root : dirname(path));
 }
 
 function bounded(sentence: string): string {
@@ -195,9 +203,30 @@ export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
     ) {
       continue;
     }
+    if (found.some((kept) => samePath(kept.path, path))) continue;
     found.push({ name, path, branch });
   }
   return found.slice(0, room);
+}
+
+export function droppedSentences(drops: readonly Drop[]): string[] {
+  const byProject = new Map<string, Drop[]>();
+  for (const drop of drops) {
+    byProject.set(drop.projectId, [...(byProject.get(drop.projectId) ?? []), drop]);
+  }
+  return [...byProject.values()].flatMap((group) => {
+    const [first] = group;
+    if (first === undefined) return [];
+    if (group.length === 1) return [first.sentence];
+    const names = group.map((drop) => drop.name);
+    const listed = `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+    const prune = group.some((drop) => drop.prunable)
+      ? " git still counts some of their branches as checked out until you run git worktree prune."
+      : "";
+    return bounded(
+      `${String(group.length)} workspaces left ${first.project} because they were removed outside Satellite, ${listed}.${prune}`,
+    );
+  });
 }
 
 export function blankWorkspace(key: WorkspaceKey, name: string | null): WorkspaceView {
@@ -229,12 +258,16 @@ export async function readWorkspaces(
       listed === undefined ||
       listed.separator === "\n" ||
       busy.has(record.id) ||
-      !(await folderDeleted(record.path))
+      !(await folderDeleted(record.path, rule.home))
     ) {
       continue;
     }
     drops.push({
       workspaceId: record.id,
+      projectId: project.id,
+      name: record.name,
+      project: projectName,
+      prunable: worktree !== undefined,
       sentence: bounded(
         dropSentence(record, projectName, listed.worktrees, worktree !== undefined),
       ),

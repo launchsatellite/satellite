@@ -338,7 +338,42 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toEqual([]);
   });
 
-  it("keeps a workspace whose folder sits on a drive that is gone", async () => {
+  it("drops every workspace of a project whose worktrees folder was deleted, in one sentence", async () => {
+    const { home, repo, gitIn, workspace } = await repoWithWorkspace();
+    const more: StoredWorkspace[] = [];
+    for (const name of ["w-a", "w-b", "w-c"]) {
+      const path = join(home, "worktrees", "repo", name);
+      await gitIn(repo, ["worktree", "add", "-q", "-b", name, path]);
+      more.push({ id: randomUUID(), name, path: await realpath(path), branch: name });
+    }
+    await writeFile(
+      join(home, "projects.json"),
+      JSON.stringify({
+        version: 2,
+        projects: [{ id: randomUUID(), path: repo, workspaces: [workspace, ...more] }],
+      }),
+    );
+    await rm(join(home, "worktrees", "repo"), { recursive: true, force: true });
+    const answer = await projectsIn(home).handlers["projects.list"]({}, owner);
+    expect(answer.dropped).toEqual([
+      "4 workspaces left repo because they were removed outside Satellite, fix-login, w-a, w-b and w-c. git still counts some of their branches as checked out until you run git worktree prune.",
+    ]);
+    expect(answer.projects[0]?.workspaces.map((view) => view.key)).toEqual(["main"]);
+    expect(await storedWorkspaceIds(home)).toEqual([]);
+  });
+
+  it("replaces a record whose folder a new workspace now holds, so no folder is saved twice", async () => {
+    const { home, workspace, projects } = await repoWithWorkspace();
+    const listed = await projects.handlers["projects.list"]({}, owner);
+    const fresh = { ...workspace, id: randomUUID() };
+    await projects.store.addWorkspace(listed.projects[0]?.id ?? "", fresh);
+    await projects.flush();
+    expect(await storedWorkspaceIds(home)).toEqual([fresh.id]);
+    const reread = await projectsIn(home).handlers["projects.list"]({}, owner);
+    expect(reread.notice).toBeNull();
+  });
+
+  it("keeps every workspace while Satellite's worktrees folder doesn't answer", async () => {
     const { home, workspace, projects } = await repoWithWorkspace();
     await rm(join(home, "worktrees"), { recursive: true, force: true });
     const answer = await projects.handlers["projects.list"]({}, owner);

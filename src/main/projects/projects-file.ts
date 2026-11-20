@@ -61,14 +61,17 @@ const version2 = z.strictObject({
     )
     .max(projectLimit),
 });
-const fileSchema = z.union([version1, version2]).refine(({ projects }) => {
-  const workspaces = projects.flatMap((project) => project.workspaces);
-  return (
-    allDifferent(projects.map((project) => project.id)) &&
-    allDifferent(workspaces.map((workspace) => workspace.id)) &&
-    allDifferent([...projects, ...workspaces].map((entry) => comparablePath(entry.path)))
-  );
-});
+const fileSchema = z
+  .union([version1, version2])
+  .transform((file) => ({ ...file, projects: withoutRepeatedFolders(file.projects) }))
+  .refine(({ projects }) => {
+    const workspaces = projects.flatMap((project) => project.workspaces);
+    return (
+      allDifferent(projects.map((project) => project.id)) &&
+      allDifferent(workspaces.map((workspace) => workspace.id)) &&
+      allDifferent(projects.map((project) => comparablePath(project.path)))
+    );
+  });
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -82,6 +85,19 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
 
 function allDifferent(values: readonly string[]): boolean {
   return new Set(values).size === values.length;
+}
+
+function withoutRepeatedFolders(projects: readonly StoredProject[]): StoredProject[] {
+  const seen = new Set(projects.map((project) => comparablePath(project.path)));
+  return projects.map((project) => ({
+    ...project,
+    workspaces: project.workspaces.filter((workspace) => {
+      const path = comparablePath(workspace.path);
+      if (seen.has(path)) return false;
+      seen.add(path);
+      return true;
+    }),
+  }));
 }
 
 async function readProjectsFile(file: string): Promise<LoadedProjects> {
