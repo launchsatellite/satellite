@@ -50,7 +50,8 @@ export function createLastSessions(home: string): LastSessions {
     cached ??= readLastSessions(file);
     return cached;
   };
-  const save = async (change: (last: Entry[]) => Entry[] | undefined) => {
+  let changes: Promise<void> = Promise.resolve();
+  const apply = async (change: (last: Entry[]) => Entry[] | undefined) => {
     const loaded = await load();
     const last = change(loaded.last);
     if (last === undefined) return;
@@ -60,13 +61,23 @@ export function createLastSessions(home: string): LastSessions {
       console.error("sessions.json could not be saved", error);
     });
   };
+  const save = (change: (last: Entry[]) => Entry[] | undefined) => {
+    changes = changes
+      .then(() => apply(change))
+      .catch((error: unknown) => {
+        console.error("sessions.json could not be changed", error);
+      });
+    return changes;
+  };
   return {
     async get(ref) {
       const pair = pairOf(ref);
       return (await load()).last.find((entry) => pairOf(entry) === pair)?.sessionId;
     },
     async set(ref, sessionId) {
-      const entry = entrySchema.parse({ ...ref, sessionId });
+      const parsed = entrySchema.safeParse({ ...ref, sessionId });
+      if (!parsed.success) return;
+      const entry = parsed.data;
       await save((last) => {
         const pair = pairOf(entry);
         if (last.some((kept) => pairOf(kept) === pair && kept.sessionId === sessionId)) {
