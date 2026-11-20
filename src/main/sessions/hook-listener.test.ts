@@ -209,7 +209,13 @@ describe("startHookListener", () => {
       body: Buffer.alloc(1024 * 1024, "x"),
     });
     expect(answer.status).toBe(204);
-    expect(events).toEqual([{ launchId, event: { name: "Stop" } }]);
+    expect((await send({ path: `/hook/${launchId}/UserPromptSubmit`, body: "{" })).status).toBe(
+      204,
+    );
+    expect(events.map((entry) => entry.event)).toEqual([
+      { name: "Stop" },
+      { name: "UserPromptSubmit" },
+    ]);
   });
 
   it("tells which agent asked and which finished a tool", async () => {
