@@ -73,7 +73,7 @@ Every task is bound by `.superpowers/sdd/global-constraints.md`, `AGENTS.md`, `.
 - **The commands**, exactly these and nothing else, each through `gitArgs`.
   - Reads. `worktree list --porcelain -z` (and without `-z` as the fallback), `for-each-ref` with the tracking format, `for-each-ref --format=%(refname) refs/heads/`, `for-each-ref --sort=-committerdate --count=200 --format=%(refname) refs/heads refs/remotes`, `status` with the flags above, `remote`, `symbolic-ref --quiet refs/remotes/<remote>/HEAD`, `show-ref --verify --quiet <ref>`, `show-ref --verify <ref>`, `ls-files -z --others --ignored --exclude-standard --directory --no-empty-directory`, `rev-list --count HEAD --not --remotes`, `rev-list --count HEAD --not --branches --remotes --tags`, `log --format=%s -n 5 HEAD --not --remotes --` and `log --format=%s -n 5 HEAD --not --branches --remotes --tags --`, and `branch --show-current` as today.
   - Network. `ls-remote --symref --end-of-options <remote> HEAD` and the fetch above.
-  - Writes. `branch --no-track --end-of-options <name> <oid>`, `update-ref -d refs/heads/<name> <oid>`, `worktree add --end-of-options <path> <name>`, `worktree remove --force --end-of-options <path>`.
+  - Writes. `branch --no-track --end-of-options <name> <oid>`, `update-ref -d refs/heads/<name> <oid>`, `worktree add --end-of-options <path> <name>`, `worktree remove --end-of-options <path>`, then only when git answers that the worktree holds modified or untracked files `worktree remove --force --end-of-options <path>`.
 - **Remote names** must match `/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/`, and a remote that does not is treated as no remote. A branch name read from git must pass `isBranchName` (Task 4).
 
 ### State

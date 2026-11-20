@@ -143,6 +143,7 @@ const terminalId = z.uuid();
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
+const fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
 const startBranch = z.strictObject({ ref: refName, label: z.string().min(1).max(255) });
 
 export const bridgeRequests = {
@@ -196,6 +197,24 @@ export const bridgeRequests = {
       start: startChoice,
     }),
     response: z.strictObject({ workspace: workspaceView }),
+  },
+  "workspaces.inspect": {
+    request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid() }),
+    response: z.strictObject({
+      branch: z.string().min(1).max(255).nullable(),
+      files: z
+        .array(z.strictObject({ code: z.string().length(2), path: z.string().min(1).max(4096) }))
+        .max(50),
+      moreFiles: count,
+      commits: lossView,
+      sessions: z.int().min(0).max(bridgeLimits.terminals),
+      locked: z.boolean(),
+      fingerprint,
+    }),
+  },
+  "workspaces.archive": {
+    request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid(), fingerprint }),
+    response: z.strictObject({ leftover: z.string().min(1).max(200).nullable() }),
   },
   "terminal.start": {
     request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),

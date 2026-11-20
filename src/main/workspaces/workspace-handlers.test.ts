@@ -9,6 +9,7 @@ import { bridgeEvents, type BridgeEventPayload } from "../../shared/bridge-contr
 import { BridgeFailure, type BridgeOwner } from "../bridge/registry.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
+import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { workspaceHandlers } from "./workspace-handlers.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -23,6 +24,10 @@ vi.mock("../platform/user-environment.ts", () => ({
 }));
 
 const run = promisify(execFile);
+const noSessions: WorkspaceSessions = {
+  countInside: () => 0,
+  stopInside: () => Promise.resolve(),
+};
 
 let base = "";
 let config = "";
@@ -105,7 +110,11 @@ describe("workspaceHandlers", () => {
       ["one", "two", "three", "four", "five"].map((name) => repository(name)),
     );
     const store = fakeStore(projects);
-    const { handlers } = workspaceHandlers({ home: join(base, "home"), store });
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
     const create = handlers["workspaces.create"];
     const { owner } = recordingOwner();
     const same = await Promise.allSettled([
@@ -137,7 +146,11 @@ describe("workspaceHandlers", () => {
     const project = await repository("repo");
     await run("git", ["-C", project.path, "branch", "taken"], { env: gitEnvironment() });
     const store = fakeStore([project]);
-    const { handlers } = workspaceHandlers({ home: join(base, "home"), store });
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
     const { owner, events } = recordingOwner();
     await expect(
       handlers["workspaces.create"](request(project.id, "taken"), owner),
@@ -166,7 +179,11 @@ describe("workspaceHandlers", () => {
   it("reports every step and answers the new workspace", async () => {
     const project = await repository("repo");
     const store = fakeStore([project]);
-    const { handlers } = workspaceHandlers({ home: join(base, "home"), store });
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
     const { owner, events } = recordingOwner();
     const answer = await handlers["workspaces.create"](request(project.id, "fresh"), owner);
     expect(answer.workspace).toEqual({
@@ -196,6 +213,7 @@ describe("workspaceHandlers", () => {
     const { handlers } = workspaceHandlers({
       home: join(base, "home"),
       store: fakeStore([project]),
+      sessions: noSessions,
     });
     const { owner } = recordingOwner();
     for (const ask of [
@@ -207,5 +225,39 @@ describe("workspaceHandlers", () => {
         message: "gone isn't available right now, so Satellite can't make a workspace in it.",
       });
     }
+  });
+
+  it("archives only a recorded workspace of the project named, and one at a time", async () => {
+    const [mine, theirs] = await Promise.all([repository("mine"), repository("theirs")]);
+    const record = {
+      id: randomUUID(),
+      name: "fix-login",
+      path: join(base, "home", "worktrees", "mine", "fix-login"),
+      branch: "fix-login",
+    };
+    mine.workspaces.push(record);
+    const store = fakeStore([mine, theirs]);
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner } = recordingOwner();
+    const ask = { workspaceId: record.id, fingerprint: "0".repeat(64) };
+    const notFound = { code: "not-found", message: "That workspace is not in Satellite." };
+    await expect(
+      handlers["workspaces.inspect"]({ projectId: theirs.id, workspaceId: record.id }, owner),
+    ).rejects.toMatchObject(notFound);
+    await expect(
+      handlers["workspaces.archive"]({ projectId: theirs.id, ...ask }, owner),
+    ).rejects.toMatchObject(notFound);
+    store.busy.add(record.id);
+    await expect(
+      handlers["workspaces.archive"]({ projectId: mine.id, ...ask }, owner),
+    ).rejects.toMatchObject({
+      code: "refused",
+      message: "Satellite is already archiving that workspace.",
+    });
+    expect(store.busy.has(record.id)).toBe(true);
   });
 });

@@ -11,6 +11,7 @@ export type CommandId =
   | "project.add"
   | "project.remove"
   | "workspace.new"
+  | "workspace.archive"
   | "tools.check"
   | "theme.system"
   | "theme.light"

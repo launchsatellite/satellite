@@ -31,7 +31,18 @@ export function WorkspaceHeader({
           </span>
         </>
       )}
-      <span className="ml-auto flex-none">
+      <span className="ml-auto flex flex-none items-center gap-1">
+        {workspace.key !== "main" && (
+          <CommandButton
+            command="workspace.archive"
+            variant="ghost"
+            size="small"
+            icon="archive"
+            testId="archive-workspace"
+          >
+            Archive
+          </CommandButton>
+        )}
         <CommandButton
           command="project.remove"
           variant="ghost"

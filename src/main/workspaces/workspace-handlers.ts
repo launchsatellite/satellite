@@ -11,7 +11,9 @@ import {
   type StoredWorkspace,
 } from "../projects/projects-file.ts";
 import { answerWithin } from "../projects/repository-check.ts";
+import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { creationSteps, failureSentence, nameTaken, prepareWorkspace } from "./create-steps.ts";
+import { archiveWorkspace, inspectWorkspace } from "./workspace-archive.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
 interface CreationRequest {
@@ -22,9 +24,13 @@ interface CreationRequest {
 interface WorkspaceOptions {
   home: string;
   store: ProjectStore;
+  sessions: WorkspaceSessions;
 }
 export interface Workspaces {
-  handlers: Pick<BridgeHandlers, "workspaces.prepare" | "workspaces.create">;
+  handlers: Pick<
+    BridgeHandlers,
+    "workspaces.prepare" | "workspaces.create" | "workspaces.inspect" | "workspaces.archive"
+  >;
   stopAll(): Promise<void>;
 }
 
@@ -40,12 +46,21 @@ function unavailable(name: string): BridgeFailure {
   );
 }
 
+async function recordOf(store: ProjectStore, projectId: string, workspaceId: string) {
+  const project = await store.project(projectId);
+  const record = project.workspaces.find((workspace) => workspace.id === workspaceId);
+  if (record === undefined) {
+    throw new BridgeFailure("not-found", "That workspace is not in Satellite.");
+  }
+  return { project, record };
+}
+
 function clipped(detail: string | null): string | null {
   if (detail === null || detail.length <= detailLimit) return detail;
   return `${detail.slice(0, detailLimit - 1)}…`;
 }
 
-export function workspaceHandlers({ home, store }: WorkspaceOptions): Workspaces {
+export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): Workspaces {
   const quitting = new AbortController();
   const availableName = async (project: StoredProject) => {
     const name = projectName(project.path);
@@ -53,6 +68,28 @@ export function workspaceHandlers({ home, store }: WorkspaceOptions): Workspaces
     return name;
   };
   const running = new Set<Promise<unknown>>();
+  const track = <T>(work: Promise<T>, settled: () => void): Promise<T> => {
+    running.add(work);
+    const settle = () => {
+      running.delete(work);
+      settled();
+    };
+    work.then(settle, settle);
+    return work;
+  };
+  const archive = async (projectId: string, workspaceId: string, fingerprint: string) => {
+    const { project, record } = await recordOf(store, projectId, workspaceId);
+    const result = await archiveWorkspace(home, project, record, fingerprint, sessions);
+    try {
+      await store.removeWorkspace(project.id, record.id);
+    } catch {
+      throw new BridgeFailure(
+        "failed",
+        `git removed ${record.name}, but Satellite couldn't update its list. The next list drops it.`,
+      );
+    }
+    return result;
+  };
   const create = async (
     project: StoredProject,
     projectLabel: string,
@@ -130,14 +167,27 @@ export function workspaceHandlers({ home, store }: WorkspaceOptions): Workspaces
           throw new BridgeFailure("limit", workspaceLimitSentence(projectLabel));
         }
         store.creating.add(projectId);
-        const work = create(project, projectLabel, { operationId, name, start }, owner);
-        running.add(work);
-        const settle = () => {
-          running.delete(work);
+        return track(create(project, projectLabel, { operationId, name, start }, owner), () => {
           store.creating.delete(projectId);
-        };
-        work.then(settle, settle);
-        return work;
+        });
+      },
+      "workspaces.inspect": async ({ projectId, workspaceId }) => {
+        const { project, record } = await recordOf(store, projectId, workspaceId);
+        return inspectWorkspace(home, project, record, sessions.countInside(record.path));
+      },
+      "workspaces.archive": ({ projectId, workspaceId, fingerprint }) => {
+        if (quitting.signal.aborted) {
+          return Promise.reject(new BridgeFailure("failed", "Satellite is quitting."));
+        }
+        if (store.busy.has(workspaceId)) {
+          return Promise.reject(
+            new BridgeFailure("refused", "Satellite is already archiving that workspace."),
+          );
+        }
+        store.busy.add(workspaceId);
+        return track(archive(projectId, workspaceId, fingerprint), () => {
+          store.busy.delete(workspaceId);
+        });
       },
     },
   };

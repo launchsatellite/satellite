@@ -269,7 +269,8 @@ describe("createProjects", () => {
       JSON.stringify({ version: 1, projects: [{ id: projectId, path: hung.path }] }),
     );
     const { store } = projectsIn(home);
-    const { handlers } = workspaceHandlers({ home, store });
+    const sessions = { countInside: () => 0, stopInside: () => Promise.resolve() };
+    const { handlers } = workspaceHandlers({ home, store, sessions });
     const unavailable = {
       code: "refused",
       message: "hung isn't available right now, so Satellite can't make a workspace in it.",

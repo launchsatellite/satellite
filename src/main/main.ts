@@ -92,7 +92,7 @@ const projects =
 const workspaces =
   home === undefined || projects === undefined
     ? undefined
-    : workspaceHandlers({ home, store: projects.store });
+    : workspaceHandlers({ home, store: projects.store, sessions: terminals.sessionsInside });
 if (
   interfaceFile !== undefined &&
   projects !== undefined &&

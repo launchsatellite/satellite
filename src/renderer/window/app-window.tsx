@@ -17,6 +17,7 @@ import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
+import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, reachableColumns } from "./columns.ts";
@@ -43,6 +44,15 @@ function forgotSentence(name: string, workspaces: number): string {
   if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
   const counted = workspaces === 1 ? "1 workspace" : `${String(workspaces)} workspaces`;
   return `Satellite forgot ${name} and its ${counted}. Every folder stays where it is.`;
+}
+
+function archivedSentence(name: string, branch: string | null, leftover: string | null): string {
+  if (leftover !== null) {
+    return `Satellite archived ${name}, but some files couldn't be deleted and stayed in ${leftover} in the Satellite home.`;
+  }
+  return branch === null
+    ? `Satellite archived ${name}.`
+    : `Satellite archived ${name}. The branch ${branch} stays.`;
 }
 
 function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean): Command[] {
@@ -83,8 +93,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
-  const { projects, add, drop, remove, upsertWorkspace, refresh } = useProjects(notify);
+  const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
+    useProjects(notify);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<WorkspaceRef | null>(null);
   const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
@@ -182,8 +194,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         ? `${removable.name} in ${removable.parent}`
         : removable.name;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
+  const archivableKey =
+    selectedProject?.missing === null && selectedWorkspace?.key !== "main"
+      ? selectedWorkspace?.key
+      : undefined;
   const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const modal = dialogProject !== undefined;
+  const archiveProject = projects?.find((project) => project.id === archiving?.projectId);
+  const archiveWorkspace = archiveProject?.workspaces.find(
+    (workspace) => workspace.key === archiving?.workspace,
+  );
+  const modal = dialogProject !== undefined || archiveWorkspace !== undefined;
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -194,6 +214,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     notify(`${String(workspace.name)} is ready in ${dialogProject.name}.`, "info");
     setCreatingIn(null);
   };
+  const closeArchive = useCallback(() => {
+    setArchiving(null);
+  }, []);
   const focusSidebarIfLost = useCallback(() => {
     requestAnimationFrame(() => {
       const active = document.activeElement;
@@ -206,6 +229,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       next?.focus();
     });
   }, []);
+  const archived = (leftover: string | null) => {
+    if (archiveProject === undefined || archiveWorkspace === undefined) return;
+    const projectId = archiveProject.id;
+    const key = archiveWorkspace.key;
+    dropWorkspace(projectId, key);
+    update(
+      (current) =>
+        current.selected?.projectId === projectId && current.selected.workspace === key
+          ? { ...current, selected: { projectId, workspace: "main" } }
+          : current,
+      true,
+    );
+    notify(
+      archivedSentence(String(archiveWorkspace.name), archiveWorkspace.branch, leftover),
+      leftover === null ? "info" : "error",
+    );
+    setArchiving(null);
+    focusSidebarIfLost();
+  };
   const registry = useMemo(() => {
     const theme = (choice: ThemeChoice) => () => {
       update((current) => ({ ...current, theme: choice }), true);
@@ -262,6 +304,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "workspace.archive",
+            title: "Archive this workspace",
+            available: archivableKey !== undefined && selectedId !== undefined,
+            run: () => {
+              if (archivableKey === undefined || selectedId === undefined) return;
+              setArchiving({ projectId: selectedId, workspace: archivableKey });
+            },
+          },
+          {
             id: "palette.switcher",
             title: "Go to a workspace",
             shortcut: { key: "p" },
@@ -294,6 +345,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, [
     modal,
     newWorkspaceIn,
+    archivableKey,
+    selectedId,
     update,
     add,
     open,
@@ -401,6 +454,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             project={dialogProject}
             onClose={closeNewWorkspace}
             onCreated={created}
+          />
+        )}
+        {archiveProject !== undefined && archiveWorkspace !== undefined && (
+          <ArchiveDialog
+            key={`${archiveProject.id}-${archiveWorkspace.key}`}
+            project={archiveProject}
+            workspace={archiveWorkspace}
+            onClose={closeArchive}
+            onArchived={archived}
           />
         )}
         {toast !== undefined && (

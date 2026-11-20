@@ -61,6 +61,20 @@ function spies() {
         },
       }),
     ),
+    "workspaces.inspect": vi.fn<BridgeHandler<"workspaces.inspect">>(() =>
+      Promise.resolve({
+        branch: "swift-comet",
+        files: [],
+        moreFiles: 0,
+        commits: { kind: "no-remote" },
+        sessions: 0,
+        locked: false,
+        fingerprint: "a".repeat(64),
+      }),
+    ),
+    "workspaces.archive": vi.fn<BridgeHandler<"workspaces.archive">>(() =>
+      Promise.resolve({ leftover: null }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -193,6 +207,33 @@ describe("createBridgeRouter", () => {
       owner,
     );
     expect(accepted).toMatchObject({ ok: true });
+  });
+
+  it("refuses to archive the main workspace or without a fingerprint", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = { projectId: terminalId, workspaceId: terminalId, fingerprint: "0".repeat(64) };
+    const payloads = [
+      { ...valid, workspaceId: "main" },
+      { ...valid, fingerprint: "0".repeat(63) },
+      { ...valid, fingerprint: "A".repeat(64) },
+      { projectId: terminalId, workspaceId: terminalId },
+      { ...valid, path: "/Users/<name>/repo" },
+      { ...valid, projectId: "../x" },
+    ];
+    for (const payload of payloads) {
+      const result = await route("workspaces.archive", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const payload of [
+      { projectId: terminalId, workspaceId: "main" },
+      { projectId: terminalId, workspaceId: terminalId, fingerprint: "0".repeat(64) },
+    ]) {
+      const result = await route("workspaces.inspect", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("workspaces.archive", valid, owner)).toMatchObject({ ok: true });
   });
 
   it("refuses a dropped path that is empty or too long", async () => {
