@@ -35,7 +35,7 @@ const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
 const madeUpFingerprint = "0".repeat(64);
 const notReady =
-  "Satellite can send here once Claude Code has taken your first request and reported it. Type this one yourself.";
+  "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const hookSettings = z.object({
   hooks: z.record(
     z.string(),
