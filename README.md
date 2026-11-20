@@ -1,12 +1,12 @@
 # Satellite
 
-An agentic development environment. One desktop app holds all your projects and every parallel piece of work inside them, and each piece of work gets its own git worktree, its own Claude Code session, its own terminals and its own view of files, changes and pull requests.
+An agentic development environment. One desktop app holds all your projects and every parallel piece of work inside them, and each piece of work gets its own git worktree, its own Claude Code sessions and its own view of changes, files and pull requests.
 
 Agents stay in orbit and do the work. You stay at the centre.
 
 ## Status
 
-Early. Nothing is built yet. The first release will be 0.1.0, for macOS, Windows and Linux.
+Early. Nothing is built yet. [SATELLITE.md](SATELLITE.md) says what the product is, and the [specs index](specs/README.md) shows what is built.
 
 ## Working on Satellite
 

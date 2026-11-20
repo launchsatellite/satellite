@@ -38,3 +38,12 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 
 | # | Spec | Status |
 | --- | --- | --- |
+| 001 | [Foundation](001-foundation/spec.md) | Approved |
+| 002 | [Shell and projects](002-shell-and-projects/spec.md) | Approved |
+| 003 | [Workspaces](003-workspaces/spec.md) | Approved |
+| 004 | [Claude Code sessions](004-claude-code-sessions/spec.md) | Approved |
+| 005 | [Inbox and notifications](005-inbox-and-notifications/spec.md) | Approved |
+| 006 | [Changes](006-changes/spec.md) | Approved |
+| 007 | [Files](007-files/spec.md) | Approved |
+| 008 | [Pull request](008-pull-request/spec.md) | Approved |
+| 009 | [Running processes](009-running-processes/spec.md) | Approved |
