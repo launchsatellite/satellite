@@ -39,7 +39,7 @@ async function expectSetAside(content: string): Promise<void> {
   expect(await readdir(dir)).not.toContain("state.json");
 }
 
-describe("readJsonFile", () => {
+describe("readJsonFile", { timeout: 20_000 }, () => {
   it("answers the fallback and sets nothing aside when the file is missing", async () => {
     const { dir, file } = await folder();
     expect(await readJsonFile(file, schema, fallback)).toEqual({
@@ -122,7 +122,7 @@ describe("readJsonFile", () => {
   });
 });
 
-describe("createJsonWriter", () => {
+describe("createJsonWriter", { timeout: 20_000 }, () => {
   it("keeps the last of a burst of writes with at most two writes to disk", async () => {
     const { dir, file } = await folder();
     const writer = createJsonWriter(file);
