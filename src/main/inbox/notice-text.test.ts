@@ -65,4 +65,23 @@ describe("noticeText", () => {
       expect(bytes(body)).toBeLessThanOrEqual(256);
     }
   });
+
+  it("falls back when a name holds no letter or digit, and drops marks that lead it", () => {
+    for (const raw of [".", "_", "+()", "- . -", "\u20dd", "\u0301\u0301"]) {
+      expect(noticeName(raw, "a project")).toBe("a project");
+    }
+    expect(noticeName("\u0301app", "a project")).toBe("app");
+    expect(noticeText([{ project: "...", workspace: "()" }])).toEqual({
+      title: "a workspace needs you",
+      body: "Claude Code is waiting for you in a project.",
+    });
+  });
+
+  it("never splits a letter cluster when it cuts, however long the name", () => {
+    const syllable = "\u1100\u1161\u11a8";
+    expect(noticeName(syllable.repeat(12), "a project")).toBe(syllable.repeat(10));
+    const cluster = "\u0915\u093f";
+    expect(noticeName(cluster.repeat(20), "a project")).toBe(cluster.repeat(16));
+    expect(noticeName("a".repeat(1_000_000), "a project")).toBe("a".repeat(noticeNameLimit));
+  });
 });
