@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { parse } from "node:path";
 import { bridgeLimits } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { spawnPty, type PtyProcess } from "../platform/pty.ts";
@@ -23,6 +24,7 @@ const spawnFailed =
 
 async function workingFolder(): Promise<string> {
   const folder = process.cwd();
+  if (parse(folder).root === folder) return userHomeFolder();
   try {
     return (await stat(folder)).isDirectory() ? folder : userHomeFolder();
   } catch {
@@ -44,6 +46,7 @@ export function createTerminalSessions(): {
   const sessions = new Map<string, Session>();
   const watchedOwners = new WeakSet<BridgeOwner>();
   const ending = new Set<Promise<void>>();
+  let closed = false;
 
   const end = (id: string, session: Session) => {
     if (sessions.get(id) === session) sessions.delete(id);
@@ -119,10 +122,11 @@ export function createTerminalSessions(): {
   return {
     handlers: {
       "terminal.start": async ({ id, cols, rows }, owner) => {
+        if (closed) throw new BridgeFailure("failed", "Satellite is quitting.");
         if (sessions.has(id)) {
           throw new BridgeFailure("invalid-request", "That terminal is already running.");
         }
-        if (sessions.size >= bridgeLimits.terminals) {
+        if (sessions.size + ending.size >= bridgeLimits.terminals) {
           throw new BridgeFailure(
             "limit",
             `Satellite already runs ${String(bridgeLimits.terminals)} terminals. Close one first.`,
@@ -157,6 +161,7 @@ export function createTerminalSessions(): {
         }),
     },
     async closeAll() {
+      closed = true;
       for (const [id, session] of sessions) end(id, session);
       await Promise.all(ending);
     },

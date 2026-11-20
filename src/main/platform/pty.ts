@@ -1,10 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { spawn } from "node-pty";
-import { endUnixTree, endWindowsTree } from "./process-tree.ts";
+import { endUnixTree, endWindowsTree, forceKillGraceMs } from "./process-tree.ts";
 import type { ResolvedCommand } from "./tools.ts";
 
 export interface PtyProcess {
-  readonly pid: number;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   pause(): void;
@@ -13,8 +12,6 @@ export interface PtyProcess {
   onData(listener: (data: string) => void): void;
   onExit(listener: (exitCode: number) => void): void;
 }
-
-const forceKillGraceMs = 2000;
 
 export function spawnPty(
   command: ResolvedCommand,
@@ -41,7 +38,6 @@ export function spawnPty(
     if (!ended) pty.kill();
   };
   return {
-    pid: pty.pid,
     write(data) {
       if (!ended) pty.write(data);
     },

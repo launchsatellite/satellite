@@ -1,7 +1,7 @@
 import { execFile, type ChildProcess } from "node:child_process";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
-import { endWindowsTree } from "./process-tree.ts";
+import { endWindowsTree, forceKillGraceMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -20,7 +20,6 @@ export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
   claude: "SATELLITE_CLAUDE",
 };
 
-const forceKillGraceMs = 2000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 
 function stopChild(child: ChildProcess): void {
@@ -78,7 +77,7 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { cwd?: string; timeoutMs?: number } = {},
+  options: { timeoutMs?: number } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
@@ -89,7 +88,6 @@ export async function runTool(
       command.file,
       [...command.args, ...args],
       {
-        cwd: options.cwd,
         env,
         shell: false,
         windowsHide: true,

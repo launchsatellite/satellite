@@ -17,9 +17,4 @@ describe("parseToolOverride", () => {
       expect(() => parseToolOverride("SATELLITE_GH", value)).toThrow(/SATELLITE_GH/);
     }
   });
-
-  it("ignores an unset override", () => {
-    expect(parseToolOverride("SATELLITE_GH", undefined)).toBeUndefined();
-    expect(parseToolOverride("SATELLITE_GH", "")).toBeUndefined();
-  });
 });

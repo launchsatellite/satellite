@@ -46,7 +46,6 @@ describe("createTerminalSessions", () => {
       };
       ptys.push(fake);
       return {
-        pid: 1,
         resize: vi.fn(),
         pause: vi.fn(),
         resume: vi.fn(),
@@ -167,5 +166,28 @@ describe("createTerminalSessions", () => {
     await expect(
       handlers["terminal.start"]({ id: terminalId(17), ...size }, mine),
     ).rejects.toMatchObject({ code: "limit" });
+  });
+
+  it("counts a terminal that is still being killed against the limit", async () => {
+    const { handlers } = createTerminalSessions();
+    const { mine } = owners();
+    for (let index = 1; index <= 16; index += 1) {
+      await handlers["terminal.start"]({ id: terminalId(index), ...size }, mine);
+    }
+    ptys[0]?.kill.mockImplementation(() => new Promise<void>(() => undefined));
+    await handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    await expect(
+      handlers["terminal.start"]({ id: terminalId(17), ...size }, mine),
+    ).rejects.toMatchObject({ code: "limit" });
+  });
+
+  it("refuses a new terminal once quitting has begun", async () => {
+    const sessions = createTerminalSessions();
+    const { mine } = owners();
+    await sessions.closeAll();
+    await expect(
+      sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine),
+    ).rejects.toMatchObject({ code: "failed" });
+    expect(ptys).toHaveLength(0);
   });
 });

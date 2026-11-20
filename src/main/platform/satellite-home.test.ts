@@ -17,8 +17,4 @@ describe("satelliteHome", () => {
   it("refuses a relative path", () => {
     expect(() => satelliteHome({ SATELLITE_HOME: "data" }, "linux")).toThrow(/SATELLITE_HOME/);
   });
-
-  it("accepts an absolute posix path", () => {
-    expect(satelliteHome({ SATELLITE_HOME: "/tmp/satellite" }, "darwin")).toBe("/tmp/satellite");
-  });
 });

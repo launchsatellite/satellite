@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -10,6 +11,10 @@ interface ProcessEntry {
 }
 
 const listTimeoutMs = 1000;
+const psPaths = ["/bin/ps", "/usr/bin/ps"];
+
+export const forceKillGraceMs = 2000;
+export const treeKillBoundMs = forceKillGraceMs + 2 * listTimeoutMs;
 const processLine = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/;
 
 function signal(pid: number, name: NodeJS.Signals): void {
@@ -21,9 +26,11 @@ function signal(pid: number, name: NodeJS.Signals): void {
 }
 
 function listProcesses(): Promise<ProcessEntry[]> {
+  const ps = psPaths.find((path) => existsSync(path));
+  if (ps === undefined) return Promise.resolve([]);
   return new Promise((resolve) => {
     execFile(
-      "ps",
+      ps,
       ["-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=", "-o", "lstart="],
       { encoding: "utf8", timeout: listTimeoutMs, maxBuffer: 16 * 1024 * 1024 },
       (error, stdout) => {

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
 
 const marker = "__SATELLITE_ENV__";
 const droppedKeys = new Set(["PWD", "OLDPWD", "SHLVL", "_"]);
@@ -30,7 +30,13 @@ function readLoginEnvironment(): Promise<Record<string, string>> {
     const shell = execFile(
       loginShell(),
       ["-i", "-l", "-c", `printf ${marker}; command env -0; printf ${marker}`],
-      { encoding: "utf8", timeout: 5000, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 },
+      {
+        cwd: homedir(),
+        encoding: "utf8",
+        timeout: 5000,
+        killSignal: "SIGKILL",
+        maxBuffer: 1024 * 1024,
+      },
       (_error, stdout) => {
         const parsed = parseEnvironmentBlock(stdout);
         resolve(parsed === undefined ? inherited : { ...inherited, ...parsed });
