@@ -2,7 +2,14 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { isFullyQualified, isInsidePath, isNetworkPath, resolveInside, samePath } from "./paths.ts";
+import {
+  isDevicePath,
+  isFullyQualified,
+  isInsidePath,
+  isNetworkPath,
+  resolveInside,
+  samePath,
+} from "./paths.ts";
 
 const isWindows = process.platform === "win32";
 
@@ -86,6 +93,9 @@ describe("samePath", () => {
     expect(isNetworkPath("\\\\server\\share\\repo", "win32")).toBe(true);
     expect(isNetworkPath("C:\\repo", "win32")).toBe(false);
     expect(isNetworkPath("//server/share", "linux")).toBe(false);
+    expect(isDevicePath("\\\\?\\C:\\repo", "win32")).toBe(true);
+    expect(isDevicePath("\\\\server\\share", "win32")).toBe(false);
+    expect(isDevicePath("//?/C:/repo", "linux")).toBe(false);
   });
 
   it("finds a folder inside another with the case folding of samePath", () => {

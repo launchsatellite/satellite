@@ -27,7 +27,11 @@ export function isFullyQualified(
   platform: NodeJS.Platform = process.platform,
 ): boolean {
   if (platform !== "win32") return posix.isAbsolute(path);
-  return windowsFullyQualified.test(path) && !windowsDevicePath.test(path);
+  return windowsFullyQualified.test(path) && !isDevicePath(path, platform);
+}
+
+export function isDevicePath(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32" && windowsDevicePath.test(path);
 }
 
 export function isNetworkPath(path: string, platform: NodeJS.Platform = process.platform): boolean {
