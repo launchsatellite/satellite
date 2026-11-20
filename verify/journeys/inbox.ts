@@ -96,23 +96,40 @@ async function recorded(
   return lines;
 }
 
-async function lastCount(session: AppSession, expected: number, when: string): Promise<void> {
+async function countsAre(session: AppSession, expected: number[], when: string): Promise<void> {
   let counts: number[] = [];
+  const failure = () =>
+    `${when} the app icon counts were ${JSON.stringify(counts)}, not ${JSON.stringify(expected)}`;
   await waitUntil(
     async () => {
       counts = countsOf(await session.notices());
-      return counts.at(-1) === expected;
+      return counts.length >= expected.length;
     },
     promptTimeoutMs,
-    () =>
-      `${when} the app icon counts were ${JSON.stringify(counts)}, not ending in ${String(expected)}`,
+    failure,
   );
+  assert.deepEqual(counts, expected, failure());
 }
 
 async function stillShown(session: AppSession, expected: Shown[], when: string): Promise<void> {
   await delay(settleMs);
   const shown = shownOf(await session.notices());
   assert.deepEqual(shown, expected, `${when} the recorder held ${JSON.stringify(shown)}`);
+}
+
+async function rowsAre(session: AppSession, expected: string[]): Promise<void> {
+  const rows = session.page.getByTestId("inbox").locator("button");
+  let order: string[] = [];
+  await waitUntil(
+    async () => {
+      order = await rows.evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("data-testid") ?? ""),
+      );
+      return order.join() === expected.join();
+    },
+    promptTimeoutMs,
+    () => `the inbox listed ${JSON.stringify(order)} instead of ${JSON.stringify(expected)}`,
+  );
 }
 
 async function select(session: AppSession, name: string): Promise<void> {
@@ -206,13 +223,17 @@ async function firstNeed(session: AppSession): Promise<number> {
   const asked = (await session.standInEvents()).length;
   await page.getByTestId("new-session").click();
   await visible(session, "session-tab-2", "after a second session in alpha");
-  await terminalShows(session, "Claude Code stand-in", "in alpha's second tab");
+  await waitUntil(
+    async () => (await claudePids(session)).length === 2,
+    promptTimeoutMs,
+    "alpha's second tab started no stand-in",
+  );
   await select(session, "beta");
   await visible(session, "inbox-repo-alpha", "with beta selected");
   await textIs(session, "inbox-repo-alpha-reason", "Session 1 needs you.", "with beta selected");
   await textIs(session, "inbox-count", "1", "with alpha asking");
-  const lines = await recorded(session, [alphaNotice], "after alpha asked,");
-  assert.deepEqual(countsOf(lines).slice(1), [1], "the app icon did not count alpha");
+  await recorded(session, [alphaNotice], "after alpha asked,");
+  await countsAre(session, [0, 1], "after alpha asked,");
   await stillShown(
     session,
     [alphaNotice],
@@ -224,13 +245,26 @@ async function firstNeed(session: AppSession): Promise<number> {
 async function openAndAnswer(session: AppSession, asked: number): Promise<void> {
   await openRow(session, "alpha");
   await terminalShows(session, "Allow Bash for both", "on the tab the inbox opened");
-  const typed = await standInInput(session, asked);
-  assert.equal(typed, "", `opening alpha from the inbox typed ${JSON.stringify(typed)}`);
+  await session.page.keyboard.press("z");
+  let typed = "";
+  await waitUntil(
+    async () => {
+      typed = await standInInput(session, asked);
+      return typed.includes("z");
+    },
+    promptTimeoutMs,
+    () => `the marker key never reached alpha's stand-in, which read ${JSON.stringify(typed)}`,
+  );
+  assert.equal(
+    typed,
+    "z",
+    `opening alpha from the inbox typed ${JSON.stringify(typed)} before the marker`,
+  );
   await session.page.keyboard.press("y");
   await terminalShows(session, "Allowed.", "after allowing in alpha");
   await visible(session, "inbox-empty", "after alpha was answered");
   await recorded(session, [alphaNotice, closed], "after alpha was answered,");
-  await lastCount(session, 0, "after alpha was answered,");
+  await countsAre(session, [0, 1, 0], "after alpha was answered,");
 }
 
 async function askAgainAndFold(session: AppSession): Promise<void> {
@@ -256,6 +290,7 @@ async function askAgainAndFold(session: AppSession): Promise<void> {
   for (const name of ["alpha", "beta", "main"]) {
     await visible(session, `inbox-repo-${name}`, "after three workspaces asked");
   }
+  await rowsAre(session, ["inbox-repo-main", "inbox-repo-beta", "inbox-repo-alpha"]);
   const took = Date.now() - started;
   assert.ok(
     took < noticeGapMs,
@@ -267,7 +302,7 @@ async function askAgainAndFold(session: AppSession): Promise<void> {
     [alphaNotice, closed, alphaNotice, closed, foldedNotice],
     "after alpha asked again and beta and main asked in its gap,",
   );
-  await lastCount(session, 3, "with three workspaces asking,");
+  await countsAre(session, [0, 1, 0, 1, 2, 3], "with three workspaces asking,");
   await session.screenshot("inbox-three");
   await answer(session, "beta", "Allowed.");
   await answer(session, "main", "Allowed.");
@@ -276,7 +311,7 @@ async function askAgainAndFold(session: AppSession): Promise<void> {
     [alphaNotice, closed, alphaNotice, closed, foldedNotice, closed],
     "after beta and main were answered,",
   );
-  await lastCount(session, 1, "with only alpha asking,");
+  await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1], "with only alpha asking,");
 }
 
 async function switchedOff(session: AppSession): Promise<void> {
@@ -288,18 +323,18 @@ async function switchedOff(session: AppSession): Promise<void> {
   await select(session, "alpha");
   await terminalShows(session, "Allow Bash again", "with alpha already shown");
   await answer(session, "alpha", "Allowed again.");
-  await lastCount(session, 0, "after alpha was answered again,");
+  await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1, 0], "after alpha was answered again,");
   await page.keyboard.press("Enter");
   await terminalShows(session, "Allow Bash once more", "after alpha's next Enter");
   await visible(session, "inbox-repo-alpha", "with notifications off");
   await textIs(session, "inbox-count", "1", "with notifications off");
-  await lastCount(session, 1, "with notifications off,");
+  await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1, 0, 1], "with notifications off,");
   await stillShown(session, before, "with notifications off and alpha asking,");
   await page.keyboard.press("y");
   await terminalShows(session, "Done.", "after the last approval");
   await stateIs(session, "workspace-repo-alpha-status", "done", "after the turn ended");
   await visible(session, "inbox-empty", "after alpha was done");
-  await lastCount(session, 0, "after alpha was done,");
+  await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1, 0, 1, 0], "after alpha was done,");
 }
 
 async function askedAtQuit(session: AppSession): Promise<void> {
@@ -316,6 +351,7 @@ async function askedAtQuit(session: AppSession): Promise<void> {
     [alphaNotice, closed, alphaNotice, closed, foldedNotice, closed, betaNotice],
     "after notifications came back on and beta asked,",
   );
+  await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1, 0, 1, 0, 1], "after beta asked again,");
   await commandMenu(session);
   await page.getByTestId("command-notifications-off").click();
   await toastReads(session, turnedOff, "after turning notifications off again,");
@@ -354,7 +390,11 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
   await terminalShows(session, "Allow Bash for both", "in beta after the restart");
   await visible(session, "inbox-repo-beta", "with beta asking after the restart");
   await textIs(session, "inbox-count", "1", "with beta asking after the restart");
-  await lastCount(session, 1, "with beta asking after the restart,");
+  await countsAre(
+    session,
+    [0, 1, 0, 1, 2, 3, 2, 1, 0, 1, 0, 1, 0, 0, 1],
+    "with beta asking after the restart,",
+  );
   await delay(settleMs);
   const shown = shownOf((await session.notices()).slice(before));
   assert.deepEqual(
