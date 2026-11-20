@@ -150,7 +150,10 @@ async function hasModulesFolder(folder: string): Promise<boolean | undefined> {
 async function submodulesIn(folder: string, index: IndexRead | undefined): Promise<Submodules> {
   const modules = await hasModulesFolder(folder);
   if (modules === true) return "checked-out";
-  if (modules === undefined || index === undefined) return "unknown";
+  if (modules === undefined) return "unknown";
+  if (index === undefined) {
+    return (await exists(join(folder, ".gitmodules"))) ? "unknown" : "none";
+  }
   if (index.gitlinks.length > gitlinkChecks) return "unknown";
   for (const path of index.gitlinks) {
     const parts = path.split("/");
