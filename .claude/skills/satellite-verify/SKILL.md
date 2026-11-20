@@ -39,7 +39,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `paste=<text>` | dispatches a paste event with the text on the focused element, failing when nothing has focus | the focused test id |
 | `paste-size=<n>` | pastes `n` generated characters, `abc…xyz0…9` repeated, up to 1000000 | the focused test id |
 | `resize=<width>x<height>` | sets the viewport size | |
-| `theme=light` or `theme=dark` | emulates the system color scheme, which also hides the theme chosen in Satellite. Without it the window follows the real system and the chosen theme | |
+| `theme=light` or `theme=dark` | emulates the system color scheme, which also hides the theme chosen in Satellite. Without it the window shows the theme the scenario seeds, or the real system's when it seeds none | |
 | `wait=<ms>` | waits, up to 60000 | |
 | `wait-for=<testid>` | waits up to 60 seconds for an element to be visible | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
@@ -58,7 +58,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 
 - `description` says what world it sets up.
 - `repo` builds the throwaway repo in order. `{ "write": { "path", "content" } }` writes a file inside it and `{ "git": [args] }` runs the real `git` there, with no system config and a global config naming `Satellite Verify`.
-- `home` optionally lists `{ path, content }` files written inside the Satellite home before launch, with the same confinement as the repo's writes, such as a cut off `interface.json`.
+- `home` optionally lists `{ path, content }` files written inside the Satellite home before launch, with the same confinement as the repo's writes, such as a cut off `interface.json`. A scenario seeds `interface.json` with `"theme": "light"` unless its description says otherwise, so its screenshots never depend on the machine's own setting.
 - `gh` lists canned answers, `{ args, stdout?, stderr?, exitCode? }`. The stand-in answers the first entry whose `args` equal its own exactly.
 - `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`.
 
