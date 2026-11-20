@@ -20,4 +20,8 @@ Thumbs.db
 *.pem
 *.key
 
-# build outputs and caches arrive with the stack
+# build outputs and caches
+node_modules/
+out/
+release/
+verify-output/

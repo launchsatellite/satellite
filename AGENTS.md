@@ -4,19 +4,14 @@ Rules for every agent working on Satellite. People follow the same rules ([CONTR
 
 You work autonomously and fast on your own branch, without asking about routine things. A human reviews and merges every change. You never merge, never approve, never push to `main` and never weaken a guard.
 
-<!-- stack:pending -->
-
-> **No stack yet.** The product is still being specified and nothing is built. The first spec chooses the stack, wires its checks into `./scripts/check` and CI, writes the stack skill, fills the Map and Commands below and deletes this note.
-
-<!-- /stack:pending -->
-
 ## Read first, only as far as the task needs
 
 1. `SATELLITE.md`, what the product is and why. It is the source of truth, so when code and doc disagree, say so and never drift silently.
 2. `specs/README.md`, how features are specified and shipped. Your feature lives in `specs/NNN-<slug>/`.
-3. The skill for the area you touch, in `.claude/skills/`.
+3. `ARCHITECTURE.md`, the parts, the bridge and the security boundary, and skill `satellite-stack` for where code goes and how it runs.
+4. The skill for the area you touch, in `.claude/skills/`, and `DESIGN.md` for anything people see.
 
-`ARCHITECTURE.md` and `DESIGN.md` sit at the root once they exist. Docs never go in a `docs/` folder.
+Every doc sits at the root. Docs never go in a `docs/` folder.
 
 ## Map
 
@@ -24,7 +19,14 @@ You work autonomously and fast on your own branch, without asking about routine 
 | --- | --- |
 | `specs/` | numbered feature specs, the template and the index |
 | `.claude/skills/` | how to work here, one folder per skill |
-| `scripts/check` | the green checkpoint |
+| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu |
+| `src/preload/` | the preload that exposes `window.satellite` |
+| `src/renderer/` | the sandboxed interface, React and Tailwind, one folder per feature plus `ui/` |
+| `src/shared/` | the bridge contract and other code both processes import |
+| `verify/` | the driver, scenarios, stand-ins and journeys that prove changes in the real app |
+| `lint/` | the `no-comments` lint rule |
+| `packaging/` | the app icon electron-builder packages |
+| `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer and the licence notices step |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 
 A new top-level folder gets a row here in the same change.
@@ -35,14 +37,21 @@ A new top-level folder gets a row here in the same change.
 | --- | --- |
 | `satellite-workflow` | starting, building or finishing any change, from spec to pull request and until it is merged |
 | `satellite-conventions` | writing or reviewing any code, including when a test is worth writing |
+| `satellite-stack` | adding or changing code in any part, to know where it goes, how the processes talk, how to run, build and package it, and which dependency rules apply |
+| `satellite-verify` | proving a change in the real window, writing a scenario or a stand-in step, or adding a journey |
 
 Our own skills are named `satellite-<area>`, so they are easy to find. Write or fix one in the same change whenever you explain something twice or learn how an area really works. A skill is one folder with a `SKILL.md`, frontmatter `name` equal to the folder and a one-line `description` that starts with "Use when", plus a row here. Create a skill only when its area exists.
 
 ## Commands
 
 ```sh
-./scripts/check    # the green checkpoint, guards plus the stack's format, lint, typecheck and tests
-./guards/test.sh   # proves every guard still fires
+npm ci                                           # install, also restores the pty helper and fetches Electron
+npm run dev                                      # the app with hot reload
+npm run --silent verify -- <scenario> [step ...] # launch the real app in a scenario and print JSON
+npm run journeys                                 # the journeys against the built app
+npm run build && npm run package                 # installers for this machine in release/
+./scripts/check                                  # the green checkpoint, guards, format, lint, typecheck and tests
+./guards/test.sh                                 # proves every guard still fires
 ```
 
 ## Autonomy

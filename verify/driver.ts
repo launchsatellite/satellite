@@ -1,0 +1,510 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, unlinkSync } from "node:fs";
+import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { constants, tmpdir } from "node:os";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { stripVTControlCharacters } from "node:util";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { endWindowsTree } from "../src/main/platform/process-tree.ts";
+import { buildRepo, withoutGitVariables } from "./repo-recipe.ts";
+import { loadScenario, type RepoStep } from "./scenario.ts";
+import { readStandInEvents, type StandInEvent } from "./stand-ins/stand-in-log.ts";
+
+export type AppTarget =
+  { kind: "built" } | { kind: "dev" } | { kind: "packaged"; executable: string };
+export interface LaunchOptions {
+  scenario: string;
+  target: AppTarget;
+  realClaude?: boolean;
+  keep?: boolean;
+}
+export interface CloseResult {
+  exitedOnItsOwn: boolean;
+  leftover?: string;
+}
+export interface AppSession {
+  page: Page;
+  home: string;
+  repo: string;
+  standInEvents(): Promise<StandInEvent[]>;
+  consoleErrors: string[];
+  screenshot(name: string): Promise<string>;
+  close(): Promise<CloseResult>;
+}
+export interface WindowTree {
+  aria: string;
+  testIds: { testId: string; visible: boolean; text: string }[];
+}
+interface AppCommand {
+  file: string;
+  args: string[];
+  cwd: string;
+  origin: string;
+}
+
+const repoRoot = join(import.meta.dirname, "..");
+const electronVite = join(repoRoot, "node_modules/electron-vite/bin/electron-vite.js");
+const devElectron = join(import.meta.dirname, "dev-electron.ts");
+const startTimeoutMs = 60_000;
+const exitTimeoutMs = 10_000;
+const pageCallTimeoutMs = 5_000;
+const outputTailLength = 4000;
+const consoleErrorLimit = 200;
+const textLimit = 2000;
+const devToolsLine = /DevTools listening on (ws:\/\/\S+)/;
+const shotName = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const strippedVariables = new Set([
+  "ELECTRON_RUN_AS_NODE",
+  "NODE_OPTIONS",
+  "SATELLITE_CLAUDE",
+  "CLAUDECODE",
+]);
+const strippedPrefixes = ["CLAUDE_CODE_"];
+const stopSignals: NodeJS.Signals[] =
+  process.platform === "win32"
+    ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
+    : ["SIGINT", "SIGTERM", "SIGHUP"];
+const cleanups = new Set<() => Promise<unknown>>();
+let signalHandlersInstalled = false;
+let stopping = false;
+
+const outputFolder = join(repoRoot, "verify-output");
+const lockFile = join(outputFolder, "run.lock");
+const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+let lockHeld = false;
+
+export const outputDir = outputFolder;
+
+async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
+  if (stopping) return;
+  stopping = true;
+  await Promise.allSettled([...cleanups].map((cleanup) => cleanup()));
+  process.exit(128 + constants.signals[signal]);
+}
+
+function stopOnSignals(): void {
+  if (signalHandlersInstalled) return;
+  signalHandlersInstalled = true;
+  for (const signal of stopSignals) {
+    process.on(signal, () => {
+      void stopForSignal(signal);
+    });
+  }
+}
+
+function releaseLock(): void {
+  try {
+    if (readFileSync(lockFile, "utf8") === String(process.pid)) unlinkSync(lockFile);
+  } catch {
+    return;
+  }
+}
+
+async function takeLock(): Promise<boolean> {
+  try {
+    const handle = await open(lockFile, "wx");
+    await handle.writeFile(String(process.pid));
+    await handle.close();
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") return false;
+    throw error;
+  }
+}
+
+async function holdCheckoutLock(): Promise<void> {
+  if (lockHeld) return;
+  await mkdir(outputDir, { recursive: true });
+  if (!(await takeLock())) {
+    const owner = Number(await readFile(lockFile, "utf8").catch(() => ""));
+    if (Number.isInteger(owner) && owner > 0 && isProcessAlive(owner)) {
+      throw new Error(
+        `another verify run (process ${String(owner)}) is using this checkout. Wait for it to finish or run from your own worktree.`,
+      );
+    }
+    await unlink(lockFile).catch(() => undefined);
+    if (!(await takeLock())) throw new Error("another verify run took this checkout just now");
+  }
+  lockHeld = true;
+  process.once("exit", releaseLock);
+}
+
+function command(target: AppTarget, repo: string): AppCommand {
+  const debugging = "--remote-debugging-port=0";
+  const origin = "app://satellite";
+  if (target.kind === "built") {
+    return { file: electronBinary(), args: [repoRoot, debugging], cwd: repo, origin };
+  }
+  if (target.kind === "packaged") {
+    return { file: target.executable, args: [debugging], cwd: repo, origin };
+  }
+  return {
+    file: process.execPath,
+    args: [electronVite, "dev", "--entry", devElectron, "--", repo, debugging],
+    cwd: repoRoot,
+    origin: "http://localhost:",
+  };
+}
+
+function standIn(tool: "claude" | "gh"): string {
+  return JSON.stringify([process.execPath, join(import.meta.dirname, "stand-ins", `${tool}.ts`)]);
+}
+
+function isStripped(key: string): boolean {
+  const upper = key.toUpperCase();
+  return (
+    strippedVariables.has(upper) || strippedPrefixes.some((prefix) => upper.startsWith(prefix))
+  );
+}
+
+function appEnvironment(
+  options: LaunchOptions,
+  home: string,
+  log: string,
+): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = Object.fromEntries(
+    Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
+  );
+  if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
+  env["SATELLITE_HOME"] = home;
+  env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
+  env["SATELLITE_VERIFY_LOG"] = log;
+  env["SATELLITE_GH"] = standIn("gh");
+  if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
+  return env;
+}
+
+function hasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function killTree(child: ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+  if (process.platform !== "win32") {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
+    return;
+  }
+  if (hasExited(child)) return;
+  void endWindowsTree(pid);
+}
+
+async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (hasExited(child)) return true;
+  const exited = new Promise<boolean>((resolve) =>
+    child.once("exit", () => {
+      resolve(true);
+    }),
+  );
+  return Promise.race([exited, delay(timeoutMs, false, { ref: false })]);
+}
+
+function waitForDevTools(child: ChildProcess, output: () => string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      fail(`the app printed no DevTools address within ${String(startTimeoutMs / 1000)} seconds`);
+    }, startTimeoutMs);
+    const onData = (): void => {
+      const match = devToolsLine.exec(output());
+      if (match?.[1] === undefined) return;
+      cleanup();
+      resolve(match[1]);
+    };
+    const onExit = (code: number | null): void => {
+      fail(`the app exited with code ${String(code)} before it opened`);
+    };
+    const onError = (error: Error): void => {
+      fail(`the app could not start. ${error.message}`);
+    };
+    function cleanup(): void {
+      clearTimeout(timer);
+      child.stderr?.off("data", onData);
+      child.off("exit", onExit);
+      child.off("error", onError);
+    }
+    function fail(reason: string): void {
+      cleanup();
+      reject(new Error(reason));
+    }
+    child.stderr?.on("data", onData);
+    child.once("exit", onExit);
+    child.once("error", onError);
+  });
+}
+
+async function prepareFolders(
+  temp: string,
+  home: string,
+  repo: string,
+  steps: RepoStep[],
+): Promise<void> {
+  const gitconfig = join(temp, "gitconfig");
+  await mkdir(home);
+  await mkdir(repo);
+  await writeFile(
+    gitconfig,
+    "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
+  );
+  await buildRepo(repo, steps, {
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: gitconfig,
+    GIT_TERMINAL_PROMPT: "0",
+  });
+}
+
+async function forceStop(child: ChildProcess): Promise<void> {
+  killTree(child);
+  await waitForExit(child, exitTimeoutMs);
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+}
+
+async function removeTemp(temp: string, keep: boolean | undefined): Promise<string | undefined> {
+  if (keep === true) return undefined;
+  try {
+    await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    return undefined;
+  } catch {
+    return temp;
+  }
+}
+
+function appPage(browser: Browser, origin: string): Page | undefined {
+  return browser
+    .contexts()
+    .flatMap((context) => context.pages())
+    .find((candidate) => candidate.url().startsWith(origin));
+}
+
+async function findAppPage(browser: Browser, origin: string): Promise<Page> {
+  const deadline = Date.now() + startTimeoutMs;
+  while (Date.now() < deadline) {
+    const page = appPage(browser, origin);
+    if (page !== undefined) return page;
+    await delay(100);
+  }
+  throw new Error(`no page with origin ${origin} appeared`);
+}
+
+function recordErrors(context: BrowserContext, consoleErrors: string[]): void {
+  const record = (text: string): void => {
+    if (consoleErrors.length < consoleErrorLimit) consoleErrors.push(text);
+  };
+  context.on("console", (message) => {
+    if (message.type() === "error") record(message.text());
+  });
+  context.on("weberror", (error) => {
+    record(error.error().message);
+  });
+}
+
+export class LaunchFailure extends Error {
+  output = "";
+  consoleErrors: string[] = [];
+  tree: WindowTree | string | undefined;
+  home: string | undefined;
+  repo: string | undefined;
+}
+
+export function errorReason(error: unknown): string {
+  return stripVTControlCharacters(error instanceof Error ? error.message : String(error));
+}
+
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): Promise<T> {
+  const controller = new AbortController();
+  const timeout = delay(timeoutMs, undefined, { signal: controller.signal }).then(() => {
+    throw new Error(`${what} did not finish within ${String(timeoutMs / 1000)} seconds`);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    controller.abort();
+  });
+}
+
+export async function readTree(page: Page): Promise<WindowTree> {
+  const aria = await page.locator("body").ariaSnapshot({ timeout: pageCallTimeoutMs });
+  const testIds = await withTimeout(
+    page.locator("[data-testid]").evaluateAll(
+      (elements, limit) =>
+        elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          const text = element instanceof HTMLElement ? element.innerText : element.textContent;
+          return {
+            testId: element.getAttribute("data-testid") ?? "",
+            visible:
+              box.width > 0 &&
+              box.height > 0 &&
+              element.checkVisibility({ visibilityProperty: true }),
+            text: text.slice(0, limit),
+          };
+        }),
+      textLimit,
+    ),
+    pageCallTimeoutMs,
+    "reading the window",
+  );
+  return { aria, testIds };
+}
+
+export function electronBinary(): string {
+  const binary: unknown = createRequire(import.meta.url)("electron");
+  if (typeof binary !== "string") throw new Error("the electron package did not name its binary");
+  return binary;
+}
+
+export async function buildApp(): Promise<void> {
+  stopOnSignals();
+  await holdCheckoutLock();
+  const child = spawn(process.execPath, [electronVite, "build"], {
+    cwd: repoRoot,
+    stdio: ["ignore", 2, 2],
+  });
+  const cleanup = async (): Promise<void> => {
+    child.kill("SIGKILL");
+    await waitForExit(child, exitTimeoutMs);
+  };
+  cleanups.add(cleanup);
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", resolve);
+    });
+    if (code !== 0) throw new Error(`electron-vite build failed with code ${String(code)}`);
+  } finally {
+    cleanups.delete(cleanup);
+  }
+}
+
+export async function launchApp(options: LaunchOptions): Promise<AppSession> {
+  stopOnSignals();
+  if (options.target.kind !== "packaged") await holdCheckoutLock();
+  const { scenario } = await loadScenario(options.scenario);
+  const temp = await realpath(await mkdtemp(join(tmpdir(), "satellite-verify-")));
+  const home = join(temp, "home");
+  const repo = join(temp, "repo");
+  const log = join(temp, "stand-ins.jsonl");
+  const shots = join(
+    outputDir,
+    `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+  );
+  const consoleErrors: string[] = [];
+  let output = "";
+  let child: ChildProcess | undefined;
+  let browser: Browser | undefined;
+  let page: Page | undefined;
+  const abandon = async (): Promise<string | undefined> => {
+    if (child !== undefined) await forceStop(child);
+    await withTimeout(
+      browser?.close() ?? Promise.resolve(),
+      pageCallTimeoutMs,
+      "disconnecting",
+    ).catch(() => undefined);
+    return removeTemp(temp, options.keep);
+  };
+  cleanups.add(abandon);
+  try {
+    await prepareFolders(temp, home, repo, scenario.repo);
+    const { file, args, cwd, origin } = command(options.target, repo);
+    child = spawn(file, args, {
+      cwd,
+      env: appEnvironment(options, home, log),
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+      windowsHide: true,
+    });
+    const collect = (chunk: Buffer): void => {
+      output = (output + chunk.toString()).slice(-outputTailLength);
+    };
+    child.stdout?.on("data", collect);
+    child.stderr?.on("data", collect);
+    const address = await waitForDevTools(child, () => output);
+    browser = await chromium.connectOverCDP(address, { timeout: startTimeoutMs });
+    for (const context of browser.contexts()) recordErrors(context, consoleErrors);
+    page = await findAppPage(browser, origin);
+    await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
+  } catch (error) {
+    const failure = new LaunchFailure(errorReason(error), { cause: error });
+    failure.output = output;
+    failure.consoleErrors = consoleErrors;
+    failure.tree =
+      page === undefined
+        ? undefined
+        : await readTree(page).catch((treeError: unknown) => errorReason(treeError));
+    failure.home = home;
+    failure.repo = repo;
+    await abandon();
+    cleanups.delete(abandon);
+    throw failure;
+  }
+  const appPageReady = page;
+  const app = child;
+  const connection = browser;
+  let closing: Promise<CloseResult> | undefined;
+  const closeOnce = async (): Promise<CloseResult> => {
+    await withTimeout(
+      appPageReady.evaluate(() => {
+        window.close();
+      }),
+      pageCallTimeoutMs,
+      "closing the window",
+    ).catch(() => undefined);
+    const exitedOnItsOwn = await waitForExit(app, exitTimeoutMs);
+    await forceStop(app);
+    await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
+      () => undefined,
+    );
+    const leftover = await removeTemp(temp, options.keep);
+    cleanups.delete(abandon);
+    return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
+  };
+  return {
+    page: appPageReady,
+    home,
+    repo,
+    consoleErrors,
+    standInEvents: () => readStandInEvents(log),
+    async screenshot(name) {
+      if (!shotName.test(name)) throw new Error(`screenshot name ${name} must be kebab-case`);
+      const path = join(shots, `${name}.png`);
+      await mkdir(shots, { recursive: true });
+      await appPageReady.screenshot({ path, timeout: startTimeoutMs });
+      return path;
+    },
+    close() {
+      closing ??= closeOnce();
+      return closing;
+    },
+  };
+}
+
+export function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
+}
+
+export function generatedText(size: number): string {
+  return pasteAlphabet.repeat(Math.ceil(size / pasteAlphabet.length)).slice(0, size);
+}
+
+export async function pasteIntoFocus(page: Page, text: string): Promise<string | undefined> {
+  const target = await page.evaluate((data) => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return null;
+    const transfer = new DataTransfer();
+    transfer.setData("text/plain", data);
+    active.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+    );
+    return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
+  }, text);
+  return target ?? undefined;
+}

@@ -5,7 +5,7 @@ description: "Use when writing or reviewing any code in Satellite. Working princ
 
 # Satellite conventions
 
-Binding from the first line written. Stack rules arrive in their own skill with the first spec.
+Binding from the first line written. Where code goes and how it runs is in skill `satellite-stack`.
 
 ## Working principles
 

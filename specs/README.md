@@ -38,7 +38,7 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 
 | # | Spec | Status |
 | --- | --- | --- |
-| 001 | [Foundation](001-foundation/spec.md) | Approved |
+| 001 | [Foundation](001-foundation/spec.md) | Done |
 | 002 | [Shell and projects](002-shell-and-projects/spec.md) | Approved |
 | 003 | [Workspaces](003-workspaces/spec.md) | Approved |
 | 004 | [Claude Code sessions](004-claude-code-sessions/spec.md) | Approved |

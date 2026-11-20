@@ -1,0 +1,45 @@
+appId: app.satellite.desktop
+productName: Satellite
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+  buildResources: packaging
+files:
+  - out/**
+  - package.json
+  - "!node_modules/node-pty/prebuilds/!(${platform}-${arch})/**"
+  - "!node_modules/node-pty/{deps,src,scripts,third_party}/**"
+  - "!node_modules/node-addon-api/**"
+  - "!**/*.test.js"
+  - "!**/*.map"
+  - "!out/renderer/third-party-licenses.md"
+extraResources:
+  - from: out/renderer/third-party-licenses.md
+    to: third-party-licenses.md
+asar:
+  smartUnpack: false
+asarUnpack:
+  - node_modules/node-pty/prebuilds/**
+  - node_modules/node-pty/build/Release/**
+npmRebuild: false
+publish: null
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+mac:
+  target: [dmg, zip]
+  category: public.app-category.developer-tools
+  identity: "-"
+  hardenedRuntime: false
+win:
+  target: nsis
+linux:
+  target: [AppImage, deb]
+  category: Development
+  executableName: satellite
+  maintainer: Satellite

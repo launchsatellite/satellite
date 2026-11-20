@@ -1,0 +1,154 @@
+# Architecture
+
+How Satellite is put together and where its security boundary runs. `SATELLITE.md` owns what the product does and `DESIGN.md` owns how it looks.
+
+## Parts
+
+| Part | Folder | What it does |
+| --- | --- | --- |
+| Background process | `src/main/` | Electron's main process. Full access to the machine. Owns the window, the `app://` protocol, the hardening, the bridge handlers and the platform module. |
+| Preload | `src/preload/` | Runs in the sandboxed preload and exposes `window.satellite`, the only door between the interface and the background process. |
+| Interface | `src/renderer/` | React and Tailwind in a sandboxed renderer with no Node. It draws the three columns and nothing else touches the machine. |
+| Shared | `src/shared/` | Code both sides import, such as the bridge contract and the content security policy. |
+
+electron-vite builds all three into `out/`. Electron starts `out/main/main.js`.
+
+## Security boundary
+
+The interface is treated as untrusted. Whatever it shows can never run a command or read a file.
+
+- **Renderer settings.** `sandbox`, `contextIsolation` and `webSecurity` are on, `nodeIntegration` and `spellcheck` are off. The preload is CommonJS with its dependencies bundled, because a sandboxed preload cannot load ESM or `node_modules`.
+- **Permissions.** Every permission request, permission check, device request and display media request on the default session is denied.
+- **Navigation.** Every web contents refuses `will-navigate`, `will-frame-navigate` and `will-attach-webview`, and its window open handler denies every new window. The one exception is a main frame reload of the window's own entry, allowed only when the target's protocol, host and path equal the entry URL, so hot reload in development and a reload in production work while every other address stays refused.
+- **Content security policy.** `default-src 'none'`, with scripts, styles, images, fonts, connections and workers only from the app itself, images and fonts also from `data:`, and `base-uri`, `form-action`, `frame-ancestors` and `object-src` all `'none'`. Styles allow `'unsafe-inline'` because the terminal and the diff editor insert style elements at run time. In development only, scripts allow `'unsafe-inline'` for the React refresh preamble and connections allow `ws://localhost:*` for hot reload. `src/shared/content-security-policy.ts` builds both, so the dev server and the protocol never drift.
+- **The `app://` protocol.** The interface loads from `app://satellite/index.html`, a standard and secure scheme, never from `file://`. The handler answers only `GET` for host `satellite`, decodes the path and confines it to `out/renderer` with `resolveInside`, which follows symlinks before it checks. It serves regular files only, so a folder is never handed to the file loader. Anything refused gets a 404. Every response, the 404 included, carries the production policy and `X-Content-Type-Options: nosniff`.
+- **Development server.** `ELECTRON_RENDERER_URL` points the window at the dev server only when the app is not packaged, so an environment variable can never aim a packaged app at remote content.
+- **Satellite home.** All state lives in the Satellite home, `~/.satellite` or the path in `SATELLITE_HOME`, which must be fully qualified, with a drive letter or a share on Windows. It is created before the app is ready and set to mode `0700` on every start on macOS and Linux, so an older, looser folder is tightened. Electron's `userData` is `app-data` inside it, so caches and storage never land anywhere else.
+- **Menu.** A minimal menu built from roles only, with no links. The app menu on macOS (about, hide, quit), Edit (undo, redo, cut, copy, paste, select all) and Window (minimize, close). View with reload and developer tools exists only when the app is not packaged. The Edit roles are what make copy and paste work on macOS.
+- **One instance per home.** The app takes Electron's single-instance lock, which Electron scopes to the `userData` folder, so to the Satellite home. A second launch on the same home quits at once and the first window comes to the front. Launches with their own `SATELLITE_HOME`, like every verify run, never collide.
+- **Failed start.** If the Satellite home cannot be prepared, the window cannot be created or its entry cannot load, the background process logs one sentence and exits with code 1, so no process lingers without a window.
+
+## Bridge
+
+The preload exposes two functions on `window.satellite` and nothing else. `invoke(channel, payload)` sends one request over the IPC channel `satellite:bridge` and `onEvent(listener)` receives pushes from `satellite:event`. `src/shared/bridge-contract.ts` holds a zod schema for every request, answer and event.
+
+- **Sender check.** The background process answers only its own window's main frame, and only while that frame shows the app origin, `app://satellite` or the dev server in development, with no user info in the URL. Anything else, including a frame that is already gone, gets `refused-sender`.
+- **Validation first.** Channels are looked up in a `Map`, so names like `__proto__` or `constructor` find nothing. Every payload is parsed with its strict schema before the handler runs, so a wrong type, a missing field or an extra key is refused with `invalid-request`.
+- **Errors.** A handler throws `BridgeFailure` for outcomes the user sees. Any other error is logged in the background process and answered as `failed` with no stack.
+- **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect. One that fails is dropped and logged to the console with its channel or event name and the failing fields, never its payload, so the journeys catch contract drift. Error messages are at most 1000 characters.
+- **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or a new document commits in its main frame, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. A navigation the hardening refuses never commits, so the page and everything it started keep running. A request the old page sends while a reload is still loading lands on the old owner, so nothing a page started outlives it.
+
+| Channel or event | What it does | Limits | Why it is safe |
+| --- | --- | --- | --- |
+| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters. Requests that arrive while a run is going share it, so at most one `--version` per tool runs at a time | Takes no input. The tools run with fixed arguments and no shell, and no number of requests starts more than three processes at once. |
+| `terminal.start` | Starts Claude Code in a terminal with a given id and size | Program must be `claude`, id a UUID, 2 to 500 columns, 1 to 300 rows, 16 terminals | The interface names no executable, path or argument. The background process resolves `claude` itself. |
+| `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches a terminal the same page started. It is exactly typing into Claude Code, so whoever can send it can run anything Claude Code can, its `!` shell included. The integrity of the interface (no remote content, the content security policy, terminal output drawn as text) is what guards command execution. |
+| `terminal.resize` | Resizes a terminal | 2 to 500 columns, 1 to 300 rows | Bounded integers only. |
+| `terminal.close` | Ends a terminal | UUID id | An id is data, never a path or a name. |
+| `terminal.ack` | Tells the background process how much output the terminal has drawn | UUID id, 1 to 65536 characters | Only lowers the count of unacknowledged output for a terminal the same page owns, clamped at what was sent, so a wrong ack can at worst resume output early. |
+| `terminal.data` event | Streams terminal output to the window that owns it | 1 to 65536 characters per event | Shown as text by the terminal and never run. |
+| `terminal.exit` event | Tells the window a terminal ended, with its exit code | Integer exit code, from -2147483648 to 4294967295 | Data only. |
+
+## Platform
+
+`src/main/platform/` is the only code that knows about executables, shells and platform differences.
+
+- **Overrides.** `SATELLITE_GH` and `SATELLITE_CLAUDE` hold a JSON array of strings, the executable then its leading arguments, and replace the search for that tool. Anything else is refused with an error that names the variable. `git` has no override.
+- **Login shell environment.** An app started from the Dock, Finder or a desktop menu inherits a minimal `PATH`. On macOS and Linux Satellite runs the user's login shell once in the home folder, so no project's shell hooks run, interactive with a 5 second limit, reads its environment between two markers and merges it over its own. Whenever both markers come back the block is used, even if the shell exits with an error. Otherwise Satellite falls back to the app's own environment. Windows uses the app's environment as it is.
+- **Search.** Tools are found by walking `PATH` and skipping empty and relative entries, so the current folder is never searched. A match must be a regular file, and executable on macOS and Linux. On Windows surrounding quotes are stripped, an entry needs a drive letter or a network share, and only `.exe` and `.com` files count, because batch files need a shell that re-parses arguments.
+- **Running.** Tools run with an argument array and no shell, a 16 MiB output limit and the user's environment without any `ELECTRON_` variable or the variables an AppImage and Electron add on Linux, with the desktop name Electron rewrote put back. Past its time limit, 30 seconds unless the caller asks for less, a tool gets `SIGTERM` and two seconds later `SIGKILL`. On Windows its whole process tree is ended at once. Errors name the tool or the override variable, never its arguments.
+
+## Terminal
+
+The right column runs the real Claude Code in a terminal Satellite owns. The background process holds the pseudo terminal and the interface draws it with xterm.js.
+
+- **Ownership.** The interface picks a fresh UUID each time it mounts a terminal, so a remount never reuses one, subscribes to its events, and only then asks to start it, so no early output is lost. A terminal belongs to the page load that started it. Write, resize and close from any other page answer `not-found`, and a duplicate id is refused.
+- **Cleanup.** When the owner ends, through a reload, a crash or a closed window, its terminals are killed, even one still starting. On macOS and Linux a kill lists processes once with `ps`, taken from `/bin` or `/usr/bin` and never searched in `PATH`, then sends `SIGHUP` to the terminal's process group and to every descendant. When the terminal has exited and nothing from that list is left, the kill is done. Otherwise, two seconds after it began, everything from the list that still runs, and anything those processes started since, gets `SIGKILL`. A process is matched by its pid and start time, so a reused pid is never signalled. On Windows `taskkill /T /F` ends the tree, then the kill waits up to two seconds for the pseudo terminal to report the exit. Only when it never does is node-pty's own kill called, because that kill starts a helper with `fork`, which the packaged app's run-as-Node fuse turns into a second Satellite. The single-instance lock makes such a launch quit at once. node-pty's spawn, write, resize, pause and resume never fork.
+- **Quit.** Quitting refuses new terminals and waits until every terminal has been killed this way, then exits. The wait is bounded by the kill's own worst case, the two second grace plus two process listings of at most a second each, plus half a second. So Claude Code, its tools and anything that ignores `SIGHUP` end with Satellite. A process that fully detaches before the kill, by leaving the process group and losing its parent to the system, is out of reach and survives.
+- **Limits.** 16 terminals at once, a terminal still being killed included. Input is split into writes of at most 65536 characters and sent through one queue per terminal, so a large paste arrives whole and in order. Scrollback keeps 5000 lines.
+- **Output flow.** The background process gathers output for 8 milliseconds and sends it in events of at most 65536 characters. The interface acknowledges each event once xterm.js has processed it. With more than 256 KiB of output unacknowledged the pseudo terminal is paused, and it resumes once that falls to 32 KiB, so a flood of output never piles up in memory. A terminal that ends is resumed first, so a page that is gone never holds a process paused.
+- **Failures.** A failed start or an ended session shows one sentence in a status region, so screen readers announce it, and a button that starts a fresh terminal. Focus moves to that button, because xterm.js takes Tab as input and would otherwise hold the keyboard. A spawn failure says that Claude Code couldn't start and nothing in the project changed.
+- **Links.** A click on a link in terminal output does nothing, so output can never open a dialog, a window or the browser.
+- **Environment.** Claude Code starts in the app's working folder, or the home folder when that is the filesystem root, as it is for an app opened from the Dock or Finder, or not a folder, with the user's environment plus `TERM=xterm-256color` and `COLORTERM=truecolor`.
+- **DOM renderer.** xterm.js draws with its default DOM renderer. A GPU renderer would need another dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text.
+- **Terminal font.** The DOM renderer draws block and box characters from the font, and Geist Mono's block glyphs are shorter than its line box, which leaves seams between rows in Claude Code's logo. The terminal uses Geist Mono under its own family name with ascent and descent overrides that match the block glyphs, so blocks join with no gap and lines sit tight. A taller line height was rejected because it brings the seams back.
+- **Unicode 11.** The unicode11 addon is active, so emoji and wide characters take the same cell widths Claude Code expects. The graphemes addon was rejected because it is experimental.
+- **Shift+Enter.** xterm.js has no extended keyboard protocol, so Shift+Enter with no other modifier sends ESC then CR, the sequence Claude Code reads as a new line, and the key's own events are swallowed.
+- **The spawn helper.** node-pty ships its macOS `spawn-helper` without the executable bit, which fails every spawn with `posix_spawnp failed`. The postinstall step restores the bit. `npm rebuild node-pty` does not, and the node-pty beta that fixes it was rejected because it is a beta. node-pty stays out of the bundle because it is a runtime dependency, and `src/main/platform/pty.ts` is the only file that imports it.
+
+## Diff
+
+The centre column shows a read-only side by side diff of two texts with Monaco's diff editor, the component the Changes and Pull request views grow from.
+
+- **Only the editor API.** The interface imports `monaco-editor/editor/editor.api` and its codicon styles, with no languages, so every text is plain text. The diff's gutter markers are codicons, which the bare API leaves out.
+- **The worker.** The editor worker is bundled by Vite as its own file and served from `app://satellite` like every other asset, so it loads under the production policy's `worker-src 'self'` with no fallback to the main thread.
+- **Read only.** Both sides are read only, the DOM included, and the revert gutter menu is off, so the diff can show changes but never make them.
+- **Always side by side.** The diff stays in two columns at any width, because the editor's narrow-width inline view would hide which side a line belongs to.
+- **Theme.** The `satellite` theme reads the app tokens, `bg`, `fg`, `dim`, `add` and `del` for lines, `addfg` and `delfg` at low alpha for changed words, `ctl` for scrollbars, `line` for the fill where a side has no line, `sel` for selection and `accent` for the focus border, and is rebuilt on every colour scheme change. Each token goes through a canvas to come back as six digit hex, because the built stylesheet shortens colours like `#ffffff` to `#fff` and Monaco accepts only the long form.
+- **Models.** Each text becomes a model, replaced when the texts change and disposed with the editor.
+
+## Packaging and fuses
+
+electron-builder packages `out/` and `package.json` into `release/` from `electron-builder.yml`, with the icon from `packaging/`. macOS gets a dmg and a zip for arm64 and x64, Windows an NSIS installer for x64, Linux an AppImage and a deb for x64. The renderer is minified. Main and preload stay readable, since they are small and their stack traces land in logs.
+
+- **Unsigned.** macOS builds are ad-hoc signed after the fuses flip, because an arm64 Mac refuses to launch a modified binary with no signature. Windows and Linux builds carry no signature.
+- **ASAR.** The app ships as `app.asar`, and Electron loads it from nowhere else. Only node-pty's native files, its builds and the macOS spawn helper, are unpacked into `app.asar.unpacked`, because they must be real files, so its JavaScript stays inside the archive under integrity validation. Smart unpacking is off, so electron-builder never unpacks a whole module by itself. node-pty is N-API, so packaging never rebuilds it. On macOS and Windows it ships its own builds, and on Linux `npm ci` compiles it on the build machine, so the Linux package links against that machine's glibc and needs a distribution at least as new as the release runner's Ubuntu 24.04. Each package carries only the node-pty build for its own platform and architecture, without node-pty's sources, tests, source maps or `node-addon-api`.
+- **Licences.** Vite's `build.license` lists every package bundled into the renderer, and `scripts/third-party-licenses.ts` adds the runtime dependencies that ship outside the bundle, the fonts and Monaco's own third-party notices. The file ships as `third-party-licenses.md` in the app's resources folder and beside the installers in a release. The `app://` protocol's confinement works unchanged inside the archive, because Electron's file system reads the archive's paths like folders.
+- **Fuses.** Running as Node, `NODE_OPTIONS`, the Node inspector arguments and extra `file://` privileges are off. ASAR integrity validation and loading the app only from the ASAR are on. Integrity is checked on macOS and Windows, and Linux has no such check. Cookie encryption is off, because Satellite stores no cookies and loads no remote content, and turning it on gives each build a keychain item that an ad-hoc signature, new with every build, can make macOS ask about.
+- **Checksums.** `node scripts/checksums.ts <folder> <label>` writes `SHA256SUMS-<label>.txt` in `sha256sum` format for every package directly in the folder.
+
+The release workflow, `.github/workflows/release.yml`, packages on macOS, Windows and Linux at once, reads the fuses, runs the journeys against the packaged app built for each runner's own processor and writes the checksums and the licence notices beside the packages. A failing journey uploads `verify-output/`, which the release never picks up. A pushed version tag runs it and, once all three pass, drafts a GitHub release with the packages, one `SHA256SUMS.txt` and `third-party-licenses.md`. A push to a `platforms/` branch or a manual run, even on a tag, builds and proves without publishing, and a branch push is how the matrix runs before a merge, because a manual run only exists for workflows on the default branch. On Linux the journeys run under `xvfb`, with unprivileged user namespaces allowed so Chromium keeps its own sandbox on Ubuntu 24.04. A new push to the same branch cancels the run before it, while a tag run always finishes and installs without the shared npm cache. Every step runs in bash, Windows included.
+
+## Folder layout
+
+| Path | What |
+| --- | --- |
+| `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, menu, hardening, protocol, bridge, window, and the quit that waits for terminals |
+| `src/main/bridge/` | `registry.ts` the router that validates every request, `sender-check.ts`, `page-owners.ts` the per-page owners and `bridge-ipc.ts` the IPC wiring |
+| `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
+| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the pseudo terminal and ending process trees |
+| `src/main/terminal/` | The terminal sessions, who owns them and their output flow |
+| `src/main/tools/` | Tool versions for the left column |
+| `src/preload/preload.ts` | Exposes `window.satellite` with `invoke` and `onEvent`. It never grows |
+| `src/renderer/entry.tsx` | Loads the five font families, then renders the window |
+| `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
+| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end. A feature that takes over a column replaces the proving part there |
+| `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
+| `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
+| `src/renderer/window/` | The three columns |
+| `src/renderer/ui/` | Shared interface parts such as the primary button |
+| `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
+| `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |
+| `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
+| `electron-builder.yml` | Packages `out/` into `release/` with the fuses |
+| `packaging/` | The app icon electron-builder turns into each platform's format |
+| `verify/` | The driver, the scenarios, the stand-ins for `gh` and `claude`, and the journeys (skill `satellite-verify`) |
+| `lint/` | The `no-comments` lint rule and its test |
+| `scripts/check` | The green checkpoint, guards, format, lint, typecheck and tests |
+| `scripts/postinstall.ts` | Restores the spawn helper's executable bit and installs the Electron binary |
+| `scripts/checksums.ts` | Writes the checksum file for a folder of packages |
+| `scripts/third-party-licenses.ts` | The build step that completes the third-party licence notices |
+| `.github/workflows/ci.yml` | Runs `./scripts/check` and `npm run build` on Linux for every pull request and every push to `main` |
+| `.github/workflows/release.yml` | Packages and proves the three platforms, and drafts a release for a tag |
+
+## Decisions
+
+| Chosen | Rejected | Why |
+| --- | --- | --- |
+| electron-vite | Plain Vite, the Vite plugin of Electron Forge | One config builds main, preload and renderer with hot reload, keeps runtime dependencies out of the main bundle and bundles the sandboxed preload as CommonJS. Plain Vite needs that setup built by hand, and the Forge plugin ties the build to Forge. |
+| electron-builder | Electron Forge | It makes the dmg, zip, NSIS installer, AppImage and deb itself, flips the fuses and ad-hoc signs from one file. Forge has no first-party AppImage maker. |
+| Stable node-pty with the spawn helper fix in postinstall | The node-pty beta that fixes the helper, forks of node-pty | A stable N-API release with builds for macOS and Windows that runs in Node and Electron alike, compiled at install on Linux. The beta is a beta, and a fork adds another party to trust in a native module. |
+| xterm.js's DOM renderer | The WebGL renderer | No extra dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text. |
+| The unicode11 addon | The graphemes addon | It gives the cell widths Claude Code expects, and the graphemes addon is experimental. |
+| A driver over the Chrome DevTools Protocol, `--remote-debugging-port=0` | Playwright's `_electron.launch` | `_electron.launch` waits for the Node inspector, which the inspect arguments fuse turns off, so it could never drive the packaged app the release proves. |
+| The `app://` protocol | `file://` | A standard, secure scheme with one handler that confines every path to `out/renderer` and sets the policy on every response. `file://` reaches the whole disk and has no real origin for the sender check. |
+| The TypeScript compiler written in TypeScript | The native TypeScript compiler | Typed lint needs the JavaScript compiler API, which only the compiler written in TypeScript offers, and typescript-eslint supports only that one. |
+| Terminal ids chosen by the interface, which subscribes before it starts | The background process buffering early output until the interface asks | Nothing is lost and nothing has to be held or bounded in between. |
+| Output batching with `terminal.ack` and a paused pseudo terminal | Streaming output with no flow control | It is the only way to bound memory when a command floods the terminal. |
+| Only `.exe` and `.com` on Windows | Running `.cmd` and `.bat` shims | A batch file needs a shell that re-parses its arguments, so a branch or file name could become a command. A shim install shows as missing. |
+| React state | A state library | The window holds a few independent parts that each own their state, and the bridge client is the only thing they share. |
+| Links in terminal output do nothing | Opening them | Opening one needs the scheme and host check before the system browser, which belongs to spec 004 with the sessions. |
+| One instance per Satellite home | Several windows on the same home | Two apps on one home would fight over its state, and the lock also stops node-pty's forking kill helper from opening a second window. |
+| Ad-hoc signing on macOS, no signature on Windows and Linux | Unsigned macOS builds, paid certificates | An arm64 Mac refuses a modified binary with no signature, and Satellite loads no remote content and holds no credentials, so nothing depends on a certificate. |
+| The cookie encryption fuse off | On | Satellite stores no cookies, and an ad-hoc signature that changes with every build can make macOS ask about the keychain item. |
+| The renderer minified, main and preload readable | Everything minified, nothing minified | The renderer carries Monaco and is large, while main and preload are small and their stack traces land in logs. |

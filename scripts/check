@@ -13,7 +13,10 @@ run() {
 
 run guards ./guards/check.sh files
 run guard-tests ./guards/test.sh
-# The stack's format check, lint, typecheck and tests arrive here with the first spec, one run line each.
+run format npm run --silent format:check
+run lint npm run --silent lint
+run typecheck npm run --silent typecheck
+run tests npm run --silent test
 
 echo
 [ -z "$failed" ] || { echo "check: FAILED:$failed"; exit 1; }

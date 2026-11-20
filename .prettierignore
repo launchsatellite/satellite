@@ -1,0 +1,10 @@
+*.md
+*.html
+package-lock.json
+out
+release
+verify-output
+.superpowers
+.claude/settings.json
+guards/
+.githooks/

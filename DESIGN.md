@@ -70,7 +70,7 @@ Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets
 | Geist Pixel | 400 | Readouts only, in capitals. Counts, timers, ports, ahead and behind |
 | Geist Mono | 400 to 500 | Code, diffs, paths and terminals |
 
-All four come from Google Fonts. Display type sits tight, around −0.04em. Headlines are lowercase and titles never end with a full stop.
+All four are bundled with the app and never loaded from the network. Display type sits tight, around −0.04em. Headlines are lowercase and titles never end with a full stop.
 
 Readouts are how the machine speaks, like `T+04:12`, `↑2 ↓3` and `2/3`. People always speak in sentences.
 

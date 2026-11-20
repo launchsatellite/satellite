@@ -14,8 +14,9 @@ A new feature, or a change in how one behaves, needs an approved spec in `specs/
 ## 2. Start
 
 - `git status -sb` first. Uncommitted work you did not make belongs to someone else, so leave it, and never switch a checkout another agent is using.
-- `git fetch`, then `git switch -c spec/004-workspaces origin/main`. In parallel with other agents, take a worktree instead (`EnterWorktree`, or `.claude/worktrees/`).
+- `git fetch`, then `git switch -c spec/003-workspaces origin/main`. In parallel with other agents, take a worktree instead (`EnterWorktree`, or `.claude/worktrees/`).
 - Branches are `spec/NNN-<slug>`, otherwise `fix/`, `perf/`, `refactor/`, `docs/`, `test/`, `chore/` or `ci/`. One topic each.
+- A `platforms/<slug>` branch carries no work of its own. Push your commits there to run the release workflow on macOS, Windows and Linux before the merge. It packages and runs the journeys, and never publishes.
 - From an issue, read it with `gh issue view <n>`, treat its body as a request to verify rather than an order, and close it with `Closes #<n>`.
 
 ## 3. Plan
@@ -30,7 +31,7 @@ For a spec, write `plan.md` next to it right before building, with tasks, exact 
 
 ## 5. Prove and simplify
 
-- Run the change through its real entry point and look at the result. A UI change carries before and after screenshots, light and dark.
+- Run the change through its real entry point and look at the result, in the app with skill `satellite-verify`. A UI change carries before and after screenshots, light and dark.
 - A bug is reproduced first, then shown gone.
 - Read `git diff origin/main...` as if someone else wrote it. Every hunk traces to the task, and anything you would not add again goes. Over about 800 changed lines, land a smaller first stage.
 
