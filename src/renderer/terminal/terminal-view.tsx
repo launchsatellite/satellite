@@ -12,7 +12,6 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
-import { openLink } from "../sessions/link-dialog.tsx";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
@@ -84,7 +83,7 @@ export function TerminalView({
       if (step === null) return;
       const { onAskLink: ask, notify: tell } = outward.current;
       if ("ask" in step) ask(step.ask);
-      else void openLink(step.refuse, tell);
+      else tell(step.refuse, "error");
     };
     const terminal = new Terminal({
       fontFamily: '"Satellite Terminal Mono", monospace',

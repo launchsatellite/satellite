@@ -16,7 +16,9 @@ describe("linkFollow", () => {
     expect(linkFollow("https://EXAMPLE.com", true)).toEqual({ ask: "https://example.com/" });
   });
 
-  it("hands text that is no address to the background, which refuses it", () => {
-    expect(linkFollow("not a link", true)).toEqual({ refuse: "not a link" });
+  it("refuses text that is no address in the page, never sending it on", () => {
+    expect(linkFollow("not a link", true)).toEqual({
+      refuse: "Satellite opens only web addresses that start with http or https.",
+    });
   });
 });
