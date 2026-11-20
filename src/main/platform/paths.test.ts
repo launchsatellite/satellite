@@ -33,8 +33,12 @@ describe("resolveInside", () => {
     expect(await resolveInside(root, "../outside/secret.txt")).toBeUndefined();
   });
 
-  it("refuses an absolute path outside the root", async () => {
-    expect(await resolveInside(root, join(base, "outside", "secret.txt"))).toBeUndefined();
+  it("refuses an absolute path that climbs out of the root", async () => {
+    expect(await resolveInside(root, "/../outside/secret.txt")).toBeUndefined();
+  });
+
+  it("anchors an absolute path at the root", async () => {
+    expect(await resolveInside(root, "/a.txt")).toBe(await realpath(join(root, "a.txt")));
   });
 
   it.skipIf(isWindows)("refuses a symlink that points outside the root", async () => {
