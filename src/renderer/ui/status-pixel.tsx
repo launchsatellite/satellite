@@ -1,5 +1,12 @@
 export type PixelState = "idle" | "working" | "ready" | "done" | "needs-you";
 
+interface StatusPixelProps {
+  state: PixelState;
+  size?: 6 | 8;
+  testId?: string;
+  label?: string;
+}
+
 const looks: Record<PixelState, string> = {
   idle: "bg-dim",
   working: "bg-accent",
@@ -8,10 +15,14 @@ const looks: Record<PixelState, string> = {
   "needs-you": "bg-signal",
 };
 
-export function StatusPixel({ state, size = 8 }: { state: PixelState; size?: 6 | 8 }) {
+export function StatusPixel({ state, size = 8, testId, label }: StatusPixelProps) {
   return (
     <span
-      aria-hidden
+      data-testid={testId}
+      data-state={state}
+      role={label === undefined ? undefined : "img"}
+      aria-label={label}
+      aria-hidden={label === undefined ? true : undefined}
       className={`flex-none rounded-[2px] ${size === 6 ? "size-[6px]" : "size-2"} ${looks[state]}`}
     />
   );

@@ -1,7 +1,10 @@
 import { spawn } from "node:child_process";
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { describe, expect, it } from "vitest";
-import { endUnixTree } from "./process-tree.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 
 const ignoresHangup = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
 
@@ -46,4 +49,22 @@ describe.skipIf(process.platform === "win32")("endUnixTree", () => {
     expect(isAlive(escapedPid)).toBe(false);
     expect(isAlive(grandchild)).toBe(false);
   });
+});
+
+describe.skipIf(process.platform === "win32")("endWindowsTree", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("gives up on a taskkill that hangs, within the tree kill's own bound", async () => {
+    const root = await mkdtemp(join(tmpdir(), "satellite-taskkill-"));
+    await mkdir(join(root, "System32"));
+    const taskkill = join(root, "System32", "taskkill.exe");
+    await writeFile(taskkill, "#!/bin/sh\nexec sleep 30\n");
+    await chmod(taskkill, 0o755);
+    vi.stubEnv("SystemRoot", root);
+    const began = performance.now();
+    await endWindowsTree(process.pid);
+    expect(performance.now() - began).toBeLessThan(treeKillBoundMs - forceKillGraceMs + 500);
+  }, 40_000);
 });

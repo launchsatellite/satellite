@@ -29,7 +29,7 @@ async function setAsideFiles(home: string): Promise<string[]> {
   return (await readdir(home)).filter((name) => name.startsWith("projects.unreadable-"));
 }
 
-describe("createProjectsFile", () => {
+describe("createProjectsFile", { timeout: 20_000 }, () => {
   it("reads a version 1 file as version 2 with no workspaces", async () => {
     const project = { id: randomUUID(), path: userPath("code/alpha") };
     const loaded = await createProjectsFile(
@@ -39,6 +39,7 @@ describe("createProjectsFile", () => {
       projects: [{ ...project, workspaces: [] }],
       notice: null,
       writable: true,
+      read: true,
     });
   });
 

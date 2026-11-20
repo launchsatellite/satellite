@@ -82,7 +82,13 @@ function spies() {
     "workspaces.archive": vi.fn<BridgeHandler<"workspaces.archive">>(() =>
       Promise.resolve({ leftover: null }),
     ),
-    "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
+    "sessions.resumable": vi.fn<BridgeHandler<"sessions.resumable">>(() =>
+      Promise.resolve({ resumable: false }),
+    ),
+    "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
+    "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
+      Promise.resolve({ windowsPty: null }),
+    ),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
     "terminal.close": vi.fn<BridgeHandler<"terminal.close">>(() => Promise.resolve({})),
@@ -149,12 +155,57 @@ describe("createBridgeRouter", () => {
     noHandlerRan(handlers);
   });
 
+  it("refuses a link that is too long or carries more than its address", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const long = `https://example.com/${"a".repeat(2048 - 20 + 1)}`;
+    expect(long).toHaveLength(2049);
+    for (const payload of [
+      { url: long },
+      { url: "https://example.com/", target: "_blank" },
+      { url: "" },
+      {},
+    ]) {
+      const result = await route("links.open", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
   it("refuses a terminal id that is not a uuid", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);
     const result = await route("terminal.close", { id: "../../etc" }, owner);
     expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     noHandlerRan(handlers);
+  });
+
+  it("refuses a start that names a program, arguments or a folder", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = {
+      id: terminalId,
+      program: "claude",
+      workspace: { projectId: terminalId, workspace: "main" },
+      resume: false,
+      cols: 80,
+      rows: 24,
+    };
+    const payloads = [
+      { ...valid, program: "bash" },
+      { ...valid, args: ["-c", "id"] },
+      { ...valid, cwd: "/Users/<name>/repo" },
+      { ...valid, workspace: undefined },
+      { ...valid, workspace: { projectId: terminalId, workspace: "../x" } },
+      { ...valid, resume: undefined },
+    ];
+    for (const payload of payloads) {
+      const result = await route("terminal.start", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("terminal.start", valid, owner)).toMatchObject({ ok: true });
+    expect(handlers["terminal.start"]).toHaveBeenCalledWith(valid, owner);
   });
 
   it("refuses a project id that is not a uuid", async () => {
@@ -346,7 +397,14 @@ describe("createBridgeRouter", () => {
     });
     const failed = await route(
       "terminal.start",
-      { id: terminalId, program: "claude", cols: 80, rows: 24 },
+      {
+        id: terminalId,
+        program: "claude",
+        workspace: { projectId: terminalId, workspace: "main" },
+        resume: false,
+        cols: 80,
+        rows: 24,
+      },
       owner,
     );
     expect(failed).toEqual({

@@ -1,0 +1,36 @@
+{
+  "description": "A repo with one workspace alpha, a stand-in gh, and a stand-in Claude Code that takes a prompt, then crashes with code 3 on x, ends on Ctrl+D, and fails every resume as an unknown session, with Satellite set to the light theme.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "workspaces": [{ "name": "alpha", "steps": [] }],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "resumeFails": true,
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      { "print": "> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" },
+      { "print": "\r\nWorking on it. Press x to crash.\r\n" },
+      { "await": "x" },
+      { "exit": 3 }
+    ]
+  }
+}

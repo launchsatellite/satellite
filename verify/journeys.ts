@@ -9,8 +9,11 @@ import {
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { launchJourney } from "./journeys/launch.ts";
+import { missingJourney } from "./journeys/missing.ts";
 import { projectsJourney } from "./journeys/projects.ts";
 import { quitJourney } from "./journeys/quit.ts";
+import { sessionsJourney } from "./journeys/sessions.ts";
+import { settingsJourney } from "./journeys/settings.ts";
 import { workspacesJourney } from "./journeys/workspaces.ts";
 
 export interface Journey {
@@ -28,6 +31,9 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   workspacesJourney,
+  sessionsJourney,
+  missingJourney,
+  settingsJourney,
   quitJourney,
 ];
 const journeyTimeoutMs = 180_000;
@@ -56,10 +62,13 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     },
     home: session.home,
     repo: session.repo,
+    userHome: session.userHome,
     gitEnv: session.gitEnv,
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),
     dropFolder: (path) => session.dropFolder(path),
+    dropFiles: (testId, paths) => session.dropFiles(testId, paths),
+    openedLinks: () => session.openedLinks(),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: (whileClosed) => session.relaunch(whileClosed),

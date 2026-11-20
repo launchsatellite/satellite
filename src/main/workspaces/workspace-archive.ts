@@ -69,7 +69,7 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-async function isConfined(home: string, project: StoredProject, record: StoredWorkspace) {
+export async function isConfined(home: string, project: StoredProject, record: StoredWorkspace) {
   return (
     samePath(basename(dirname(record.path)), projectSegment(project.path)) &&
     (await isWorktreeFolder(home, record.path))

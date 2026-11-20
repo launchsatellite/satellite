@@ -28,6 +28,8 @@ interface ProjectsOptions {
   home: string;
   chooseFolder: (window: BrowserWindow | undefined) => Promise<string | undefined>;
   window: () => BrowserWindow | undefined;
+  stopSessions: (folder: string) => Promise<void>;
+  recorded: (projects: readonly StoredProject[]) => void;
 }
 interface ProjectAnswer {
   view: ProjectView;
@@ -130,7 +132,13 @@ export function workspaceLimitSentence(project: string): string {
   return `${project} has 20 workspaces, as many as Satellite holds. Archive one, then make this one.`;
 }
 
-export function createProjects({ home, chooseFolder, window }: ProjectsOptions): Projects {
+export function createProjects({
+  home,
+  chooseFolder,
+  window,
+  stopSessions,
+  recorded,
+}: ProjectsOptions): Projects {
   const file = createProjectsFile(home);
   let projects: StoredProject[] | undefined;
   let noticeGiven = false;
@@ -186,7 +194,10 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   };
   const current = async () => {
     const loaded = await file.load();
-    projects ??= [...loaded.projects];
+    if (projects === undefined) {
+      projects = [...loaded.projects];
+      if (loaded.read) recorded(projects);
+    }
     return projects;
   };
   const replace = (
@@ -206,6 +217,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         console.error("Satellite could not write projects.json", error);
         throw new BridgeFailure("failed", failure);
       }
+      if ((await file.load()).read) recorded(projects);
     });
     changing = run.catch(() => undefined);
     return run;
@@ -224,6 +236,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   const forget = async (drops: readonly Drop[]): Promise<Drop[]> => {
     if (drops.length === 0 || !(await file.load()).writable) return [];
     let forgotten: Drop[] = [];
+    let folders: string[] = [];
     try {
       await replace((latest) => {
         const stored = new Set(
@@ -233,6 +246,9 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           (drop) => stored.has(drop.workspaceId) && !busy.has(drop.workspaceId),
         );
         const ids = new Set(forgotten.map((drop) => drop.workspaceId));
+        folders = latest.flatMap((project) =>
+          project.workspaces.filter((workspace) => ids.has(workspace.id)).map(({ path }) => path),
+        );
         return latest.map((project) => ({
           ...project,
           workspaces: project.workspaces.filter((workspace) => !ids.has(workspace.id)),
@@ -240,6 +256,11 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       });
     } catch {
       return [];
+    }
+    for (const folder of folders) {
+      stopSessions(folder).catch((error: unknown) => {
+        console.error("The sessions of a dropped workspace could not be stopped", error);
+      });
     }
     return forgotten;
   };
@@ -403,6 +424,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           throw new BridgeFailure("refused", stillHas(projectName(removed.path), count));
         }
         let forgotWorkspaces = 0;
+        let forgotten: string[] = [];
         await replace((latest) => {
           const project = latest.find((candidate) => candidate.id === projectId);
           if (project !== undefined) {
@@ -414,9 +436,11 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
               );
             }
             forgotWorkspaces = project.workspaces.length;
+            forgotten = [project.path, ...project.workspaces.map((workspace) => workspace.path)];
           }
           return latest.filter((candidate) => candidate.id !== projectId);
         });
+        await Promise.all(forgotten.map(stopSessions));
         return { forgotWorkspaces };
       },
     },

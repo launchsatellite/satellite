@@ -14,8 +14,10 @@ import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
-import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
+import { LinkDialog } from "../sessions/link-dialog.tsx";
+import { SessionsPane } from "../sessions/sessions-pane.tsx";
+import { useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
@@ -99,12 +101,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const { state, update } = useInterfaceState(initial, notify);
   const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
     useProjects(notify);
+  const sessions = useSessions(notify);
+  const {
+    open: openSession,
+    close: closeSession,
+    activate: activateSession,
+    forgetWorkspace,
+    forgetGone,
+    forgetProject,
+  } = sessions;
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
     workspace: WorkspaceView;
   } | null>(null);
   const [added, setAdded] = useState<string>();
+  const [asking, setAsking] = useState<string | null>(null);
+  const closeLink = useCallback(() => {
+    setAsking(null);
+  }, []);
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
   const repositoryRef = useRef<HTMLElement>(null);
@@ -135,6 +150,26 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       true,
     );
   }, [projects, selectedId, selectedKey, update]);
+  const allSessions = sessions.all;
+  const listedNames = useRef(new Map<string, string | null>());
+  useEffect(() => {
+    if (projects === undefined) return;
+    const listed = new Map(
+      projects.flatMap((project) =>
+        project.workspaces.map((workspace) => [`${project.id}/${workspace.key}`, workspace.name]),
+      ),
+    );
+    const gone = new Map<string, { ref: WorkspaceRef; name: string | null }>();
+    for (const { workspace } of allSessions) {
+      const place = `${workspace.projectId}/${workspace.workspace}`;
+      if (listed.has(place)) continue;
+      const projectListed = projects.some((project) => project.id === workspace.projectId);
+      const name = projectListed ? (listedNames.current.get(place) ?? null) : null;
+      gone.set(place, { ref: workspace, name });
+    }
+    listedNames.current = listed;
+    if (gone.size > 0) forgetGone([...gone.values()]);
+  }, [projects, allSessions, forgetGone]);
   const { left, right } = fitColumns(state.columns, width);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
@@ -208,8 +243,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       ? selectedProject
       : undefined;
   const archivableWorkspace = archivable === undefined ? undefined : selectedWorkspace;
+  const hereId = selectedProject?.id;
+  const hereKey = selectedWorkspace?.key;
+  const sessionHere = useMemo<WorkspaceRef | undefined>(
+    () =>
+      hereId === undefined || hereKey === undefined
+        ? undefined
+        : { projectId: hereId, workspace: hereKey },
+    [hereId, hereKey],
+  );
+  const folderHere = selectedProject?.missing === null;
+  const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
+  const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
+  const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
+  const neighbour = (step: number) =>
+    tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
+  const nextSession = neighbour(1);
+  const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const modal = dialogProject !== undefined || archiving !== null;
+  const modal = dialogProject !== undefined || archiving !== null || asking !== null;
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -250,6 +302,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     const projectId = archiving.project.id;
     const { key, name, branch } = archiving.workspace;
     dropWorkspace(projectId, key);
+    forgetWorkspace({ projectId, workspace: key });
     update(
       (current) =>
         current.selected?.projectId === projectId && current.selected.workspace === key
@@ -295,6 +348,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (removableId === undefined) return;
               const forgot = await remove(removableId);
               if (forgot === undefined) return;
+              forgetProject(removableId);
               update(
                 (current) => ({
                   ...current,
@@ -325,6 +379,39 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             run: () => {
               if (archivable === undefined || archivableWorkspace === undefined) return;
               setArchiving({ project: archivable, workspace: archivableWorkspace });
+            },
+          },
+          {
+            id: "session.new",
+            title: "New Claude Code session",
+            shortcut: { key: "t" },
+            available: sessionHere !== undefined && folderHere,
+            run: () => {
+              if (sessionHere !== undefined) openSession(sessionHere, false);
+            },
+          },
+          {
+            id: "session.close",
+            title: "Close this session",
+            available: activeSession !== undefined,
+            run: () => {
+              if (activeSession !== undefined) closeSession(activeSession);
+            },
+          },
+          {
+            id: "session.next",
+            title: "Go to the next session",
+            available: nextSession !== undefined,
+            run: () => {
+              if (nextSession !== undefined) activateSession(nextSession);
+            },
+          },
+          {
+            id: "session.previous",
+            title: "Go to the previous session",
+            available: previousSession !== undefined,
+            run: () => {
+              if (previousSession !== undefined) activateSession(previousSession);
             },
           },
           {
@@ -372,6 +459,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     notify,
     dismissToast,
     focusSidebarIfLost,
+    sessionHere,
+    folderHere,
+    activeSession,
+    nextSession,
+    previousSession,
+    openSession,
+    closeSession,
+    activateSession,
+    forgetProject,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -421,6 +517,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onSelect={select}
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
+            pixelFor={sessions.pixelFor}
           />
           <ColumnDivider
             side="left"
@@ -449,8 +546,17 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             testId="divider-right"
           />
         </section>
-        <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
-          <ClaudePane />
+        <section
+          data-testid="column-sessions"
+          aria-label="Sessions"
+          className="relative min-h-0 bg-bg"
+        >
+          <SessionsPane
+            sessions={sessions}
+            selected={sessionHere ?? null}
+            onAskLink={setAsking}
+            notify={notify}
+          />
         </section>
         {dragging && <DropOverlay />}
         {palette !== null && (
@@ -479,6 +585,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onClose={closeArchive}
             onArchived={archived}
           />
+        )}
+        {asking !== null && (
+          <LinkDialog key={asking} address={asking} onClose={closeLink} notify={notify} />
         )}
         {toast !== undefined && (
           <Toast

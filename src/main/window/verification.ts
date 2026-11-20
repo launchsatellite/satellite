@@ -10,8 +10,8 @@ function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
+  } catch {
+    return false;
   }
 }
 
@@ -19,6 +19,10 @@ function liveDriver(): number | undefined {
   const pid = Number(process.env["SATELLITE_VERIFY_DRIVER_PID"]);
   if (!underVerification() || !Number.isInteger(pid) || pid <= 0) return undefined;
   return isAlive(pid) ? pid : undefined;
+}
+
+export function drivenByVerify(): boolean {
+  return liveDriver() !== undefined;
 }
 
 export function runsQuietly(): boolean {

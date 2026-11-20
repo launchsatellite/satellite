@@ -12,6 +12,7 @@
       "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
     }
   ],
+  "workspaces": [],
   "gh": [
     { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
     {

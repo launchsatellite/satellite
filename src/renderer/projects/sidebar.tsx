@@ -1,4 +1,9 @@
-import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import type {
+  ProjectView,
+  WorkspaceKey,
+  WorkspaceRef,
+  WorkspaceView,
+} from "../../shared/bridge-contract.ts";
 import type { CommandId } from "../commands/command-registry.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Button } from "../ui/button.tsx";
@@ -6,7 +11,8 @@ import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
-import { StatusPixel } from "../ui/status-pixel.tsx";
+import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
+import { pixelLabel } from "../sessions/session-pixel.ts";
 import { repeatedNames, workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
@@ -15,6 +21,7 @@ interface SidebarProps {
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
+  pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
 }
 interface ProjectRow {
   project: ProjectView;
@@ -126,12 +133,14 @@ function ProjectRows({
   onSelect,
   onNewWorkspace,
   focus,
+  pixelFor,
 }: {
   row: ProjectRow;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
   focus: boolean;
+  pixelFor: SidebarProps["pixelFor"];
 }) {
   return (
     <>
@@ -165,11 +174,13 @@ function ProjectRows({
         {project.workspaces.map((workspace, index) => {
           const current =
             selected?.projectId === project.id && selected.workspace === workspace.key;
+          const pixel = pixelFor(project.id, workspace.key);
+          const testId = workspaceTestIds[index];
           return (
             <li key={workspace.key}>
               <button
                 type="button"
-                data-testid={workspaceTestIds[index]}
+                data-testid={testId}
                 autoFocus={focus}
                 aria-current={current ? "true" : undefined}
                 onClick={() => {
@@ -177,11 +188,16 @@ function ProjectRows({
                 }}
                 className={`flex h-7 w-full items-center gap-[9px] rounded-[6px] pr-2 pl-[33px] text-[13px] font-medium whitespace-nowrap ${current ? "bg-sel text-fg" : "text-fg2 hover:bg-hover"} ${focusRing}`}
               >
-                <StatusPixel state="idle" size={6} />
+                <StatusPixel
+                  state={pixel}
+                  size={6}
+                  testId={testId === undefined ? undefined : `${testId}-status`}
+                  label={pixelLabel(pixel)}
+                />
                 <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
                   {workspaceLabel(project, workspace)}
                 </span>
-                <Readouts workspace={workspace} testId={workspaceTestIds[index]} />
+                <Readouts workspace={workspace} testId={testId} />
               </button>
             </li>
           );
@@ -197,6 +213,7 @@ export function Sidebar({
   onSelect,
   onNewWorkspace,
   focusProjectId,
+  pixelFor,
 }: SidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
@@ -238,6 +255,7 @@ export function Sidebar({
               onSelect={onSelect}
               onNewWorkspace={onNewWorkspace}
               focus={row.project.id === focusProjectId}
+              pixelFor={pixelFor}
             />
           ))}
         </nav>

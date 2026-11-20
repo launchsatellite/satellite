@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { z } from "zod";
 import { resolveInside } from "../src/main/platform/paths.ts";
+import { hookEvents } from "../src/main/sessions/claude-launch.ts";
 
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type RepoStep = z.infer<typeof repoStepSchema>;
@@ -24,17 +25,26 @@ const ghAnswerSchema = z.strictObject({
   stderr: z.string().optional(),
   exitCode: z.int().min(0).max(255).optional(),
 });
+const seededFileSchema = z.strictObject({ path: z.string().min(1), content: z.string() });
 const claudeStepSchema = z.union([
   z.strictObject({ print: z.string() }),
   z.strictObject({ wait: z.int().min(0).max(60_000) }),
   z.strictObject({ flood: z.int().min(1).max(50_000_000) }),
   z.strictObject({ child: z.literal("ignores-hangup") }),
+  z.strictObject({
+    hook: z.enum(hookEvents),
+    fields: z.record(z.string(), z.string()).optional(),
+  }),
+  z.strictObject({ await: z.string().min(1) }),
+  z.strictObject({ trust: z.literal(true) }),
+  z.strictObject({ exit: z.int().min(0).max(255) }),
 ]);
 
 export const scenarioSchema = z.strictObject({
   description: z.string(),
   repo: z.array(repoStepSchema),
-  home: z.array(z.strictObject({ path: z.string().min(1), content: z.string() })).optional(),
+  home: z.array(seededFileSchema).optional(),
+  userHome: z.array(seededFileSchema).optional(),
   folders: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),
@@ -43,7 +53,11 @@ export const scenarioSchema = z.strictObject({
     .optional(),
   gh: z.array(ghAnswerSchema),
   claude: z.union([
-    z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
+    z.strictObject({
+      version: z.string(),
+      resumeFails: z.literal(true).optional(),
+      script: z.array(claudeStepSchema),
+    }),
     z.strictObject({ missing: z.literal(true) }),
   ]),
 });

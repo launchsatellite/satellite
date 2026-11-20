@@ -49,12 +49,20 @@ Selecting a workspace switches the centre and the right column together. Session
 
 Every action is one command, reached from its button, its shortcut or the command menu on Cmd+K, or Ctrl+Shift+K on Windows and Linux. The quick switcher on Cmd+P, or Ctrl+Shift+P, jumps to any workspace in any project. On first run Satellite checks `git`, `gh` and `claude` for real and names the step that fixes whatever is missing.
 
+## Sessions
+
+Each workspace runs its Claude Code sessions as tabs, and every session keeps running while another workspace is shown. A session is idle until its first request, then working, needs you or done, and stopped once Claude Code ends. Status comes from Claude Code's hooks, so a session stays idle before its trust question is answered and whenever the user's own settings block hooks. The agent can report its own status, so the pixel is as honest as the agent. Quitting or reloading ends every session, and each workspace then offers to resume the conversation it last prompted in. Declining Claude Code's trust question ends the session, which reads as stopped unexpectedly.
+
+Send to Claude Code types a prepared request into the selected session's prompt as one line of at most 800 characters and never presses enter. It works once Claude Code has reported the user's first request in that session, and never while Claude Code is asking the user something. Every link in terminal output asks before it opens in the system browser, naming the site and the full address.
+
+On Windows Satellite runs the native install of Claude Code, since an npm install starts through a batch file. Claude Code picks its colours when a session starts, so a running session keeps them through a theme change.
+
 ## Decisions
 
 | Chosen | Rejected | Why |
 | --- | --- | --- |
 | The user's own `claude` in a terminal | A custom agent interface | Nothing to maintain, every Claude Code feature works at once, and the user's sign-in, settings, hooks and skills apply untouched. |
-| Session status from hooks passed at launch | Editing the user's Claude Code settings, or reading terminal output | The launch flag lasts for one process, merges with the user's own hooks and writes nothing. |
+| Session status from hooks passed at launch | Editing the user's Claude Code settings, or reading terminal output | The hooks sit in a short-lived file in Satellite's own home, last for one process and merge with the user's own. Nothing is written to the user's Claude Code settings or the repository. |
 | Read-only files and diffs | A code editor | Agents change the code. An editor invites a second way of working and a second product to maintain. |
 | Prepared requests typed into the prompt | An editor link that shares selection and proposed edits | The link's protocol is undocumented, and pairing several sessions with the right workspace is its weakest part. The prompt is already ours. |
 | A native read-only pull request view fed by `gh` | An embedded browser signed in to GitHub | A browser needs its own sign-in, stores a full-power session on disk and must be patched as fast as a browser. `gh` is already signed in and scoped. |

@@ -33,11 +33,15 @@ describe("createPageOwners", () => {
     const { owners, send } = pages();
     const page = {};
     const owner = owners.ownerFor(page);
-    owner.emit("terminal.exit", { id: terminalId, exitCode: 0 });
+    owner.emit("terminal.exit", { id: terminalId, exitCode: 0, ending: "ended" });
     owners.end(page);
     owner.emit("terminal.data", { id: terminalId, data: "late output" });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(page, "terminal.exit", { id: terminalId, exitCode: 0 });
+    expect(send).toHaveBeenCalledWith(page, "terminal.exit", {
+      id: terminalId,
+      exitCode: 0,
+      ending: "ended",
+    });
   });
 
   it("a reload yields a new owner", () => {

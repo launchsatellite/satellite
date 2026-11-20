@@ -2,7 +2,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
+import {
+  claudeEnvironment,
+  parseToolOverride,
+  resolveTool,
+  runTool,
+  toolEnvironment,
+} from "./tools.ts";
 
 vi.mock("./user-environment.ts", () => ({
   userEnvironment: () =>
@@ -61,6 +67,20 @@ describe("parseToolOverride", () => {
   });
 });
 
+describe("resolveTool", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads an override naming a file that is not there as missing", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "satellite-override-"));
+    vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([join(folder, "missing-claude")]));
+    expect(await resolveTool("claude")).toBeUndefined();
+    vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([process.execPath, "stand-in.ts"]));
+    expect(await resolveTool("claude")).toEqual({ file: process.execPath, args: ["stand-in.ts"] });
+  });
+});
+
 describe("toolEnvironment", () => {
   it("gives git an environment that never prompts", () => {
     const env = toolEnvironment("git", {
@@ -102,6 +122,130 @@ describe("toolEnvironment", () => {
       "GH_TELEMETRY",
       "NO_COLOR",
     ]);
+  });
+});
+
+describe("claudeEnvironment", () => {
+  it("gives Claude Code the user's environment without the nesting marker", () => {
+    expect(
+      claudeEnvironment({
+        PATH: "/usr/bin",
+        CLAUDECODE: "1",
+        ANTHROPIC_BASE_URL: "https://llm.example.com",
+      }),
+    ).toEqual({ PATH: "/usr/bin", ANTHROPIC_BASE_URL: "https://llm.example.com" });
+  });
+
+  it("drops the child session marker that hides a session from resume", () => {
+    expect(claudeEnvironment({ PATH: "/usr/bin", CLAUDE_CODE_CHILD_SESSION: "1" })).toEqual({
+      PATH: "/usr/bin",
+    });
+  });
+
+  it("never hands Claude Code the identity of what started Satellite", () => {
+    const kept = {
+      PATH: "/usr/bin",
+      HOME: "/Users/<name>",
+      CLAUDE_CONFIG_DIR: "/Users/<name>/.claude",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+      LANG: "en_US.UTF-8",
+      LC_ALL: "en_US.UTF-8",
+      HTTPS_PROXY: "",
+      TERM_PROGRAM_SETTING: "kept",
+    };
+    expect(
+      claudeEnvironment({
+        ...kept,
+        CLAUDE_CODE_SSE_PORT: "51234",
+        CLAUDE_CODE_ENTRYPOINT: "claude-vscode",
+        CLAUDE_CODE_BRIDGE_SESSION_ID: "session_x",
+        CLAUDE_CODE_SESSION_ID: "x",
+        CLAUDE_CODE_MESSAGING_SOCKET: "/tmp/x.sock",
+        CLAUDE_CODE_MESSAGING_TOKEN: "x",
+        CLAUDE_EFFORT: "high",
+        CLAUDE_JOB_DIR: "/tmp/x",
+        CLAUDE_PID: "4242",
+        CLAUDE_CODE_EXECPATH: "/Users/<name>/.local/bin/claude",
+        CLAUDE_CODE_CHILD_NOTES_DIR: "/tmp/x",
+        CLAUDE_CODE_SESSION_ATTENDED: "1",
+        TERM_PROGRAM: "vscode",
+        TERM_PROGRAM_VERSION: "1.0",
+        TERM_SESSION_ID: "w0t0p0",
+        ITERM_SESSION_ID: "w0t0p0",
+        LC_TERMINAL: "iTerm2",
+        KITTY_WINDOW_ID: "1",
+        KITTY_PID: "1",
+        KITTY_LISTEN_ON: "unix:/tmp/kitty",
+        KITTY_PUBLIC_KEY: "x",
+        WT_SESSION: "x",
+        TMUX: "/tmp/tmux-501/default,1,0",
+        TMUX_PANE: "%1",
+        STY: "1.pts-0",
+        VSCODE_SHELL_INTEGRATION: "1",
+        VSCODE_GIT_IPC_HANDLE: "/tmp/vscode-git.sock",
+      }),
+    ).toEqual(kept);
+  });
+
+  it("drops the editor's askpass with the editor and keeps the user's own", () => {
+    const helper = "/Applications/Editor.app/Contents/Resources/app/extensions/git/dist";
+    expect(
+      claudeEnvironment({
+        PATH: "/usr/bin",
+        GIT_ASKPASS: `${helper}/askpass.sh`,
+        VSCODE_GIT_ASKPASS_MAIN: `${helper}/askpass-main.js`,
+        VSCODE_GIT_ASKPASS_NODE: "/Applications/Editor.app/Contents/MacOS/Editor",
+      }),
+    ).toEqual({ PATH: "/usr/bin" });
+    const own = { GIT_ASKPASS: "/usr/local/bin/my-askpass" };
+    expect(
+      claudeEnvironment({ ...own, VSCODE_GIT_ASKPASS_MAIN: `${helper}/askpass-main.js` }),
+    ).toEqual(own);
+    expect(claudeEnvironment(own)).toEqual(own);
+  });
+
+  it("drops the markers in any case on Windows only", () => {
+    const env = { Path: "C:\\Windows", ClaudeCode: "1", claude_code_child_session: "1" };
+    expect(claudeEnvironment(env, "win32")).toEqual({ Path: "C:\\Windows" });
+    expect(claudeEnvironment(env, "linux")).toEqual(env);
+  });
+
+  it("keeps loopback away from a proxy", () => {
+    expect(claudeEnvironment({ HTTPS_PROXY: "http://proxy.example.com:8080" })).toEqual({
+      HTTPS_PROXY: "http://proxy.example.com:8080",
+      NO_PROXY: "127.0.0.1",
+      no_proxy: "127.0.0.1",
+    });
+    expect(
+      claudeEnvironment({
+        http_proxy: "http://proxy.example.com:8080",
+        NO_PROXY: "example.com",
+        no_proxy: "",
+      }),
+    ).toEqual({
+      http_proxy: "http://proxy.example.com:8080",
+      NO_PROXY: "example.com,127.0.0.1",
+      no_proxy: "127.0.0.1",
+    });
+    expect(
+      claudeEnvironment({
+        HTTPS_PROXY: "http://proxy.example.com:8080",
+        NO_PROXY: "localhost 127.0.0.1 example.com",
+        no_proxy: "example.com,127.0.0.1",
+      }),
+    ).toEqual({
+      HTTPS_PROXY: "http://proxy.example.com:8080",
+      NO_PROXY: "localhost 127.0.0.1 example.com",
+      no_proxy: "example.com,127.0.0.1",
+    });
+    expect(
+      claudeEnvironment({ ALL_PROXY: "socks5://proxy.example.com:1080", all_proxy: "x" }),
+    ).toEqual({ ALL_PROXY: "socks5://proxy.example.com:1080", all_proxy: "x" });
+    expect(claudeEnvironment({ HTTPS_PROXY: "", NO_PROXY: "example.com" })).toEqual({
+      HTTPS_PROXY: "",
+      NO_PROXY: "example.com",
+    });
+    expect(claudeEnvironment({ PATH: "/usr/bin" })).toEqual({ PATH: "/usr/bin" });
   });
 });
 

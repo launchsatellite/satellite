@@ -1,0 +1,55 @@
+{
+  "description": "A repo with a committed file whose name holds a space, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that posts its hooks as it takes a prompt, asks to run Bash, runs it once allowed and finishes. Its output holds two links and an address whose tail is concealed, and Satellite is set to the light theme.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "write": { "path": "with space.txt", "content": "a file whose name holds a space\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "workspaces": [
+    { "name": "alpha", "steps": [] },
+    { "name": "beta", "steps": [] }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      {
+        "print": "See https://example.com/docs and \u001b]8;;https://example.com/real\u001b\\the docs\u001b]8;;\u001b\\\r\n"
+      },
+      { "print": "Hidden https://example.com\u001b[8m.evil.example/login\u001b[28m tail\r\n" },
+      { "print": "\u001b[?2004h" },
+      { "print": "> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" },
+      { "print": "\r\nWorking on it.\r\n" },
+      { "wait": 3000 },
+      { "print": "Later output.\r\n" },
+      { "hook": "Notification", "fields": { "notification_type": "auth_success" } },
+      { "await": "\r" },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
+      { "print": "Allow Bash to run? Press y to allow.\r\n" },
+      { "await": "y" },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
+      { "await": "\r" },
+      { "hook": "Stop" },
+      { "print": "Done.\r\n> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" }
+    ]
+  }
+}

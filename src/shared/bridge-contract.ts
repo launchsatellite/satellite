@@ -12,6 +12,8 @@ export type BridgeEventName = keyof typeof bridgeEvents;
 export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bridgeEvents)[E]>;
 export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
+export type SessionStatus = z.output<typeof sessionStatus>;
+export type SessionEnding = z.output<typeof sessionEnding>;
 export type WorkspaceKey = z.output<typeof workspaceKey>;
 export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
@@ -29,12 +31,15 @@ export type InstallFix = z.output<typeof installFix>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
+export const linkRefusal =
+  "Satellite opens only plain web addresses, http or https with a real host and no sign-in or hidden characters.";
 export const bridgeLimits = {
   terminalWriteChars: 65536,
   terminalOutputChars: 65536,
   terminals: 16,
   workspacesPerProject: 20,
   messageChars: 1000,
+  linkChars: 2048,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
 };
@@ -46,6 +51,8 @@ export const interfaceLimits = {
 };
 
 export const themeChoice = z.enum(["system", "light", "dark"]);
+export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
+export const sessionEnding = z.enum(["ended", "unexpected", "resume-failed"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
 export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
 export const workspaceName = z
@@ -115,6 +122,11 @@ const toolReady = z.strictObject({
   state: z.literal("ready"),
   version: z.string().min(1).max(200),
 });
+const windowsPty = z.strictObject({
+  backend: z.enum(["conpty", "winpty"]),
+  buildNumber: z.number().int().positive(),
+});
+export type WindowsPty = z.output<typeof windowsPty>;
 export const installFix = z.strictObject({
   kind: z.enum(["command", "address"]),
   text: z.string().min(1).max(200),
@@ -231,9 +243,24 @@ export const bridgeRequests = {
     request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid(), fingerprint }),
     response: z.strictObject({ leftover: z.string().min(1).max(200).nullable() }),
   },
-  "terminal.start": {
-    request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),
+  "sessions.resumable": {
+    request: z.strictObject({ workspace: workspaceRef }),
+    response: z.strictObject({ resumable: z.boolean() }),
+  },
+  "links.open": {
+    request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),
     response: empty,
+  },
+  "terminal.start": {
+    request: z.strictObject({
+      id: terminalId,
+      program: z.literal("claude"),
+      workspace: workspaceRef,
+      resume: z.boolean(),
+      cols,
+      rows,
+    }),
+    response: z.strictObject({ windowsPty: windowsPty.nullable() }),
   },
   "terminal.write": {
     request: z.strictObject({
@@ -276,7 +303,9 @@ export const bridgeEvents = {
       .int()
       .min(-(2 ** 31))
       .max(2 ** 32 - 1),
+    ending: sessionEnding,
   }),
+  "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus, ready: z.boolean() }),
 };
 
 const bridgeErrorCode = z.enum([

@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
+import { sendToClaudeCodeEvent } from "../src/renderer/sessions/send-to-claude-code.ts";
 import {
   buildApp,
   errorReason,
@@ -54,6 +55,7 @@ const textLimit = 2000;
 const pasteLimit = 1_000_000;
 const waitLimitMs = 60_000;
 const stepTimeoutMs = 15_000;
+const waitPollMs = 100;
 const restartTimeoutMs = 75_000;
 
 const noFocus = "nothing in the window has focus, click an element first";
@@ -74,6 +76,37 @@ async function focusedTestId(page: Page): Promise<string> {
   });
   if (testId === null) throw new Error(noFocus);
   return testId;
+}
+
+async function waitForText(page: Page, testId: string, text: string): Promise<void> {
+  const element = page.getByTestId(testId);
+  const deadline = Date.now() + waitLimitMs;
+  for (;;) {
+    const read = (await element.count()) === 0 ? "" : await element.first().innerText();
+    if (read.includes(text)) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${testId} did not show ${JSON.stringify(text)} within ${String(waitLimitMs / 1000)} seconds, it last read ${JSON.stringify(read.slice(-textLimit))}`,
+      );
+    }
+    await delay(waitPollMs);
+  }
+}
+
+async function waitForState(page: Page, testId: string, state: string): Promise<void> {
+  const element = page.getByTestId(testId);
+  const deadline = Date.now() + waitLimitMs;
+  for (;;) {
+    const read =
+      (await element.count()) === 0 ? null : await element.first().getAttribute("data-state");
+    if (read === state) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${testId} did not reach the state ${JSON.stringify(state)} within ${String(waitLimitMs / 1000)} seconds, it last read ${JSON.stringify(read)}`,
+      );
+    }
+    await delay(waitPollMs);
+  }
 }
 
 async function paste(page: Page, text: string): Promise<string> {
@@ -142,6 +175,17 @@ function parseStep(raw: string): Step {
       const text = needsValue();
       return step(({ session }) => paste(session.page, text));
     }
+    case "send": {
+      const text = needsValue();
+      return step(({ session }) =>
+        session.page.evaluate(
+          ({ name, detail }) => {
+            window.dispatchEvent(new CustomEvent(name, { detail }));
+          },
+          { name: sendToClaudeCodeEvent, detail: { text } },
+        ),
+      );
+    }
     case "paste-size": {
       const size = boundedInt(needsValue(), name, 1, pasteLimit);
       return step(({ session }) => paste(session.page, generatedText(size)));
@@ -171,6 +215,34 @@ function parseStep(raw: string): Step {
       return step(
         ({ session }) =>
           session.page.getByTestId(testId).waitFor({ state: "visible", timeout: waitLimitMs }),
+        waitLimitMs + stepTimeoutMs,
+      );
+    }
+    case "wait-text": {
+      const target = needsValue();
+      const separator = target.indexOf(":");
+      const testId = target.slice(0, separator);
+      const text = target.slice(separator + 1);
+      if (separator === -1 || testId === "" || text === "") {
+        throw new Error("step wait-text needs <testid>:<text>, as in wait-text=terminal:Done.");
+      }
+      return step(
+        ({ session }) => waitForText(session.page, testId, text),
+        waitLimitMs + stepTimeoutMs,
+      );
+    }
+    case "wait-state": {
+      const target = needsValue();
+      const separator = target.indexOf(":");
+      const testId = target.slice(0, separator);
+      const state = target.slice(separator + 1);
+      if (separator === -1 || testId === "" || state === "") {
+        throw new Error(
+          "step wait-state needs <testid>:<state>, as in wait-state=session-tab-1:working",
+        );
+      }
+      return step(
+        ({ session }) => waitForState(session.page, testId, state),
         waitLimitMs + stepTimeoutMs,
       );
     }

@@ -29,10 +29,13 @@ export interface AppSession {
   readonly page: Page;
   home: string;
   repo: string;
+  userHome: string;
   gitEnv: Record<string, string>;
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
   dropFolder(path: string): Promise<void>;
+  dropFiles(testId: string, paths: string[]): Promise<void>;
+  openedLinks(): Promise<string[]>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
@@ -52,9 +55,11 @@ interface RunningApp {
 interface AppPaths {
   home: string;
   repo: string;
+  userHome: string;
   gitConfig: string;
   log: string;
   dialog: string;
+  links: string;
   missingClaude: string | undefined;
 }
 interface AppCommand {
@@ -82,6 +87,7 @@ const strippedVariables = new Set([
   "CLAUDECODE",
 ]);
 const strippedPrefixes = ["CLAUDE_CODE_"];
+const homeVariables = new Set(["HOME", "USERPROFILE", "CLAUDE_CONFIG_DIR"]);
 const stopSignals: NodeJS.Signals[] =
   process.platform === "win32"
     ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
@@ -201,10 +207,13 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, gitConfig, log, dialog, missingClaude }: AppPaths,
+  { home, userHome, gitConfig, log, dialog, links, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
+  const keepsUserHome = options.realClaude === true;
   const env: Record<string, string | undefined> = Object.fromEntries(
-    Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
+    Object.entries(withoutGitVariables(process.env)).filter(
+      ([key]) => !isStripped(key) && (keepsUserHome || !homeVariables.has(key.toUpperCase())),
+    ),
   );
   if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
   env["GIT_CONFIG_GLOBAL"] = gitConfig;
@@ -214,7 +223,12 @@ function appEnvironment(
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
   env["SATELLITE_VERIFY_LOG"] = log;
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
+  env["SATELLITE_VERIFY_LINKS"] = links;
   env["SATELLITE_GH"] = standIn("gh");
+  if (!keepsUserHome) {
+    env["HOME"] = userHome;
+    if (process.platform === "win32") env["USERPROFILE"] = userHome;
+  }
   if (missingClaude !== undefined) env["SATELLITE_CLAUDE"] = JSON.stringify([missingClaude]);
   else if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
   return env;
@@ -292,17 +306,22 @@ function recipeGitEnv(temp: string) {
 
 async function prepareFolders(
   temp: string,
-  home: string,
-  repo: string,
+  { home, repo, userHome }: AppPaths,
   scenario: Scenario,
 ): Promise<void> {
   const gitEnv = recipeGitEnv(temp);
   await mkdir(home);
   await mkdir(repo);
+  await mkdir(userHome);
   for (const file of scenario.home ?? []) await writeInside(home, file.path, file.content);
+  for (const file of scenario.userHome ?? []) {
+    await writeInside(userHome, file.path, file.content);
+  }
+  const noIgnores = join(temp, "git-ignore");
+  await writeFile(noIgnores, "");
   await writeFile(
     gitEnv.GIT_CONFIG_GLOBAL,
-    "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
+    `[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n[core]\n\texcludesFile = ${noIgnores.replaceAll("\\", "/")}\n`,
   );
   for (const folder of scenario.folders ?? []) {
     const target = join(temp, "folders", folder.name);
@@ -438,12 +457,12 @@ async function stopApp(running: RunningApp): Promise<boolean> {
   return exitedOnItsOwn;
 }
 
-async function dropOnWindow(page: Page, path: string): Promise<void> {
-  const box = await page.getByTestId("column-repository").boundingBox();
-  if (box === null) throw new Error("the repository column is not on screen to drop on");
+async function dropOn(page: Page, testId: string, files: string[]): Promise<void> {
+  const box = await page.getByTestId(testId).boundingBox();
+  if (box === null) throw new Error(`${testId} is not on screen to drop on`);
   const x = Math.round(box.x + box.width / 2);
   const y = Math.round(box.y + box.height / 2);
-  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  const data = { items: [], files, dragOperationsMask: 1 };
   const protocol = await page.context().newCDPSession(page);
   try {
     for (const type of ["dragEnter", "dragOver", "drop"] as const) {
@@ -537,11 +556,13 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const temp = await realpath(await mkdtemp(join(tmpdir(), "satellite-verify-")));
   const home = join(temp, "home");
   const repo = join(temp, "repo");
+  const userHome = join(temp, "user-home");
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
+  const links = join(temp, "links.txt");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
   const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
-  const paths = { home, repo, gitConfig, log, dialog, missingClaude };
+  const paths = { home, repo, userHome, gitConfig, log, dialog, links, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -560,7 +581,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   cleanups.add(abandon);
   let page: Page;
   try {
-    await prepareFolders(temp, home, repo, scenario);
+    await prepareFolders(temp, paths, scenario);
     page = await startApp(options, paths, running, consoleErrors);
   } catch (error) {
     const failure = new LaunchFailure(errorReason(error), { cause: error });
@@ -603,6 +624,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     home,
     repo,
+    userHome,
     gitEnv: recipeGitEnv(temp),
     folder(name) {
       const segments = name.split("/");
@@ -612,7 +634,12 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       return join(temp, "folders", ...segments);
     },
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
-    dropFolder: (path) => dropOnWindow(page, path),
+    dropFolder: (path) => dropOn(page, "column-repository", [path]),
+    dropFiles: (testId, files) => dropOn(page, testId, files),
+    async openedLinks() {
+      const text = await readFile(links, "utf8").catch(() => "");
+      return text.split("\n").filter((line) => line !== "");
+    },
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
     async screenshot(name) {

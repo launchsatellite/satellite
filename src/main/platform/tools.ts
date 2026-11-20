@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { posix, win32 } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
+import { isFullyQualified, samePath } from "./paths.ts";
 import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
@@ -72,6 +75,39 @@ const gitQuiet = {
 };
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
+const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
+const noProxyKeys = ["NO_PROXY", "no_proxy"];
+const claudeHostKeys = new Set([
+  "CLAUDECODE",
+  "CLAUDE_CODE_CHILD_SESSION",
+  "CLAUDE_CODE_SSE_PORT",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_BRIDGE_SESSION_ID",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_EFFORT",
+  "CLAUDE_JOB_DIR",
+  "CLAUDE_PID",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_CODE_CHILD_NOTES_DIR",
+  "CLAUDE_CODE_SESSION_ATTENDED",
+  "TERM_PROGRAM",
+  "TERM_PROGRAM_VERSION",
+  "TERM_SESSION_ID",
+  "ITERM_SESSION_ID",
+  "LC_TERMINAL",
+  "KITTY_WINDOW_ID",
+  "KITTY_PID",
+  "KITTY_LISTEN_ON",
+  "KITTY_PUBLIC_KEY",
+  "WT_SESSION",
+  "TMUX",
+  "TMUX_PANE",
+  "STY",
+]);
+const editorPrefix = "VSCODE_";
+const loopback = "127.0.0.1";
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
@@ -87,6 +123,27 @@ function without(env: Record<string, string>, keys: Set<string>): Record<string,
   return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.has(key.toUpperCase())));
 }
 
+function withLoopback(list: string | undefined): string {
+  if (list === undefined || list === "") return loopback;
+  return list.split(/[\s,]+/).includes(loopback) ? list : `${list},${loopback}`;
+}
+
+function isEditorAskpass(env: Record<string, string>, platform: NodeJS.Platform): boolean {
+  const askpass = env["GIT_ASKPASS"];
+  const editorHelper = env[`${editorPrefix}GIT_ASKPASS_MAIN`];
+  if (askpass === undefined || editorHelper === undefined) return false;
+  const paths = platform === "win32" ? win32 : posix;
+  return samePath(paths.dirname(askpass), paths.dirname(editorHelper), platform);
+}
+
+async function isMissingFile(file: string): Promise<boolean> {
+  if (!isFullyQualified(file)) return false;
+  return stat(file).then(
+    (stats) => !stats.isFile(),
+    () => true,
+  );
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -99,6 +156,23 @@ export function toolEnvironment(tool: Tool, env: Record<string, string>): Record
   if (tool === "git") return { ...without(env, gitReplacedKeys), ...gitQuiet };
   if (tool === "gh") return { ...without(env, ghReplacedKeys), ...ghQuiet };
   return env;
+}
+
+export function claudeEnvironment(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const nameOf = (key: string) => (platform === "win32" ? key.toUpperCase() : key);
+  const kept = Object.fromEntries(
+    Object.entries(env).filter(([key]) => {
+      const name = nameOf(key);
+      return !claudeHostKeys.has(name) && !name.startsWith(editorPrefix);
+    }),
+  );
+  if (isEditorAskpass(env, platform)) delete kept["GIT_ASKPASS"];
+  if (!proxyKeys.some((key) => (env[key] ?? "") !== "")) return kept;
+  for (const key of noProxyKeys) kept[key] = withLoopback(env[key]);
+  return kept;
 }
 
 export function parseToolOverride(
@@ -126,7 +200,7 @@ export async function resolveTool(tool: Tool): Promise<ResolvedCommand | undefin
     console.error(error instanceof Error ? error.message : `${tool} has a malformed override`);
     return undefined;
   }
-  if (override !== undefined) return override;
+  if (override !== undefined) return (await isMissingFile(override.file)) ? undefined : override;
   const file = await findExecutable(tool, await userEnvironment());
   return file === undefined ? undefined : { file, args: [] };
 }

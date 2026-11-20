@@ -19,6 +19,7 @@ export interface LoadedProjects {
   projects: StoredProject[];
   notice: string | null;
   writable: boolean;
+  read: boolean;
 }
 export interface ProjectsFile {
   load(): Promise<LoadedProjects>;
@@ -106,6 +107,7 @@ async function readProjectsFile(file: string): Promise<LoadedProjects> {
     projects: value.projects,
     notice: notices[outcome.kind],
     writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
+    read: outcome.kind === "read",
   };
 }
 

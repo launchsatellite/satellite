@@ -1,7 +1,10 @@
 import { setTimeout as delay } from "node:timers/promises";
+import type { Page } from "playwright-core";
+import { z } from "zod";
 import { isProcessAlive, type AppSession } from "../driver.ts";
 
 const pollMs = 100;
+const refusedAnswer = z.object({ ok: z.literal(false), error: z.object({ code: z.string() }) });
 const shownTimeoutMs = 15_000;
 
 export const promptTimeoutMs = 60_000;
@@ -46,7 +49,19 @@ export async function startClaude(session: AppSession, count: number): Promise<n
     "Claude Code stand-in did not appear in the terminal",
   );
   if (pid === undefined) throw new Error("the stand-in logged no start");
+  await terminalFocused(session);
   return pid;
+}
+
+export async function terminalFocused(session: AppSession): Promise<void> {
+  await waitUntil(
+    () =>
+      session.page.evaluate(
+        () => (document.activeElement?.closest('[data-testid="terminal"]') ?? null) !== null,
+      ),
+    promptTimeoutMs,
+    "the terminal never took focus",
+  );
 }
 
 export async function toastReads(
@@ -86,4 +101,71 @@ export async function visible(
     .catch(() => {
       throw new Error(`${testId} did not appear ${when}`);
     });
+}
+
+export async function stateIs(
+  session: AppSession,
+  testId: string,
+  expected: string,
+  when: string,
+): Promise<void> {
+  const element = session.page.getByTestId(testId);
+  let read: string | null = null;
+  await waitUntil(
+    async () => {
+      read = (await element.count()) === 0 ? null : await element.getAttribute("data-state");
+      return read === expected;
+    },
+    promptTimeoutMs,
+    () => `${testId} read ${JSON.stringify(read)} instead of ${expected} ${when}`,
+  );
+}
+
+export async function standInInput(session: AppSession, from = 0): Promise<string> {
+  return (await session.standInEvents())
+    .slice(from)
+    .flatMap((event) => (event.type === "input" ? [event.data] : []))
+    .join("");
+}
+
+export async function hooksAnswered(session: AppSession, name: string): Promise<number> {
+  return (await session.standInEvents()).filter(
+    (event) => event.type === "hook" && event.event === name && event.status === 204,
+  ).length;
+}
+
+export async function settingsFileOf(session: AppSession, pid: number): Promise<string> {
+  const start = (await session.standInEvents()).find(
+    (event) => event.type === "start" && event.pid === pid,
+  );
+  const args = start?.type === "start" ? start.args : [];
+  const file = args[args.indexOf("--settings") + 1];
+  if (!args.includes("--settings") || file === undefined) {
+    throw new Error(`the stand-in ${String(pid)} started without --settings`);
+  }
+  return file;
+}
+
+export async function bridgeAnswer(
+  page: Page,
+  channel: string,
+  payload: unknown,
+): Promise<unknown> {
+  return page.evaluate(
+    async ([name, data]) => {
+      const api: unknown = Reflect.get(window, "satellite");
+      const invoke: unknown =
+        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+      if (typeof invoke !== "function") return "window.satellite.invoke is missing";
+      const result: unknown = await Reflect.apply(invoke, api, [name, data]);
+      return result;
+    },
+    [channel, payload],
+  );
+}
+
+export async function bridgeCode(page: Page, channel: string, payload: unknown): Promise<string> {
+  const answer = await bridgeAnswer(page, channel, payload);
+  const parsed = refusedAnswer.safeParse(answer);
+  return parsed.success ? parsed.data.error.code : `answered ${JSON.stringify(answer)}`;
 }
