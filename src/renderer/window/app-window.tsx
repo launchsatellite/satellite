@@ -1,3 +1,4 @@
+import { ClaudePane } from "../proving/claude-pane.tsx";
 import { ToolReadout } from "../proving/tool-readout.tsx";
 
 export function AppWindow() {
@@ -18,7 +19,9 @@ export function AppWindow() {
         aria-label="Repository"
         className="border-r border-line"
       />
-      <section data-testid="column-sessions" aria-label="Sessions" />
+      <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
+        <ClaudePane />
+      </section>
     </div>
   );
 }

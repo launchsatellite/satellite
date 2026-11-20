@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
-import { BridgeFailure } from "./bridge/registry.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
 import { toolVersions } from "./tools/tool-versions.ts";
 import {
   appOrigin,
@@ -14,13 +14,11 @@ import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow } from "./window/main-window.ts";
 
-function noTerminal(): Promise<never> {
-  return Promise.reject(new BridgeFailure("not-found", "Terminals are not available yet."));
-}
-
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
 }
+
+const terminals = createTerminalSessions();
 
 async function start(): Promise<void> {
   await app.whenReady();
@@ -32,10 +30,7 @@ async function start(): Promise<void> {
   registerBridge(
     {
       "tools.versions": toolVersions,
-      "terminal.start": noTerminal,
-      "terminal.write": noTerminal,
-      "terminal.resize": noTerminal,
-      "terminal.close": noTerminal,
+      ...terminals.handlers,
     },
     allowedOrigin(entryUrl),
   );
@@ -49,6 +44,10 @@ start().catch((error: unknown) => {
   const reason = error instanceof Error ? error.message : String(error);
   console.error(`Satellite could not open its window and is quitting. ${reason}`);
   app.exit(1);
+});
+
+app.on("before-quit", () => {
+  terminals.closeAll();
 });
 
 app.on("window-all-closed", () => {

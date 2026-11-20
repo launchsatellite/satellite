@@ -8,6 +8,7 @@ const fontFamilies = [
   "Funnel Display Variable",
   "Geist Mono Variable",
   "Geist Pixel",
+  "Satellite Terminal Mono",
 ];
 
 await Promise.all(fontFamilies.map((family) => document.fonts.load(`13px "${family}"`)));

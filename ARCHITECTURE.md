@@ -37,8 +37,6 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 - **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect.
 - **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or it reloads, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. So nothing a page started outlives it, even when a request was still in flight.
 
-The terminal channels are in the contract and validated, and their handlers answer `not-found` until the terminal is wired.
-
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
 | `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters | Takes no input. The tools run with fixed arguments and no shell. |
@@ -58,6 +56,20 @@ The terminal channels are in the contract and validated, and their handlers answ
 - **Search.** Tools are found by walking `PATH` and skipping empty and relative entries, so the current folder is never searched. A match must be a regular file, and executable on macOS and Linux. On Windows surrounding quotes are stripped, an entry needs a drive letter or a network share, and only `.exe` and `.com` files count, because batch files need a shell that re-parses arguments.
 - **Running.** Tools run with an argument array and no shell, a 16 MiB output limit and the user's environment without any `ELECTRON_` variable. Past its time limit, 30 seconds unless the caller asks for less, a tool gets `SIGTERM` and two seconds later `SIGKILL`. On Windows its whole process tree is ended at once. Errors name the tool or the override variable, never its arguments.
 
+## Terminal
+
+The right column runs the real Claude Code in a terminal Satellite owns. The background process holds the pseudo terminal and the interface draws it with xterm.js.
+
+- **Ownership.** The interface picks a UUID for each terminal, subscribes to its events, and only then asks to start it, so no early output is lost. A terminal belongs to the page load that started it. Write, resize and close from any other page answer `not-found`, and a duplicate id is refused.
+- **Cleanup.** When the owner ends, through a reload, a crash or a closed window, its terminals are killed, even one still starting. Quitting kills every terminal. A kill ends the whole process tree. On macOS and Linux the terminal's process group and every descendant found with `ps` get `SIGHUP`, then `SIGKILL` two seconds later. On Windows `taskkill /T /F` ends the tree before the pseudo terminal closes. Claude Code's own tools run as its descendants, so a terminal that ends leaves nothing behind.
+- **Limits.** 16 terminals at once. Input is split into writes of at most 65536 characters and sent through one queue per terminal, so a large paste arrives whole and in order. Scrollback keeps 5000 lines.
+- **Environment.** Claude Code starts in the app's working folder, or the home folder when that is not a folder, with the user's environment plus `TERM=xterm-256color` and `COLORTERM=truecolor`.
+- **DOM renderer.** xterm.js draws with its default DOM renderer. A GPU renderer would need another dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text.
+- **Terminal font.** The DOM renderer draws block and box characters from the font, and Geist Mono's block glyphs are shorter than its line box, which leaves seams between rows in Claude Code's logo. The terminal uses Geist Mono under its own family name with ascent and descent overrides that match the block glyphs, so blocks join with no gap and lines sit tight. A taller line height was rejected because it brings the seams back.
+- **Unicode 11.** The unicode11 addon is active, so emoji and wide characters take the same cell widths Claude Code expects. The graphemes addon was rejected because it is experimental.
+- **Shift+Enter.** xterm.js has no extended keyboard protocol, so Shift+Enter with no other modifier sends ESC then CR, the sequence Claude Code reads as a new line, and the key's own events are swallowed.
+- **The spawn helper.** node-pty ships its macOS `spawn-helper` without the executable bit, which fails every spawn with `posix_spawnp failed`. The postinstall step restores the bit. `npm rebuild node-pty` does not, and the node-pty beta that fixes it was rejected because it is a beta. node-pty stays out of the bundle because it is a runtime dependency, and `src/main/platform/pty.ts` is the only file that imports it.
+
 ## Folder layout
 
 | Path | What |
@@ -65,12 +77,14 @@ The terminal channels are in the contract and validated, and their handlers answ
 | `src/main/main.ts` | Startup order. Home, scheme, hardening, protocol, bridge, window |
 | `src/main/bridge/` | The router that validates every request, the sender check, the per-page owners and the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
-| `src/main/platform/` | The Satellite home, path confinement, the login shell environment and finding and running tools |
+| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, and the pseudo terminal |
+| `src/main/terminal/` | The terminal sessions and who owns them |
 | `src/main/tools/` | Tool versions for the left column |
 | `src/preload/preload.ts` | Exposes `window.satellite` |
 | `src/renderer/entry.tsx` | Loads the four typefaces, then renders the window |
 | `src/renderer/bridge/` | The typed client that checks every answer and event |
-| `src/renderer/proving/` | The tool readout that proves the bridge end to end |
+| `src/renderer/proving/` | The tool readout and the Claude Code pane that prove the bridge and the terminal end to end |
+| `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
 | `src/renderer/window/` | The three columns |
 | `src/renderer/ui/` | Shared interface parts such as the primary button |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
