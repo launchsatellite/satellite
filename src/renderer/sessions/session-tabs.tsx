@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, type KeyboardEvent } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
@@ -34,6 +34,12 @@ export function sessionPanelId(key: string): string {
 }
 
 export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsProps) {
+  useEffect(() => {
+    if (active === undefined) return;
+    document
+      .getElementById(sessionTabId(active))
+      ?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
   const close = (key: string) => {
     onClose(key);
     focusActiveTabIfLost();
@@ -84,6 +90,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
                 id={sessionTabId(tab.key)}
                 aria-selected={selected}
                 aria-controls={sessionPanelId(tab.key)}
+                aria-keyshortcuts="Delete"
                 tabIndex={selected ? 0 : -1}
                 data-testid={`session-tab-${String(tab.number)}`}
                 data-state={tab.status}
@@ -98,6 +105,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
               <button
                 type="button"
                 tabIndex={-1}
+                aria-hidden
                 aria-label={`Close ${name}`}
                 data-testid={`close-session-${String(tab.number)}`}
                 onClick={() => {
