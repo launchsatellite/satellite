@@ -47,7 +47,7 @@ Three columns that never move.
 
 Selecting a workspace switches the centre and the right column together. Sessions in other workspaces keep running.
 
-Every action is one command, reached from its button, its shortcut or the command menu on Cmd or Ctrl+K. The quick switcher on Cmd or Ctrl+P jumps to any workspace in any project. On first run Satellite checks `git`, `gh` and `claude` for real and names the step that fixes whatever is missing.
+Every action is one command, reached from its button, its shortcut or the command menu on Cmd+K, or Ctrl+Shift+K on Windows and Linux. The quick switcher on Cmd+P, or Ctrl+Shift+P, jumps to any workspace in any project. On first run Satellite checks `git`, `gh` and `claude` for real and names the step that fixes whatever is missing.
 
 ## Decisions
 

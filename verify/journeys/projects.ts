@@ -20,6 +20,7 @@ const execute = promisify(execFile);
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const narrowPresses = 4;
+const menuCommands = 7;
 const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
@@ -243,6 +244,13 @@ async function run(session: AppSession): Promise<void> {
   await projectsWidth(session, narrowed, "after the restart");
 
   await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "palette", "after opening the command menu");
+  const listed = await session.page.locator("[data-testid^='command-']").count();
+  assert.equal(
+    listed,
+    menuCommands,
+    `the command menu listed ${String(listed)} commands instead of ${String(menuCommands)}`,
+  );
   await session.page.getByTestId("palette-input").fill("remove");
   await visible(session, "command-project-remove", "in the command menu for remove");
   await session.page.keyboard.press("Enter");
