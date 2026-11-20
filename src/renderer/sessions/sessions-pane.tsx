@@ -5,7 +5,12 @@ import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
-import { sendToClaudeCodeEvent, sentText, type PromptTarget } from "./send-to-claude-code.ts";
+import {
+  leavesFocusAlone,
+  sendToClaudeCodeEvent,
+  sentText,
+  type PromptTarget,
+} from "./send-to-claude-code.ts";
 import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
 import type { Sessions } from "./use-sessions.ts";
 
@@ -97,6 +102,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
   const active = selected === null ? undefined : sessions.activeOf(selected);
   const shownTab = tabs.find((tab) => tab.key === active);
   const targets = useRef(new Map<string, PromptTarget>());
+  const pane = useRef<HTMLDivElement>(null);
   const latest = useRef({ shownTab, notify });
   useEffect(() => {
     latest.current = { shownTab, notify };
@@ -123,6 +129,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
       }
       target.paste(text);
       setTimeout(() => {
+        if (leavesFocusAlone(document.activeElement, pane.current)) return;
         targets.current.get(tab.terminalId)?.focus();
       });
     };
@@ -168,7 +175,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
     );
   };
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={pane} className="flex h-full min-h-0 flex-col">
       {top()}
       <div hidden={tabs.length === 0} className="min-h-0 flex-1">
         {sessions.all.map((tab) => {
