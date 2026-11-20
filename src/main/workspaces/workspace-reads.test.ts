@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adoptable, type AdoptionInput } from "./workspace-reads.ts";
+import { adoptable, droppedSentences, type AdoptionInput } from "./workspace-reads.ts";
 import type { ListedWorktree } from "./worktree-list.ts";
 
 const segment = "/Users/<name>/.satellite/worktrees/repo";
@@ -76,5 +76,24 @@ describe("adoptable", () => {
     ).toEqual([]);
     const three = ["a", "b", "c"].map((name) => worktree(`${segment}/${name}`, name));
     expect(adoptable(input(three, { room: 2 })).map((found) => found.name)).toEqual(["a", "b"]);
+  });
+});
+
+describe("droppedSentences", () => {
+  it("names as many dropped workspaces as fit and keeps the prune advice", () => {
+    const project = "a-project-with-a-long-name-for-its-folder";
+    const drops = Array.from({ length: 8 }, (_, index) => ({
+      workspaceId: String(index),
+      projectId: "p",
+      name: `workspace-number-${String(index)}-with-a-long-name`,
+      project,
+      prunable: true,
+      sentence: "unused",
+    }));
+    const [sentence = ""] = droppedSentences(drops);
+    expect(sentence.length).toBeLessThanOrEqual(300);
+    expect(sentence).toMatch(
+      /^8 workspaces left a-project-with-a-long-name-for-its-folder because they were removed outside Satellite, workspace-number-0-with-a-long-name, .* and \d more\. git still counts some of their branches as checked out until you run git worktree prune\.$/,
+    );
   });
 });

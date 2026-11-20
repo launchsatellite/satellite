@@ -420,7 +420,10 @@ describe("workspaceHandlers", () => {
     for (let index = 0; index < 4; index += 1) {
       void handlers["workspaces.prepare"]({ projectId: randomUUID() }, owner);
     }
-    const busy = { code: "refused", message: "Satellite is checking other workspaces. Try again." };
+    const busy = {
+      code: "refused",
+      message: "Satellite is busy with other workspaces. Try again in a moment.",
+    };
     await expect(
       handlers["workspaces.prepare"]({ projectId: randomUUID() }, owner),
     ).rejects.toMatchObject(busy);

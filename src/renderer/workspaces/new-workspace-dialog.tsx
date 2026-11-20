@@ -32,6 +32,7 @@ interface NewWorkspaceDialogProps {
 
 const stepOrder: readonly CreationStep[] = ["start", "branch", "worktree", "files", "save"];
 const defaultStart = "default";
+const undoneSteps: readonly CreationStep[] = ["branch", "worktree", "files"];
 const field =
   "h-8 rounded-[8px] border border-ctl bg-side px-[10px] text-[13px] text-fg outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgb(106_75_255/0.22)] disabled:opacity-[0.38]";
 const fieldLabel = "text-[12px] font-semibold text-fg2";
@@ -54,6 +55,10 @@ const readouts: Record<StepState, string | null> = {
 function pendingSteps(): Steps {
   const entry: Steps[CreationStep] = { state: "pending", detail: null };
   return { start: entry, branch: entry, worktree: entry, files: entry, save: entry };
+}
+
+function settled(entry: Steps[CreationStep]): Steps[CreationStep] {
+  return entry.state === "failed" ? { ...entry, state: "undone" } : entry;
 }
 
 function stepTitle(step: CreationStep, name: string): string {
@@ -188,20 +193,23 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     stopping.current = false;
     const operationId = crypto.randomUUID();
     let reported = false;
+    const started = new Set<CreationStep>();
+    const undone = new Set<CreationStep>();
     setRefusal(null);
     setSteps(pendingSteps());
     setPhase({ kind: "running", prepared: phase.prepared, operationId, stopping: false });
     unsubscribe.current = subscribe("workspaces.step", (event) => {
       if (event.operationId !== operationId) return;
       reported = true;
+      if (event.state === "running") started.add(event.step);
+      if (event.state === "undone") undone.add(event.step);
       setSteps((current) => {
         const before = current[event.step];
         const keepsFailure = before.state === "failed" && event.state === "undone";
-        const stopped = stopping.current && event.state === "failed";
         return {
           ...current,
           [event.step]: {
-            state: stopped ? "undone" : keepsFailure ? "failed" : event.state,
+            state: keepsFailure ? "failed" : event.state,
             detail: event.detail ?? before.detail,
           },
         };
@@ -222,11 +230,23 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
       }
       submitting.current = false;
       if (reported) {
+        const stopped =
+          stopping.current &&
+          [...started].every((step) => !undoneSteps.includes(step) || undone.has(step));
+        if (stopped) {
+          setSteps((current) => ({
+            start: settled(current.start),
+            branch: settled(current.branch),
+            worktree: settled(current.worktree),
+            files: settled(current.files),
+            save: settled(current.save),
+          }));
+        }
         setPhase({
           kind: "failed",
           prepared: phase.prepared,
           message: result.error.message,
-          stopped: stopping.current,
+          stopped,
         });
         return;
       }

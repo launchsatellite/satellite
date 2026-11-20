@@ -208,6 +208,26 @@ export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
   return found.slice(0, room);
 }
 
+function namesList(names: readonly string[], shown: number): string {
+  const head = names.slice(0, shown);
+  const rest = names.length - shown;
+  return rest === 0
+    ? `${head.slice(0, -1).join(", ")} and ${head.at(-1) ?? ""}`
+    : `${head.join(", ")} and ${String(rest)} more`;
+}
+
+function foldedSentence(names: readonly string[], project: string, prune: string): string {
+  const count = `${String(names.length)} workspaces left`;
+  const why = "because they were removed outside Satellite";
+  for (let shown = names.length; shown > 0; shown -= 1) {
+    const sentence = `${count} ${project} ${why}, ${namesList(names, shown)}.${prune}`;
+    if (sentence.length <= sentenceLimit) return sentence;
+  }
+  const room = sentenceLimit - `${count}  ${why}.${prune}`.length;
+  const shortProject = project.length <= room ? project : `${project.slice(0, room - 1)}…`;
+  return `${count} ${shortProject} ${why}.${prune}`;
+}
+
 export function droppedSentences(drops: readonly Drop[]): string[] {
   const byProject = new Map<string, Drop[]>();
   for (const drop of drops) {
@@ -217,14 +237,16 @@ export function droppedSentences(drops: readonly Drop[]): string[] {
     const [first] = group;
     if (first === undefined) return [];
     if (group.length === 1) return [first.sentence];
-    const names = group.map((drop) => drop.name);
-    const listed = `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
     const prune = group.some((drop) => drop.prunable)
       ? " git still counts some of their branches as checked out until you run git worktree prune."
       : "";
-    return bounded(
-      `${String(group.length)} workspaces left ${first.project} because they were removed outside Satellite, ${listed}.${prune}`,
-    );
+    return [
+      foldedSentence(
+        group.map((drop) => drop.name),
+        first.project,
+        prune,
+      ),
+    ];
   });
 }
 

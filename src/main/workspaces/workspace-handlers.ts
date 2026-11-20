@@ -50,7 +50,7 @@ const creationStopMs = 20_000;
 
 const detailLimit = 300;
 const canceledSentence = "You stopped making the workspace.";
-const busyReading = "Satellite is checking other workspaces. Try again.";
+const busyReading = "Satellite is busy with other workspaces. Try again in a moment.";
 const notSavable =
   "Satellite can't save its project list right now, so it won't make a workspace. Restart Satellite, then try again.";
 
