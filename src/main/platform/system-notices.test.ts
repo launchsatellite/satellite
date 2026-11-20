@@ -98,6 +98,22 @@ describe("system notices", () => {
     expect(fakes.app.setBadgeCount).not.toHaveBeenCalled();
   });
 
+  it("never counts the window as in front or seen while recording", async () => {
+    const file = join(await mkdtemp(join(tmpdir(), "satellite-notices-")), "notices.jsonl");
+    vi.stubEnv("SATELLITE_VERIFY_NOTICES", file);
+    const recording = await freshModule();
+    const seen = vi.fn();
+    expect(recording.windowCountsInFront(() => true)).toBe(false);
+    recording.windowTookFocus(seen);
+    expect(seen).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+    const real = await freshModule();
+    expect(real.windowCountsInFront(() => true)).toBe(true);
+    expect(real.windowCountsInFront(() => false)).toBe(false);
+    real.windowTookFocus(seen);
+    expect(seen).toHaveBeenCalledOnce();
+  });
+
   it("never lets a leftover variable or a relative path swallow notifications", async () => {
     const file = join(await mkdtemp(join(tmpdir(), "satellite-notices-")), "notices.jsonl");
     vi.stubEnv("SATELLITE_VERIFY_NOTICES", file);

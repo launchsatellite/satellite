@@ -76,6 +76,14 @@ export function noticesRecorded(): boolean {
   return recordFile() !== undefined;
 }
 
+export function windowCountsInFront(inFront: () => boolean): boolean {
+  return !noticesRecorded() && inFront();
+}
+
+export function windowTookFocus(seen: () => void): void {
+  if (!noticesRecorded()) seen();
+}
+
 export function prepareSystemNotices(): void {
   if (process.platform === "win32") app.setAppUserModelId(appUserModelId);
   if (process.platform === "linux" || noticesRecorded()) setAppBadge(0);

@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { app, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
@@ -8,10 +7,11 @@ import { createNotices, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
 import {
-  noticesRecorded,
   prepareSystemNotices,
   setAppBadge,
   showNotice,
+  windowCountsInFront,
+  windowTookFocus,
 } from "./platform/system-notices.ts";
 import { createProjects, type Projects } from "./projects/project-list.ts";
 import { startHookListener, type HookListener } from "./sessions/hook-listener.ts";
@@ -40,6 +40,7 @@ import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { bringToFront, createMainWindow, mainWindow, windowInFront } from "./window/main-window.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
+import { settleForQuit } from "./window/quit-settle.ts";
 import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
@@ -91,7 +92,7 @@ async function start({
   );
   const window = await createMainWindow(entryUrl);
   window.on("focus", () => {
-    if (!noticesRecorded()) notices.seen();
+    windowTookFocus(notices.seen);
   });
 }
 
@@ -138,7 +139,7 @@ function assemble(home: string): Parts {
     },
   });
   const notices = createNotices({
-    inFront: () => !noticesRecorded() && windowInFront(),
+    inFront: () => windowCountsInFront(windowInFront),
     subject: (ref) => noticeSubject(projects.store, ref),
     show: showNotice,
     setBadge: setAppBadge,
@@ -185,22 +186,7 @@ if (parts !== undefined && app.requestSingleInstanceLock()) {
 app.on(
   "before-quit",
   createQuitGate(
-    () => {
-      parts?.notices.stop();
-      const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
-      return Promise.all([
-        bounded(
-          Promise.all([
-            parts?.terminals.closeAll(),
-            parts?.last.flush(),
-            parts?.interfaceFile.flush(),
-          ]),
-        ),
-        (parts?.workspaces.stopAll() ?? Promise.resolve()).then(() =>
-          bounded(parts?.projects.flush() ?? Promise.resolve()),
-        ),
-      ]);
-    },
+    () => settleForQuit(parts, quitBoundMs),
     () => {
       app.quit();
     },
