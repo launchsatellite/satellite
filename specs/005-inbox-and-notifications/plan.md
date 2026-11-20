@@ -230,6 +230,8 @@ The words and the controller that decides when to notify, with their tests. Noth
     interface Notices {
       update(needing: readonly Needing[]): void;
       setEnabled(on: boolean): void;
+      stop(): void;
+      seen(): void;
     }
     createNotices(options: NoticesOptions): Notices
     ```
@@ -239,6 +241,7 @@ The words and the controller that decides when to notify, with their tests. Noth
   - Then, with `pending` not empty and no timer waiting, it flushes at once when nothing was shown yet or `noticeGapMs` has passed since the last show by `Date.now()`, else it sets one timer for the rest of the gap.
   - A flush clears the timer. While disabled or `inFront()` is true it empties `pending` and stops. Otherwise it takes `pending`'s entries, empties it and records the show time before any wait, so no second flush runs inside the gap. It resolves each entry's `subject`, drops the `undefined` ones and stops when none is left. Then it closes the shown notice, calls `show(noticeText(subjects), () => { open(target) })` with `target` the newest entry, and keeps the answer and the keys it named. A `show` that throws is logged once per run with `console.error("Satellite could not show a notification", error)`, and the next need tries again.
   - `setEnabled(false)` empties `pending` and clears the timer. `setEnabled(true)` only enables, so a need that began while off is never announced late.
+  - `stop()`, called first by the quit gate, empties `pending`, clears the timer and keeps the controller quiet for good, whatever `setEnabled` is called with afterwards. Counts and closes go on.
 
 - [ ] **Step 1: Tests.** See each fail first. `notices.test.ts` uses `vi.useFakeTimers()` and fakes for every option, with `inFront` returning a variable the test sets.
   - `notice-text.test.ts`

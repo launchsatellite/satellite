@@ -254,6 +254,22 @@ describe("createNotices", () => {
     expect(shown).toHaveLength(1);
   });
 
+  it("stays off once stopped for quitting, whatever is saved afterwards", async () => {
+    const { shown, badges, notices } = setup();
+    notices.update([need("1")]);
+    await settle();
+    notices.update([need("1"), need("2")]);
+    notices.stop();
+    notices.setEnabled(true);
+    await settle(noticeGapMs * 2);
+    notices.update([need("1"), need("2"), need("3")]);
+    await settle(noticeGapMs * 2);
+    notices.update([]);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]?.close).toHaveBeenCalledOnce();
+    expect(badges).toEqual([1, 2, 3, 0]);
+  });
+
   it("shows nothing when turned off or brought to the front while a name is looked up", async () => {
     const { state, shown, notices } = setup();
     notices.update([need("1")]);

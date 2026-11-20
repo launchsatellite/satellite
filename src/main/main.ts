@@ -186,7 +186,7 @@ app.on(
   "before-quit",
   createQuitGate(
     () => {
-      parts?.notices.setEnabled(false);
+      parts?.notices.stop();
       const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
       return Promise.all([
         bounded(

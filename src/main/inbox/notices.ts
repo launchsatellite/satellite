@@ -19,6 +19,7 @@ export interface NoticesOptions {
 export interface Notices {
   update(needing: readonly Needing[]): void;
   setEnabled(on: boolean): void;
+  stop(): void;
   seen(): void;
 }
 interface Named {
@@ -34,6 +35,7 @@ function placeKey({ projectId, workspace }: WorkspaceRef): string {
 
 export function createNotices({ inFront, subject, show, setBadge, open }: NoticesOptions): Notices {
   let enabled = true;
+  let stopped = false;
   let needing = new Map<string, Needing>();
   const pending = new Map<string, Needing>();
   const retry = new Map<string, Needing>();
@@ -42,7 +44,7 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   let shown: { notice: ShownNotice; keys: string[] } | undefined;
   let failureLogged = false;
   let runs = 0;
-  const quiet = () => !enabled || inFront();
+  const quiet = () => stopped || !enabled || inFront();
   const clearTimer = () => {
     clearTimeout(timer);
     timer = undefined;
@@ -137,6 +139,10 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     setEnabled(on) {
       enabled = on;
       if (!on) forgetWaiting();
+    },
+    stop() {
+      stopped = true;
+      forgetWaiting();
     },
     seen: forgetWaiting,
   };
