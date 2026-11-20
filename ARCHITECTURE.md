@@ -75,6 +75,17 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 - **Shift+Enter.** xterm.js has no extended keyboard protocol, so Shift+Enter with no other modifier sends ESC then CR, the sequence Claude Code reads as a new line, and the key's own events are swallowed.
 - **The spawn helper.** node-pty ships its macOS `spawn-helper` without the executable bit, which fails every spawn with `posix_spawnp failed`. The postinstall step restores the bit. `npm rebuild node-pty` does not, and the node-pty beta that fixes it was rejected because it is a beta. node-pty stays out of the bundle because it is a runtime dependency, and `src/main/platform/pty.ts` is the only file that imports it.
 
+## Diff
+
+The centre column shows a read-only side by side diff of two texts with Monaco's diff editor, the component the Changes and Pull request views grow from.
+
+- **Only the editor API.** The interface imports `monaco-editor/editor/editor.api` and its codicon styles, with no languages, so every text is plain text. The diff's gutter markers are codicons, which the bare API leaves out.
+- **The worker.** The editor worker is bundled by Vite as its own file and served from `app://satellite` like every other asset, so it loads under the production policy's `worker-src 'self'` with no fallback to the main thread.
+- **Read only.** Both sides are read only, the DOM included, and the revert gutter menu is off, so the diff can show changes but never make them.
+- **Always side by side.** The diff stays in two columns at any width, because the editor's narrow-width inline view would hide which side a line belongs to.
+- **Theme.** The `satellite` theme reads the app tokens, `bg`, `fg`, `dim`, `add` and `del` for lines and `addfg` and `delfg` at low alpha for changed words and `ctl` for scrollbars, and is rebuilt on every colour scheme change. Each token goes through a canvas to come back as six digit hex, because the built stylesheet shortens colours like `#ffffff` to `#fff` and Monaco accepts only the long form.
+- **Models.** Each text becomes a model, replaced when the texts change and disposed with the editor.
+
 ## Folder layout
 
 | Path | What |
@@ -88,8 +99,9 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 | `src/preload/preload.ts` | Exposes `window.satellite` |
 | `src/renderer/entry.tsx` | Loads the four typefaces, then renders the window |
 | `src/renderer/bridge/` | The typed client that checks every answer and event |
-| `src/renderer/proving/` | The tool readout and the Claude Code pane that prove the bridge and the terminal end to end |
+| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end |
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
+| `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
 | `src/renderer/window/` | The three columns |
 | `src/renderer/ui/` | Shared interface parts such as the primary button |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |

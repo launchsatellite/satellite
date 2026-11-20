@@ -1,4 +1,5 @@
 import { ClaudePane } from "../proving/claude-pane.tsx";
+import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolReadout } from "../proving/tool-readout.tsx";
 
 export function AppWindow() {
@@ -17,8 +18,10 @@ export function AppWindow() {
       <section
         data-testid="column-repository"
         aria-label="Repository"
-        className="border-r border-line"
-      />
+        className="min-h-0 border-r border-line"
+      >
+        <SampleDiff />
+      </section>
       <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
         <ClaudePane />
       </section>
