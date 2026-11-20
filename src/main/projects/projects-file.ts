@@ -1,11 +1,19 @@
 import { join } from "node:path";
 import { z } from "zod";
+import { bridgeLimits, workspaceName } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "../state/json-file.ts";
 
+export interface StoredWorkspace {
+  id: string;
+  name: string;
+  path: string;
+  branch: string;
+}
 export interface StoredProject {
   id: string;
   path: string;
+  workspaces: StoredWorkspace[];
 }
 export interface LoadedProjects {
   projects: StoredProject[];
@@ -19,22 +27,49 @@ export interface ProjectsFile {
 }
 
 export const projectLimit = 200;
+export const workspaceLimit = bridgeLimits.workspacesPerProject;
 
-const storedProject = z.strictObject({
+const storedPath = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine((path) => isFullyQualified(path));
+const storedWorkspace = z.strictObject({
   id: z.uuid(),
-  path: z
-    .string()
-    .min(1)
-    .max(4096)
-    .refine((path) => isFullyQualified(path)),
+  name: workspaceName,
+  path: storedPath,
+  branch: z.string().min(1).max(255),
 });
-const fileSchema = z
-  .strictObject({ version: z.literal(1), projects: z.array(storedProject).max(projectLimit) })
-  .refine(
-    ({ projects }) =>
-      new Set(projects.map((project) => project.id)).size === projects.length &&
-      new Set(projects.map((project) => project.path)).size === projects.length,
+const version1 = z
+  .strictObject({
+    version: z.literal(1),
+    projects: z.array(z.strictObject({ id: z.uuid(), path: storedPath })).max(projectLimit),
+  })
+  .transform(({ projects }) => ({
+    version: 2,
+    projects: projects.map((project) => ({ ...project, workspaces: [] })),
+  }));
+const version2 = z.strictObject({
+  version: z.literal(2),
+  projects: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        path: storedPath,
+        workspaces: z.array(storedWorkspace).max(workspaceLimit),
+      }),
+    )
+    .max(projectLimit),
+});
+const fileSchema = z.union([version1, version2]).refine(({ projects }) => {
+  const workspaces = projects.flatMap((project) => project.workspaces);
+  return (
+    allDifferent(projects.map((project) => project.id)) &&
+    allDifferent(projects.map((project) => project.path)) &&
+    allDifferent(workspaces.map((workspace) => workspace.id)) &&
+    allDifferent(workspaces.map((workspace) => workspace.path))
   );
+});
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -46,8 +81,12 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
     "Satellite couldn't open its saved projects, so it started with an empty list, left the file as it is and won't save project changes for now.",
 };
 
+function allDifferent(values: readonly string[]): boolean {
+  return new Set(values).size === values.length;
+}
+
 async function readProjectsFile(file: string): Promise<LoadedProjects> {
-  const { value, outcome } = await readJsonFile(file, fileSchema, { version: 1, projects: [] });
+  const { value, outcome } = await readJsonFile(file, fileSchema, { version: 2, projects: [] });
   return {
     projects: value.projects,
     notice: notices[outcome.kind],
@@ -68,7 +107,7 @@ export function createProjectsFile(home: string): ProjectsFile {
     async save(projects) {
       const loaded = await load();
       if (!loaded.writable) throw new Error("projects.json is not writable for this run");
-      await writer.write({ version: 1, projects });
+      await writer.write({ version: 2, projects });
     },
     flush: () => writer.flush(),
   };

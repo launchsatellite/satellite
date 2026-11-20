@@ -21,7 +21,7 @@ function spies() {
     ),
     "interface.save": vi.fn<BridgeHandler<"interface.save">>(() => Promise.resolve({})),
     "projects.list": vi.fn<BridgeHandler<"projects.list">>(() =>
-      Promise.resolve({ projects: [], notice: null }),
+      Promise.resolve({ projects: [], notice: null, dropped: [] }),
     ),
     "projects.choose": vi.fn<BridgeHandler<"projects.choose">>(() =>
       Promise.resolve({ outcome: "canceled" }),
@@ -33,11 +33,15 @@ function spies() {
           name: "alpha",
           parent: "folders",
           missing: null,
-          workspaces: [{ key: "main", branch: "main" }],
+          workspaces: [
+            { key: "main", name: null, branch: "main", ahead: 0, behind: 0, changed: 0 },
+          ],
         },
       }),
     ),
-    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() => Promise.resolve({})),
+    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() =>
+      Promise.resolve({ forgotWorkspaces: 0 }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -179,6 +183,21 @@ describe("createBridgeRouter", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);
+  });
+
+  it("refuses a selection with a workspace that is neither main nor a uuid", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    for (const workspace of ["main", terminalId]) {
+      const state = { ...defaultInterfaceState, selected: { projectId: terminalId, workspace } };
+      expect(await route("interface.save", { state }, owner)).toEqual({ ok: true, value: {} });
+    }
+    for (const workspace of ["Main", "fix-login", "", "../x", `${terminalId}x`, 1]) {
+      const state = { ...defaultInterfaceState, selected: { projectId: terminalId, workspace } };
+      const result = await route("interface.save", { state }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    expect(handlers["interface.save"]).toHaveBeenCalledTimes(2);
   });
 
   it("passes a valid request to its handler and returns its value", async () => {

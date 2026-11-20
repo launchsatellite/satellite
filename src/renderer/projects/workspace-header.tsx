@@ -15,7 +15,12 @@ export function WorkspaceHeader({
       data-testid="workspace-header"
       className="flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
-      <h1 className="max-w-[60%] flex-none truncate text-[14px] font-semibold">{project.name}</h1>
+      <h1 className="max-w-[60%] flex-none truncate text-[14px] font-semibold">
+        {workspace.name ?? project.name}
+      </h1>
+      {workspace.name !== null && (
+        <span className="min-w-0 truncate text-[13px] text-dim">{project.name}</span>
+      )}
       {project.missing === null && (
         <>
           <span className="flex-none text-dim">

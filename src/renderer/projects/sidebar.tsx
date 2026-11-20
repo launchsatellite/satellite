@@ -1,4 +1,4 @@
-import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
 import type { CommandId } from "../commands/command-registry.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
@@ -57,6 +57,32 @@ function CommandRow({
   );
 }
 
+function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: string | undefined }) {
+  const { ahead, behind, changed } = workspace;
+  const parts = [
+    ahead !== null && ahead > 0 ? `${String(ahead)} ahead` : undefined,
+    behind !== null && behind > 0 ? `${String(behind)} behind` : undefined,
+    changed !== null && changed > 0 ? `${String(changed)} changed files` : undefined,
+  ].filter((part) => part !== undefined);
+  if (parts.length === 0) return null;
+  return (
+    <span
+      data-testid={testId === undefined ? undefined : `${testId}-meta`}
+      aria-label={parts.join(", ")}
+      className="ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase"
+    >
+      {ahead !== null && ahead > 0 && <span aria-hidden="true">↑{ahead}</span>}
+      {behind !== null && behind > 0 && <span aria-hidden="true">↓{behind}</span>}
+      {changed !== null && changed > 0 && (
+        <span aria-hidden="true" className="flex items-center gap-[3px]">
+          <Icon name="folder" size={12} />
+          {changed}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
   const repeated = repeatedNames(projects);
   const rows = withUniqueTestIds(
@@ -66,7 +92,7 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
     projects.flatMap((project) =>
       project.workspaces.map((workspace) => ({
         projectId: project.id,
-        testId: `workspace-${project.name}-${workspace.key}`,
+        testId: `workspace-${project.name}-${workspace.name ?? "main"}`,
       })),
     ),
   );
@@ -125,6 +151,7 @@ function ProjectRows({
                 <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
                   {workspaceLabel(project, workspace)}
                 </span>
+                <Readouts workspace={workspace} testId={workspaceTestIds[index]} />
               </button>
             </li>
           );

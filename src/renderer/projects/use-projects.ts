@@ -9,7 +9,7 @@ const listFailure =
 
 export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): string {
   if (project.missing !== null) return "unavailable";
-  return workspace.branch ?? "detached";
+  return workspace.branch ?? workspace.name ?? "detached";
 }
 
 export function repeatedNames(projects: readonly ProjectView[]): Set<string> {
@@ -26,7 +26,7 @@ export function useProjects(notify: Notify): {
   projects: ProjectView[] | undefined;
   add: () => Promise<WorkspaceRef | undefined>;
   drop: (path: string) => Promise<WorkspaceRef | undefined>;
-  remove: (projectId: string) => Promise<boolean>;
+  remove: (projectId: string) => Promise<number | undefined>;
   refresh: () => void;
 } {
   const [projects, setProjects] = useState<ProjectView[]>();
@@ -50,6 +50,7 @@ export function useProjects(notify: Notify): {
           break;
         }
         if (result.value.notice !== null) notify(result.value.notice, "info");
+        for (const sentence of result.value.dropped) notify(sentence, "info");
         if (startedAt === changes.current) {
           setProjects(result.value.projects);
           break;
@@ -93,18 +94,18 @@ export function useProjects(notify: Notify): {
   );
   const remove = useCallback(
     async (projectId: string) => {
-      if (removing.current.has(projectId)) return false;
+      if (removing.current.has(projectId)) return undefined;
       removing.current.add(projectId);
       const result = await invoke("projects.remove", { projectId }).finally(() => {
         removing.current.delete(projectId);
       });
       if (!result.ok) {
         notify(result.error.message, "error");
-        return false;
+        return undefined;
       }
       changes.current += 1;
       setProjects((current) => current?.filter((project) => project.id !== projectId));
-      return true;
+      return result.value.forgotWorkspaces;
     },
     [notify],
   );
