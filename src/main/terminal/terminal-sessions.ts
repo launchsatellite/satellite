@@ -344,6 +344,7 @@ export function createTerminalSessions({
     if (session.pty === undefined) {
       await release(session);
       settle(session);
+      owner.emit("terminal.exit", { id, exitCode: 0, ending: "ended" });
     }
     return {};
   };

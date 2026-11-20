@@ -346,6 +346,20 @@ describe("createTerminalSessions", () => {
     }
   });
 
+  it("tells the page when quitting ends a start before it spawns", async () => {
+    const sessions = create();
+    const { mine, sent } = owners();
+    const starting = sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    await sessions.closeAll();
+    await starting;
+    expect(ptys).toHaveLength(0);
+    expect(sent).toHaveBeenCalledWith(expect.anything(), "terminal.exit", {
+      id: terminalId(1),
+      exitCode: 0,
+      ending: "ended",
+    });
+  });
+
   it("cancels a start closed by its own page, so the same id starts again", async () => {
     const { handlers } = create();
     const { mine } = owners();
