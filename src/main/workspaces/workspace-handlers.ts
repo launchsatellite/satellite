@@ -21,6 +21,11 @@ interface CreationRequest {
   name: string;
   start: StartChoice;
 }
+interface Creation {
+  projectId: string;
+  ownerId: number;
+  stop: AbortController;
+}
 interface WorkspaceOptions {
   home: string;
   store: ProjectStore;
@@ -29,7 +34,11 @@ interface WorkspaceOptions {
 export interface Workspaces {
   handlers: Pick<
     BridgeHandlers,
-    "workspaces.prepare" | "workspaces.create" | "workspaces.inspect" | "workspaces.archive"
+    | "workspaces.prepare"
+    | "workspaces.create"
+    | "workspaces.cancel"
+    | "workspaces.inspect"
+    | "workspaces.archive"
   >;
   stopAll(): Promise<void>;
 }
@@ -38,6 +47,7 @@ const creationsAtOnce = 4;
 const creationStopMs = 20_000;
 
 const detailLimit = 300;
+const canceledSentence = "You stopped making the workspace.";
 
 function unavailable(name: string): BridgeFailure {
   return new BridgeFailure(
@@ -68,6 +78,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
     return name;
   };
   const running = new Set<Promise<unknown>>();
+  const creations = new Map<string, Creation>();
   const track = <T>(work: Promise<T>, settled: () => void): Promise<T> => {
     running.add(work);
     const settle = () => {
@@ -95,6 +106,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
     projectLabel: string,
     request: CreationRequest,
     owner: BridgeOwner,
+    signal: AbortSignal,
   ) => {
     const { operationId, name, start } = request;
     const taken = await nameTaken(home, project.path, name, projectLabel);
@@ -106,7 +118,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
       project: projectLabel,
       name,
       start,
-      signal: quitting.signal,
+      signal,
       save: async (workspace) => {
         await store.addWorkspace(project.id, workspace);
         made = workspace;
@@ -166,10 +178,27 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
         if (project.workspaces.length >= workspaceLimit) {
           throw new BridgeFailure("limit", workspaceLimitSentence(projectLabel));
         }
+        if (creations.has(operationId)) {
+          throw new BridgeFailure("refused", "That creation is already running.");
+        }
         store.creating.add(projectId);
-        return track(create(project, projectLabel, { operationId, name, start }, owner), () => {
+        const stop = new AbortController();
+        creations.set(operationId, { projectId, ownerId: owner.id, stop });
+        const signal = AbortSignal.any([quitting.signal, stop.signal]);
+        const work = create(project, projectLabel, { operationId, name, start }, owner, signal);
+        return track(work, () => {
           store.creating.delete(projectId);
+          creations.delete(operationId);
         });
+      },
+      "workspaces.cancel": async ({ operationId, projectId }, owner) => {
+        await store.project(projectId);
+        const creation = creations.get(operationId);
+        if (creation?.projectId !== projectId || creation.ownerId !== owner.id) {
+          return { canceled: false };
+        }
+        creation.stop.abort(canceledSentence);
+        return { canceled: true };
       },
       "workspaces.inspect": async ({ projectId, workspaceId }) => {
         const { project, record } = await recordOf(store, projectId, workspaceId);

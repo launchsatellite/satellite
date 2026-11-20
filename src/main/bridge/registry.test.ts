@@ -61,6 +61,9 @@ function spies() {
         },
       }),
     ),
+    "workspaces.cancel": vi.fn<BridgeHandler<"workspaces.cancel">>(() =>
+      Promise.resolve({ canceled: true }),
+    ),
     "workspaces.inspect": vi.fn<BridgeHandler<"workspaces.inspect">>(() =>
       Promise.resolve({
         branch: "swift-comet",
@@ -234,6 +237,23 @@ describe("createBridgeRouter", () => {
     }
     noHandlerRan(handlers);
     expect(await route("workspaces.archive", valid, owner)).toMatchObject({ ok: true });
+  });
+
+  it("refuses a cancel that names anything but two ids", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = { operationId: terminalId, projectId: terminalId };
+    for (const payload of [
+      { operationId: terminalId },
+      { ...valid, operationId: "main" },
+      { ...valid, projectId: "../x" },
+      { ...valid, workspaceId: terminalId },
+    ]) {
+      const result = await route("workspaces.cancel", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("workspaces.cancel", valid, owner)).toMatchObject({ ok: true });
   });
 
   it("refuses a dropped path that is empty or too long", async () => {

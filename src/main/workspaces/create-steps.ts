@@ -95,7 +95,9 @@ function clashesWith(lowerRef: string, wanted: string): boolean {
 }
 
 function stopIfQuitting(signal: AbortSignal): void {
-  if (signal.aborted) throw new StepFailure(quitSentence);
+  if (!signal.aborted) return;
+  const reason: unknown = signal.reason;
+  throw new StepFailure(typeof reason === "string" ? reason : quitSentence);
 }
 
 async function git(

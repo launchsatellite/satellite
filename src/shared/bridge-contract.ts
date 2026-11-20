@@ -198,6 +198,10 @@ export const bridgeRequests = {
     }),
     response: z.strictObject({ workspace: workspaceView }),
   },
+  "workspaces.cancel": {
+    request: z.strictObject({ operationId: z.uuid(), projectId: z.uuid() }),
+    response: z.strictObject({ canceled: z.boolean() }),
+  },
   "workspaces.inspect": {
     request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid() }),
     response: z.strictObject({

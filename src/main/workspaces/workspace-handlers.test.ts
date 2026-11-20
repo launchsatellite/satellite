@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -260,4 +260,59 @@ describe("workspaceHandlers", () => {
     });
     expect(store.busy.has(record.id)).toBe(true);
   });
+  it("stops only the creation the same page names and undoes it", async () => {
+    const project = await repository("repo");
+    const marker = join(base, "hook-started");
+    const hook = join(project.path, ".git", "hooks", "post-checkout");
+    await writeFile(hook, `#!/bin/sh\ntouch "${marker}"\nsleep 30\n`);
+    await chmod(hook, 0o755);
+    const store = fakeStore([project]);
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner, events } = recordingOwner();
+    const asked = request(project.id, "stopped");
+    const work = handlers["workspaces.create"](asked, owner);
+    work.catch(() => undefined);
+    await vi.waitFor(() => stat(marker), { timeout: 15_000, interval: 50 });
+    const cancel = handlers["workspaces.cancel"];
+    const operationId = asked.operationId;
+    await expect(cancel({ operationId, projectId: randomUUID() }, owner)).rejects.toMatchObject({
+      code: "not-found",
+    });
+    expect(await cancel({ operationId: randomUUID(), projectId: project.id }, owner)).toEqual({
+      canceled: false,
+    });
+    expect(await cancel({ operationId, projectId: project.id }, { ...owner, id: 2 })).toEqual({
+      canceled: false,
+    });
+    expect(await cancel({ operationId, projectId: project.id }, owner)).toEqual({
+      canceled: true,
+    });
+    await expect(work).rejects.toMatchObject({
+      code: "failed",
+      message:
+        "You stopped making the workspace. Satellite removed what it had made, so nothing changed.",
+    });
+    expect(events.filter((event) => event.state === "undone").map((event) => event.step)).toEqual([
+      "worktree",
+      "branch",
+    ]);
+    const env = gitEnvironment();
+    const branches = await run("git", ["-C", project.path, "branch", "--list", "stopped"], { env });
+    expect(branches.stdout).toBe("");
+    const worktrees = await run("git", ["-C", project.path, "worktree", "list", "--porcelain"], {
+      env,
+    });
+    expect(worktrees.stdout).not.toContain("stopped");
+    await expect(stat(join(base, "home", "worktrees", "repo", "stopped"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(project.workspaces).toEqual([]);
+    expect(await cancel({ operationId, projectId: project.id }, owner)).toEqual({
+      canceled: false,
+    });
+  }, 30_000);
 });
