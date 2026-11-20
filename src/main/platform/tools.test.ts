@@ -23,6 +23,14 @@ require("node:fs").writeFileSync(process.argv[1], String(child.pid));
 setInterval(() => {}, 1000);
 `;
 
+const leavesAnOrphan = `
+const { spawn } = require("node:child_process");
+const keep = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
+const orphan = \`const o = require("node:child_process").spawn(process.execPath, ["-e", \${JSON.stringify(keep)}], { detached: true, stdio: ["ignore", "inherit", "inherit"] }); require("node:fs").writeFileSync(process.argv[1], String(o.pid)); process.exit(0);\`;
+spawn(process.execPath, ["-e", orphan, process.argv[1]], { stdio: "inherit" });
+setInterval(() => {}, 1000);
+`;
+
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -71,4 +79,28 @@ describe("runTool", () => {
       await rm(folder, { recursive: true, force: true });
     }
   }, 15_000);
+});
+
+describe("runTool", () => {
+  it.skipIf(process.platform === "win32")(
+    "settles after its time limit even when an escaped process keeps its output open",
+    async () => {
+      const folder = await mkdtemp(join(tmpdir(), "satellite-tools-"));
+      const pidFile = join(folder, "orphan.pid");
+      vi.stubEnv("SATELLITE_GH", JSON.stringify([process.execPath, "-e", leavesAnOrphan]));
+      let orphan = 0;
+      try {
+        const started = Date.now();
+        await expect(runTool("gh", [pidFile], { timeoutMs: 500 })).rejects.toThrow(
+          "gh did not finish in time",
+        );
+        expect(Date.now() - started).toBeLessThan(8000);
+        orphan = Number(await readFile(pidFile, "utf8"));
+      } finally {
+        if (orphan > 0 && isAlive(orphan)) process.kill(orphan, "SIGKILL");
+        await rm(folder, { recursive: true, force: true });
+      }
+    },
+    20_000,
+  );
 });

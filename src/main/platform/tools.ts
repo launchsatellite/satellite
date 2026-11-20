@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
-import { endUnixTree, endWindowsTree, forceKillGraceMs } from "./process-tree.ts";
+import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -28,7 +28,8 @@ const appLaunchKeys = new Set([
   "CHROME_DESKTOP",
   "ORIGINAL_XDG_CURRENT_DESKTOP",
 ]);
-const repositoryLocatingKeys = new Set([
+const gitDroppedKeys = new Set([
+  "LANGUAGE",
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   "GIT_CONFIG",
   "GIT_CONFIG_PARAMETERS",
@@ -52,7 +53,9 @@ const ghQuiet = {
   GH_NO_EXTENSION_UPDATE_NOTIFIER: "1",
   NO_COLOR: "1",
 };
+const gitLocale = { LC_ALL: "C" };
 const outputLimit = 16 * 1024 * 1024;
+const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 
 function stopChild(child: ChildProcess, exited: Promise<void>): void {
@@ -67,7 +70,7 @@ function without(env: Record<string, string>, keys: Set<string>): Record<string,
 }
 
 function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
-  if (tool === "git") return without(env, repositoryLocatingKeys);
+  if (tool === "git") return { ...without(env, gitDroppedKeys), ...gitLocale };
   if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
   return env;
 }
@@ -139,10 +142,16 @@ export async function runTool(
     );
     const output = { stdout: "", stderr: "", size: 0 };
     let failure: Error | undefined;
+    let abandon: NodeJS.Timeout | undefined;
     const stop = (reason: Error) => {
       if (failure !== undefined) return;
       failure = reason;
       stopChild(child, exited);
+      abandon = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        reject(reason);
+      }, settleGraceMs);
     };
     const timer = setTimeout(() => {
       stop(new Error(`${tool} did not finish in time`));
@@ -161,6 +170,7 @@ export async function runTool(
     });
     child.once("close", (code, signal) => {
       clearTimeout(timer);
+      clearTimeout(abandon);
       if (failure !== undefined) reject(failure);
       else if (code !== null)
         resolve({ exitCode: code, stdout: output.stdout, stderr: output.stderr });
