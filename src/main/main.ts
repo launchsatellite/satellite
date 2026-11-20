@@ -2,8 +2,10 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
+import { chooseFolder } from "./platform/folder-dialog.ts";
 import { treeKillBoundMs } from "./platform/process-tree.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import { createProjects, type Projects } from "./projects/project-list.ts";
 import {
   createInterfaceFile,
   interfaceHandlers,
@@ -19,7 +21,7 @@ import {
 } from "./window/app-protocol.ts";
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
-import { createMainWindow } from "./window/main-window.ts";
+import { createMainWindow, mainWindow } from "./window/main-window.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
 const terminals = createTerminalSessions();
@@ -38,7 +40,7 @@ function focusMainWindow(): void {
   window.focus();
 }
 
-async function start(interfaceFile: InterfaceFile): Promise<void> {
+async function start(interfaceFile: InterfaceFile, projects: Projects): Promise<void> {
   await app.whenReady();
   applyThemeChoice((await interfaceFile.load()).state.theme);
   const entryUrl = rendererEntryUrl();
@@ -50,6 +52,7 @@ async function start(interfaceFile: InterfaceFile): Promise<void> {
     {
       "tools.versions": toolVersions,
       ...interfaceHandlers(interfaceFile, applyThemeChoice),
+      ...projects.handlers,
       ...terminals.handlers,
     },
     allowedOrigin(entryUrl),
@@ -76,10 +79,12 @@ function prepareHome(): string | undefined {
 
 const home = prepareHome();
 const interfaceFile = home === undefined ? undefined : createInterfaceFile(home);
-if (interfaceFile !== undefined && app.requestSingleInstanceLock()) {
+const projects =
+  home === undefined ? undefined : createProjects({ home, chooseFolder, window: mainWindow });
+if (interfaceFile !== undefined && projects !== undefined && app.requestSingleInstanceLock()) {
   registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start(interfaceFile).catch(failStart);
+  start(interfaceFile, projects).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
 }
@@ -88,7 +93,7 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   event.preventDefault();
-  const settled = Promise.all([terminals.closeAll(), interfaceFile?.flush()]);
+  const settled = Promise.all([terminals.closeAll(), interfaceFile?.flush(), projects?.flush()]);
   void Promise.race([settled, delay(quitBoundMs)]).finally(() => {
     app.quit();
   });

@@ -14,6 +14,13 @@ function spies() {
       Promise.resolve({ state: defaultInterfaceState, notice: null }),
     ),
     "interface.save": vi.fn<BridgeHandler<"interface.save">>(() => Promise.resolve({})),
+    "projects.list": vi.fn<BridgeHandler<"projects.list">>(() =>
+      Promise.resolve({ projects: [], notice: null }),
+    ),
+    "projects.choose": vi.fn<BridgeHandler<"projects.choose">>(() =>
+      Promise.resolve({ outcome: "canceled" }),
+    ),
+    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -86,6 +93,27 @@ describe("createBridgeRouter", () => {
     const route = createBridgeRouter(handlers);
     const result = await route("terminal.close", { id: "../../etc" }, owner);
     expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    noHandlerRan(handlers);
+  });
+
+  it("refuses a project id that is not a uuid", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const payloads = [
+      { projectId: "../../etc" },
+      { projectId: "/Users/<name>/repo" },
+      { projectId: terminalId.toUpperCase().replace("6F1C", "ZZZZ") },
+      { projectId: terminalId, path: "/Users/<name>/repo" },
+      {},
+    ];
+    for (const payload of payloads) {
+      const result = await route("projects.remove", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const channel of ["projects.choose", "projects.list"]) {
+      const result = await route(channel, { path: "/Users/<name>/repo" }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
     noHandlerRan(handlers);
   });
 

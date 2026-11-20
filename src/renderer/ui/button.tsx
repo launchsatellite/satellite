@@ -60,7 +60,7 @@ export function Button({
     >
       {icon !== undefined && <Icon name={icon} />}
       {children}
-      {shortcut !== undefined && <KeyHint keys={shortcut} />}
+      {shortcut !== undefined && !iconOnly && <KeyHint keys={shortcut} />}
     </button>
   );
 }

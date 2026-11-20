@@ -1,7 +1,7 @@
-import { execFile, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
-import { endWindowsTree, forceKillGraceMs } from "./process-tree.ts";
+import { endUnixTree, endWindowsTree, forceKillGraceMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -28,19 +28,38 @@ const appLaunchKeys = new Set([
   "CHROME_DESKTOP",
   "ORIGINAL_XDG_CURRENT_DESKTOP",
 ]);
+const repositoryLocatingKeys = new Set([
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CONFIG",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_CONFIG_COUNT",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_IMPLICIT_WORK_TREE",
+  "GIT_GRAFT_FILE",
+  "GIT_INDEX_FILE",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_REPLACE_REF_BASE",
+  "GIT_PREFIX",
+  "GIT_SHALLOW_FILE",
+  "GIT_COMMON_DIR",
+]);
+const outputLimit = 16 * 1024 * 1024;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 
-function stopChild(child: ChildProcess): void {
+function stopChild(child: ChildProcess, exited: Promise<void>): void {
   const pid = child.pid;
   if (pid === undefined) return;
-  if (process.platform === "win32") {
-    void endWindowsTree(pid);
-    return;
-  }
-  child.kill("SIGTERM");
-  setTimeout(() => {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-  }, forceKillGraceMs).unref();
+  if (process.platform === "win32") void endWindowsTree(pid);
+  else void endUnixTree(pid, exited, forceKillGraceMs);
+}
+
+function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
+  if (tool !== "git") return env;
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !repositoryLocatingKeys.has(key.toUpperCase())),
+  );
 }
 
 function parseJson(text: string): unknown {
@@ -94,31 +113,48 @@ export async function runTool(
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
-  const env = await childEnvironment();
+  const env = toolEnvironment(tool, await childEnvironment());
   return new Promise((resolve, reject) => {
-    let timedOut = false;
-    const child = execFile(
-      command.file,
-      [...command.args, ...args],
-      {
-        env,
-        shell: false,
-        windowsHide: true,
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-      },
-      (error, stdout, stderr) => {
-        clearTimeout(timer);
-        if (timedOut) reject(new Error(`${tool} did not finish in time`));
-        else if (error === null) resolve({ exitCode: 0, stdout, stderr });
-        else if (typeof error.code === "number") resolve({ exitCode: error.code, stdout, stderr });
-        else if (error.code === "ENOENT") resolve(undefined);
-        else reject(new Error(`${tool} did not finish (${String(error.code ?? error.signal)})`));
-      },
+    const child = spawn(command.file, [...command.args, ...args], {
+      env,
+      shell: false,
+      windowsHide: true,
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const exited = new Promise<void>((settle) =>
+      child.once("exit", () => {
+        settle();
+      }),
     );
+    const output = { stdout: "", stderr: "", size: 0 };
+    let failure: Error | undefined;
+    const stop = (reason: Error) => {
+      if (failure !== undefined) return;
+      failure = reason;
+      stopChild(child, exited);
+    };
     const timer = setTimeout(() => {
-      timedOut = true;
-      stopChild(child);
+      stop(new Error(`${tool} did not finish in time`));
     }, options.timeoutMs ?? 30_000);
+    const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
+      output.size += chunk.length;
+      if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
+      else output[stream] += chunk;
+    };
+    child.stdout.setEncoding("utf8").on("data", collect("stdout"));
+    child.stderr.setEncoding("utf8").on("data", collect("stderr"));
+    child.once("error", (error: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      if (error.code === "ENOENT") resolve(undefined);
+      else reject(new Error(`${tool} did not start (${String(error.code)})`));
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timer);
+      if (failure !== undefined) reject(failure);
+      else if (code !== null)
+        resolve({ exitCode: code, stdout: output.stdout, stderr: output.stderr });
+      else reject(new Error(`${tool} did not finish (${String(signal)})`));
+    });
   });
 }

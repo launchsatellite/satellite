@@ -1,0 +1,75 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { invoke } from "../bridge/bridge-client.ts";
+import type { Notify } from "../ui/toast.tsx";
+
+export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): string {
+  if (project.missing) return "unavailable";
+  return workspace.branch ?? "detached";
+}
+
+export function useProjects(notify: Notify): {
+  projects: ProjectView[] | undefined;
+  add: () => Promise<WorkspaceRef | undefined>;
+  remove: (projectId: string) => Promise<boolean>;
+  refresh: () => void;
+} {
+  const [projects, setProjects] = useState<ProjectView[]>();
+  const listing = useRef(false);
+  const changes = useRef(0);
+  const refresh = useCallback(() => {
+    if (listing.current) return;
+    listing.current = true;
+    void (async () => {
+      for (;;) {
+        const startedAt = changes.current;
+        const result = await invoke("projects.list", {});
+        if (!result.ok) {
+          notify(result.error.message, "error");
+          setProjects((current) => current ?? []);
+          break;
+        }
+        if (result.value.notice !== null) notify(result.value.notice, "info");
+        if (startedAt === changes.current) {
+          setProjects(result.value.projects);
+          break;
+        }
+      }
+      listing.current = false;
+    })();
+  }, [notify]);
+  useEffect(() => {
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+    };
+  }, [refresh]);
+  const add = useCallback(async () => {
+    const result = await invoke("projects.choose", {});
+    if (!result.ok) {
+      notify(result.error.message, "error");
+      return undefined;
+    }
+    if (result.value.outcome === "canceled") return undefined;
+    const { project } = result.value;
+    changes.current += 1;
+    setProjects((current) => [...(current ?? []), project]);
+    const added: WorkspaceRef = { projectId: project.id, workspace: "main" };
+    return added;
+  }, [notify]);
+  const remove = useCallback(
+    async (projectId: string) => {
+      const result = await invoke("projects.remove", { projectId });
+      if (!result.ok) {
+        notify(result.error.message, "error");
+        return false;
+      }
+      changes.current += 1;
+      setProjects((current) => current?.filter((project) => project.id !== projectId));
+      return true;
+    },
+    [notify],
+  );
+  return { projects, add, remove, refresh };
+}

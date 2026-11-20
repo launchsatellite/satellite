@@ -1,36 +1,69 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   interfaceLimits,
   type InterfaceState,
   type ThemeChoice,
+  type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
-import { createCommandRegistry } from "../commands/command-registry.ts";
-import { commandShortcut, CommandsProvider } from "../commands/commands-context.tsx";
+import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
+import { CommandsProvider } from "../commands/commands-context.tsx";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
+import { Sidebar } from "../projects/sidebar.tsx";
+import { useProjects } from "../projects/use-projects.ts";
+import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolReadout } from "../proving/tool-readout.tsx";
-import { Icon } from "../ui/icon.tsx";
-import { KeyHint } from "../ui/key-hint.tsx";
+import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns } from "./columns.ts";
+import { FolderMissing, NoProjects, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 
 type PaletteMode = "commands" | "switcher";
+type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
 interface AppWindowProps {
   initial: InterfaceState;
   notice: string | null;
 }
+interface ShownToast {
+  id: number;
+  message: string;
+  tone: ToastTone;
+}
 
-const noWorkspaces: readonly SwitcherItem[] = [];
+const commandFailure = "Satellite couldn't finish that. Try again.";
 
-function openWorkspace(): void {
-  return undefined;
+function guarded(specs: readonly CommandSpec[], notify: Notify): Command[] {
+  const fail = (error: unknown) => {
+    console.error("A command failed", error);
+    notify(commandFailure, "error");
+  };
+  return specs.map((spec) => ({
+    ...spec,
+    run: () => {
+      try {
+        void Promise.resolve(spec.run()).catch(fail);
+      } catch (error) {
+        fail(error);
+      }
+    },
+  }));
 }
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
-  const { state, update } = useInterfaceState(initial);
+  const [toast, setToast] = useState<ShownToast | null>(() =>
+    notice === null ? null : { id: 0, message: notice, tone: "info" },
+  );
+  const notify = useCallback<Notify>((message, tone) => {
+    setToast((shown) => ({ id: (shown?.id ?? 0) + 1, message, tone }));
+  }, []);
+  const dismissToast = useCallback(() => {
+    setToast(null);
+  }, []);
+  const { state, update } = useInterfaceState(initial, notify);
+  const { projects, add } = useProjects(notify);
   const windowRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -44,44 +77,107 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       observer.disconnect();
     };
   }, []);
+  const selectedId = state.selected?.projectId;
+  useEffect(() => {
+    if (projects === undefined || selectedId === undefined) return;
+    if (projects.some((project) => project.id === selectedId)) return;
+    update((current) => ({ ...current, selected: null }), true);
+  }, [projects, selectedId, update]);
   const { left, right } = fitColumns(state.columns, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const select = useCallback(
+    (ref: WorkspaceRef) => {
+      update((current) => ({ ...current, selected: ref }), true);
+    },
+    [update],
+  );
+  const switcher = useMemo<SwitcherItem[]>(
+    () =>
+      (projects ?? [])
+        .filter((project) => !project.missing)
+        .flatMap((project) =>
+          project.workspaces.map((workspace) => ({
+            ref: { projectId: project.id, workspace: workspace.key },
+            label: workspace.branch ?? "detached",
+            project: project.name,
+          })),
+        ),
+    [projects],
+  );
   const registry = useMemo(() => {
     const theme = (choice: ThemeChoice) => () => {
-      update({ ...state, theme: choice }, true);
+      update((current) => ({ ...current, theme: choice }), true);
     };
-    return createCommandRegistry([
-      {
-        id: "palette.commands",
-        title: "Open the command menu",
-        shortcut: { key: "k" },
-        available: true,
-        run: () => {
-          setPalette((open) => (open === "commands" ? null : "commands"));
-        },
-      },
-      {
-        id: "palette.switcher",
-        title: "Go to a workspace",
-        shortcut: { key: "p" },
-        available: true,
-        run: () => {
-          setPalette((open) => (open === "switcher" ? null : "switcher"));
-        },
-      },
-      {
-        id: "theme.system",
-        title: "Follow the system theme",
-        available: true,
-        run: theme("system"),
-      },
-      { id: "theme.light", title: "Use the light theme", available: true, run: theme("light") },
-      { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
-    ]);
-  }, [state, update]);
-  const openMenu = registry.get("palette.commands");
+    return createCommandRegistry(
+      guarded(
+        [
+          {
+            id: "palette.commands",
+            title: "Open the command menu",
+            shortcut: { key: "k" },
+            available: true,
+            run: () => {
+              setPalette((open) => (open === "commands" ? null : "commands"));
+            },
+          },
+          {
+            id: "project.add",
+            title: "Add a project",
+            shortcut: { key: "o" },
+            available: true,
+            run: async () => {
+              setToast(null);
+              const added = await add();
+              if (added !== undefined) select(added);
+            },
+          },
+          {
+            id: "palette.switcher",
+            title: "Go to a workspace",
+            shortcut: { key: "p" },
+            available: true,
+            run: () => {
+              setPalette((open) => (open === "switcher" ? null : "switcher"));
+            },
+          },
+          {
+            id: "theme.system",
+            title: "Follow the system theme",
+            available: true,
+            run: theme("system"),
+          },
+          { id: "theme.light", title: "Use the light theme", available: true, run: theme("light") },
+          { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
+        ],
+        notify,
+      ),
+    );
+  }, [update, add, select, notify]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
-    update({ ...state, columns: { ...state.columns, [side]: value } }, persist);
+    update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
+  };
+  const selectedProject = projects?.find((project) => project.id === selectedId);
+  const selectedWorkspace = selectedProject?.workspaces.find(
+    (workspace) => workspace.key === state.selected?.workspace,
+  );
+  const centre = () => {
+    if (projects === undefined) return null;
+    if (projects.length === 0) return <NoProjects />;
+    if (selectedProject === undefined || selectedWorkspace === undefined) {
+      return <NothingSelected />;
+    }
+    return (
+      <>
+        <WorkspaceHeader project={selectedProject} workspace={selectedWorkspace} />
+        {selectedProject.missing ? (
+          <FolderMissing name={selectedProject.name} />
+        ) : (
+          <div className="min-h-0 flex-1">
+            <SampleDiff />
+          </div>
+        )}
+      </>
+    );
   };
 
   return (
@@ -95,27 +191,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         <section
           data-testid="column-projects"
           aria-label="Projects"
-          className="relative flex flex-col border-r border-line bg-side"
+          className="relative flex min-h-0 flex-col border-r border-line bg-side"
         >
-          <div className="p-2">
-            <button
-              type="button"
-              data-testid="open-command-menu"
-              onClick={openMenu?.run}
-              className="flex h-7 w-full items-center gap-[9px] rounded-[6px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <span className="text-dim">
-                <Icon name="keys" size={15} />
-              </span>
-              Commands
-              {openMenu !== undefined && (
-                <span className="ml-auto">
-                  <KeyHint keys={commandShortcut(openMenu) ?? ""} />
-                </span>
-              )}
-            </button>
-          </div>
-          <div className="mt-auto p-4">
+          <Sidebar projects={projects} selected={state.selected} onSelect={select} />
+          <div className="flex-none p-4">
             <ToolReadout />
           </div>
           <ColumnDivider
@@ -131,16 +210,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         <section
           data-testid="column-repository"
           aria-label="Repository"
-          className="relative flex min-h-0 flex-col border-r border-line"
+          className="relative flex min-h-0 min-w-0 flex-col border-r border-line"
         >
-          {notice !== null && (
-            <p data-testid="toast" className="px-4 py-2 text-[13px] text-dim">
-              {notice}
-            </p>
-          )}
-          <div className="min-h-0 flex-1">
-            <SampleDiff />
-          </div>
+          {centre()}
           <ColumnDivider
             side="right"
             value={right}
@@ -160,8 +232,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onClose={() => {
               setPalette(null);
             }}
-            switcher={noWorkspaces}
-            onOpenWorkspace={openWorkspace}
+            switcher={switcher}
+            onOpenWorkspace={select}
+          />
+        )}
+        {toast !== null && (
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            tone={toast.tone}
+            onDismiss={dismissToast}
           />
         )}
       </div>

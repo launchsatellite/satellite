@@ -13,6 +13,8 @@ export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
 export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
+export type WorkspaceView = z.output<typeof workspaceView>;
+export type ProjectView = z.output<typeof projectView>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -41,6 +43,16 @@ export const interfaceState = z.strictObject({
   }),
   theme: themeChoice,
 });
+export const workspaceView = z.strictObject({
+  key: z.literal("main"),
+  branch: z.string().min(1).max(255).nullable(),
+});
+export const projectView = z.strictObject({
+  id: z.uuid(),
+  name: z.string().min(1).max(255),
+  missing: z.boolean(),
+  workspaces: z.array(workspaceView).max(1),
+});
 export const defaultInterfaceState: InterfaceState = {
   selected: null,
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
@@ -64,6 +76,24 @@ export const bridgeRequests = {
   },
   "interface.save": {
     request: z.strictObject({ state: interfaceState }),
+    response: empty,
+  },
+  "projects.list": {
+    request: empty,
+    response: z.strictObject({
+      projects: z.array(projectView).max(200),
+      notice: z.string().max(300).nullable(),
+    }),
+  },
+  "projects.choose": {
+    request: empty,
+    response: z.discriminatedUnion("outcome", [
+      z.strictObject({ outcome: z.literal("added"), project: projectView }),
+      z.strictObject({ outcome: z.literal("canceled") }),
+    ]),
+  },
+  "projects.remove": {
+    request: z.strictObject({ projectId: z.uuid() }),
     response: empty,
   },
   "terminal.start": {

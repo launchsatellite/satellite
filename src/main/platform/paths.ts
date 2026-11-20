@@ -1,5 +1,5 @@
 import { realpath } from "node:fs/promises";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { isAbsolute, join, posix, relative, sep, win32 } from "node:path";
 
 async function realpathOrUndefined(path: string): Promise<string | undefined> {
   try {
@@ -16,4 +16,16 @@ export async function resolveInside(root: string, requested: string): Promise<st
   const fromRoot = relative(realRoot, realCandidate);
   const climbsOut = fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot);
   return climbsOut ? undefined : realCandidate;
+}
+
+export function samePath(
+  a: string,
+  b: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const resolved = (path: string) => {
+    const full = platform === "win32" ? win32.resolve(path) : posix.resolve(path);
+    return platform === "win32" || platform === "darwin" ? full.toLowerCase() : full;
+  };
+  return resolved(a) === resolved(b);
 }

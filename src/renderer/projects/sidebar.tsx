@@ -1,0 +1,144 @@
+import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { CommandId } from "../commands/command-registry.ts";
+import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { Icon, type IconName } from "../ui/icon.tsx";
+import { KeyHint } from "../ui/key-hint.tsx";
+import { PixelAvatar } from "../ui/pixel-avatar.tsx";
+import { workspaceLabel } from "./use-projects.ts";
+
+interface SidebarProps {
+  projects: readonly ProjectView[] | undefined;
+  selected: WorkspaceRef | null;
+  onSelect: (ref: WorkspaceRef) => void;
+}
+
+const focusRing =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+function CommandRow({
+  command,
+  icon,
+  text,
+  testId,
+}: {
+  command: CommandId;
+  icon: IconName;
+  text: string;
+  testId: string;
+}) {
+  const found = useCommands().get(command);
+  const shortcut = found === undefined ? undefined : commandShortcut(found);
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={found?.run}
+      className={`flex h-7 w-full flex-none items-center gap-[9px] rounded-[6px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 hover:bg-hover ${focusRing}`}
+    >
+      <span className="text-dim">
+        <Icon name={icon} size={15} />
+      </span>
+      {text}
+      {shortcut !== undefined && (
+        <span className="ml-auto">
+          <KeyHint keys={shortcut} />
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ProjectRows({
+  project,
+  selected,
+  onSelect,
+}: {
+  project: ProjectView;
+  selected: WorkspaceRef | null;
+  onSelect: (ref: WorkspaceRef) => void;
+}) {
+  return (
+    <>
+      <div
+        data-testid={`project-${project.name}`}
+        className="flex h-7 flex-none items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg"
+      >
+        <PixelAvatar seed={project.name} />
+        <span className="min-w-0 truncate">{project.name}</span>
+        {project.missing && (
+          <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
+        )}
+      </div>
+      <ul aria-label={project.name} className="flex flex-col gap-px">
+        {project.workspaces.map((workspace) => {
+          const current = selected?.projectId === project.id;
+          return (
+            <li key={workspace.key}>
+              <button
+                type="button"
+                data-testid={`workspace-${project.name}-${workspace.key}`}
+                aria-current={current ? "true" : undefined}
+                onClick={() => {
+                  onSelect({ projectId: project.id, workspace: workspace.key });
+                }}
+                className={`flex h-7 w-full items-center gap-[9px] rounded-[6px] pr-2 pl-[33px] text-[13px] font-medium whitespace-nowrap ${current ? "bg-sel text-fg" : "text-fg2 hover:bg-hover"} ${focusRing}`}
+              >
+                <span className="size-[6px] flex-none rounded-[2px] bg-dim" />
+                <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
+                  {workspaceLabel(project, workspace)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+export function Sidebar({ projects, selected, onSelect }: SidebarProps) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
+      <CommandRow
+        command="palette.commands"
+        icon="keys"
+        text="Commands"
+        testId="open-command-menu"
+      />
+      <CommandRow
+        command="palette.switcher"
+        icon="search"
+        text="Go to a workspace"
+        testId="open-switcher"
+      />
+      <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
+        Projects
+        <CommandButton
+          command="project.add"
+          variant="ghost"
+          size="small"
+          icon="plus"
+          label="Add a project"
+          testId="add-project"
+        />
+      </div>
+      {projects?.length === 0 && (
+        <p data-testid="no-projects" className="px-2 py-1 text-[13px] text-dim">
+          No projects yet.
+        </p>
+      )}
+      {projects !== undefined && projects.length > 0 && (
+        <nav aria-label="Projects" className="flex flex-col gap-px">
+          {projects.map((project) => (
+            <ProjectRows
+              key={project.id}
+              project={project}
+              selected={selected}
+              onSelect={onSelect}
+            />
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
