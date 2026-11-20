@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -427,25 +427,34 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
   });
 
-  it("keeps a workspace whose stored path differs from git's by a link or by case", async () => {
-    const { base, home, workspace } = await repoWithWorkspace();
-    await symlink(join(home, "worktrees"), join(base, "linked"), "junction");
-    const spellings = [
-      join(base, "linked", "repo", "fix-login"),
-      workspace.path.replace("fix-login", "FIX-LOGIN"),
-    ];
+  async function listsWithStoredPath(home: string, from: string, to: string) {
     const stored = join(home, "projects.json");
     const original = await readFile(stored, "utf8");
-    for (const path of spellings) {
-      await writeFile(
-        stored,
-        original.replace(JSON.stringify(workspace.path), JSON.stringify(path)),
-      );
-      expect(await readFile(stored, "utf8")).toContain(JSON.stringify(path));
-      const answer = await projectsIn(home).handlers["projects.list"]({}, owner);
-      expect(answer.dropped).toEqual([]);
-      expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
-    }
+    await writeFile(stored, original.replace(JSON.stringify(from), JSON.stringify(to)));
+    expect(await readFile(stored, "utf8")).toContain(JSON.stringify(to));
+    return projectsIn(home).handlers["projects.list"]({}, owner);
+  }
+
+  it("keeps a workspace whose stored path reaches git's by a link", async () => {
+    const { base, home, workspace } = await repoWithWorkspace();
+    await symlink(join(home, "worktrees"), join(base, "linked"), "junction");
+    const linked = join(base, "linked", "repo", "fix-login");
+    const answer = await listsWithStoredPath(home, workspace.path, linked);
+    expect(answer.dropped).toEqual([]);
+    expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
+  });
+
+  it("keeps a workspace whose stored path differs from git's by case where the volume ignores case", async (context) => {
+    const { home, workspace } = await repoWithWorkspace();
+    const upper = workspace.path.replace("fix-login", "FIX-LOGIN");
+    const ignoresCase = await stat(upper).then(
+      () => true,
+      () => false,
+    );
+    if (!ignoresCase) context.skip();
+    const answer = await listsWithStoredPath(home, workspace.path, upper);
+    expect(answer.dropped).toEqual([]);
+    expect(await storedWorkspaceIds(home)).toEqual([workspace.id]);
   });
 
   it("adopts a worktree left in its own folder with no record, but never while one is made", async () => {
