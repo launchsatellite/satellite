@@ -11,8 +11,21 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { removeSettingsFile, sweepSettingsFiles, writeSettingsFile } from "./settings-files.ts";
+
+const held = vi.hoisted(() => new Set<string>());
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    unlink: (path: string) =>
+      held.has(path)
+        ? Promise.reject(Object.assign(new Error("busy"), { code: "EBUSY" }))
+        : actual.unlink(path),
+  };
+});
 
 const posixOnly = process.platform === "win32";
 
@@ -81,6 +94,18 @@ describe("settings files", () => {
     expect((await readdir(sessions)).sort()).toEqual([...kept, keptFolder].sort());
     expect(await readdir(join(sessions, keptFolder))).toHaveLength(1);
     await sweepSettingsFiles(await home());
+  });
+
+  it("sweeps past a file it cannot remove", async () => {
+    const folder = await home();
+    const stuck = await writeSettingsFile(folder, randomUUID(), { hooks: {} });
+    await writeSettingsFile(folder, randomUUID(), { hooks: {} });
+    held.add(stuck);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(sweepSettingsFiles(folder)).resolves.toBeUndefined();
+    logged.mockRestore();
+    held.delete(stuck);
+    expect(await readdir(join(folder, "sessions"))).toEqual([stuck.slice(-41)]);
   });
 
   it.skipIf(posixOnly)("never sweeps a linked folder", async () => {

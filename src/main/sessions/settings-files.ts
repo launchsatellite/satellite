@@ -60,7 +60,9 @@ export async function sweepSettingsFiles(home: string): Promise<void> {
     if (!launchFile.test(name)) continue;
     const path = join(folder, name);
     const entry = await lstat(path).catch(() => undefined);
-    if (entry?.isFile() === true || entry?.isSymbolicLink() === true)
-      await removeSettingsFile(path);
+    if (entry?.isFile() !== true && entry?.isSymbolicLink() !== true) continue;
+    await removeSettingsFile(path).catch((error: unknown) => {
+      console.error("A leftover session settings file could not be removed", error);
+    });
   }
 }
