@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { request } from "node:http";
+import { connect, type Socket } from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startHookListener, type HookListener } from "./hook-listener.ts";
 import { mainThread, type SessionEvent } from "./session-status.ts";
@@ -54,6 +56,23 @@ function send(sent: Sent): Promise<Answer> {
     );
     outgoing.on("error", reject);
     outgoing.end(sent.body ?? "{}");
+  });
+}
+
+function openSocket(): Promise<{ socket: Socket; closed: Promise<number> }> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: "127.0.0.1", port: listener.port });
+    const closed = new Promise<number>((closing) => {
+      socket.once("close", () => {
+        closing(Date.now());
+      });
+    });
+    socket.once("error", () => undefined);
+    socket.resume();
+    socket.once("connect", () => {
+      resolve({ socket, closed });
+    });
+    socket.once("error", reject);
   });
 }
 
@@ -261,6 +280,50 @@ describe("startHookListener", () => {
     expect(answers.filter((answer) => answer.status === 429)).toHaveLength(1);
     expect(events).toHaveLength(100);
   });
+
+  it("closes every answer and lets no outsider use up a launch's events", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    for (let sent = 0; sent < 101; sent += 1) {
+      const answer = await send({
+        headers: { Authorization: `Bearer ${"0".repeat(64)}`, Connection: "keep-alive" },
+      });
+      expect(answer.status).toBe(401);
+      expect(answer.headers["connection"]).toBe("close");
+    }
+    const answer = await send({ headers: { Connection: "keep-alive" } });
+    expect(answer.status).toBe(204);
+    expect(answer.headers["connection"]).toBe("close");
+  });
+
+  it("holds at most 64 connections at once", async () => {
+    const open = await Promise.all(Array.from({ length: 64 }, () => openSocket()));
+    await delay(200);
+    const extra = await openSocket();
+    const shut = await Promise.race([extra.closed.then(() => true), delay(2000).then(() => false)]);
+    const stillOpen = open.filter(({ socket }) => !socket.destroyed).length;
+    for (const { socket } of [...open, extra]) socket.destroy();
+    expect(shut).toBe(true);
+    expect(stillOpen).toBe(64);
+  });
+
+  it(
+    "closes a connection that sends no request within six seconds",
+    { timeout: 15_000 },
+    async () => {
+      const started = Date.now();
+      const idle = await openSocket();
+      const slow = await openSocket();
+      slow.socket.write("PO");
+      const closed = await Promise.all(
+        [idle, slow].map(({ closed }) => Promise.race([closed, delay(9000).then(() => Infinity)])),
+      );
+      for (const { socket } of [idle, slow]) socket.destroy();
+      for (const closedAt of closed) {
+        expect(closedAt - started).toBeGreaterThanOrEqual(4000);
+        expect(closedAt - started).toBeLessThan(7000);
+      }
+    },
+  );
 
   it("still answers when the status cannot take an event", async () => {
     await listener.stop();
