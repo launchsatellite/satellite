@@ -15,6 +15,7 @@ const psPaths = ["/bin/ps", "/usr/bin/ps"];
 
 export const forceKillGraceMs = 2000;
 export const treeKillBoundMs = forceKillGraceMs + 2 * listTimeoutMs;
+const taskkillTimeoutMs = treeKillBoundMs - forceKillGraceMs;
 const processLine = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/;
 
 function signal(pid: number, name: NodeJS.Signals): void {
@@ -88,9 +89,14 @@ function survivors(known: ReadonlySet<string>, entries: readonly ProcessEntry[])
 export function endWindowsTree(pid: number): Promise<void> {
   const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
   return new Promise((resolve) => {
-    execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => {
-      resolve();
-    });
+    execFile(
+      taskkill,
+      ["/pid", String(pid), "/T", "/F"],
+      { windowsHide: true, timeout: taskkillTimeoutMs },
+      () => {
+        resolve();
+      },
+    );
   });
 }
 
