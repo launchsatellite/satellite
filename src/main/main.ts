@@ -10,6 +10,7 @@ import {
   registerAppScheme,
   rendererEntryUrl,
 } from "./window/app-protocol.ts";
+import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow } from "./window/main-window.ts";
 
@@ -21,13 +22,12 @@ function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
 }
 
-app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
-registerAppScheme();
-
-void app.whenReady().then(() => {
+async function start(): Promise<void> {
+  await app.whenReady();
   const entryUrl = rendererEntryUrl();
+  installAppMenu();
   hardenSession(session.defaultSession);
-  hardenWebContents();
+  hardenWebContents(entryUrl);
   handleAppProtocol(join(app.getAppPath(), "out/renderer"));
   registerBridge(
     {
@@ -39,7 +39,16 @@ void app.whenReady().then(() => {
     },
     allowedOrigin(entryUrl),
   );
-  createMainWindow(entryUrl);
+  await createMainWindow(entryUrl);
+}
+
+app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
+registerAppScheme();
+
+start().catch((error: unknown) => {
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`Satellite could not open its window and is quitting. ${reason}`);
+  app.exit(1);
 });
 
 app.on("window-all-closed", () => {

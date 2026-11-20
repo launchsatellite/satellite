@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { BrowserWindow, nativeTheme } from "electron";
 
-export function createMainWindow(entryUrl: string): BrowserWindow {
+export async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -22,6 +22,6 @@ export function createMainWindow(entryUrl: string): BrowserWindow {
   window.once("ready-to-show", () => {
     window.show();
   });
-  void window.loadURL(entryUrl);
+  await window.loadURL(entryUrl);
   return window;
 }

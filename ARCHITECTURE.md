@@ -19,12 +19,13 @@ The interface is treated as untrusted. Whatever it shows can never run a command
 
 - **Renderer settings.** `sandbox`, `contextIsolation` and `webSecurity` are on, `nodeIntegration` and `spellcheck` are off. The preload is CommonJS with its dependencies bundled, because a sandboxed preload cannot load ESM or `node_modules`.
 - **Permissions.** Every permission request, permission check, device request and display media request on the default session is denied.
-- **Navigation.** Every web contents refuses `will-navigate`, `will-frame-navigate` and `will-attach-webview`, and its window open handler denies every new window.
+- **Navigation.** Every web contents refuses `will-navigate`, `will-frame-navigate` and `will-attach-webview`, and its window open handler denies every new window. The one exception is a main frame reload of the window's own entry, allowed only when the target's protocol, host and path equal the entry URL, so hot reload in development and a reload in production work while every other address stays refused.
 - **Content security policy.** `default-src 'none'`, with scripts, styles, images, fonts, connections and workers only from the app itself, images and fonts also from `data:`, and `base-uri`, `form-action`, `frame-ancestors` and `object-src` all `'none'`. Styles allow `'unsafe-inline'` because the terminal and the diff editor insert style elements at run time. In development only, scripts allow `'unsafe-inline'` for the React refresh preamble and connections allow `ws://localhost:*` for hot reload. `src/shared/content-security-policy.ts` builds both, so the dev server and the protocol never drift.
-- **The `app://` protocol.** The interface loads from `app://satellite/index.html`, a standard and secure scheme, never from `file://`. The handler answers only `GET` for host `satellite`, decodes the path and confines it to `out/renderer` with `resolveInside`, which follows symlinks before it checks. Anything refused gets a 404. Every response carries the production policy and `X-Content-Type-Options: nosniff`.
+- **The `app://` protocol.** The interface loads from `app://satellite/index.html`, a standard and secure scheme, never from `file://`. The handler answers only `GET` for host `satellite`, decodes the path and confines it to `out/renderer` with `resolveInside`, which follows symlinks before it checks. It serves regular files only, so a folder is never handed to the file loader. Anything refused gets a 404. Every response, the 404 included, carries the production policy and `X-Content-Type-Options: nosniff`.
 - **Development server.** `ELECTRON_RENDERER_URL` points the window at the dev server only when the app is not packaged, so an environment variable can never aim a packaged app at remote content.
-- **Satellite home.** All state lives in the Satellite home, `~/.satellite` or the absolute path in `SATELLITE_HOME`, created with mode `0700` before the app is ready. Electron's `userData` is `app-data` inside it, so caches and storage never land anywhere else.
-- **Menu.** Electron's default application menu stays, because it carries the Edit roles that make copy and paste work on macOS.
+- **Satellite home.** All state lives in the Satellite home, `~/.satellite` or the path in `SATELLITE_HOME`, which must be fully qualified, with a drive letter or a share on Windows. It is created before the app is ready and set to mode `0700` on every start on macOS and Linux, so an older, looser folder is tightened. Electron's `userData` is `app-data` inside it, so caches and storage never land anywhere else.
+- **Menu.** A minimal menu built from roles only, with no links. The app menu on macOS (about, hide, quit), Edit (undo, redo, cut, copy, paste, select all) and Window (minimize, close). View with reload and developer tools exists only when the app is not packaged. The Edit roles are what make copy and paste work on macOS.
+- **Failed start.** If the window cannot be created or its entry cannot load, the background process logs one sentence and exits with code 1, so no process lingers without a window.
 
 ## Bridge
 
@@ -63,7 +64,7 @@ The terminal channels are in the contract and validated, and their handlers answ
 | --- | --- |
 | `src/main/main.ts` | Startup order. Home, scheme, hardening, protocol, bridge, window |
 | `src/main/bridge/` | The router that validates every request and the IPC wiring with the sender check |
-| `src/main/window/` | The window, the `app://` protocol and the hardening |
+| `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
 | `src/main/platform/` | The Satellite home, path confinement, the login shell environment and finding and running tools |
 | `src/main/tools/` | Tool versions for the left column |
 | `src/preload/preload.ts` | Exposes `window.satellite` |
