@@ -26,7 +26,7 @@ The interface is treated as untrusted. Whatever it shows can never run a command
 - **Satellite home.** All state lives in the Satellite home, `~/.satellite` or the path in `SATELLITE_HOME`, which must be fully qualified, with a drive letter or a share on Windows. It is created before the app is ready and set to mode `0700` on every start on macOS and Linux, so an older, looser folder is tightened. Electron's `userData` is `app-data` inside it, so caches and storage never land anywhere else.
 - **Menu.** A minimal menu built from roles only, with no links. The app menu on macOS (about, hide, quit), Edit (undo, redo, cut, copy, paste, select all) and Window (minimize, close). View with reload and developer tools exists only when the app is not packaged. The Edit roles are what make copy and paste work on macOS.
 - **One instance per home.** The app takes Electron's single-instance lock, which Electron scopes to the `userData` folder, so to the Satellite home. A second launch on the same home quits at once and the first window comes to the front. Launches with their own `SATELLITE_HOME`, like every verify run, never collide.
-- **Failed start.** If the window cannot be created or its entry cannot load, the background process logs one sentence and exits with code 1, so no process lingers without a window.
+- **Failed start.** If the Satellite home cannot be prepared, the window cannot be created or its entry cannot load, the background process logs one sentence and exits with code 1, so no process lingers without a window.
 
 ## Bridge
 

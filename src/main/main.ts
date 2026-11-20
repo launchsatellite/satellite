@@ -49,17 +49,28 @@ async function start(): Promise<void> {
   await createMainWindow(entryUrl);
 }
 
-app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
-registerAppScheme();
+function failStart(error: unknown): void {
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`Satellite could not start and is quitting. ${reason}`);
+  app.exit(1);
+}
 
-if (app.requestSingleInstanceLock()) {
+function prepareHome(): boolean {
+  try {
+    app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
+    return true;
+  } catch (error) {
+    failStart(error);
+    return false;
+  }
+}
+
+const homeReady = prepareHome();
+if (homeReady && app.requestSingleInstanceLock()) {
+  registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start().catch((error: unknown) => {
-    const reason = error instanceof Error ? error.message : String(error);
-    console.error(`Satellite could not open its window and is quitting. ${reason}`);
-    app.exit(1);
-  });
-} else {
+  start().catch(failStart);
+} else if (homeReady) {
   app.exit(0);
 }
 
