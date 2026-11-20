@@ -120,4 +120,4 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 001 Foundation, the security boundary | `default` | `boundary` |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |
 | 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
-| 002 Shell and projects, adding repositories, refusing other folders and duplicates, the quick switcher, restoring the selection and column width, and removing a project with its folder byte for byte unchanged | `two-projects` | `projects` |
+| 002 Shell and projects, adding repositories, refusing other folders and duplicates, the quick switcher, restoring the selection and column width, removing a project with its folder byte for byte unchanged, and a project whose `.git` or whole folder moved away | `two-projects` | `projects` |

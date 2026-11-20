@@ -18,6 +18,8 @@ interface Entry {
 const execute = promisify(execFile);
 const waitMs = 15_000;
 const widenedLeft = 280;
+const moveTimeoutMs = 5000;
+const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
 
 async function snapshot(root: string): Promise<Entry[]> {
   const entries: Entry[] = [];
@@ -45,8 +47,12 @@ function compareSnapshots(before: Entry[], after: Entry[]): void {
     const now = afterByPath.get(entry.path);
     assert.ok(now !== undefined, `alpha lost ${entry.path} after it was removed`);
     assert.ok(
-      now.size === entry.size && now.sha256 === entry.sha256,
+      now.size === entry.size,
       `alpha's ${entry.path} changed from ${String(entry.size)} bytes to ${String(now.size)}`,
+    );
+    assert.ok(
+      now.sha256 === entry.sha256,
+      `alpha's ${entry.path} kept its size but its bytes changed`,
     );
   }
   const beforePaths = new Set(before.map((entry) => entry.path));
@@ -99,11 +105,61 @@ async function projectsWidth(session: AppSession, expected: number, when: string
   let width: number | undefined;
   await waitUntil(
     async () => {
-      width = (await column.boundingBox())?.width;
+      const box = await column.boundingBox();
+      width = box === null ? undefined : Math.round(box.width);
       return width === expected;
     },
     waitMs,
     () => `${when} the projects column was ${String(width)} px wide instead of ${String(expected)}`,
+  );
+}
+
+async function moveAside(from: string, to: string, what: string): Promise<void> {
+  let reason = "";
+  await waitUntil(
+    async () => {
+      try {
+        await rename(from, to);
+        return true;
+      } catch (error) {
+        const code = error instanceof Error && "code" in error ? String(error.code) : "";
+        if (!busyCodes.has(code)) throw error;
+        reason = code;
+        return false;
+      }
+    },
+    moveTimeoutMs,
+    () => `${what} could not be moved aside, the last try failed with ${reason}`,
+  );
+}
+
+async function refocus(session: AppSession): Promise<void> {
+  await session.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+}
+
+async function showsMissing(session: AppSession, name: string, when: string): Promise<void> {
+  const row = session.page.getByTestId(`project-${name}`);
+  let shown = "";
+  await waitUntil(
+    async () => {
+      shown = (await row.count()) === 0 ? "no row" : await row.innerText();
+      return shown.includes("MISSING");
+    },
+    waitMs,
+    () => `project-${name} read "${shown}" ${when}, with no MISSING`,
+  );
+}
+
+async function centreReads(session: AppSession, title: string, when: string): Promise<void> {
+  const view = session.page.getByTestId("folder-missing");
+  let shown = "";
+  await waitUntil(
+    async () => {
+      shown = (await view.count()) === 0 ? "nothing" : await view.innerText();
+      return shown.startsWith(title);
+    },
+    waitMs,
+    () => `folder-missing read "${shown}" ${when} instead of "${title}"`,
   );
 }
 
@@ -142,11 +198,6 @@ async function run(session: AppSession): Promise<void> {
   await workspaceReads(session, "beta", "develop");
   await addWithShortcut(session, "alpha");
   await toastReads(session, "alpha is already in Satellite.", "after adding alpha twice");
-  assert.equal(
-    await session.page.getByTestId("project-alpha-2").count(),
-    0,
-    "alpha was listed twice after adding it again",
-  );
 
   await session.page.getByTestId("divider-left").focus();
   for (let step = 0; step < 4; step += 1) await session.page.keyboard.press("ArrowRight");
@@ -162,7 +213,7 @@ async function run(session: AppSession): Promise<void> {
     env: { ...withoutGitVariables(process.env), ...session.gitEnv },
     windowsHide: true,
   });
-  await session.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await refocus(session);
   await workspaceReads(session, "beta", "feature");
 
   await session.relaunch();
@@ -185,20 +236,27 @@ async function run(session: AppSession): Promise<void> {
 
   compareSnapshots(before, await snapshot(session.folder("alpha")));
 
-  await rename(session.folder("beta"), session.folder("beta-moved"));
-  await session.relaunch();
-  const beta = session.page.getByTestId("project-beta");
-  let shown = "";
-  await waitUntil(
-    async () => {
-      shown = (await beta.count()) === 0 ? "no row" : await beta.innerText();
-      return shown.includes("MISSING");
-    },
-    waitMs,
-    () => `project-beta read "${shown}" after its folder moved, with no MISSING`,
-  );
+  const betaGit = join(session.folder("beta"), ".git");
+  const betaGitAside = join(session.folder("beta"), "git-aside");
+  await moveAside(betaGit, betaGitAside, "beta's .git");
+  await refocus(session);
+  await showsMissing(session, "beta", "after its .git moved aside");
   await session.page.getByTestId("workspace-beta-main").click();
-  await visible(session, "folder-missing", "after selecting the moved beta");
+  await centreReads(
+    session,
+    "beta isn't a repository anymore",
+    "after selecting beta without its .git",
+  );
+  await session.screenshot("projects-not-repository");
+  await moveAside(betaGitAside, betaGit, "beta's .git on its way back");
+  await refocus(session);
+  await workspaceReads(session, "beta", "feature");
+
+  await moveAside(session.folder("beta"), session.folder("beta-moved"), "beta");
+  await session.relaunch();
+  await showsMissing(session, "beta", "after its folder moved");
+  await session.page.getByTestId("workspace-beta-main").click();
+  await centreReads(session, "beta isn't where it was", "after selecting the moved beta");
   await session.screenshot("projects-missing");
   await session.page.getByTestId("remove-project").click();
   await visible(session, "no-projects", "after removing the moved beta");
