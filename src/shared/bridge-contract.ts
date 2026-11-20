@@ -13,6 +13,7 @@ export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bri
 export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
 export type SessionStatus = z.output<typeof sessionStatus>;
+export type SessionEnding = z.output<typeof sessionEnding>;
 export type WorkspaceKey = z.output<typeof workspaceKey>;
 export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
@@ -48,6 +49,7 @@ export const interfaceLimits = {
 
 export const themeChoice = z.enum(["system", "light", "dark"]);
 export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
+export const sessionEnding = z.enum(["ended", "unexpected", "resume-failed"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
 export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
 export const workspaceName = z
@@ -233,8 +235,19 @@ export const bridgeRequests = {
     request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid(), fingerprint }),
     response: z.strictObject({ leftover: z.string().min(1).max(200).nullable() }),
   },
+  "sessions.resumable": {
+    request: z.strictObject({ workspace: workspaceRef }),
+    response: z.strictObject({ resumable: z.boolean() }),
+  },
   "terminal.start": {
-    request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),
+    request: z.strictObject({
+      id: terminalId,
+      program: z.literal("claude"),
+      workspace: workspaceRef,
+      resume: z.boolean(),
+      cols,
+      rows,
+    }),
     response: empty,
   },
   "terminal.write": {
@@ -278,7 +291,9 @@ export const bridgeEvents = {
       .int()
       .min(-(2 ** 31))
       .max(2 ** 32 - 1),
+    ending: sessionEnding,
   }),
+  "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus }),
 };
 
 const bridgeErrorCode = z.enum([

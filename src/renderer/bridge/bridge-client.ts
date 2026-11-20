@@ -18,6 +18,7 @@ const listeners: { [E in BridgeEventName]: Set<(payload: BridgeEventPayload<E>) 
   "workspaces.step": new Set(),
   "terminal.data": new Set(),
   "terminal.exit": new Set(),
+  "sessions.status": new Set(),
 };
 let listening = false;
 

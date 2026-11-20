@@ -28,6 +28,7 @@ interface ProjectsOptions {
   home: string;
   chooseFolder: (window: BrowserWindow | undefined) => Promise<string | undefined>;
   window: () => BrowserWindow | undefined;
+  stopSessions: (folder: string) => Promise<void>;
 }
 interface ProjectAnswer {
   view: ProjectView;
@@ -130,7 +131,12 @@ export function workspaceLimitSentence(project: string): string {
   return `${project} has 20 workspaces, as many as Satellite holds. Archive one, then make this one.`;
 }
 
-export function createProjects({ home, chooseFolder, window }: ProjectsOptions): Projects {
+export function createProjects({
+  home,
+  chooseFolder,
+  window,
+  stopSessions,
+}: ProjectsOptions): Projects {
   const file = createProjectsFile(home);
   let projects: StoredProject[] | undefined;
   let noticeGiven = false;
@@ -403,6 +409,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           throw new BridgeFailure("refused", stillHas(projectName(removed.path), count));
         }
         let forgotWorkspaces = 0;
+        let forgotten: string[] = [];
         await replace((latest) => {
           const project = latest.find((candidate) => candidate.id === projectId);
           if (project !== undefined) {
@@ -414,9 +421,11 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
               );
             }
             forgotWorkspaces = project.workspaces.length;
+            forgotten = [project.path, ...project.workspaces.map((workspace) => workspace.path)];
           }
           return latest.filter((candidate) => candidate.id !== projectId);
         });
+        await Promise.all(forgotten.map(stopSessions));
         return { forgotWorkspaces };
       },
     },

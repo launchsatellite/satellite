@@ -54,6 +54,7 @@ const textLimit = 2000;
 const pasteLimit = 1_000_000;
 const waitLimitMs = 60_000;
 const stepTimeoutMs = 15_000;
+const waitPollMs = 100;
 const restartTimeoutMs = 75_000;
 
 const noFocus = "nothing in the window has focus, click an element first";
@@ -74,6 +75,21 @@ async function focusedTestId(page: Page): Promise<string> {
   });
   if (testId === null) throw new Error(noFocus);
   return testId;
+}
+
+async function waitForText(page: Page, testId: string, text: string): Promise<void> {
+  const element = page.getByTestId(testId);
+  const deadline = Date.now() + waitLimitMs;
+  for (;;) {
+    const read = (await element.count()) === 0 ? "" : await element.first().innerText();
+    if (read.includes(text)) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${testId} did not show ${JSON.stringify(text)} within ${String(waitLimitMs / 1000)} seconds, it last read ${JSON.stringify(read.slice(-textLimit))}`,
+      );
+    }
+    await delay(waitPollMs);
+  }
 }
 
 async function paste(page: Page, text: string): Promise<string> {
@@ -171,6 +187,19 @@ function parseStep(raw: string): Step {
       return step(
         ({ session }) =>
           session.page.getByTestId(testId).waitFor({ state: "visible", timeout: waitLimitMs }),
+        waitLimitMs + stepTimeoutMs,
+      );
+    }
+    case "wait-text": {
+      const target = needsValue();
+      const separator = target.indexOf(":");
+      const testId = target.slice(0, separator);
+      const text = target.slice(separator + 1);
+      if (separator === -1 || testId === "" || text === "") {
+        throw new Error("step wait-text needs <testid>:<text>, as in wait-text=terminal:Done.");
+      }
+      return step(
+        ({ session }) => waitForText(session.page, testId, text),
         waitLimitMs + stepTimeoutMs,
       );
     }

@@ -3,7 +3,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
-import { bridgeLimits } from "../../shared/bridge-contract.ts";
+import { bridgeLimits, type WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
@@ -18,7 +18,14 @@ function isShiftEnter(event: KeyboardEvent): boolean {
   );
 }
 
-export function TerminalView({ onRestart }: { onRestart: () => void }) {
+export function TerminalView({
+  workspace,
+  onRestart,
+}: {
+  workspace: WorkspaceRef;
+  onRestart: () => void;
+}) {
+  const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string>();
 
@@ -55,6 +62,8 @@ export function TerminalView({ onRestart }: { onRestart: () => void }) {
     let queue: Promise<unknown> = invoke("terminal.start", {
       id: terminalId,
       program: "claude",
+      workspace: { projectId, workspace: key },
+      resume: false,
       cols: terminal.cols,
       rows: terminal.rows,
     }).then((result) => {
@@ -102,7 +111,7 @@ export function TerminalView({ onRestart }: { onRestart: () => void }) {
       terminal.dispose();
       void invoke("terminal.close", { id: terminalId });
     };
-  }, []);
+  }, [projectId, key]);
 
   return (
     <div data-testid="terminal" className="flex h-full min-h-0 flex-col bg-bg p-2">

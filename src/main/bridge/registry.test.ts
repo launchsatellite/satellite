@@ -82,6 +82,9 @@ function spies() {
     "workspaces.archive": vi.fn<BridgeHandler<"workspaces.archive">>(() =>
       Promise.resolve({ leftover: null }),
     ),
+    "sessions.resumable": vi.fn<BridgeHandler<"sessions.resumable">>(() =>
+      Promise.resolve({ resumable: false }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -155,6 +158,34 @@ describe("createBridgeRouter", () => {
     const result = await route("terminal.close", { id: "../../etc" }, owner);
     expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     noHandlerRan(handlers);
+  });
+
+  it("refuses a start that names a program, arguments or a folder", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = {
+      id: terminalId,
+      program: "claude",
+      workspace: { projectId: terminalId, workspace: "main" },
+      resume: false,
+      cols: 80,
+      rows: 24,
+    };
+    const payloads = [
+      { ...valid, program: "bash" },
+      { ...valid, args: ["-c", "id"] },
+      { ...valid, cwd: "/Users/<name>/repo" },
+      { ...valid, workspace: undefined },
+      { ...valid, workspace: { projectId: terminalId, workspace: "../x" } },
+      { ...valid, resume: undefined },
+    ];
+    for (const payload of payloads) {
+      const result = await route("terminal.start", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("terminal.start", valid, owner)).toMatchObject({ ok: true });
+    expect(handlers["terminal.start"]).toHaveBeenCalledWith(valid, owner);
   });
 
   it("refuses a project id that is not a uuid", async () => {
@@ -346,7 +377,14 @@ describe("createBridgeRouter", () => {
     });
     const failed = await route(
       "terminal.start",
-      { id: terminalId, program: "claude", cols: 80, rows: 24 },
+      {
+        id: terminalId,
+        program: "claude",
+        workspace: { projectId: terminalId, workspace: "main" },
+        resume: false,
+        cols: 80,
+        rows: 24,
+      },
       owner,
     );
     expect(failed).toEqual({

@@ -359,6 +359,8 @@ async function run(session: AppSession): Promise<void> {
   await checkRelativeDrop(page);
   await checkFingerprint(session, await checkWorkspaceRequests(session));
   await session.screenshot("boundary");
+  await page.reload();
+  await page.getByTestId("workspace-repo-main").click();
   const pid = await startClaude(session, 1);
   await checkLeaving(page, appUrl, reached);
   await checkTerminalSurvives(session, pid);

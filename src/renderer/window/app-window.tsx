@@ -450,7 +450,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         </section>
         <section data-testid="column-sessions" aria-label="Sessions" className="min-h-0">
-          <ClaudePane />
+          <ClaudePane
+            key={
+              state.selected === null
+                ? "none"
+                : `${state.selected.projectId}/${state.selected.workspace}`
+            }
+            workspace={state.selected}
+          />
         </section>
         {dragging && <DropOverlay />}
         {palette !== null && (

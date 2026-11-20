@@ -9,6 +9,7 @@ interface Started {
 }
 
 async function startWithChild(session: AppSession): Promise<Started> {
+  await session.page.getByTestId("workspace-repo-main").click();
   await session.page.getByTestId("start-claude").click();
   let started: Started | undefined;
   await waitUntil(

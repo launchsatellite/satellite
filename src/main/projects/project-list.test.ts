@@ -170,6 +170,7 @@ function projectsIn(home: string) {
     home,
     chooseFolder: () => Promise.resolve(undefined),
     window: () => undefined,
+    stopSessions: () => Promise.resolve(),
   });
 }
 
@@ -250,6 +251,7 @@ describe("createProjects", () => {
       home,
       chooseFolder: () => Promise.resolve(undefined),
       window: () => undefined,
+      stopSessions: () => Promise.resolve(),
     });
     for (let refresh = 0; refresh < 3; refresh += 1) {
       const answer = handlers["projects.list"]({}, owner);
@@ -298,6 +300,7 @@ describe("createProjects", () => {
       home: join(base, "home"),
       chooseFolder: () => Promise.resolve(base),
       window: () => undefined,
+      stopSessions: () => Promise.resolve(),
     });
     const first = handlers["projects.drop"]({ path: hung.path }, owner);
     const second = handlers["projects.choose"]({}, owner);

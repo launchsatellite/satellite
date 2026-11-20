@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { z } from "zod";
 import { resolveInside } from "../src/main/platform/paths.ts";
+import { hookEvents } from "../src/main/sessions/claude-launch.ts";
 
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type RepoStep = z.infer<typeof repoStepSchema>;
@@ -29,6 +30,12 @@ const claudeStepSchema = z.union([
   z.strictObject({ wait: z.int().min(0).max(60_000) }),
   z.strictObject({ flood: z.int().min(1).max(50_000_000) }),
   z.strictObject({ child: z.literal("ignores-hangup") }),
+  z.strictObject({
+    hook: z.enum(hookEvents),
+    fields: z.record(z.string(), z.string()).optional(),
+  }),
+  z.strictObject({ await: z.string().min(1) }),
+  z.strictObject({ trust: z.literal(true) }),
 ]);
 
 export const scenarioSchema = z.strictObject({

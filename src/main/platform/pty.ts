@@ -10,14 +10,15 @@ export interface PtyProcess {
   resume(): void;
   kill(): Promise<void>;
   onData(listener: (data: string) => void): void;
-  onExit(listener: (exitCode: number) => void): void;
+  onExit(listener: (exitCode: number, signal: number | undefined) => void): void;
 }
 
 export function spawnPty(
   command: ResolvedCommand,
+  args: readonly string[],
   options: { cwd: string; cols: number; rows: number; env: Record<string, string> },
 ): PtyProcess {
-  const pty = spawn(command.file, [...command.args], {
+  const pty = spawn(command.file, [...command.args, ...args], {
     name: "xterm-256color",
     cwd: options.cwd,
     cols: options.cols,
@@ -61,8 +62,8 @@ export function spawnPty(
       pty.onData(listener);
     },
     onExit(listener) {
-      pty.onExit(({ exitCode }) => {
-        listener(exitCode);
+      pty.onExit(({ exitCode, signal }) => {
+        listener(exitCode, signal === 0 ? undefined : signal);
       });
     },
   };
