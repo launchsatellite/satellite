@@ -15,6 +15,7 @@ import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
+import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
@@ -114,6 +115,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     workspace: WorkspaceView;
   } | null>(null);
   const [added, setAdded] = useState<string>();
+  const [asking, setAsking] = useState<string | null>(null);
+  const closeLink = useCallback(() => {
+    setAsking(null);
+  }, []);
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
   const repositoryRef = useRef<HTMLElement>(null);
@@ -234,7 +239,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const nextSession = neighbour(1);
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const modal = dialogProject !== undefined || archiving !== null;
+  const modal = dialogProject !== undefined || archiving !== null || asking !== null;
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -523,7 +528,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           aria-label="Sessions"
           className="relative min-h-0 bg-bg"
         >
-          <SessionsPane sessions={sessions} selected={sessionHere ?? null} />
+          <SessionsPane
+            sessions={sessions}
+            selected={sessionHere ?? null}
+            onAskLink={setAsking}
+            notify={notify}
+          />
         </section>
         {dragging && <DropOverlay />}
         {palette !== null && (
@@ -552,6 +562,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onClose={closeArchive}
             onArchived={archived}
           />
+        )}
+        {asking !== null && (
+          <LinkDialog key={asking} address={asking} onClose={closeLink} notify={notify} />
         )}
         {toast !== undefined && (
           <Toast

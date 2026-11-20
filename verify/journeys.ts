@@ -60,6 +60,8 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),
     dropFolder: (path) => session.dropFolder(path),
+    dropFiles: (testId, paths) => session.dropFiles(testId, paths),
+    openedLinks: () => session.openedLinks(),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: (whileClosed) => session.relaunch(whileClosed),

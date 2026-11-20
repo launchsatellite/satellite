@@ -85,6 +85,7 @@ function spies() {
     "sessions.resumable": vi.fn<BridgeHandler<"sessions.resumable">>(() =>
       Promise.resolve({ resumable: false }),
     ),
+    "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -149,6 +150,23 @@ describe("createBridgeRouter", () => {
       owner,
     );
     expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    noHandlerRan(handlers);
+  });
+
+  it("refuses a link that is too long or carries more than its address", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const long = `https://example.com/${"a".repeat(2048 - 20 + 1)}`;
+    expect(long).toHaveLength(2049);
+    for (const payload of [
+      { url: long },
+      { url: "https://example.com/", target: "_blank" },
+      { url: "" },
+      {},
+    ]) {
+      const result = await route("links.open", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
     noHandlerRan(handlers);
   });
 

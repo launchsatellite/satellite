@@ -1,5 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
@@ -11,9 +12,13 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
+import { openLink } from "../sessions/link-dialog.tsx";
 import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
+import type { Notify } from "../ui/toast.tsx";
+import { droppedPaths } from "./dropped-paths.ts";
 import "./terminal-font.css";
+import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
 import { terminalTheme } from "./terminal-theme.ts";
 
 interface TerminalViewProps {
@@ -22,9 +27,16 @@ interface TerminalViewProps {
   resume: boolean;
   shown: boolean;
   onRestart: () => void;
+  onAskLink: (address: string) => void;
+  notify: Notify;
 }
 
-const newlineSequence = "\u001b\r";
+const dropLimit = 20;
+const dropPathChars = 4096;
+const tooManyFiles = "Drop up to 20 files at a time.";
+const unreadableFile = "Satellite couldn't read where that file came from.";
+const unsafePath =
+  "Satellite can't type a path that holds a line break or another control character.";
 const endings: Record<SessionEnding, string> = {
   ended: "Claude Code ended.",
   unexpected: "Claude Code stopped unexpectedly. The workspace and its changes are safe.",
@@ -32,10 +44,13 @@ const endings: Record<SessionEnding, string> = {
     "Claude Code couldn't resume that session, so Satellite let it go. Start a new one.",
 };
 
-function isShiftEnter(event: KeyboardEvent): boolean {
-  return (
-    event.key === "Enter" && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
-  );
+function carriesFiles(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes("Files") === true;
+}
+
+function holdsOnlyFiles(data: DataTransfer | null): boolean {
+  if (data === null || data.types.includes("text/plain")) return false;
+  return [...data.items].some((item) => item.kind === "file");
 }
 
 export function TerminalView({
@@ -44,11 +59,14 @@ export function TerminalView({
   resume,
   shown,
   onRestart,
+  onAskLink,
+  notify,
 }: TerminalViewProps) {
   const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
   const show = useRef<() => void>(undefined);
   const noticedNow = useRef(false);
+  const outward = useRef({ onAskLink, notify });
   const [notice, setNotice] = useState<string>();
   const [missingFix, setMissingFix] = useState<InstallFix>();
   const noticed = notice !== undefined;
@@ -56,6 +74,14 @@ export function TerminalView({
   useEffect(() => {
     const element = host.current;
     if (element === null) return;
+    const follow = (event: MouseEvent, text: string, asks: boolean) => {
+      if (!opensLink(event)) return;
+      const { onAskLink: ask, notify: tell } = outward.current;
+      const href = URL.parse(text)?.href;
+      if (href === undefined) openLink(text, tell);
+      else if (!asks && (href === text || href === `${text}/`)) openLink(href, tell);
+      else ask(href);
+    };
     const terminal = new Terminal({
       fontFamily: '"Satellite Terminal Mono", monospace',
       fontSize: 13,
@@ -63,11 +89,20 @@ export function TerminalView({
       allowProposedApi: true,
       cursorBlink: !matchMedia("(prefers-reduced-motion: reduce)").matches,
       theme: terminalTheme(),
-      linkHandler: { activate: () => undefined },
+      linkHandler: {
+        activate: (event, text) => {
+          follow(event, text, true);
+        },
+      },
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.loadAddon(new Unicode11Addon());
+    terminal.loadAddon(
+      new WebLinksAddon((event, text) => {
+        follow(event, text, false);
+      }),
+    );
     terminal.unicode.activeVersion = "11";
     terminal.open(element);
     const fitted = () => {
@@ -115,6 +150,43 @@ export function TerminalView({
     };
 
     const input = terminal.onData(send);
+    const pasteImage = (event: ClipboardEvent) => {
+      if (!holdsOnlyFiles(event.clipboardData)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      send(imagePasteSequence());
+    };
+    const dragOver = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "copy";
+    };
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      const files = [...(event.dataTransfer?.files ?? [])];
+      if (files.length === 0) return;
+      const { notify: tell } = outward.current;
+      if (files.length > dropLimit) {
+        tell(tooManyFiles, "error");
+        return;
+      }
+      const paths = files.map((file) => window.satellite.pathForFile(file));
+      if (paths.some((path) => path === "" || path.length > dropPathChars)) {
+        tell(unreadableFile, "error");
+        return;
+      }
+      const typed = droppedPaths(paths);
+      if (typed === null) {
+        tell(unsafePath, "error");
+        return;
+      }
+      terminal.paste(typed);
+      terminal.focus();
+    };
+    element.addEventListener("paste", pasteImage, true);
+    element.addEventListener("dragover", dragOver);
+    element.addEventListener("drop", drop);
     terminal.attachCustomKeyEventHandler((event) => {
       if (!isShiftEnter(event)) return true;
       if (event.type === "keydown") send(newlineSequence);
@@ -140,6 +212,9 @@ export function TerminalView({
 
     return () => {
       show.current = undefined;
+      element.removeEventListener("paste", pasteImage, true);
+      element.removeEventListener("dragover", dragOver);
+      element.removeEventListener("drop", drop);
       darkScheme.removeEventListener("change", retheme);
       observer.disconnect();
       cancelAnimationFrame(frame);
@@ -154,6 +229,10 @@ export function TerminalView({
   useEffect(() => {
     noticedNow.current = noticed;
   }, [noticed]);
+
+  useEffect(() => {
+    outward.current = { onAskLink, notify };
+  }, [onAskLink, notify]);
 
   useEffect(() => {
     if (shown) show.current?.();

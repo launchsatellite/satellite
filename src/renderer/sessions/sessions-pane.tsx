@@ -3,12 +3,15 @@ import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
 import { Button } from "../ui/button.tsx";
+import type { Notify } from "../ui/toast.tsx";
 import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
 import type { Sessions } from "./use-sessions.ts";
 
 interface SessionsPaneProps {
   sessions: Sessions;
   selected: WorkspaceRef | null;
+  onAskLink: (address: string) => void;
+  notify: Notify;
 }
 
 function EmptyWorkspace({
@@ -82,7 +85,7 @@ function EmptyWorkspace({
   );
 }
 
-export function SessionsPane({ sessions, selected }: SessionsPaneProps) {
+export function SessionsPane({ sessions, selected, onAskLink, notify }: SessionsPaneProps) {
   const tabs = selected === null ? [] : sessions.tabsOf(selected);
   const active = selected === null ? undefined : sessions.activeOf(selected);
   const top = () => {
@@ -139,6 +142,8 @@ export function SessionsPane({ sessions, selected }: SessionsPaneProps) {
                 onRestart={() => {
                   sessions.restart(tab.key);
                 }}
+                onAskLink={onAskLink}
+                notify={notify}
               />
             </div>
           );

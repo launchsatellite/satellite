@@ -33,6 +33,8 @@ export interface AppSession {
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
   dropFolder(path: string): Promise<void>;
+  dropFiles(testId: string, paths: string[]): Promise<void>;
+  openedLinks(): Promise<string[]>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
@@ -55,6 +57,7 @@ interface AppPaths {
   gitConfig: string;
   log: string;
   dialog: string;
+  links: string;
   missingClaude: string | undefined;
 }
 interface AppCommand {
@@ -201,7 +204,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, gitConfig, log, dialog, missingClaude }: AppPaths,
+  { home, gitConfig, log, dialog, links, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
@@ -214,6 +217,7 @@ function appEnvironment(
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
   env["SATELLITE_VERIFY_LOG"] = log;
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
+  env["SATELLITE_VERIFY_LINKS"] = links;
   env["SATELLITE_GH"] = standIn("gh");
   if (missingClaude !== undefined) env["SATELLITE_CLAUDE"] = JSON.stringify([missingClaude]);
   else if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
@@ -438,12 +442,12 @@ async function stopApp(running: RunningApp): Promise<boolean> {
   return exitedOnItsOwn;
 }
 
-async function dropOnWindow(page: Page, path: string): Promise<void> {
-  const box = await page.getByTestId("column-repository").boundingBox();
-  if (box === null) throw new Error("the repository column is not on screen to drop on");
+async function dropOn(page: Page, testId: string, files: string[]): Promise<void> {
+  const box = await page.getByTestId(testId).boundingBox();
+  if (box === null) throw new Error(`${testId} is not on screen to drop on`);
   const x = Math.round(box.x + box.width / 2);
   const y = Math.round(box.y + box.height / 2);
-  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  const data = { items: [], files, dragOperationsMask: 1 };
   const protocol = await page.context().newCDPSession(page);
   try {
     for (const type of ["dragEnter", "dragOver", "drop"] as const) {
@@ -539,9 +543,10 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const repo = join(temp, "repo");
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
+  const links = join(temp, "links.txt");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
   const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
-  const paths = { home, repo, gitConfig, log, dialog, missingClaude };
+  const paths = { home, repo, gitConfig, log, dialog, links, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -612,7 +617,12 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       return join(temp, "folders", ...segments);
     },
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
-    dropFolder: (path) => dropOnWindow(page, path),
+    dropFolder: (path) => dropOn(page, "column-repository", [path]),
+    dropFiles: (testId, files) => dropOn(page, testId, files),
+    async openedLinks() {
+      const text = await readFile(links, "utf8").catch(() => "");
+      return text.split("\n").filter((line) => line !== "");
+    },
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
     async screenshot(name) {

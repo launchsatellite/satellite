@@ -14,6 +14,7 @@ import {
   interfaceHandlers,
   type InterfaceFile,
 } from "./state/interface-file.ts";
+import { linkHandlers } from "./terminal/link-handlers.ts";
 import { createTerminalSessions, type TerminalSessions } from "./terminal/terminal-sessions.ts";
 import { checkTools } from "./tools/tool-check.ts";
 import {
@@ -75,6 +76,7 @@ async function start({
       ...projects.handlers,
       ...workspaces.handlers,
       ...terminals.handlers,
+      ...linkHandlers(),
     },
     allowedOrigin(entryUrl),
   );

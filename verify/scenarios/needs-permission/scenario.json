@@ -28,6 +28,9 @@
     "version": "2.0.0 (Claude Code stand-in)",
     "script": [
       { "print": "Claude Code stand-in\r\n" },
+      {
+        "print": "See https://example.com/docs and \u001b]8;;https://example.com/real\u001b\\the docs\u001b]8;;\u001b\\\r\n"
+      },
       { "print": "\u001b[?2004h" },
       { "hook": "SessionStart", "fields": { "source": "startup" } },
       { "print": "> " },

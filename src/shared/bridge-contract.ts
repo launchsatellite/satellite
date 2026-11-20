@@ -37,6 +37,7 @@ export const bridgeLimits = {
   terminals: 16,
   workspacesPerProject: 20,
   messageChars: 1000,
+  linkChars: 2048,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
 };
@@ -238,6 +239,10 @@ export const bridgeRequests = {
   "sessions.resumable": {
     request: z.strictObject({ workspace: workspaceRef }),
     response: z.strictObject({ resumable: z.boolean() }),
+  },
+  "links.open": {
+    request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),
+    response: empty,
   },
   "terminal.start": {
     request: z.strictObject({
