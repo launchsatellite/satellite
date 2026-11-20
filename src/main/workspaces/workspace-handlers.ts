@@ -13,13 +13,7 @@ import {
   type StoredWorkspace,
 } from "../projects/projects-file.ts";
 import { answerWithin, folderReadMs } from "../projects/repository-check.ts";
-import {
-  branchTakenSentence,
-  creationSteps,
-  failureSentence,
-  nameTaken,
-  prepareWorkspace,
-} from "./create-steps.ts";
+import { creationSteps, failureSentence, nameTaken, prepareWorkspace } from "./create-steps.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
 interface CreationRequest {
@@ -98,7 +92,8 @@ export function workspaceHandlers({ home, store }: WorkspaceOptions): Workspaces
     const result = await runCreation(steps, report);
     if (!result.ok) {
       const refused =
-        result.step === "start" || result.sentence === branchTakenSentence(name, projectLabel);
+        result.step === "start" ||
+        (result.step === "branch" && result.sentence.endsWith(" Pick another name."));
       throw new BridgeFailure(
         refused ? "refused" : "failed",
         failureSentence(result, name, projectLabel),

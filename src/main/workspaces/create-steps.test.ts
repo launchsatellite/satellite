@@ -255,6 +255,32 @@ describe("creationSteps", () => {
     expect(await exists(path)).toBe(false);
   });
 
+  it("refuses a name that differs only by case from a packed branch", async () => {
+    const root = await repository();
+    const first = await commit(root, "a", "first commit\n");
+    await git(root, ["branch", "Fix"]);
+    await git(root, ["branch", "Login/form"]);
+    await git(root, ["pack-refs", "--all"]);
+    await commit(root, "b", "second commit\n");
+    for (const [name, clash] of [
+      ["fix", "Fix"],
+      ["login", "Login/form"],
+    ] as const) {
+      const { result, path } = await create(root, name);
+      expect(result).toEqual({
+        ok: false,
+        step: "branch",
+        sentence: `repo already has a branch named ${clash}, which git can't keep next to ${name} on every system. Pick another name.`,
+        undone: true,
+      });
+      expect(await exists(path)).toBe(false);
+    }
+    expect(await git(root, ["rev-parse", "refs/heads/Fix"])).toBe(first);
+    expect(await git(root, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe(
+      "refs/heads/Fix\nrefs/heads/Login/form\nrefs/heads/main",
+    );
+  });
+
   it.skipIf(!onUnix)("never deletes a branch that moved since it was made", async () => {
     const root = await repository();
     const first = await commit(root, "a", "first commit\n");

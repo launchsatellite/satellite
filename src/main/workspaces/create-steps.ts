@@ -66,6 +66,7 @@ const remoteHeadPattern = /^refs\/remotes\/[^/]+\/HEAD$/;
 const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const includeLimit = 65536;
 const branchListLimit = 200;
+const branchLabelLimit = 255;
 const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
 const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
 const quitSentence = "Satellite stopped making the workspace because it is quitting.";
@@ -86,6 +87,10 @@ function errorCode(error: unknown): unknown {
 function label(ref: string): string {
   const prefix = startPrefixes.find((candidate) => ref.startsWith(candidate));
   return prefix === undefined ? ref : ref.slice(prefix.length);
+}
+
+function clashesWith(lowerRef: string, wanted: string): boolean {
+  return lowerRef === wanted || lowerRef.startsWith(`${wanted}/`);
 }
 
 function stopIfQuitting(signal: AbortSignal): void {
@@ -154,6 +159,21 @@ async function branchExists(root: string, name: string): Promise<boolean | undef
   const run = await git(root, ["show-ref", "--verify", "--quiet", `refs/heads/${name}`], gitReadMs);
   if (run?.exitCode === 0) return true;
   return run?.exitCode === 1 ? false : undefined;
+}
+
+async function branchClash(
+  root: string,
+  name: string,
+  project: string,
+): Promise<string | null | undefined> {
+  const run = await git(root, ["for-each-ref", "--format=%(refname)", "refs/heads/"], gitReadMs);
+  if (run?.exitCode !== 0) return undefined;
+  const wanted = `refs/heads/${name}`;
+  const refs = run.stdout.split("\n").filter((ref) => ref !== "");
+  if (refs.includes(wanted)) return branchTakenSentence(name, project);
+  const clash = refs.find((ref) => clashesWith(ref.toLowerCase(), wanted));
+  if (clash === undefined) return null;
+  return `${project} already has a branch named ${label(clash).slice(0, branchLabelLimit)}, which git can't keep next to ${name} on every system. Pick another name.`;
 }
 
 async function isListed(root: string, path: string): Promise<boolean | undefined> {
@@ -259,9 +279,9 @@ function branchStep(context: CreationContext, shared: Shared): CreationStepRun {
   return {
     id: "branch",
     async run() {
-      const exists = await branchExists(root, name);
-      if (exists === true) throw new StepFailure(branchTakenSentence(name, project));
-      if (exists === undefined || shared.oid === null) throw new StepFailure(failure);
+      const clash = await branchClash(root, name, project);
+      if (clash !== null && clash !== undefined) throw new StepFailure(clash);
+      if (clash === undefined || shared.oid === null) throw new StepFailure(failure);
       stopIfQuitting(signal);
       const made = await git(
         root,
@@ -517,7 +537,8 @@ export async function nameTaken(
   name: string,
   project: string,
 ): Promise<string | null> {
-  if ((await branchExists(root, name)) === true) return branchTakenSentence(name, project);
+  const clash = await branchClash(root, name, project);
+  if (clash !== null && clash !== undefined) return clash;
   const entries = await folderEntries(home, root);
   if (!entries.some((entry) => entry.toLowerCase() === name)) return null;
   return `A folder named ${name} is already in Satellite's worktrees for ${projectSegment(root)}. Pick another name.`;
@@ -547,11 +568,13 @@ export function creationSteps(context: CreationContext): CreationStepRun[] {
 
 export async function prepareWorkspace(root: string, home: string): Promise<PreparedWorkspace> {
   const heads = await refList(root, ["--format=%(refname)", "refs/heads/"]);
-  const taken = new Set([
-    ...heads.map((ref) => label(ref).toLowerCase()),
-    ...(await folderEntries(home, root)).map((entry) => entry.toLowerCase()),
-  ]);
-  const name = suggestName((candidate) => taken.has(candidate));
+  const lowerHeads = heads.map((ref) => ref.toLowerCase());
+  const folders = new Set((await folderEntries(home, root)).map((entry) => entry.toLowerCase()));
+  const name = suggestName(
+    (candidate) =>
+      folders.has(candidate) ||
+      lowerHeads.some((ref) => clashesWith(ref, `refs/heads/${candidate}`)),
+  );
   const main = (await listWorktrees(root))?.worktrees[0];
   const mainBranch =
     main?.branch !== undefined && main.branch !== null && isBranchName(main.branch)
