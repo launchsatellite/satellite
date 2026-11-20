@@ -25,7 +25,12 @@ const nameOf = (workspace: WorkspaceRef) =>
   workspace.workspace === "main" ? "main" : workspace.workspace.slice(-12).replace(/^0+/, "");
 
 function setup() {
-  const state = { front: false, gone: new Set<string>(), slow: new Map<string, number>() };
+  const state = {
+    front: false,
+    gone: new Set<string>(),
+    failing: new Set<string>(),
+    slow: new Map<string, number>(),
+  };
   const shown: Shown[] = [];
   const badges: number[] = [];
   const opened: Needing[] = [];
@@ -35,6 +40,7 @@ function setup() {
     await (slow === undefined
       ? Promise.resolve()
       : new Promise((resolve) => setTimeout(resolve, slow)));
+    if (state.failing.has(name)) throw new Error("projects.json could not be read");
     if (state.gone.has(name)) return undefined;
     return { project: "repo", workspace: name === "main" ? null : `w${name}` };
   });
@@ -341,5 +347,51 @@ describe("createNotices", () => {
     notices.update([need("1"), need("2"), need("3")]);
     await settle();
     expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w3 needs you"]);
+  });
+
+  it("does not use up the gap when nothing could be named", async () => {
+    const { state, shown, notices } = setup();
+    state.gone = new Set(["1"]);
+    notices.update([need("1")]);
+    await settle(100);
+    notices.update([need("1"), need("2")]);
+    await settle();
+    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
+  });
+
+  it("tries a lookup that failed once more on the next change, never on its own", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { state, shown, subject, notices } = setup();
+    state.failing = new Set(["1"]);
+    notices.update([need("1")]);
+    await settle(noticeGapMs * 3);
+    expect(shown).toEqual([]);
+    expect(subject).toHaveBeenCalledTimes(1);
+    notices.update([need("1")]);
+    await settle(noticeGapMs * 3);
+    expect(subject).toHaveBeenCalledTimes(2);
+    state.failing = new Set();
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs * 3);
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs * 3);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it("announces later what a stale lookup held, once", async () => {
+    const { state, shown, notices } = setup();
+    state.slow.set("1", noticeGapMs * 2);
+    notices.update([need("1")]);
+    await settle(1);
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs * 3);
+    state.slow.clear();
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs);
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs * 2);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you", "w1 needs you"]);
   });
 });

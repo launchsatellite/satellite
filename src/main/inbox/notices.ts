@@ -36,6 +36,7 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   let enabled = true;
   let needing = new Map<string, Needing>();
   const pending = new Map<string, Needing>();
+  const retry = new Map<string, Needing>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let shownAt: number | undefined;
   let shown: { notice: ShownNotice; keys: string[] } | undefined;
@@ -48,6 +49,7 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   };
   const forgetWaiting = () => {
     pending.clear();
+    retry.clear();
     clearTimer();
   };
   const closeShown = () => {
@@ -59,20 +61,25 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     failureLogged = true;
     console.error("Satellite could not show a notification", error);
   };
-  const present = async (entries: readonly Needing[]) => {
+  const present = async (entries: readonly Needing[]): Promise<boolean> => {
     runs += 1;
     const run = runs;
-    const subjects = await Promise.all(entries.map(({ workspace }) => subject(workspace)));
-    if (run !== runs || quiet()) return;
+    const subjects = await Promise.allSettled(entries.map(({ workspace }) => subject(workspace)));
+    if (quiet()) return false;
     const named = entries.flatMap((entry, index): Named[] => {
+      const key = placeKey(entry.workspace);
       const found = subjects[index];
-      return found === undefined || !needing.has(placeKey(entry.workspace))
-        ? []
-        : [{ entry, subject: found }];
+      if (!needing.has(key) || found === undefined) return [];
+      if (found.status === "rejected" || run !== runs) {
+        if (found.status === "rejected") failed(found.reason);
+        retry.set(key, entry);
+        return [];
+      }
+      return found.value === undefined ? [] : [{ entry, subject: found.value }];
     });
     const [first, ...rest] = named;
     const target = named.at(-1);
-    if (first === undefined || target === undefined) return;
+    if (first === undefined || target === undefined) return false;
     closeShown();
     const notice = show(noticeText([first.subject, ...rest.map(({ subject }) => subject)]), () => {
       open(target.entry);
@@ -80,14 +87,21 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     if (notice !== undefined) {
       shown = { notice, keys: named.map(({ entry }) => placeKey(entry.workspace)) };
     }
+    return true;
   };
   const flush = () => {
     clearTimer();
     const entries = [...pending.values()];
     pending.clear();
     if (entries.length === 0 || quiet()) return;
-    shownAt = Date.now();
-    present(entries).catch(failed);
+    const before = shownAt;
+    const stamp = Date.now();
+    shownAt = stamp;
+    present(entries)
+      .then((showed) => {
+        if (!showed && shownAt === stamp) shownAt = before;
+      })
+      .catch(failed);
   };
   const schedule = () => {
     if (pending.size === 0 || timer !== undefined) return;
@@ -107,6 +121,12 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
       for (const [key, entry] of next) {
         if (announce && !needing.has(key)) pending.set(key, entry);
       }
+      for (const [key, entry] of retry) {
+        if (announce && next.has(key) && shown?.keys.includes(key) !== true) {
+          pending.set(key, entry);
+        }
+      }
+      retry.clear();
       for (const key of pending.keys()) {
         if (!next.has(key)) pending.delete(key);
       }
