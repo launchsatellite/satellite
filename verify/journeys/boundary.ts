@@ -363,6 +363,8 @@ async function startsRefused(session: AppSession, projectId: string): Promise<vo
   await refusedWith(page, "terminal.start", { ...request, cwd: "/" }, "invalid-request");
   const elsewhere = { ...request, workspace: { projectId: randomUUID(), workspace: "main" } };
   await refusedWith(page, "terminal.start", elsewhere, "not-found");
+  const madeUp = { ...request, workspace: { projectId, workspace: randomUUID() } };
+  await refusedWith(page, "terminal.start", madeUp, "not-found");
   await refusedWith(page, "terminal.start", { ...request, resume: true }, "not-found");
   await refusedWith(page, "links.open", { url: "javascript:alert(1)" }, "refused");
   assert.equal(
@@ -370,6 +372,28 @@ async function startsRefused(session: AppSession, projectId: string): Promise<vo
     starts,
     "a refused terminal.start started Claude Code",
   );
+  await okValue(page, "terminal.start", request, z.object({}));
+  await waitUntil(
+    async () => (await claudePids(session)).length > starts,
+    promptTimeoutMs,
+    "the request the refusals were built from did not start Claude Code",
+  );
+}
+
+async function resumableRefused(page: Page, projectId: string): Promise<void> {
+  const main = { projectId, workspace: "main" };
+  await refusedWith(page, "sessions.resumable", { workspace: main, id: "x" }, "invalid-request");
+  const climbing = { projectId, workspace: "../main" };
+  await refusedWith(page, "sessions.resumable", { workspace: climbing }, "invalid-request");
+  const answer = z.object({ resumable: z.boolean() });
+  for (const workspace of [
+    main,
+    { projectId: randomUUID(), workspace: "main" },
+    { projectId, workspace: randomUUID() },
+  ]) {
+    const { resumable } = await okValue(page, "sessions.resumable", { workspace }, answer);
+    assert.equal(resumable, false, `sessions.resumable offered ${JSON.stringify(workspace)}`);
+  }
 }
 
 async function forgedHooks(session: AppSession, pid: number): Promise<void> {
@@ -399,7 +423,6 @@ async function forgedHooks(session: AppSession, pid: number): Promise<void> {
     await response.arrayBuffer();
     assert.equal(response.status, expected, `a hook ${what} got ${String(response.status)}`);
   }
-  await delay(settleMs);
   const after = await pixel.getAttribute("data-state");
   assert.equal(
     after,
@@ -441,11 +464,12 @@ async function run(session: AppSession): Promise<void> {
   await checkRelativeDrop(page);
   const projectId = await checkWorkspaceRequests(session);
   await checkFingerprint(session, projectId);
+  await resumableRefused(page, projectId);
   await startsRefused(session, projectId);
   await session.screenshot("boundary");
   await page.reload();
   await page.getByTestId("workspace-repo-main").click();
-  const pid = await startClaude(session, 1);
+  const pid = await startClaude(session, 2);
   await checkLeaving(page, appUrl, reached);
   await checkTerminalSurvives(session, pid);
   await forgedHooks(session, pid);
