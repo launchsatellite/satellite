@@ -72,14 +72,7 @@ const gitQuiet = {
 };
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
-const proxyKeys = [
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "http_proxy",
-  "https_proxy",
-  "all_proxy",
-];
+const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
 const noProxyKeys = ["NO_PROXY", "no_proxy"];
 const claudeHostKeys = new Set([
   "CLAUDECODE",

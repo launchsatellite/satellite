@@ -188,15 +188,18 @@ describe("claudeEnvironment", () => {
     });
     expect(
       claudeEnvironment({
-        ALL_PROXY: "socks5://proxy.example.com:1080",
+        HTTPS_PROXY: "http://proxy.example.com:8080",
         NO_PROXY: "localhost 127.0.0.1 example.com",
         no_proxy: "example.com,127.0.0.1",
       }),
     ).toEqual({
-      ALL_PROXY: "socks5://proxy.example.com:1080",
+      HTTPS_PROXY: "http://proxy.example.com:8080",
       NO_PROXY: "localhost 127.0.0.1 example.com",
       no_proxy: "example.com,127.0.0.1",
     });
+    expect(
+      claudeEnvironment({ ALL_PROXY: "socks5://proxy.example.com:1080", all_proxy: "x" }),
+    ).toEqual({ ALL_PROXY: "socks5://proxy.example.com:1080", all_proxy: "x" });
     expect(claudeEnvironment({ HTTPS_PROXY: "", NO_PROXY: "example.com" })).toEqual({
       HTTPS_PROXY: "",
       NO_PROXY: "example.com",
