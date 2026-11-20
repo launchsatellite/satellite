@@ -22,6 +22,10 @@ const safeConfig = [
   "gc.auto=0",
   "-c",
   "maintenance.auto=false",
+  "-c",
+  "protocol.ext.allow=never",
+  "-c",
+  "submodule.recurse=false",
 ];
 const foldersWithStuckGit = new Set<string>();
 
