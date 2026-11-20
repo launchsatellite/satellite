@@ -20,6 +20,7 @@ export interface LaunchOptions {
   keep?: boolean;
 }
 export interface CloseResult {
+  exitedOnItsOwn: boolean;
   leftover?: string;
 }
 export interface AppSession {
@@ -471,14 +472,14 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
         pageCallTimeoutMs,
         "closing the window",
       ).catch(() => undefined);
-      await waitForExit(app, exitTimeoutMs);
+      const exitedOnItsOwn = await waitForExit(app, exitTimeoutMs);
       await forceStop(app);
       await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
         () => undefined,
       );
       const leftover = await removeTemp(temp, options.keep);
       cleanups.delete(abandon);
-      return leftover === undefined ? {} : { leftover };
+      return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
     },
   };
 }

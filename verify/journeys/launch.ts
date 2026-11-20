@@ -1,0 +1,164 @@
+import assert from "node:assert/strict";
+import type { Page } from "playwright-core";
+import type { AppSession } from "../driver.ts";
+import type { Journey } from "../journeys.ts";
+import {
+  goneTimeoutMs,
+  processGone,
+  promptTimeoutMs,
+  startClaude,
+  waitUntil,
+} from "./conditions.ts";
+
+interface TerminalSize {
+  cols: number;
+  rows: number;
+}
+
+const columns = ["column-projects", "column-repository", "column-sessions"];
+const pasteSize = 100_000;
+const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+const newlineSequence = "\u001b\r";
+const resizedViewport = { width: 1280, height: 640 };
+
+async function pasteIntoFocus(page: Page, text: string): Promise<boolean> {
+  return page.evaluate((data) => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return false;
+    const transfer = new DataTransfer();
+    transfer.setData("text/plain", data);
+    active.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+    );
+    return true;
+  }, text);
+}
+
+async function receivedInput(session: AppSession): Promise<string> {
+  return (await session.standInEvents())
+    .flatMap((event) => (event.type === "input" ? [event.data] : []))
+    .join("");
+}
+
+function firstDifference(received: string, expected: string): number {
+  let index = 0;
+  while (index < received.length && received[index] === expected[index]) index += 1;
+  return index;
+}
+
+async function drawnTerminalSize(page: Page): Promise<TerminalSize | null> {
+  return page.evaluate(() => {
+    const terminal = document.querySelector('[data-testid="terminal"]');
+    const rows = terminal?.querySelectorAll(".xterm-rows > div") ?? [];
+    const measure = terminal?.querySelector(".xterm-char-measure-element");
+    const firstRow = rows[0];
+    if (measure === null || measure === undefined || firstRow === undefined) return null;
+    const charWidth = measure.getBoundingClientRect().width / measure.textContent.length;
+    return {
+      cols: Math.round(firstRow.getBoundingClientRect().width / charWidth),
+      rows: rows.length,
+    };
+  });
+}
+
+async function checkWindow(page: Page): Promise<void> {
+  for (const column of columns) {
+    assert.ok(await page.getByTestId(column).isVisible(), `${column} is not visible`);
+  }
+  await page.getByTestId("tool-git").waitFor();
+  const git = (await page.getByTestId("tool-git").textContent()) ?? "";
+  assert.match(git, /\d+\.\d+/, `tool-git names no version, it reads "${git}"`);
+  const gh = (await page.getByTestId("tool-gh").textContent()) ?? "";
+  assert.ok(gh.includes("stand-in"), `tool-gh does not name the stand-in, it reads "${gh}"`);
+}
+
+async function checkInput(session: AppSession): Promise<void> {
+  const pasted = pasteAlphabet
+    .repeat(Math.ceil(pasteSize / pasteAlphabet.length))
+    .slice(0, pasteSize);
+  const expected = `hello${newlineSequence}${pasted}`;
+  await session.page.keyboard.type("hello");
+  await session.page.keyboard.press("Shift+Enter");
+  assert.ok(await pasteIntoFocus(session.page, pasted), "nothing had focus to paste into");
+  let received = "";
+  await waitUntil(
+    async () => {
+      received = await receivedInput(session);
+      return received.length >= expected.length;
+    },
+    promptTimeoutMs,
+    () =>
+      `the stand-in received ${String(received.length)} of ${String(expected.length)} characters`,
+  );
+  assert.ok(
+    received === expected,
+    `the stand-in received ${String(received.length)} characters for ${String(expected.length)}, first differing at ${String(firstDifference(received, expected))}`,
+  );
+}
+
+async function checkResize(session: AppSession): Promise<void> {
+  const before = (await session.standInEvents()).length;
+  await session.page.setViewportSize(resizedViewport);
+  let drawn: TerminalSize | null = null;
+  let resizes: TerminalSize[] = [];
+  await waitUntil(
+    async () => {
+      drawn = await drawnTerminalSize(session.page);
+      resizes = (await session.standInEvents())
+        .slice(before)
+        .flatMap((event) =>
+          event.type === "resize" ? [{ cols: event.cols, rows: event.rows }] : [],
+        );
+      const size = drawn;
+      return (
+        size !== null &&
+        resizes.some((resize) => resize.cols === size.cols && resize.rows === size.rows)
+      );
+    },
+    promptTimeoutMs,
+    () =>
+      `the stand-in got no resize to the drawn size ${JSON.stringify(drawn)}, only ${JSON.stringify(resizes)}`,
+  );
+}
+
+async function checkDiff(page: Page): Promise<void> {
+  const editor = page.getByTestId("diff").locator(".monaco-diff-editor");
+  assert.equal(await editor.count(), 1, "diff holds no Monaco diff editor");
+  for (const side of ["original", "modified"]) {
+    assert.ok(
+      await editor.locator(`.editor.${side}`).isVisible(),
+      `the diff has no visible ${side} side`,
+    );
+  }
+}
+
+async function run(session: AppSession): Promise<void> {
+  const { page } = session;
+  await checkWindow(page);
+  const firstPid = await startClaude(session, 1);
+  await checkInput(session);
+  await checkResize(session);
+  await checkDiff(page);
+  await session.screenshot("launch");
+
+  assert.ok(!processGone(firstPid), "the first stand-in was gone before the reload");
+  await page.reload();
+  await waitUntil(
+    () => processGone(firstPid),
+    goneTimeoutMs,
+    `the first stand-in (pid ${String(firstPid)}) still ran after the reload`,
+  );
+  await page.getByTestId("app-window").waitFor();
+
+  const secondPid = await startClaude(session, 2);
+  const { exitedOnItsOwn } = await session.close();
+  assert.ok(exitedOnItsOwn, "the app was still running 10 seconds after its window closed");
+  await waitUntil(
+    () => processGone(secondPid),
+    goneTimeoutMs,
+    `the second stand-in (pid ${String(secondPid)}) still ran after quit`,
+  );
+  assert.deepEqual(session.consoleErrors, [], "the window logged console errors");
+}
+
+export const launchJourney: Journey = { name: "launch", scenario: "default", run };

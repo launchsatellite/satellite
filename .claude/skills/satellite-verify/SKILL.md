@@ -79,11 +79,33 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## In code
 
-`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ leftover? }`. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason` and `outputDir`. Journeys use it directly.
+`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason` and `outputDir`. Journeys use it directly.
+
+## Journeys
+
+Journeys are fixed scripts over the driver that prove the first run and the security boundary. They run against the built app here and against each packaged app at release.
+
+```sh
+npm run --silent journeys -- [--app <executable>]
+```
+
+It builds once for the built target, runs every journey in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind.
+
+| Journey | Scenario | Proves |
+| --- | --- | --- |
+| `launch` | `default` | three columns, the tool readout, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
+| `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke` and `onEvent`, no new window, no navigation away, no remote fetch, no path escaping the `app://` root, no microphone, no notifications, and the bridge refusing a bad payload and an unknown channel |
+| `quit` | `flood` | quitting mid flood ends the stand-in and its child that ignores hangup |
+
+A journey is `{ name, scenario, run(session) }` in `verify/journeys/<name>.ts`, listed in `verify/journeys.ts`. It asserts with `node:assert/strict` and a message that says what went wrong, and waits on conditions with `waitUntil` from `verify/journeys/conditions.ts`, never on fixed sleeps, because CI runners and Windows are slower. A check that something stays refused is the one place a short settle is right. Process checks use `processGone`, which works on all three platforms. Keep the suite short, since it runs three times per release.
+
+Before trusting a new check, turn its guard off for one run and see the journey fail with a legible reason. Note that two guards back each other up in places. Navigation is refused by `will-navigate` and `will-frame-navigate` alike, and the URL parser already folds `%2e%2e` segments, so only an encoded slash such as `..%2f` reaches the protocol's path confinement.
 
 ## Feature map
 
 | Feature | Scenario | Journey |
 | --- | --- | --- |
-| 001 Foundation, the window and the tool readout | `default` | none |
-| 001 Foundation, terminal output flow and process cleanup | `flood` | none |
+| 001 Foundation, the window and the tool readout | `default` | `launch` |
+| 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
+| 001 Foundation, the security boundary | `default` | `boundary` |
+| 001 Foundation, terminal output flow and process cleanup | `flood` | `quit` |
