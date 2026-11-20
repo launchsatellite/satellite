@@ -16,6 +16,7 @@ import {
   standInInput,
   startClaude,
   stateIs,
+  terminalFocused,
   toastReads,
   visible,
   waitUntil,
@@ -28,7 +29,7 @@ interface Cell {
 }
 
 const mark = "alpha-first-terminal";
-const hostileSend = "fix it\r\nnow\u001b[201~\u0007 ‮";
+const hostileSend = "fix it\r\nnow\u001b[201~\u0007 \u202e";
 const cleanSend = "\u001b[200~fix it now[201~ \u001b[201~";
 const secondTabSend = "for the second tab";
 const menuSend = "while the menu is open";
@@ -202,6 +203,33 @@ async function openedAre(session: AppSession, expected: string[], when: string):
   assert.deepEqual(opened, expected, `${when} the opened links were ${JSON.stringify(opened)}`);
 }
 
+async function promptWith(session: AppSession, text: string, when: string): Promise<void> {
+  const { page } = session;
+  const before = (await session.standInEvents()).length;
+  const focus = await page.evaluate(() => {
+    const active = document.activeElement;
+    const owner = active?.closest("[data-testid]")?.getAttribute("data-testid") ?? "none";
+    return `${active?.tagName.toLowerCase() ?? "nothing"} in ${owner}`;
+  });
+  await page.keyboard.type(text);
+  await page.keyboard.press("Enter");
+  let received = "";
+  await waitUntil(
+    async () => {
+      received = await standInInput(session, before);
+      return received.includes("\r");
+    },
+    promptTimeoutMs,
+    `the stand-in received no Enter ${when}`,
+  );
+  const screen = await terminalText(page);
+  assert.equal(
+    received,
+    `${text}\r`,
+    `${when} the stand-in received ${JSON.stringify(received)}, focus before typing was on ${focus}, the screen read ${JSON.stringify(screen.slice(-200))}`,
+  );
+}
+
 async function firstPrompt(session: AppSession): Promise<number> {
   const { page } = session;
   await select(session, "alpha");
@@ -209,8 +237,7 @@ async function firstPrompt(session: AppSession): Promise<number> {
   await page.getByTestId("terminal").evaluate((element, value) => {
     element.setAttribute("data-mark", value);
   }, mark);
-  await page.keyboard.type("one");
-  await page.keyboard.press("Enter");
+  await promptWith(session, "one", "in alpha's first prompt");
   await stateIs(session, pixel("alpha"), "working", "after the first prompt");
   await page.keyboard.press("Enter");
   await stateIs(session, pixel("alpha"), "needs-you", "after the permission request");
@@ -237,8 +264,7 @@ async function secondWorkspace(session: AppSession, alphaPid: number): Promise<n
   await send(page, "early");
   await toastReads(session, noSession, "after a send with no session,");
   const pid = await startClaude(session, 2);
-  await page.keyboard.type("two");
-  await page.keyboard.press("Enter");
+  await promptWith(session, "two", "in beta's first prompt");
   await stateIs(session, pixel("beta"), "working", "after beta's prompt");
   await stateIs(session, pixel("alpha"), "done", "while beta worked");
   assert.ok(!processGone(alphaPid), "alpha's stand-in ended when beta started");
@@ -248,7 +274,10 @@ async function secondWorkspace(session: AppSession, alphaPid: number): Promise<n
 
 async function backAndForth(session: AppSession): Promise<void> {
   const { page } = session;
+  const printedEarly = (await hooksAnswered(session, "Notification")) > 1;
+  assert.ok(!printedEarly, "beta printed its later output before alpha was shown");
   await select(session, "alpha");
+  await hooksReach(session, "Notification", 2);
   await terminalShows(session, "Done.", "back in alpha");
   const alpha = await terminalText(page);
   assert.ok(alpha.includes("one"), "alpha's terminal lost its prompt");
@@ -257,6 +286,7 @@ async function backAndForth(session: AppSession): Promise<void> {
   assert.equal(marked, mark, "alpha's terminal is a new element, so its screen was drawn again");
   await select(session, "beta");
   await terminalShows(session, "two", "back in beta");
+  await terminalShows(session, "Later output.", "back in beta, printed while alpha was shown");
   assert.ok(!(await terminalText(page)).includes("one"), "beta's terminal shows alpha's prompt");
   const size = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   await page.setViewportSize(narrow);
@@ -276,6 +306,7 @@ async function tabs(session: AppSession): Promise<void> {
   await visible(session, "session-tab-2", "after a new session");
   const pid = await nextPid(session, 3);
   await terminalShows(session, "Claude Code stand-in", "in beta's second tab");
+  await terminalFocused(session);
   await page.keyboard.press("Enter");
   await hooksReach(session, "UserPromptSubmit", 3);
   await send(page, secondTabSend);
@@ -453,10 +484,7 @@ async function endings(session: AppSession, resumedPid: number, sendFrom: number
   assert.ok(!sent.includes("\r"), "something after the send pressed Enter");
   await select(session, "beta");
   await visible(session, "start-claude", "in beta after the restart");
-  const count = (await claudePids(session)).length;
-  await page.getByTestId("start-claude").click();
-  await nextPid(session, count + 1);
-  await terminalShows(session, "Claude Code stand-in", "in beta's new session");
+  await startClaude(session, (await claudePids(session)).length + 1);
   await page.keyboard.press("Control+D");
   await terminalShows(session, ended, "after Ctrl+D");
   await stateIs(session, "session-tab-1", "stopped", "in beta after Ctrl+D");

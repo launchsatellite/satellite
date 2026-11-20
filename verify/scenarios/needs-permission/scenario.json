@@ -37,6 +37,9 @@
       { "await": "\r" },
       { "hook": "UserPromptSubmit" },
       { "print": "\r\nWorking on it.\r\n" },
+      { "wait": 3000 },
+      { "print": "Later output.\r\n" },
+      { "hook": "Notification", "fields": { "notification_type": "auth_success" } },
       { "await": "\r" },
       { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
       { "print": "Allow Bash to run? Press y to allow.\r\n" },
@@ -44,7 +47,9 @@
       { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
       { "await": "\r" },
       { "hook": "Stop" },
-      { "print": "Done.\r\n> " }
+      { "print": "Done.\r\n> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" }
     ]
   }
 }

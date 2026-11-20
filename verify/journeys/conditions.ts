@@ -49,6 +49,11 @@ export async function startClaude(session: AppSession, count: number): Promise<n
     "Claude Code stand-in did not appear in the terminal",
   );
   if (pid === undefined) throw new Error("the stand-in logged no start");
+  await terminalFocused(session);
+  return pid;
+}
+
+export async function terminalFocused(session: AppSession): Promise<void> {
   await waitUntil(
     () =>
       session.page.evaluate(
@@ -57,7 +62,6 @@ export async function startClaude(session: AppSession, count: number): Promise<n
     promptTimeoutMs,
     "the terminal never took focus",
   );
-  return pid;
 }
 
 export async function toastReads(
