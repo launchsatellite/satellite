@@ -49,6 +49,19 @@ describe("readJsonFile", () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it("keeps only the newest five set-aside copies of a file", async () => {
+    const { dir, file } = await folder();
+    const older = [1, 2, 3, 4, 5, 6].map((time) => `state.unreadable-${String(time)}.json`);
+    for (const name of older) await writeFile(join(dir, name), "{");
+    await writeFile(join(dir, "other.unreadable-1.json"), "{");
+    await writeFile(file, "{");
+    const { outcome } = await readJsonFile(file, schema, fallback);
+    if (outcome.kind !== "set-aside") throw new Error(`expected a set-aside, got ${outcome.kind}`);
+    expect((await readdir(dir)).sort()).toEqual(
+      ["other.unreadable-1.json", outcome.name, ...older.slice(2)].sort(),
+    );
+  });
+
   it("sets aside truncated JSON and answers the fallback", async () => {
     await expectSetAside('{"version":1,"names":["a"');
   });

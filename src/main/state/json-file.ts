@@ -24,6 +24,7 @@ const maxFileBytes = 1024 * 1024;
 const renameRetries = 5;
 const renameRetryMs = 50;
 const retriedRenameCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
+const keptSetAside = 5;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function errorCode(error: unknown): unknown {
@@ -60,11 +61,33 @@ async function renameWithRetry(from: string, to: string): Promise<void> {
   }
 }
 
+function setAsideTime(candidate: string, name: string): number | undefined {
+  const prefix = `${name}.unreadable-`;
+  const suffix = ".json";
+  if (!candidate.startsWith(prefix) || !candidate.endsWith(suffix)) return undefined;
+  const time = candidate.slice(prefix.length, -suffix.length);
+  return /^\d+$/.test(time) ? Number(time) : undefined;
+}
+
+async function keepNewestSetAside(dir: string, name: string): Promise<void> {
+  const names = await readdir(dir).catch(() => []);
+  const setAside = names
+    .flatMap((candidate) => {
+      const time = setAsideTime(candidate, name);
+      return time === undefined ? [] : [{ candidate, time }];
+    })
+    .sort((a, b) => b.time - a.time);
+  for (const { candidate } of setAside.slice(keptSetAside)) {
+    await unlink(join(dir, candidate)).catch(() => undefined);
+  }
+}
+
 async function setAside(file: string): Promise<JsonReadOutcome> {
   const { dir, name } = parse(file);
   const aside = `${name}.unreadable-${String(Date.now())}.json`;
   try {
     await renameWithRetry(file, join(dir, aside));
+    await keepNewestSetAside(dir, name);
     return { kind: "set-aside", name: aside };
   } catch {
     return { kind: "not-moved" };
