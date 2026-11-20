@@ -102,8 +102,8 @@ function prepareHome(): string | undefined {
 
 function assemble(home: string): Parts {
   const last = createLastSessions(home);
-  const listening = startHookListener((launchId, event) => {
-    terminals.hookEvent(launchId, event);
+  const listening = startHookListener((launchId, event, sessionId) => {
+    terminals.hookEvent(launchId, event, sessionId);
   }).catch((error: unknown) => {
     console.error(
       "Satellite could not listen for Claude Code's status, so sessions stay idle",

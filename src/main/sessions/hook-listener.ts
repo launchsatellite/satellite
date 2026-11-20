@@ -28,17 +28,12 @@ const rateWindowMs = 1000;
 const hookPath =
   /^\/hook\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([A-Za-z]+)$/;
 const bearer = /^Bearer ([0-9a-f]{64})$/;
-const statusEvents = new Set<HookEventName>(["Notification"]);
-const agentEvents = new Set<HookEventName>([
-  "PermissionRequest",
-  "PostToolUse",
-  "PostToolUseFailure",
-]);
 const hookBody = z.object({
   session_id: z.string().max(100).optional(),
   agent_id: z.unknown().optional(),
   notification_type: z.string().max(64).optional(),
 });
+const sessionIdSchema = z.uuid();
 const agentIdSchema = z.string().min(1).max(128).optional();
 const unknownLaunchSecret = randomBytes(secretBytes);
 
@@ -75,8 +70,7 @@ function withinRate(launch: OpenLaunch, now: number): boolean {
 }
 
 function bodyLimitOf(name: HookEventName): number {
-  if (statusEvents.has(name)) return statusBodyLimit;
-  return agentEvents.has(name) ? agentBodyLimit : 0;
+  return name === "Notification" ? statusBodyLimit : agentBodyLimit;
 }
 
 function readBody(request: IncomingMessage, limit: number): Promise<BodyRead> {
@@ -88,7 +82,7 @@ function readBody(request: IncomingMessage, limit: number): Promise<BodyRead> {
       if (size <= limit) chunks.push(chunk);
     });
     request.once("end", () => {
-      if (size > limit && limit > 0) resolve({ kind: "too-large" });
+      if (size > limit) resolve({ kind: "too-large" });
       else resolve({ kind: "body", text: Buffer.concat(chunks).toString("utf8") });
     });
     request.once("close", () => {
@@ -112,6 +106,11 @@ function agentOf(body: HookBody | undefined): Agent {
   return agent.success ? (agent.data ?? mainThread) : null;
 }
 
+function sessionIdOf(body: HookBody | undefined): string | null {
+  const sessionId = sessionIdSchema.safeParse(body?.session_id);
+  return sessionId.success ? sessionId.data : null;
+}
+
 function eventOf(name: HookEventName, body: HookBody | undefined): SessionEvent {
   if (name === "Notification") {
     return { name, type: body?.notification_type ?? null, agent: agentOf(body) };
@@ -123,7 +122,7 @@ function eventOf(name: HookEventName, body: HookBody | undefined): SessionEvent 
 }
 
 export async function startHookListener(
-  onEvent: (launchId: string, event: SessionEvent) => void,
+  onEvent: (launchId: string, event: SessionEvent, sessionId: string | null) => void,
 ): Promise<HookListener> {
   const launches = new Map<string, OpenLaunch>();
   let host = "";
@@ -140,16 +139,14 @@ export async function startHookListener(
     if (!secretMatches(launch, authorization) || launch === undefined) return 401;
     if (!isJson(onlyValue(request, "content-type"))) return 415;
     if (!withinRate(launch, Date.now())) return 429;
-    const limit = bodyLimitOf(name);
-    const keep = limit > 0;
-    const read = await readBody(request, limit);
+    const read = await readBody(request, bodyLimitOf(name));
     if (read.kind === "failed") return undefined;
-    if (read.kind === "too-large" && statusEvents.has(name)) return 413;
-    const body = read.kind === "body" && keep ? parseBody(read.text) : undefined;
-    if (read.kind === "body" && keep && body === undefined) return 400;
+    if (read.kind === "too-large" && name === "Notification") return 413;
+    const body = read.kind === "body" ? parseBody(read.text) : undefined;
+    if (read.kind === "body" && body === undefined) return 400;
     if (launches.get(launchId) !== launch) return 401;
     try {
-      onEvent(launchId, eventOf(name, body));
+      onEvent(launchId, eventOf(name, body), sessionIdOf(body));
     } catch (error) {
       console.error("A session's status could not take a hook event", error);
     }

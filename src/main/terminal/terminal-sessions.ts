@@ -40,7 +40,7 @@ export interface WorkspaceSessions {
 export interface TerminalSessions {
   handlers: TerminalHandlers;
   sessionsInside: WorkspaceSessions;
-  hookEvent(launchId: string, event: SessionEvent): void;
+  hookEvent(launchId: string, event: SessionEvent, sessionId: string | null): void;
   closeAll(): Promise<void>;
 }
 interface TerminalOptions {
@@ -414,10 +414,11 @@ export function createTerminalSessions({
         await settled(stopping);
       },
     },
-    hookEvent(launchId, event) {
+    hookEvent(launchId, event, sessionId) {
       const session = launches.get(launchId);
       if (session === undefined || session.ended) return;
       session.hooked = true;
+      if (sessionId !== null) session.sessionId = sessionId;
       if (event.name === "UserPromptSubmit" && session.sessionId !== undefined) {
         void last.set(session.workspace, session.sessionId);
       }

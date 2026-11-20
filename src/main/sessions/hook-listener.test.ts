@@ -20,6 +20,7 @@ interface Answer {
 
 let listener: HookListener;
 let events: { launchId: string; event: SessionEvent }[];
+let sessionIds: (string | null)[];
 let launchId: string;
 let secret: string;
 
@@ -82,7 +83,11 @@ function notification(body: unknown): Promise<Answer> {
 
 beforeEach(async () => {
   events = [];
-  listener = await startHookListener((id, event) => events.push({ launchId: id, event }));
+  sessionIds = [];
+  listener = await startHookListener((id, event, sessionId) => {
+    events.push({ launchId: id, event });
+    sessionIds.push(sessionId);
+  });
   launchId = randomUUID();
   secret = listener.open(launchId);
 });
@@ -207,19 +212,32 @@ describe("startHookListener", () => {
     ]);
   });
 
-  it("never reads the body of other events", async () => {
-    const answer = await send({
-      path: `/hook/${launchId}/Stop`,
-      body: Buffer.alloc(1024 * 1024, "x"),
-    });
-    expect(answer.status).toBe(204);
-    expect((await send({ path: `/hook/${launchId}/UserPromptSubmit`, body: "{" })).status).toBe(
-      204,
-    );
-    expect(events.map((entry) => entry.event)).toEqual([
-      { name: "Stop" },
-      { name: "UserPromptSubmit" },
+  it("reads the session id any hook carries and drops one that is no UUID", async () => {
+    const post = (name: string, body: unknown) =>
+      send({ path: `/hook/${launchId}/${name}`, body: JSON.stringify(body) });
+    const first = randomUUID();
+    const cleared = randomUUID();
+    await post("UserPromptSubmit", { session_id: first, prompt: "x".repeat(100_000) });
+    await post("Stop", { session_id: cleared });
+    await post("Notification", { session_id: "../../etc", notification_type: "idle_prompt" });
+    await post("PostToolUse", { session_id: "--help" });
+    await post("StopFailure", {});
+    expect(sessionIds).toEqual([first, cleared, null, null, null]);
+    expect(events.map((entry) => entry.event.name)).toEqual([
+      "UserPromptSubmit",
+      "Stop",
+      "Notification",
+      "PostToolUse",
+      "StopFailure",
     ]);
+  });
+
+  it("takes a prompt or stop too large to read without its session id", async () => {
+    const body = JSON.stringify({ session_id: randomUUID(), prompt: "x".repeat(2 * 1024 * 1024) });
+    expect((await send({ path: `/hook/${launchId}/UserPromptSubmit`, body })).status).toBe(204);
+    expect((await send({ path: `/hook/${launchId}/Stop`, body: "{" })).status).toBe(400);
+    expect(events.map((entry) => entry.event)).toEqual([{ name: "UserPromptSubmit" }]);
+    expect(sessionIds).toEqual([null]);
   });
 
   it("tells which agent asked and which finished a tool", async () => {
