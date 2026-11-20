@@ -54,7 +54,7 @@ git push -u origin HEAD
 gh pr create --base main --title "feat(workspaces): create a workspace in one step" --body-file /tmp/pr-body.md
 ```
 
-Fill every section of `.github/pull_request_template.md`, report the link and what is left for the human, **then stop**. You never merge, approve or enable auto-merge.
+Fill every section of `.github/pull_request_template.md`, report the link and what is left for the human, **then stop**. You never approve or enable auto-merge, and you merge only where the maintainer granted it. With the grant, squash-merge your own pull request once CI is fully green and the review is addressed, then bring any branch stacked on it up to date.
 
 ## 9. Follow up until merged
 
