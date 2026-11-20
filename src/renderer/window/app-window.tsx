@@ -243,6 +243,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         : { projectId: hereId, workspace: hereKey },
     [hereId, hereKey],
   );
+  const folderHere = selectedProject?.missing === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -375,7 +376,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             id: "session.new",
             title: "New Claude Code session",
             shortcut: { key: "t" },
-            available: sessionHere !== undefined,
+            available: sessionHere !== undefined && folderHere,
             run: () => {
               if (sessionHere !== undefined) openSession(sessionHere, false);
             },
@@ -450,6 +451,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     dismissToast,
     focusSidebarIfLost,
     sessionHere,
+    folderHere,
     activeSession,
     nextSession,
     previousSession,
