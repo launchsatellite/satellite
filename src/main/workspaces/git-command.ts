@@ -22,6 +22,7 @@ const safeConfig = [
   "-c",
   "maintenance.auto=false",
 ];
+const foldersWithStuckGit = new Set<string>();
 
 export function gitArgs(folder: string, args: readonly string[]): string[] {
   return ["--no-optional-locks", "-C", folder, ...safeConfig, ...args];
@@ -32,11 +33,18 @@ export async function runGit(
   args: readonly string[],
   timeoutMs: number,
 ): Promise<ToolRun | undefined> {
+  if (foldersWithStuckGit.has(folder)) return undefined;
   let run: ToolRun | undefined;
   try {
     run = await runTool("git", gitArgs(folder, args), { timeoutMs });
   } catch (error) {
-    if (error instanceof AbandonedRun) await error.exited;
+    if (error instanceof AbandonedRun) {
+      foldersWithStuckGit.add(folder);
+      const release = () => {
+        foldersWithStuckGit.delete(folder);
+      };
+      error.exited.then(release, release);
+    }
     return undefined;
   }
   if (run === undefined) {
