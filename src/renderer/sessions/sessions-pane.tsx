@@ -197,7 +197,6 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
           workspace={selected}
           missing={missing}
           onOpen={(resume) => {
-            setMissing(undefined);
             sessions.open(selected, resume);
           }}
         />
@@ -236,8 +235,12 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
                 onRestart={() => {
                   sessions.restart(tab.key);
                 }}
+                onStarted={() => {
+                  setMissing(undefined);
+                }}
                 onMissing={(sentence) => {
                   setMissing(sentence);
+                  if (sessions.tabsOf(tab.workspace).length > 1) notify(sentence, "error");
                   sessions.close(tab.key);
                 }}
                 onAskLink={onAskLink}

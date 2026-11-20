@@ -9,6 +9,7 @@ import {
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { launchJourney } from "./journeys/launch.ts";
+import { missingJourney } from "./journeys/missing.ts";
 import { projectsJourney } from "./journeys/projects.ts";
 import { quitJourney } from "./journeys/quit.ts";
 import { sessionsJourney } from "./journeys/sessions.ts";
@@ -31,6 +32,7 @@ const journeys: Journey[] = [
   projectsJourney,
   workspacesJourney,
   sessionsJourney,
+  missingJourney,
   settingsJourney,
   quitJourney,
 ];

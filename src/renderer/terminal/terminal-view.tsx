@@ -26,6 +26,7 @@ interface TerminalViewProps {
   resume: boolean;
   shown: boolean;
   onRestart: () => void;
+  onStarted: () => void;
   onMissing: (sentence: string) => void;
   onAskLink: (address: string) => void;
   onPromptTarget: (id: string, target: PromptTarget) => () => void;
@@ -60,6 +61,7 @@ export function TerminalView({
   resume,
   shown,
   onRestart,
+  onStarted,
   onMissing,
   onAskLink,
   onPromptTarget,
@@ -70,7 +72,7 @@ export function TerminalView({
   const show = useRef<() => void>(undefined);
   const prompt = useRef<PromptTarget>(undefined);
   const noticedNow = useRef(false);
-  const outward = useRef({ onAskLink, notify, onMissing });
+  const outward = useRef({ onAskLink, notify, onMissing, onStarted });
   const [notice, setNotice] = useState<string>();
   const noticed = notice !== undefined;
 
@@ -139,6 +141,7 @@ export function TerminalView({
     }).then((result) => {
       if (result.ok) {
         if (result.value.windowsPty !== null) terminal.options.windowsPty = result.value.windowsPty;
+        outward.current.onStarted();
         return;
       }
       if (result.error.code === "tool-missing") outward.current.onMissing(result.error.message);
@@ -254,8 +257,8 @@ export function TerminalView({
   }, [terminalId, projectId, key, resume, noticed, onPromptTarget]);
 
   useEffect(() => {
-    outward.current = { onAskLink, notify, onMissing };
-  }, [onAskLink, notify, onMissing]);
+    outward.current = { onAskLink, notify, onMissing, onStarted };
+  }, [onAskLink, notify, onMissing, onStarted]);
 
   useEffect(() => {
     if (shown) show.current?.();
