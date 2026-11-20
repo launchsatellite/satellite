@@ -44,7 +44,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `wait=<ms>` | waits, up to 60000 | |
 | `wait-for=<testid>` | waits up to 60 seconds for an element to be visible | |
 | `wait-text=<testid>:<text>` | waits up to 60 seconds until the element's inner text holds the text, split at the first `:`, and fails naming what it last read | |
-| `wait-state=<testid>:<state>` | waits up to 60 seconds until the element's `data-state` equals the state, split at the first `:`, and fails naming the state it last read. Session tabs and each workspace row's `-status` pixel carry one | |
+| `wait-state=<testid>:<state>` | waits up to 60 seconds until the element's `data-state` equals the state, split at the first `:`, and fails naming the state it last read. Session tabs carry the session status (`idle`, `working`, `needs-you`, `done`, `stopped`), and each workspace row's `-status` pixel carries the pixel state, where a stopped session reads `idle` | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
 | `choose-folder=<target>` | sets what the next folder dialog answers. `repo` is the working repo, `cancel` cancels, anything else is `folders/<target>` in the temp folder, such as `alpha`, `alpha/src` or a folder that does not exist | |
