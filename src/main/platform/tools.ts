@@ -1,7 +1,7 @@
 import { execFile, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
+import { endWindowsTree } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -27,8 +27,7 @@ function stopChild(child: ChildProcess): void {
   const pid = child.pid;
   if (pid === undefined) return;
   if (process.platform === "win32") {
-    const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
-    execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+    void endWindowsTree(pid);
     return;
   }
   child.kill("SIGTERM");
