@@ -108,7 +108,13 @@ describe("isWorktreeFolder", () => {
     expect(await isWorktreeFolder(home, join(workspace, "deeper"))).toBe(false);
     expect(await isWorktreeFolder(home, join(outside, "p", "n"))).toBe(false);
     expect(await isWorktreeFolder(home, join(home, "worktrees", "p", "missing"))).toBe(false);
-    expect(await isWorktreeFolder(home, "worktrees/p/n")).toBe(false);
+    const working = process.cwd();
+    process.chdir(home);
+    try {
+      expect(await isWorktreeFolder(home, "worktrees/p/n")).toBe(false);
+    } finally {
+      process.chdir(working);
+    }
   });
 
   it.skipIf(process.platform === "win32")(

@@ -1,7 +1,7 @@
 import { lstat, mkdir, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { reservedWorkspaceNames, workspaceNameProblem } from "../../shared/workspace-name.ts";
-import { isInsidePath, samePath } from "../platform/paths.ts";
+import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 
 type PreparedFolder = { ok: true; path: string; segment: string } | { ok: false; refusal: string };
 
@@ -96,7 +96,7 @@ export async function prepareWorktreeFolder(
 }
 
 export async function isWorktreeFolder(home: string, path: string): Promise<boolean> {
-  if (!(await isPlainFolder(path))) return false;
+  if (!isFullyQualified(path) || !(await isPlainFolder(path))) return false;
   const realHome = await realpathOrUndefined(home);
   const realFolder = await realpathOrUndefined(path);
   if (realHome === undefined || realFolder === undefined) return false;

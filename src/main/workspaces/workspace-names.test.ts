@@ -11,6 +11,16 @@ describe("suggestName", () => {
       }
     }
     expect(workspaceNameProblem(suggestName(() => false))).toBeNull();
+    for (const odd of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(
+        workspaceNameProblem(
+          suggestName(
+            () => false,
+            () => odd,
+          ),
+        ),
+      ).toBeNull();
+    }
     expect(
       workspaceNameProblem(
         suggestName(

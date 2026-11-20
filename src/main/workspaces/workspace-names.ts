@@ -56,7 +56,8 @@ const randomTries = 20;
 const highestNumber = 99;
 
 function pick(words: readonly string[], random: () => number): string {
-  const index = Math.min(words.length - 1, Math.max(0, Math.floor(random() * words.length)));
+  const drawn = Math.floor(random() * words.length);
+  const index = Number.isFinite(drawn) ? Math.min(words.length - 1, Math.max(0, drawn)) : 0;
   return words[index] ?? "";
 }
 
