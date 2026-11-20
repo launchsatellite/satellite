@@ -57,11 +57,16 @@ async function checkWindow(page: Page): Promise<void> {
         throw new Error(`${column} is not visible`);
       });
   }
-  await page.getByTestId("tool-git").waitFor();
-  const git = (await page.getByTestId("tool-git").textContent()) ?? "";
-  assert.match(git, /\d+\.\d+/, `tool-git names no version, it reads "${git}"`);
-  const gh = (await page.getByTestId("tool-gh").textContent()) ?? "";
-  assert.ok(gh.includes("stand-in"), `tool-gh does not name the stand-in, it reads "${gh}"`);
+  await page
+    .getByTestId("check-git")
+    .filter({ hasText: /\d+\.\d+/ })
+    .waitFor({ timeout: promptTimeoutMs })
+    .catch(async () => {
+      const git = await page.getByTestId("check-git").innerText();
+      throw new Error(`check-git names no version, it reads "${git}"`);
+    });
+  const gh = await page.getByTestId("check-gh").innerText();
+  assert.ok(gh.includes("octo-verify"), `check-gh does not name the account, it reads "${gh}"`);
 }
 
 async function checkInput(session: AppSession): Promise<void> {

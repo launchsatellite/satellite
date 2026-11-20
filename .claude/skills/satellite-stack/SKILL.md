@@ -46,7 +46,7 @@ Names are `<feature>.<verb>`. In this order.
 5. **Call it.** The renderer calls `invoke("x.y", payload)` from `src/renderer/bridge/bridge-client.ts` and gets a `BridgeResult`. On `!result.ok` it shows `result.error.message`, a sentence written for people.
 
    ```ts
-   void invoke("tools.versions", {}).then(setVersions);
+   void invoke("tools.check", {}).then(setResult);
    ```
 
    React 19 ignores a state update after unmount, so a request whose answer only sets state needs no unmount guard. One that starts something, like `terminal.start`, has a matching cleanup in the effect.

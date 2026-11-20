@@ -99,7 +99,7 @@ It builds once for the built target, runs every journey in order, each in a fres
 
 | Journey | Scenario | Proves |
 | --- | --- | --- |
-| `launch` | `default` | three columns, the tool readout, the working repo added through the folder dialog, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
+| `launch` | `default` | three columns, the first run check reading the git version and the gh account, the working repo added through the folder dialog, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
 | `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke` and `onEvent`, the content security policy refusing an inline script, a `data:` fetch, a remote fetch, image and frame, microphone, camera and notifications reading denied, no path escaping the `app://` root, the bridge refusing a bad payload and an unknown channel, no new window or navigation reaching a remote address, and Claude Code still running and echoing after those refused navigations |
 | `quit` | `flood` | quitting mid flood ends the stand-in and its child that ignores hangup |
 

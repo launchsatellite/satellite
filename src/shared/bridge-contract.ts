@@ -15,6 +15,9 @@ export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
 export type WorkspaceView = z.output<typeof workspaceView>;
 export type ProjectView = z.output<typeof projectView>;
+export type ToolState = z.output<typeof toolState>;
+export type GhState = z.output<typeof ghState>;
+export type ToolCheck = z.output<typeof toolCheck>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -53,6 +56,30 @@ export const projectView = z.strictObject({
   missing: z.boolean(),
   workspaces: z.array(workspaceView).max(1),
 });
+const toolReady = z.strictObject({
+  state: z.literal("ready"),
+  version: z.string().min(1).max(200),
+});
+const toolMissing = z.strictObject({
+  state: z.literal("missing"),
+  fix: z.string().min(1).max(200),
+});
+export const toolState = z.discriminatedUnion("state", [toolReady, toolMissing]);
+export const ghState = z.discriminatedUnion("state", [
+  toolReady.extend({
+    account: z
+      .string()
+      .regex(/^[A-Za-z0-9-]{1,39}$/)
+      .nullable(),
+  }),
+  toolMissing,
+  z.strictObject({
+    state: z.literal("signed-out"),
+    reason: z.enum(["none", "failed"]),
+    fix: z.literal("gh auth login"),
+  }),
+]);
+export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: toolState });
 export const defaultInterfaceState: InterfaceState = {
   selected: null,
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
@@ -62,14 +89,10 @@ export const defaultInterfaceState: InterfaceState = {
 const terminalId = z.uuid();
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
-const toolVersion = z.string().max(200).nullable();
 const empty = z.strictObject({});
 
 export const bridgeRequests = {
-  "tools.versions": {
-    request: empty,
-    response: z.strictObject({ git: toolVersion, gh: toolVersion, claude: toolVersion }),
-  },
+  "tools.check": { request: empty, response: toolCheck },
   "interface.load": {
     request: empty,
     response: z.strictObject({ state: interfaceState, notice: z.string().max(300).nullable() }),

@@ -45,6 +45,13 @@ const repositoryLocatingKeys = new Set([
   "GIT_SHALLOW_FILE",
   "GIT_COMMON_DIR",
 ]);
+const ghUnsafeKeys = new Set(["GH_DEBUG", "DEBUG", "GH_FORCE_TTY", "CLICOLOR_FORCE"]);
+const ghQuiet = {
+  GH_PROMPT_DISABLED: "1",
+  GH_NO_UPDATE_NOTIFIER: "1",
+  GH_NO_EXTENSION_UPDATE_NOTIFIER: "1",
+  NO_COLOR: "1",
+};
 const outputLimit = 16 * 1024 * 1024;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 
@@ -55,11 +62,14 @@ function stopChild(child: ChildProcess, exited: Promise<void>): void {
   else void endUnixTree(pid, exited, forceKillGraceMs);
 }
 
+function without(env: Record<string, string>, keys: Set<string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.has(key.toUpperCase())));
+}
+
 function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
-  if (tool !== "git") return env;
-  return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !repositoryLocatingKeys.has(key.toUpperCase())),
-  );
+  if (tool === "git") return without(env, repositoryLocatingKeys);
+  if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
+  return env;
 }
 
 function parseJson(text: string): unknown {

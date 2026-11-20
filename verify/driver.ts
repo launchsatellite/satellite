@@ -51,6 +51,7 @@ interface AppPaths {
   repo: string;
   log: string;
   dialog: string;
+  missingClaude: string | undefined;
 }
 interface AppCommand {
   file: string;
@@ -177,7 +178,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, log, dialog }: AppPaths,
+  { home, log, dialog, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
@@ -188,7 +189,8 @@ function appEnvironment(
   env["SATELLITE_VERIFY_LOG"] = log;
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
   env["SATELLITE_GH"] = standIn("gh");
-  if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
+  if (missingClaude !== undefined) env["SATELLITE_CLAUDE"] = JSON.stringify([missingClaude]);
+  else if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
   return env;
 }
 
@@ -464,7 +466,8 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const repo = join(temp, "repo");
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
-  const paths = { home, repo, log, dialog };
+  const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
+  const paths = { home, repo, log, dialog, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,

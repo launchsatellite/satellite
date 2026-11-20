@@ -33,7 +33,13 @@
       "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
     }
   ],
-  "gh": [{ "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" }],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
   "claude": {
     "version": "2.0.0 (Claude Code stand-in)",
     "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]

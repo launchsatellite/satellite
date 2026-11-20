@@ -33,7 +33,10 @@ export const scenarioSchema = z.strictObject({
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),
   gh: z.array(ghAnswerSchema),
-  claude: z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
+  claude: z.union([
+    z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
+    z.strictObject({ missing: z.literal(true) }),
+  ]),
 });
 
 export async function loadScenario(

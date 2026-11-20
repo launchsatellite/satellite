@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 
 function Centred({
   testId,
@@ -17,21 +17,6 @@ function Centred({
         {children}
       </div>
     </div>
-  );
-}
-
-export function NoProjects() {
-  return (
-    <Centred testId="welcome" title="Add your first project">
-      <p className="mt-1 text-[13px] text-fg2">
-        Satellite holds every repository you work on in one window. Choose a folder to begin.
-      </p>
-      <div className="mt-4">
-        <CommandButton command="project.add" testId="add-first-project">
-          Add your first project
-        </CommandButton>
-      </div>
-    </Centred>
   );
 }
 

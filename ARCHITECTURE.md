@@ -41,7 +41,7 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
-| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters. Requests that arrive while a run is going share it, so at most one `--version` per tool runs at a time | Takes no input. The tools run with fixed arguments and no shell, and no number of requests starts more than three processes at once. |
+| `tools.check` | Answers whether `git`, `gh` and `claude` are ready with their version number, or missing with the command that installs them, and whether `gh` is signed in, with the account name | Empty request, versions and commands at most 200 characters, the account a GitHub login of at most 39 letters, digits and dashes. Each `--version` has 5 seconds and `gh auth status --active` 10. Requests that arrive while a check runs share it | Takes no input. The tools run with fixed arguments and no shell, so no number of requests starts more than four processes at once. `gh` runs with prompts, update notices, colour and debug output off. Only the sign-in state and the account name leave the background process, never a line of output, so the masked token line is dropped. The install commands are fixed strings chosen by platform. |
 | `interface.load` | Answers the saved interface state and, once per app run, the sentence saying a corrupt file was set aside | Empty request, the notice at most 300 characters | Takes no input and answers only what the interface itself saved. |
 | `interface.save` | Stores the whole interface state in `interface.json` and applies its theme | Strict state, column widths as bounded integers, the theme one of three names, the selection a UUID and `main` | Every field is bounded data. The file name is fixed, nothing in the request is a path, and the worst a hostile page can do is change the layout or theme. |
 | `projects.list` | Answers every project with its name, whether its folder is missing and its main workspace's branch, and once per app run the sentence saying a corrupt `projects.json` was set aside | Empty request, at most 200 projects, names and branches at most 255 characters, the notice at most 300 | Takes no input. Paths stay in the background process, and branch and folder names reach the interface as text it never interprets. Each branch read is `git -C <path> branch --show-current` with an argument array and a 5 second limit, eight at a time. |
@@ -113,22 +113,23 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, the saved interface state and its theme, menu, hardening, protocol, bridge, window, and the quit that waits for terminals and pending state writes |
 | `src/main/bridge/` | `registry.ts` the router that validates every request, `sender-check.ts`, `page-owners.ts` the per-page owners and `bridge-ipc.ts` the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol, the hardening and the theme choice |
-| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the native folder dialog, the pseudo terminal and ending process trees |
+| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the install command for each tool, the native folder dialog, the pseudo terminal and ending process trees |
 | `src/main/state/` | The JSON state files, `json-file.ts` with the reader that sets a bad file aside and the bounded atomic writer, and `interface-file.ts` with the interface state and its bridge handlers |
 | `src/main/terminal/` | The terminal sessions, who owns them and their output flow |
 | `src/main/projects/` | The project list and its bridge handlers, `projects-file.ts` for `projects.json`, `repository-check.ts` with the `git rev-parse` reader that decides what folder can be added, and `workspaces.ts` with the main workspace's branch |
-| `src/main/tools/` | Tool versions for the left column |
+| `src/main/tools/` | The first run check |
 | `src/preload/preload.ts` | Exposes `window.satellite` with `invoke` and `onEvent`. It never grows |
 | `src/renderer/entry.tsx` | Loads the five font families and the saved interface state, then renders the window |
 | `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
 | `src/renderer/projects/` | The sidebar, the workspace header and the hook that lists, adds and removes projects |
-| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end. A feature that takes over a column replaces the proving part there |
+| `src/renderer/proving/` | The Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end. A feature that takes over a column replaces the proving part there |
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
 | `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
 | `src/renderer/window/` | The three columns, their dividers, how widths fit the window, the empty states and the interface state hook |
 | `src/renderer/commands/` | The command registry, the platform shortcut matcher and the provider that runs a command from its shortcut or its button |
 | `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share |
-| `src/renderer/ui/` | Shared interface parts, the button, the key hint, the line icons, the pixel avatar and the toast |
+| `src/renderer/setup/` | The tool check card, shown on first run and from the command menu |
+| `src/renderer/ui/` | Shared interface parts, the button, the key hint, the line icons, the pixel avatar, the status pixel and the toast |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens and the raised shadow for light and dark, mapped to Tailwind utilities |
 | `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |

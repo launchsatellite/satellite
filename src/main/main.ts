@@ -12,7 +12,7 @@ import {
   type InterfaceFile,
 } from "./state/interface-file.ts";
 import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
-import { toolVersions } from "./tools/tool-versions.ts";
+import { checkTools } from "./tools/tool-check.ts";
 import {
   appOrigin,
   handleAppProtocol,
@@ -50,7 +50,7 @@ async function start(interfaceFile: InterfaceFile, projects: Projects): Promise<
   handleAppProtocol(join(app.getAppPath(), "out/renderer"));
   registerBridge(
     {
-      "tools.versions": toolVersions,
+      "tools.check": checkTools,
       ...interfaceHandlers(interfaceFile, applyThemeChoice),
       ...projects.handlers,
       ...terminals.handlers,

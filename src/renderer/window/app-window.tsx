@@ -13,11 +13,11 @@ import { useProjects } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
-import { ToolReadout } from "../proving/tool-readout.tsx";
+import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns } from "./columns.ts";
-import { FolderMissing, NoProjects, NothingSelected } from "./empty-states.tsx";
+import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 
 type PaletteMode = "commands" | "switcher";
@@ -85,8 +85,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, [projects, selectedId, update]);
   const { left, right } = fitColumns(state.columns, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const [checking, setChecking] = useState(false);
+  const closeCheck = useCallback(() => {
+    setChecking(false);
+  }, []);
   const select = useCallback(
     (ref: WorkspaceRef) => {
+      setChecking(false);
       update((current) => ({ ...current, selected: ref }), true);
     },
     [update],
@@ -141,6 +146,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "tools.check",
+            title: "Check git, gh and Claude Code",
+            available: true,
+            run: () => {
+              setChecking(true);
+            },
+          },
+          {
             id: "theme.system",
             title: "Follow the system theme",
             available: true,
@@ -161,8 +174,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (workspace) => workspace.key === state.selected?.workspace,
   );
   const centre = () => {
+    if (checking) return <ToolCheckCard key="revisit" firstRun={false} onClose={closeCheck} />;
     if (projects === undefined) return null;
-    if (projects.length === 0) return <NoProjects />;
+    if (projects.length === 0) return <ToolCheckCard key="first-run" firstRun />;
     if (selectedProject === undefined || selectedWorkspace === undefined) {
       return <NothingSelected />;
     }
@@ -194,9 +208,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           className="relative flex min-h-0 flex-col border-r border-line bg-side"
         >
           <Sidebar projects={projects} selected={state.selected} onSelect={select} />
-          <div className="flex-none p-4">
-            <ToolReadout />
-          </div>
           <ColumnDivider
             side="left"
             value={left}

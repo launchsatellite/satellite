@@ -1,15 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { defaultInterfaceState } from "../../shared/bridge-contract.ts";
+import { defaultInterfaceState, type ToolCheck } from "../../shared/bridge-contract.ts";
 import type { BridgeHandler, BridgeHandlers, BridgeOwner } from "./registry.ts";
 import { BridgeFailure, createBridgeRouter } from "./registry.ts";
 
 const terminalId = "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6";
+const toolCheck: ToolCheck = {
+  git: { state: "ready", version: "2.50.1" },
+  gh: { state: "signed-out", reason: "none", fix: "gh auth login" },
+  claude: { state: "missing", fix: "curl -fsSL https://claude.ai/install.sh | bash" },
+};
 
 function spies() {
   const handlers = {
-    "tools.versions": vi.fn<BridgeHandler<"tools.versions">>(() =>
-      Promise.resolve({ git: "git version 2.50.1", gh: null, claude: null }),
-    ),
+    "tools.check": vi.fn<BridgeHandler<"tools.check">>(() => Promise.resolve(toolCheck)),
     "interface.load": vi.fn<BridgeHandler<"interface.load">>(() =>
       Promise.resolve({ state: defaultInterfaceState, notice: null }),
     ),
@@ -161,10 +164,7 @@ describe("createBridgeRouter", () => {
     const result = await route("terminal.resize", request, owner);
     expect(result).toEqual({ ok: true, value: {} });
     expect(handlers["terminal.resize"]).toHaveBeenCalledWith(request, owner);
-    expect(await route("tools.versions", {}, owner)).toEqual({
-      ok: true,
-      value: { git: "git version 2.50.1", gh: null, claude: null },
-    });
+    expect(await route("tools.check", {}, owner)).toEqual({ ok: true, value: toolCheck });
   });
 
   it("turns a BridgeFailure into its code and message and any other error into failed without its stack", async () => {
