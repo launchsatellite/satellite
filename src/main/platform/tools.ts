@@ -70,6 +70,8 @@ const gitQuiet = {
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
 };
+const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
+const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
@@ -94,8 +96,8 @@ function parseJson(text: string): unknown {
 }
 
 export function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
-  if (tool === "git") return { ...without(env, gitDroppedKeys), ...gitQuiet };
-  if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
+  if (tool === "git") return { ...without(env, gitReplacedKeys), ...gitQuiet };
+  if (tool === "gh") return { ...without(env, ghReplacedKeys), ...ghQuiet };
   return env;
 }
 

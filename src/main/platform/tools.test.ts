@@ -81,6 +81,29 @@ describe("toolEnvironment", () => {
     expect(Object.keys(env)).not.toContain("SSH_ASKPASS");
     expect(Object.keys(env)).not.toContain("GIT_DIR");
   });
+
+  it("leaves no differently cased copy of a quiet variable", () => {
+    const git = toolEnvironment("git", {
+      git_terminal_prompt: "1",
+      Gcm_Interactive: "true",
+      ssh_askpass_require: "force",
+      lc_all: "de_DE",
+    });
+    expect(git).toEqual({
+      LC_ALL: "C",
+      GIT_TERMINAL_PROMPT: "0",
+      GCM_INTERACTIVE: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+    });
+    const gh = toolEnvironment("gh", { gh_prompt_disabled: "0", no_color: "0", Gh_Telemetry: "1" });
+    expect(Object.keys(gh).sort()).toEqual([
+      "GH_NO_EXTENSION_UPDATE_NOTIFIER",
+      "GH_NO_UPDATE_NOTIFIER",
+      "GH_PROMPT_DISABLED",
+      "GH_TELEMETRY",
+      "NO_COLOR",
+    ]);
+  });
 });
 
 describe("runTool", () => {
