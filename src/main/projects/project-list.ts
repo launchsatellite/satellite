@@ -66,14 +66,17 @@ async function readProject(project: StoredProject): Promise<ProjectView> {
   };
 }
 
-async function projectView(project: StoredProject): Promise<ProjectView> {
+async function boundedView(
+  project: StoredProject,
+  read: Promise<ProjectView>,
+): Promise<ProjectView> {
   const controller = new AbortController();
   const expired = delay(projectCheckMs, undefined, { signal: controller.signal }).then(
     () => unavailable(project),
     () => unavailable(project),
   );
   try {
-    return await Promise.race([readProject(project), expired]);
+    return await Promise.race([read, expired]);
   } finally {
     controller.abort();
   }
@@ -92,7 +95,18 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let projects: StoredProject[] | undefined;
   let noticeGiven = false;
   let choosing = false;
-  let listing: Promise<ProjectView[]> | undefined;
+  let listing: { list: StoredProject[]; views: Promise<ProjectView[]> } | undefined;
+  const pendingReads = new Map<string, Promise<ProjectView>>();
+  const projectView = (project: StoredProject) => {
+    let read = pendingReads.get(project.id);
+    if (read === undefined) {
+      read = readProject(project).finally(() => {
+        pendingReads.delete(project.id);
+      });
+      pendingReads.set(project.id, read);
+    }
+    return boundedView(project, read);
+  };
   const current = async () => {
     const loaded = await file.load();
     projects ??= [...loaded.projects];
@@ -136,10 +150,13 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         const { notice } = await file.load();
         const shown = noticeGiven ? null : notice;
         noticeGiven = true;
-        listing ??= inBatches(list, branchReads, projectView).finally(() => {
-          listing = undefined;
-        });
-        return { projects: await listing, notice: shown };
+        if (listing?.list !== list) {
+          const views = inBatches(list, branchReads, projectView).finally(() => {
+            if (listing?.views === views) listing = undefined;
+          });
+          listing = { list, views };
+        }
+        return { projects: await listing.views, notice: shown };
       },
       "projects.choose": async () => {
         if (choosing) throw new BridgeFailure("refused", "The folder dialog is already open.");
