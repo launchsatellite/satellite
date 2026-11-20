@@ -53,6 +53,8 @@ const gitDroppedKeys = new Set([
   "GIT_PREFIX",
   "GIT_SHALLOW_FILE",
   "GIT_COMMON_DIR",
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
 ]);
 const ghUnsafeKeys = new Set(["GH_DEBUG", "DEBUG", "GH_FORCE_TTY", "CLICOLOR_FORCE"]);
 const ghQuiet = {
@@ -62,7 +64,12 @@ const ghQuiet = {
   GH_TELEMETRY: "false",
   NO_COLOR: "1",
 };
-const gitLocale = { LC_ALL: "C" };
+const gitQuiet = {
+  LC_ALL: "C",
+  GIT_TERMINAL_PROMPT: "0",
+  GCM_INTERACTIVE: "false",
+  SSH_ASKPASS_REQUIRE: "never",
+};
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
@@ -78,18 +85,18 @@ function without(env: Record<string, string>, keys: Set<string>): Record<string,
   return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.has(key.toUpperCase())));
 }
 
-function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
-  if (tool === "git") return { ...without(env, gitDroppedKeys), ...gitLocale };
-  if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
-  return env;
-}
-
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
     return undefined;
   }
+}
+
+export function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
+  if (tool === "git") return { ...without(env, gitDroppedKeys), ...gitQuiet };
+  if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
+  return env;
 }
 
 export function parseToolOverride(

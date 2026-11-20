@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseToolOverride, runTool } from "./tools.ts";
+import { parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
 
 vi.mock("./user-environment.ts", () => ({
   userEnvironment: () =>
@@ -59,6 +59,27 @@ describe("parseToolOverride", () => {
     for (const value of ["/opt/tools/bin/gh", "[]", '[""]', "[1]", '{"file":"gh"}', "["]) {
       expect(() => parseToolOverride("SATELLITE_GH", value)).toThrow(/SATELLITE_GH/);
     }
+  });
+});
+
+describe("toolEnvironment", () => {
+  it("gives git an environment that never prompts", () => {
+    const env = toolEnvironment("git", {
+      PATH: "/usr/bin",
+      GIT_ASKPASS: "/usr/bin/askpass",
+      SSH_ASKPASS: "/usr/bin/ssh-askpass",
+      GIT_DIR: "/tmp/x",
+    });
+    expect(env).toMatchObject({
+      PATH: "/usr/bin",
+      GIT_TERMINAL_PROMPT: "0",
+      GCM_INTERACTIVE: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+      LC_ALL: "C",
+    });
+    expect(Object.keys(env)).not.toContain("GIT_ASKPASS");
+    expect(Object.keys(env)).not.toContain("SSH_ASKPASS");
+    expect(Object.keys(env)).not.toContain("GIT_DIR");
   });
 });
 
