@@ -19,7 +19,8 @@ const columns = ["column-projects", "column-repository", "column-sessions"];
 const pasteSize = 100_000;
 const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 const newlineSequence = "\u001b\r";
-const resizedViewport = { width: 1280, height: 640 };
+const shrinkPx = 200;
+const smallestHeight = 300;
 
 async function pasteIntoFocus(page: Page, text: string): Promise<boolean> {
   return page.evaluate((data) => {
@@ -105,7 +106,14 @@ async function checkResize(session: AppSession): Promise<void> {
   const initial = await drawnTerminalSize(session.page);
   assert.ok(initial !== null, "the terminal draws no rows to measure");
   const before = (await session.standInEvents()).length;
-  await session.page.setViewportSize(resizedViewport);
+  const inner = await session.page.evaluate(() => ({
+    width: innerWidth,
+    height: innerHeight,
+  }));
+  await session.page.setViewportSize({
+    width: inner.width,
+    height: Math.max(smallestHeight, inner.height - shrinkPx),
+  });
   let drawn: TerminalSize | null = null;
   let resizes: TerminalSize[] = [];
   await waitUntil(
