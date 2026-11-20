@@ -26,6 +26,7 @@ You work autonomously and fast on your own branch, without asking about routine 
 | `.claude/skills/` | how to work here, one folder per skill |
 | `scripts/check` | the green checkpoint |
 | `verify/` | the driver, scenarios and stand-ins that prove changes in the real app |
+| `packaging/` | the app icon electron-builder packages |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 
 A new top-level folder gets a row here in the same change.

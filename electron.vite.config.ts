@@ -13,6 +13,7 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react(), tailwindcss()],
+    build: { minify: true },
     server: { headers: { "Content-Security-Policy": contentSecurityPolicy("development") } },
   },
 });

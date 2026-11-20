@@ -86,6 +86,15 @@ The centre column shows a read-only side by side diff of two texts with Monaco's
 - **Theme.** The `satellite` theme reads the app tokens, `bg`, `fg`, `dim`, `add` and `del` for lines and `addfg` and `delfg` at low alpha for changed words and `ctl` for scrollbars, and is rebuilt on every colour scheme change. Each token goes through a canvas to come back as six digit hex, because the built stylesheet shortens colours like `#ffffff` to `#fff` and Monaco accepts only the long form.
 - **Models.** Each text becomes a model, replaced when the texts change and disposed with the editor.
 
+## Packaging and fuses
+
+electron-builder packages `out/` and `package.json` into `release/` from `electron-builder.yml`, with the icon from `packaging/`. macOS gets a dmg and a zip for arm64 and x64, Windows an NSIS installer for x64, Linux an AppImage and a deb for x64. The renderer is minified. Main and preload stay readable, since they are small and their stack traces land in logs.
+
+- **Unsigned.** macOS builds are ad-hoc signed after the fuses flip, because an arm64 Mac refuses to launch a modified binary with no signature. Windows and Linux builds carry no signature.
+- **ASAR.** The app ships as `app.asar`, and Electron loads it from nowhere else. node-pty is unpacked into `app.asar.unpacked`, because its native module and the macOS spawn helper must be real files. node-pty is N-API and ships its builds, so packaging never rebuilds it. The `app://` protocol's confinement works unchanged inside the archive, because Electron's file system reads the archive's paths like folders.
+- **Fuses.** Running as Node, `NODE_OPTIONS`, the Node inspector arguments and extra `file://` privileges are off. ASAR integrity validation and loading the app only from the ASAR are on. Integrity is checked on macOS and Windows, and Linux has no such check. Cookie encryption is off, because Satellite stores no cookies and loads no remote content, and turning it on gives each build a keychain item that an ad-hoc signature, new with every build, can make macOS ask about.
+- **Checksums.** `node scripts/checksums.ts <folder> <label>` writes `SHA256SUMS-<label>.txt` in `sha256sum` format for every package directly in the folder.
+
 ## Folder layout
 
 | Path | What |
@@ -107,3 +116,6 @@ The centre column shows a read-only side by side diff of two texts with Monaco's
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
 | `src/shared/` | Code both processes import |
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
+| `electron-builder.yml` | Packages `out/` into `release/` with the fuses |
+| `packaging/` | The app icon electron-builder turns into each platform's format |
+| `scripts/checksums.ts` | Writes the checksum file for a folder of packages |

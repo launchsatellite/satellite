@@ -19,7 +19,7 @@ npm run --silent verify -- <scenario> [--dev | --app <executable>] [--real-claud
 | --- | --- | --- |
 | none | built | `electron-vite build`, then Electron with the repo root as the app |
 | `--dev` | dev | `electron-vite dev` with hot reload, the interface served from `http://localhost` |
-| `--app <executable>` | packaged | a packaged app from `release/`, nothing is built. Name the executable itself, `Satellite.app/Contents/MacOS/Satellite` on macOS, `Satellite.exe` on Windows, the AppImage on Linux |
+| `--app <executable>` | packaged | a packaged app from `release/`, nothing is built. Name the executable itself, `mac-arm64/Satellite.app/Contents/MacOS/Satellite` on macOS, `win-unpacked/Satellite.exe` on Windows, `linux-unpacked/satellite` on Linux |
 
 Every target runs with the scenario's throwaway repo as its working folder, so a terminal the app opens starts inside it.
 
@@ -83,11 +83,13 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## Journeys
 
-Journeys are fixed scripts over the driver that prove the first run and the security boundary. They run against the built app here and against each packaged app at release.
+Journeys are fixed scripts over the driver that prove the first run and the security boundary. They run against the built app here and against each packaged app in the release workflow.
 
 ```sh
 npm run --silent journeys -- [--app <executable>]
 ```
+
+To prove a packaged app on macOS, run `npm run build`, then `npx electron-builder --mac --arm64 --publish never`, then the journeys with `--app release/mac-arm64/Satellite.app/Contents/MacOS/Satellite`. Windows and Linux are proven by pushing the branch as `platforms/<slug>`, which runs the release workflow without publishing.
 
 It builds once for the built target, runs every journey in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind.
 
