@@ -77,7 +77,7 @@ interface Session {
 const spawnFailed =
   "Claude Code couldn't start. Nothing in your project changed. Start it again, and reinstall Claude Code if it keeps failing.";
 const statusGapMs = 100;
-const exitGraceMs = 1000;
+export const exitGraceMs = 1000;
 const stopBoundMs = treeKillBoundMs + exitGraceMs + 500;
 export const quitBoundMs = stopBoundMs + 500;
 

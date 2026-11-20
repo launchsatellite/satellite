@@ -10,7 +10,7 @@ import { spawnPty } from "../platform/pty.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
-import { createTerminalSessions, quitBoundMs } from "./terminal-sessions.ts";
+import { createTerminalSessions, exitGraceMs, quitBoundMs } from "./terminal-sessions.ts";
 
 vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn(), windowsPty: () => null }));
 vi.mock("../platform/tools.ts", async (importOriginal) => {
@@ -556,26 +556,35 @@ describe("createTerminalSessions", () => {
     expect(closed).toBe(true);
   });
 
-  it(
-    "quits only after a kill at its worst case, with no exit reported, has released the launch",
-    { timeout: 15_000 },
-    async () => {
-      const listener = fakeListener();
-      const sessions = create({ listener });
-      const { mine } = owners();
-      await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
-      const launchId = listener.open.mock.calls[0]?.[0] ?? "";
-      const settingsFile = join(home, "sessions", `${launchId}.json`);
+  it("quits only after a kill at its worst case, with no exit reported, has released the launch", async () => {
+    const listener = fakeListener();
+    const sessions = create({ listener });
+    const { mine } = owners();
+    await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    const launchId = listener.open.mock.calls[0]?.[0] ?? "";
+    const settingsFile = join(home, "sessions", `${launchId}.json`);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], fakeNodeBuiltins: true });
+    try {
       ptys[0]?.kill.mockImplementation(() => delay(treeKillBoundMs));
-      const first = await Promise.race([
-        sessions.closeAll().then(() => "closed"),
-        delay(quitBoundMs).then(() => "bound"),
-      ]);
-      expect(first).toBe("closed");
-      expect(listener.close).toHaveBeenCalledWith(launchId);
-      expect(await exists(settingsFile)).toBe(false);
-    },
-  );
+      const quit = { closed: false };
+      void sessions.closeAll().then(() => {
+        quit.closed = true;
+      });
+      const endChainMs = treeKillBoundMs + exitGraceMs;
+      await vi.advanceTimersByTimeAsync(endChainMs - 1);
+      expect(quit.closed).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      for (let turn = 0; turn < 1000 && !quit.closed; turn += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(quit.closed).toBe(true);
+      expect(endChainMs).toBeLessThan(quitBoundMs);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(listener.close).toHaveBeenCalledWith(launchId);
+    expect(await exists(settingsFile)).toBe(false);
+  });
 
   it("keeps the listener until every claude it configured has exited", async () => {
     const listener = fakeListener();
