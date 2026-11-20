@@ -463,6 +463,7 @@ describe("createTerminalSessions", () => {
     await handlers["terminal.start"](request, mine);
     expect(ptys).toHaveLength(2);
     expect(sent).not.toHaveBeenCalledWith(expect.anything(), "terminal.exit", expect.anything());
+    expect(sent).not.toHaveBeenCalledWith(expect.anything(), "sessions.status", expect.anything());
   });
 
   it("frees the id when Claude Code exits on its own", async () => {

@@ -124,7 +124,8 @@ export function createTerminalSessions({
   };
 
   const showStatus = (session: Session) => {
-    if (session.statusTimer !== undefined || session.shown === session.state.status) return;
+    if (session.closedByPage || session.statusTimer !== undefined) return;
+    if (session.shown === session.state.status) return;
     session.shown = session.state.status;
     session.owner.emit("sessions.status", { id: session.id, status: session.shown });
     session.statusTimer = setTimeout(() => {

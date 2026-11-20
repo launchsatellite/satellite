@@ -66,7 +66,7 @@ The preload exposes three functions on `window.satellite` and nothing else. `inv
 | `terminal.ack` | Tells the background process how much output the terminal has drawn | UUID id, 1 to 65536 characters | Only lowers the count of unacknowledged output for a terminal the same page owns, clamped at what was sent, so a wrong ack can at worst resume output early. |
 | `terminal.data` event | Streams terminal output to the window that owns it | 1 to 65536 characters per event | Shown as text by the terminal and never run. |
 | `terminal.exit` event | Tells the window a terminal ended, with its exit code and how it ended, `ended`, `unexpected` for a failure Satellite did not cause, or `resume-failed` for a resumed session that failed before any hook arrived. It is never sent for a terminal its own page closed | Integer exit code, from -2147483648 to 4294967295, one of three words | Data only. |
-| `sessions.status` event | Tells the page that started a terminal its session's new status, `idle`, `working`, `needs-you`, `done` or `stopped` | The terminal id and one of five words. At most one every 100 milliseconds per session, the latest status kept, and `stopped` at once | A status word only, sent only to the owning page, so a busy agent cannot flood the interface. |
+| `sessions.status` event | Tells the page that started a terminal its session's new status, `idle`, `working`, `needs-you`, `done` or `stopped`. It is never sent for a terminal its own page closed | The terminal id and one of five words. At most one every 100 milliseconds per session, the latest status kept, and `stopped` at once | A status word only, sent only to the owning page, so a busy agent cannot flood the interface. |
 
 ## State
 
