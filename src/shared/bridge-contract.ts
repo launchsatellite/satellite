@@ -1,0 +1,78 @@
+import { z } from "zod";
+
+export type BridgeChannel = keyof typeof bridgeRequests;
+export type BridgeRequest<C extends BridgeChannel> = z.output<
+  (typeof bridgeRequests)[C]["request"]
+>;
+export type BridgeResponse<C extends BridgeChannel> = z.output<
+  (typeof bridgeRequests)[C]["response"]
+>;
+export type BridgeEventName = keyof typeof bridgeEvents;
+export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bridgeEvents)[E]>;
+export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
+export type BridgeResult<T> =
+  { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
+
+export const bridgeLimits = {
+  terminalWriteChars: 65536,
+  terminals: 16,
+  cols: { min: 2, max: 500 },
+  rows: { min: 1, max: 300 },
+};
+
+const terminalId = z.uuid();
+const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
+const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
+const toolVersion = z.string().max(200).nullable();
+const empty = z.strictObject({});
+
+export const bridgeRequests = {
+  "tools.versions": {
+    request: empty,
+    response: z.strictObject({ git: toolVersion, gh: toolVersion, claude: toolVersion }),
+  },
+  "terminal.start": {
+    request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),
+    response: empty,
+  },
+  "terminal.write": {
+    request: z.strictObject({
+      id: terminalId,
+      data: z.string().min(1).max(bridgeLimits.terminalWriteChars),
+    }),
+    response: empty,
+  },
+  "terminal.resize": {
+    request: z.strictObject({ id: terminalId, cols, rows }),
+    response: empty,
+  },
+  "terminal.close": {
+    request: z.strictObject({ id: terminalId }),
+    response: empty,
+  },
+};
+
+export const bridgeEvents = {
+  "terminal.data": z.strictObject({ id: terminalId, data: z.string() }),
+  "terminal.exit": z.strictObject({ id: terminalId, exitCode: z.int() }),
+};
+
+const bridgeErrorCode = z.enum([
+  "unknown-channel",
+  "invalid-request",
+  "refused-sender",
+  "not-found",
+  "tool-missing",
+  "limit",
+  "failed",
+]);
+
+export function bridgeResultSchema<T extends z.ZodType>(value: T) {
+  return z.discriminatedUnion("ok", [
+    z.strictObject({ ok: z.literal(true), value }),
+    z.strictObject({
+      ok: z.literal(false),
+      error: z.strictObject({ code: bridgeErrorCode, message: z.string() }),
+    }),
+  ]);
+}
