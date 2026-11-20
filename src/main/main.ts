@@ -30,10 +30,9 @@ import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow, mainWindow } from "./window/main-window.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
+import { createQuitGate } from "./window/quit-gate.ts";
 import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
-
-let quitting = false;
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -158,23 +157,29 @@ if (parts !== undefined && app.requestSingleInstanceLock()) {
   app.exit(0);
 }
 
-app.on("before-quit", (event) => {
-  if (quitting) return;
-  quitting = true;
-  event.preventDefault();
-  const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
-  const settled = Promise.all([
-    bounded(
-      Promise.all([parts?.terminals.closeAll(), parts?.last.flush(), parts?.interfaceFile.flush()]),
-    ),
-    (parts?.workspaces.stopAll() ?? Promise.resolve()).then(() =>
-      bounded(parts?.projects.flush() ?? Promise.resolve()),
-    ),
-  ]);
-  void settled.finally(() => {
-    app.quit();
-  });
-});
+app.on(
+  "before-quit",
+  createQuitGate(
+    () => {
+      const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
+      return Promise.all([
+        bounded(
+          Promise.all([
+            parts?.terminals.closeAll(),
+            parts?.last.flush(),
+            parts?.interfaceFile.flush(),
+          ]),
+        ),
+        (parts?.workspaces.stopAll() ?? Promise.resolve()).then(() =>
+          bounded(parts?.projects.flush() ?? Promise.resolve()),
+        ),
+      ]);
+    },
+    () => {
+      app.quit();
+    },
+  ),
+);
 
 app.on("window-all-closed", () => {
   app.quit();
