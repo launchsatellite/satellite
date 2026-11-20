@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { app, net, protocol } from "electron";
 import { contentSecurityPolicy } from "../../shared/content-security-policy.ts";
 import { resolveInside } from "../platform/paths.ts";
+import { requestedPath } from "./app-request.ts";
 
 export const appOrigin = "app://satellite";
 
@@ -25,14 +26,8 @@ async function isRegularFile(path: string): Promise<boolean> {
 }
 
 async function serve(request: Request, rendererRoot: string): Promise<Response> {
-  const url = new URL(request.url);
-  if (request.method !== "GET" || url.host !== "satellite") return notFound();
-  let requested: string;
-  try {
-    requested = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
-  } catch {
-    return notFound();
-  }
+  const requested = requestedPath(request.method, request.url);
+  if (requested === undefined) return notFound();
   const file = await resolveInside(rendererRoot, requested);
   if (file === undefined || !(await isRegularFile(file))) return notFound();
   const response = await net.fetch(pathToFileURL(file).toString());

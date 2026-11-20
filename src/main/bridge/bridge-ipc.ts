@@ -1,24 +1,14 @@
-import { ipcMain, type IpcMainInvokeEvent, type WebContents } from "electron";
+import { ipcMain, type WebContents } from "electron";
 import type { BridgeResult } from "../../shared/bridge-contract.ts";
 import { bridgeIpc } from "../../shared/satellite-api.ts";
 import { createPageOwners, type PageOwners } from "./page-owners.ts";
 import { createBridgeRouter, type BridgeHandlers } from "./registry.ts";
-import { isAllowedSender } from "./sender-check.ts";
+import { isTrustedSender } from "./sender-check.ts";
 
 const refusedSender: BridgeResult<never> = {
   ok: false,
   error: { code: "refused-sender", message: "Satellite refused a request from an unknown page." },
 };
-
-function isTrustedSender(event: IpcMainInvokeEvent, allowedOrigin: string): boolean {
-  try {
-    const frame = event.senderFrame;
-    if (frame === null) return false;
-    return isAllowedSender(frame.url, frame === event.sender.mainFrame, allowedOrigin);
-  } catch {
-    return false;
-  }
-}
 
 function watchPage(contents: WebContents, pages: PageOwners<WebContents>): void {
   const end = () => {
