@@ -19,7 +19,7 @@ export function WorkspaceHeader({
         {workspace.name ?? project.name}
       </h1>
       {workspace.name !== null && (
-        <span className="min-w-0 truncate text-[13px] text-dim">{project.name}</span>
+        <span className="min-w-[48px] truncate text-[13px] text-dim">{project.name}</span>
       )}
       {project.missing === null && (
         <>
