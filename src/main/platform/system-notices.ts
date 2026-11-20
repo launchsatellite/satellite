@@ -20,7 +20,8 @@ const logged = new Set<string>();
 function logOnce(message: string, error?: unknown): void {
   if (logged.has(message)) return;
   logged.add(message);
-  console.error(message, error);
+  if (error === undefined) console.error(message);
+  else console.error(message, error);
 }
 
 function recordFile(): string | undefined {
@@ -37,7 +38,7 @@ function record(file: string, line: RecordedLine): void {
   recording = recording
     .then(() => appendFile(file, `${JSON.stringify(line)}\n`))
     .catch((error: unknown) => {
-      console.error("Satellite could not record a notification", error);
+      logOnce("Satellite could not record a notification", error);
     });
 }
 

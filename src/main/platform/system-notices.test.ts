@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -98,6 +98,25 @@ describe("system notices", () => {
     expect(fakes.app.setBadgeCount).not.toHaveBeenCalled();
   });
 
+  it("logs a recorder that cannot write once", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "satellite-notices-"));
+    const blocker = join(folder, "not-a-folder");
+    await writeFile(blocker, "");
+    vi.stubEnv("SATELLITE_VERIFY_NOTICES", join(blocker, "notices.jsonl"));
+    const notices = await freshModule();
+    notices.setAppBadge(1);
+    notices.setAppBadge(2);
+    notices.showNotice(text, vi.fn())?.close();
+    notices.setAppBadge(0);
+    await vi.waitFor(() => {
+      expect(console.error).toHaveBeenCalled();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(vi.mocked(console.error).mock.calls.map((call) => String(call[0]))).toEqual([
+      "Satellite could not record a notification",
+    ]);
+  });
+
   it("never counts the window as in front or seen while recording", async () => {
     const file = join(await mkdtemp(join(tmpdir(), "satellite-notices-")), "notices.jsonl");
     vi.stubEnv("SATELLITE_VERIFY_NOTICES", file);
@@ -159,10 +178,12 @@ describe("system notices", () => {
       made.listeners.get("failed")?.({}, "not signed");
     }
     expect(fakes.FakeNotification.made.map((made) => made.show.mock.calls.length)).toEqual([1, 1]);
-    expect(vi.mocked(console.error).mock.calls.map((call) => String(call[0]))).toEqual([
+    const calls = vi.mocked(console.error).mock.calls;
+    expect(calls.map((call) => String(call[0]))).toEqual([
       "This system shows no notifications",
       "The system refused a notification",
     ]);
+    expect(calls[0]).toHaveLength(1);
   });
 
   it("clamps the count, shows none on Windows and gives Windows the installer's identity", async () => {
