@@ -16,7 +16,7 @@ const windows: Record<Tool, InstallFix> = {
   claude: { kind: "command", text: "winget install Anthropic.ClaudeCode" },
 };
 const linux: Record<Tool, InstallFix> = {
-  git: { kind: "command", text: "sudo apt install git" },
+  git: { kind: "address", text: "https://git-scm.com/install/linux" },
   gh: { kind: "address", text: "https://github.com/cli/cli/blob/trunk/docs/install_linux.md" },
   claude: claudeScript,
 };
