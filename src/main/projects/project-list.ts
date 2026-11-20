@@ -7,7 +7,7 @@ import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { samePath } from "../platform/paths.ts";
 import { createProjectsFile, projectLimit, type StoredProject } from "./projects-file.ts";
-import { checkRepository } from "./repository-check.ts";
+import { checkRepository, folderReadMs } from "./repository-check.ts";
 import { mainWorkspace } from "./workspaces.ts";
 
 type Missing = NonNullable<ProjectView["missing"]>;
@@ -22,12 +22,10 @@ export interface Projects {
     BridgeHandlers,
     "projects.list" | "projects.choose" | "projects.drop" | "projects.remove"
   >;
-  add(folder: string): Promise<ProjectView>;
   flush(): Promise<void>;
 }
 
 const branchReads = 8;
-const projectCheckMs = 6000;
 const nameLimit = 255;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
 
@@ -74,7 +72,7 @@ async function boundedView(
   read: Promise<ProjectView>,
 ): Promise<ProjectView> {
   const controller = new AbortController();
-  const expired = delay(projectCheckMs, undefined, { signal: controller.signal }).then(
+  const expired = delay(folderReadMs, undefined, { signal: controller.signal }).then(
     () => unavailable(project),
     () => unavailable(project),
   );
@@ -98,6 +96,8 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let projects: StoredProject[] | undefined;
   let noticeGiven = false;
   let choosing = false;
+  let adding = false;
+  let changing: Promise<unknown> = Promise.resolve();
   let listing: { list: StoredProject[]; views: Promise<ProjectView[]> } | undefined;
   const pendingReads = new Map<string, Promise<ProjectView>>();
   const projectView = (project: StoredProject) => {
@@ -115,15 +115,20 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
     projects ??= [...loaded.projects];
     return projects;
   };
-  const replace = async (next: StoredProject[], undo: () => StoredProject[]) => {
-    projects = next;
-    try {
-      await file.save(next);
-    } catch (error) {
-      projects = undo();
-      console.error("Satellite could not write projects.json", error);
-      throw new BridgeFailure("failed", saveFailure);
-    }
+  const replace = (change: (list: StoredProject[]) => StoredProject[]) => {
+    const run = changing.then(async () => {
+      const list = await current();
+      projects = change(list);
+      try {
+        await file.save(projects);
+      } catch (error) {
+        projects = list;
+        console.error("Satellite could not write projects.json", error);
+        throw new BridgeFailure("failed", saveFailure);
+      }
+    });
+    changing = run.catch(() => undefined);
+    return run;
   };
   const add = async (folder: string) => {
     const checked = await checkRepository(folder, home);
@@ -139,13 +144,19 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       );
     }
     const project = { id: randomUUID(), path: checked.root };
-    await replace([...list, project], () =>
-      (projects ?? []).filter((candidate) => candidate.id !== project.id),
-    );
+    await replace((latest) => [...latest, project]);
     return projectView(project);
   };
+  const addOne = async (folder: string) => {
+    if (adding) throw new BridgeFailure("refused", "Satellite is still adding the last folder.");
+    adding = true;
+    try {
+      return await add(folder);
+    } finally {
+      adding = false;
+    }
+  };
   return {
-    add,
     flush: () => file.flush(),
     handlers: {
       "projects.list": async () => {
@@ -171,19 +182,16 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
           choosing = false;
         }
         if (folder === undefined) return { outcome: "canceled" };
-        return { outcome: "added", project: await add(folder) };
+        return { outcome: "added", project: await addOne(folder) };
       },
-      "projects.drop": async ({ path }) => ({ project: await add(path) }),
+      "projects.drop": async ({ path }) => ({ project: await addOne(path) }),
       "projects.remove": async ({ projectId }) => {
         const list = await current();
         const removed = list.find((project) => project.id === projectId);
         if (removed === undefined) {
           throw new BridgeFailure("not-found", "That project is not in Satellite.");
         }
-        await replace(
-          list.filter((project) => project !== removed),
-          () => [...(projects ?? []), removed],
-        );
+        await replace((latest) => latest.filter((project) => project.id !== projectId));
         return {};
       },
     },

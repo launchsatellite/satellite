@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -45,5 +45,26 @@ describe("createProjects", () => {
       expect(projects[0]?.missing).toBe("folder");
     }
     expect(hung.calls).toBe(1);
+  });
+
+  it("adds one folder at a time and refuses a new add while a folder read never answers", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-project-add-")));
+    hung.path = join(base, "hung");
+    await mkdir(hung.path);
+    await mkdir(join(base, "home"));
+    const { handlers } = createProjects({
+      home: join(base, "home"),
+      chooseFolder: () => Promise.resolve(base),
+      window: () => undefined,
+    });
+    const first = handlers["projects.drop"]({ path: hung.path }, owner);
+    const second = handlers["projects.choose"]({}, owner);
+    await expect(second).rejects.toThrow("Satellite is still adding the last folder.");
+    await expect(first).rejects.toThrow(
+      "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.",
+    );
+    await expect(handlers["projects.drop"]({ path: base }, owner)).rejects.toThrow(
+      "Satellite is still waiting on a folder that didn't answer. Try again in a moment.",
+    );
   });
 });

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resolveInside, samePath } from "./paths.ts";
+import { isFullyQualified, resolveInside, samePath } from "./paths.ts";
 
 const isWindows = process.platform === "win32";
 
@@ -69,5 +69,13 @@ describe("samePath", () => {
     expect(samePath("/Users/<name>/repo", "/Users/<name>/repo2", "darwin")).toBe(false);
     expect(samePath("C:\\Users\\<name>\\Repo", "c:/users/<name>/repo/", "win32")).toBe(true);
     expect(samePath("C:\\Users\\<name>\\repo", "D:\\Users\\<name>\\repo", "win32")).toBe(false);
+  });
+
+  it("counts a Windows path as fully qualified only with a drive or a share", () => {
+    expect(isFullyQualified("C:\\repo", "win32")).toBe(true);
+    expect(isFullyQualified("\\\\server\\share\\repo", "win32")).toBe(true);
+    expect(isFullyQualified("\\repo", "win32")).toBe(false);
+    expect(isFullyQualified("C:repo", "win32")).toBe(false);
+    expect(isFullyQualified("/repo", "linux")).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { checkRepository, parseRevParse } from "./repository-check.ts";
@@ -180,6 +180,7 @@ describe("checkRepository", () => {
       ],
       [join(base, "gone"), "That folder no longer exists. Choose another one."],
       [join(base, "notes.txt"), "Drop a folder, not a file."],
+      [parse(base).root, "That's a whole drive. Choose the folder a repository was cloned into."],
       ["repo", "That folder no longer exists. Choose another one."],
       [
         join(home, "inner"),

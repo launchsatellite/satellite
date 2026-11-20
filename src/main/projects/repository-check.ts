@@ -1,7 +1,8 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, isAbsolute, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, sep } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
-import { samePath } from "../platform/paths.ts";
+import { isFullyQualified, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
 
 export type RevParse =
@@ -13,8 +14,14 @@ export type RevParse =
   | { kind: "outdated" }
   | { kind: "unknown" };
 export type RepositoryCheck = { ok: true; root: string } | { ok: false; refusal: string };
+interface FolderRead {
+  real: string;
+  isFolder: boolean;
+  home: string;
+}
 
 export const gitReadTimeoutMs = 5000;
+export const folderReadMs = 6000;
 export const gitReadFlags = ["-c", "core.fsmonitor=false"];
 
 const revParseArgs = [
@@ -27,6 +34,11 @@ const revParseArgs = [
   "--show-toplevel",
 ];
 const missingFolder = "That folder no longer exists. Choose another one.";
+const slowFolder =
+  "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.";
+const stillWaiting =
+  "Satellite is still waiting on a folder that didn't answer. Try again in a moment.";
+let unanswered: Promise<unknown> | undefined;
 
 async function realFolder(path: string): Promise<string | undefined> {
   try {
@@ -34,6 +46,37 @@ async function realFolder(path: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+function folderName(path: string): string {
+  return basename(path) || path;
+}
+
+async function readFolder(folder: string, home: string): Promise<FolderRead | undefined> {
+  const real = await realFolder(folder);
+  if (real === undefined) return undefined;
+  const isFolder = await stat(real).then(
+    (stats) => stats.isDirectory(),
+    () => false,
+  );
+  return { real, isFolder, home: (await realFolder(home)) ?? home };
+}
+
+async function boundedRead(folder: string, home: string): Promise<FolderRead | undefined | "slow"> {
+  const read = readFolder(folder, home);
+  const controller = new AbortController();
+  const expired = delay(folderReadMs, undefined, { signal: controller.signal }).then(
+    (): "slow" => "slow",
+    () => undefined,
+  );
+  const answer = await Promise.race([read, expired]);
+  controller.abort();
+  if (answer !== "slow") return answer;
+  const pending = read.finally(() => {
+    if (unanswered === pending) unanswered = undefined;
+  });
+  unanswered = pending;
+  return "slow";
 }
 
 function isInside(parent: string, child: string): boolean {
@@ -85,17 +128,20 @@ export function parseRevParse(run: ToolRun): RevParse {
 }
 
 export async function checkRepository(folder: string, home: string): Promise<RepositoryCheck> {
-  const real = isAbsolute(folder) ? await realFolder(folder) : undefined;
-  if (real === undefined) return refuse(missingFolder);
-  const isFolder = await stat(real).then(
-    (stats) => stats.isDirectory(),
-    () => false,
-  );
-  if (!isFolder) return refuse("Drop a folder, not a file.");
-  if (isInside((await realFolder(home)) ?? home, real)) {
+  if (!isFullyQualified(folder)) return refuse(missingFolder);
+  if (unanswered !== undefined) return refuse(stillWaiting);
+  const read = await boundedRead(folder, home);
+  if (read === "slow") return refuse(slowFolder);
+  if (read === undefined) return refuse(missingFolder);
+  const { real } = read;
+  if (!read.isFolder) return refuse("Drop a folder, not a file.");
+  if (dirname(real) === real) {
+    return refuse("That's a whole drive. Choose the folder a repository was cloned into.");
+  }
+  if (isInside(read.home, real)) {
     return refuse("That folder belongs to Satellite itself. Add a repository from somewhere else.");
   }
-  const name = basename(real);
+  const name = folderName(real);
   const parsed = await revParse(real);
   switch (parsed.kind) {
     case "not-a-repository":
@@ -129,7 +175,7 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   const root = await realFolder(parsed.toplevel);
   if (root === undefined) return refuse(missingFolder);
   if (!samePath(root, real)) {
-    const rootName = basename(root);
+    const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
   }
   return { ok: true, root };

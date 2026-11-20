@@ -1,6 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { isAbsolute, join, posix, relative, sep, win32 } from "node:path";
 
+const windowsFullyQualified = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
+
 async function realpathOrUndefined(path: string): Promise<string | undefined> {
   try {
     return await realpath(path);
@@ -16,6 +18,13 @@ export async function resolveInside(root: string, requested: string): Promise<st
   const fromRoot = relative(realRoot, realCandidate);
   const climbsOut = fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot);
   return climbsOut ? undefined : realCandidate;
+}
+
+export function isFullyQualified(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform === "win32" ? windowsFullyQualified.test(path) : posix.isAbsolute(path);
 }
 
 export function samePath(
