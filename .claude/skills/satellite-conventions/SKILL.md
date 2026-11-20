@@ -28,7 +28,7 @@ The background process has full access to the machine. The interface has none an
 
 - Call `git`, `gh` and `claude` with argument arrays, never by joining strings into a shell command.
 - Paths and names from users and repos are validated and never escape the folder they belong to.
-- Satellite writes nothing into a user's repo and stores no tokens. Its own state lives in `~/.satellite`.
+- Satellite writes nothing into a user's working files and stores no tokens. Its own state and the workspaces' worktrees live in `~/.satellite`. The only repository writes are the branch, the worktree record and the fetch that making a workspace needs and the worktree removal of archive, all inside `.git` and listed in `ARCHITECTURE.md`.
 
 ## Code
 

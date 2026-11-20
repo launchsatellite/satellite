@@ -62,7 +62,8 @@ Never add an IPC channel or an `ipcMain` handler. Everything goes through `satel
 
 `src/main/platform/` is the only code that spawns a process, imports `node:child_process` or `node-pty`, finds an executable or branches on `process.platform`. Three small branches live elsewhere, the macOS app menu, quiet verification on macOS in `src/main/window/verification.ts`, and the interface's shortcut keys in `src/renderer/commands/shortcuts.ts`, which reads the system from the page's user agent because it has no other way to know it. A feature calls in.
 
-- `resolveTool("gh")` and `runTool("git", ["status", "--porcelain=v2"], { timeoutMs })` take a `Tool` and an argument array, never a shell string. `runTool` answers `{ exitCode, stdout, stderr }`, or `undefined` when the tool is missing, and throws when it runs past its time limit, 30 seconds unless the caller asks for less, after ending the tool's whole process tree. When the tree does not end, it throws `AbandonedRun`, whose `exited` settles once the process really exits, so a caller never starts the same command again while the first still runs. A new git command on a project needs the programs its config can start and its optional index lock reviewed before it ships, as the Read only rule in `ARCHITECTURE.md` says.
+- `resolveTool("gh")` and `runTool("git", ["status", "--porcelain=v2"], { timeoutMs })` take a `Tool` and an argument array, never a shell string. `runTool` answers `{ exitCode, stdout, stderr }`, or `undefined` when the tool is missing, and throws when it runs past its time limit, 30 seconds unless the caller asks for less, after ending the tool's whole process tree. When the tree does not end, it throws `AbandonedRun`, whose `exited` settles once the process really exits, so a caller never starts the same command again while the first still runs.
+- git on a project or workspace goes through `src/main/workspaces/git-command.ts`. `gitArgs(folder, args)` puts the safe options and `-C <folder>` first, and `runGit(folder, args, timeoutMs, signal?)` runs it, answers `undefined` for a run that failed to finish, throws `tool-missing` when git is gone, and starts nothing in a folder where a git is stuck. Use its time limits, and put any value from the interface or a repository after `--end-of-options` or as a full `refs/...` name. A new git command lists the programs a repository's config can make it start, its writes and its optional index lock in the Reads paragraph or the Workspaces section of `ARCHITECTURE.md` before it ships. Adding a project is the one git call outside it, through `runTool` in `src/main/projects/repository-check.ts`.
 - `chooseFolder(window)` opens the native folder dialog, or reads the verify answer file, and answers a path or `undefined`. A path that reaches `git` always goes after `-C` in the argument array.
 - `installCommand(tool)` answers the fixed install step for a missing tool on this platform, a `command` or an `address`.
 - `childEnvironment()` is the user's login shell environment without `ELECTRON_` variables and the AppImage launch variables, with `XDG_CURRENT_DESKTOP` restored. Every child gets it.
@@ -85,7 +86,7 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 
 `src/renderer/ui/` holds the shared parts, each a named export.
 
-- `Button`, the `primary`, `secondary` and `ghost` variants in the `default` and `small` sizes, with an optional `icon`, `shortcut` hint and `label` for an icon-only button. A disabled button keeps focus through `aria-disabled` and ignores clicks.
+- `Button`, the `primary`, `secondary`, `ghost` and `danger` variants in the `default` and `small` sizes, `danger` for the one action that loses work, such as Archive anyway, with an optional `icon`, `shortcut` hint and `label` for an icon-only button. A disabled button keeps focus through `aria-disabled` and ignores clicks.
 - `Dialog`, the modal panel with a title, an optional description, a body and a footer. It takes focus on open, makes everything beside it inert, keeps Tab and Shift+Tab inside, closes on Escape or a click outside only while `closable`, and returns focus to what had it on open.
 - `Icon`, the line icons by `IconName`.
 - `KeyHint`, a key cap such as `⌘K`, framed or `plain`.
@@ -126,7 +127,7 @@ Every action is a command, so the button, the shortcut and the command menu all 
 | `npm run build` | `electron-vite build` into `out/`, the renderer minified |
 | `npm run package` | `electron-builder --publish never`, packages for this machine from `out/` into `release/`. Build first |
 | `npm run verify -- <scenario> [step ...]` | Launches the real app in a scenario and prints JSON, skill `satellite-verify` |
-| `npm run journeys` | Builds once and runs `launch`, `boundary`, `projects` and `quit` |
+| `npm run journeys` | Builds once and runs `launch`, `boundary`, `projects`, `workspaces` and `quit` |
 | `npm run format`, `npm run format:check` | Prettier at 100 columns. Markdown and HTML are left alone |
 | `npm run lint` | ESLint, zero warnings |
 | `npm run typecheck` | `tsc` over the three projects |

@@ -6,7 +6,7 @@ Agents stay in orbit and do the work. You stay at the centre.
 
 ## Status
 
-Early. Satellite holds your projects in one window. Add a repository from a folder dialog or by dropping it on the window, switch between them from the sidebar or the quick switcher, and run the real Claude Code in a terminal on the right. [SATELLITE.md](SATELLITE.md) says what the product is, and the [specs index](specs/README.md) shows what is built.
+Early. Satellite holds your projects in one window. Add a repository from a folder dialog or by dropping it on the window, switch between them from the sidebar or the quick switcher, and run the real Claude Code in a terminal on the right. Give each piece of work its own workspace, a worktree and branch made in one step, and archive it once you no longer need it, after seeing what would be lost. [SATELLITE.md](SATELLITE.md) says what the product is, and the [specs index](specs/README.md) shows what is built.
 
 ## Install
 
