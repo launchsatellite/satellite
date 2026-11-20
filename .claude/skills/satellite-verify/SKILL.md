@@ -45,6 +45,8 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
 
+`consoleErrors` holds console errors, uncaught errors and unhandled rejections from the first render on, because the driver attaches before the page runs or, when the page already ran, the protocol replays what it buffered.
+
 `wait` gets its own length plus 15 seconds and `wait-for` gets 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
 
 The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, output?, tree? }], consoleErrors, screenshots, leftover? }`. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch`, and a failed launch adds the app's last output and the window tree when one exists. `home` and `repo` are `null` until the temp folder exists. A failed close adds a `close` entry, and `leftover` names a temp folder that could not be deleted. The exit code is 1 when any step failed or something was left over.
@@ -65,7 +67,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - **gh** prints its answer and exits with its code. Without an answer it prints `stand-in gh has no answer for <args>` and exits 1.
 - **claude** prints `version` for `--version`. Otherwise it plays the script, then reads stdin raw, echoes every chunk (ESC then CR echoes as a new line) and exits on Ctrl+C or Ctrl+D.
 
-Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, and `resize` with `cols` and `rows`. The window usually loads twice at launch, once more after the driver starts listening so no startup error is missed, so startup calls such as `gh --version` can appear twice.
+Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, and `resize` with `cols` and `rows`. Startup calls such as `gh --version` appear once on the built and packaged targets. The dev target runs React in development mode, whose strict mode runs every effect twice, so count events on a built run.
 
 ## Home, output and cleanup
 

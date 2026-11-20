@@ -431,12 +431,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     const address = await waitForDevTools(child, () => output);
     browser = await chromium.connectOverCDP(address, { timeout: startTimeoutMs });
     for (const context of browser.contexts()) recordErrors(context, consoleErrors);
-    const loadedBeforeListening = appPage(browser, origin);
-    page = loadedBeforeListening ?? (await findAppPage(browser, origin));
-    if (loadedBeforeListening !== undefined) {
-      await page.waitForLoadState("load", { timeout: startTimeoutMs });
-      await page.reload({ waitUntil: "domcontentloaded", timeout: startTimeoutMs });
-    }
+    page = await findAppPage(browser, origin);
     await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
   } catch (error) {
     const failure = new LaunchFailure(errorReason(error), { cause: error });
