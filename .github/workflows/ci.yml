@@ -29,3 +29,4 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: ./scripts/check
+      - run: npm run build
