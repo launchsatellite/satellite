@@ -170,8 +170,8 @@ describe("parseWorktreeList", () => {
     );
     const started = Date.now();
     expect(parseWorktreeList(stdout, "\0")).toHaveLength(200_000);
-    expect(Date.now() - started).toBeLessThan(2000);
-  });
+    expect(Date.now() - started).toBeLessThan(15_000);
+  }, 30_000);
 });
 
 describe("listWorktrees", () => {

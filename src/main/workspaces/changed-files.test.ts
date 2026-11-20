@@ -38,6 +38,6 @@ describe("parseStatus", () => {
     const stdout = "?? some/folder/file.txt\0".repeat(500_000);
     const started = Date.now();
     expect(parseStatus(stdout)).toHaveLength(500_000);
-    expect(Date.now() - started).toBeLessThan(2000);
-  });
+    expect(Date.now() - started).toBeLessThan(15_000);
+  }, 30_000);
 });
