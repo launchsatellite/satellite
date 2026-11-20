@@ -54,6 +54,7 @@ interface Shared {
   oid: string | null;
   branchMade: boolean;
   folder: MadeFolder | null;
+  worktreeLeft: boolean;
 }
 
 const includeFilesMs = 120_000;
@@ -235,7 +236,7 @@ async function startFromDefault(context: CreationContext, shared: Shared): Promi
       "--no-write-fetch-head",
       "--end-of-options",
       remote,
-      `refs/heads/${branch}`,
+      `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
     ],
     fetchMs,
     signal,
@@ -296,6 +297,7 @@ function branchStep(context: CreationContext, shared: Shared): CreationStepRun {
     },
     async undo() {
       if (!shared.branchMade || shared.oid === null) return true;
+      if (shared.worktreeLeft) return false;
       const removed = await git(
         root,
         ["update-ref", "-d", `refs/heads/${name}`, shared.oid],
@@ -331,6 +333,11 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
     async run() {
       const prepared = await prepareWorktreeFolder(home, root, name);
       if (!prepared.ok) throw new StepFailure(prepared.refusal);
+      if ((await isListed(root, prepared.path)) !== false) {
+        throw new StepFailure(
+          `git still lists a worktree at the folder for ${name}. Run git worktree prune, then try again.`,
+        );
+      }
       stopIfQuitting(signal);
       const folder = await makeLeafFolder(prepared.path, name, prepared.segment);
       shared.folder = folder;
@@ -350,6 +357,7 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
     async undo() {
       const folder = shared.folder;
       if (folder === null) return true;
+      shared.worktreeLeft = true;
       if (await isSafeWorktree(home, folder)) {
         const listing = await listWorktrees(root);
         if (listing === undefined) return false;
@@ -366,7 +374,9 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
           await rm(folder.path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
         }
       }
-      return (await isListed(root, folder.path)) === false && (await isGone(folder.path));
+      shared.worktreeLeft =
+        (await isListed(root, folder.path)) !== false || !(await isGone(folder.path));
+      return !shared.worktreeLeft;
     },
   };
 }
@@ -481,13 +491,9 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
       }
-      const copy = await beforeDeadline(
-        copyIncludedFiles(root, folder.path, selection.files, limit),
-        deadline,
-        signal,
-      );
+      const copy = await copyIncludedFiles(root, folder.path, selection.files, limit);
       stopIfQuitting(signal);
-      if (copy === "late" || copy === "too-slow") throw new StepFailure(includeTooSlow);
+      if (copy === "too-slow") throw new StepFailure(includeTooSlow);
       return copiedDetail(copy.copied, copy.skipped + selection.links);
     },
     undo: () => Promise.resolve(true),
@@ -556,7 +562,7 @@ export function failureSentence(
 }
 
 export function creationSteps(context: CreationContext): CreationStepRun[] {
-  const shared: Shared = { oid: null, branchMade: false, folder: null };
+  const shared: Shared = { oid: null, branchMade: false, folder: null, worktreeLeft: false };
   return [
     startStep(context, shared),
     branchStep(context, shared),

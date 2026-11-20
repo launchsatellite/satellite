@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -16,6 +17,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StartChoice } from "../../shared/bridge-contract.ts";
 import type { StoredWorkspace } from "../projects/projects-file.ts";
+import { BridgeFailure } from "../bridge/registry.ts";
 import { creationSteps, prepareWorkspace } from "./create-steps.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
@@ -87,6 +89,7 @@ async function create(
   name: string,
   start: StartChoice = { kind: "default" },
   signal: AbortSignal = new AbortController().signal,
+  failSave = false,
 ) {
   const home = join(base, "home");
   await mkdir(home, { recursive: true });
@@ -100,6 +103,7 @@ async function create(
     start,
     signal,
     save: (workspace) => {
+      if (failSave) return Promise.reject(new BridgeFailure("failed", "The disk said no."));
       saved.push(workspace);
       return Promise.resolve();
     },
@@ -321,6 +325,81 @@ describe("creationSteps", () => {
       );
     },
   );
+
+  it("removes the copied files with the worktree when the save fails", async () => {
+    const root = await repository();
+    await writeFile(join(root, ".gitignore"), ".env\n");
+    await writeFile(join(root, ".worktreeinclude"), ".env\n");
+    await commit(root, "a", "first commit\n");
+    await writeFile(join(root, ".env"), "TOKEN=1\n");
+    const { result, path, detail } = await create(
+      root,
+      "unsaved",
+      { kind: "default" },
+      undefined,
+      true,
+    );
+    expect(detail("files")).toBe("Copied 1 file.");
+    expect(result).toEqual({
+      ok: false,
+      step: "save",
+      sentence: "Satellite couldn't save the workspace list.",
+      undone: true,
+    });
+    await leftNothing(root, "unsaved", path);
+  });
+
+  it.skipIf(!onUnix)("keeps the branch when the worktree could not be removed", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    const target = join(base, "home", "worktrees", "repo", "kept");
+    await hook(
+      root,
+      "post-checkout",
+      `cd /; mv '${target}' '${target}-moved'; mkdir '${target}'; exit 1`,
+    );
+    const { result } = await create(root, "kept");
+    expect(result).toMatchObject({ ok: false, step: "worktree", undone: false });
+    expect(await git(root, ["show-ref", "--verify", "refs/heads/kept"])).toContain(
+      "refs/heads/kept",
+    );
+    expect(await git(root, ["worktree", "list", "--porcelain"])).toContain(target);
+    expect(await exists(target)).toBe(true);
+  });
+
+  it("refuses a folder git still lists from a worktree deleted by hand", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    const target = join(base, "home", "worktrees", "repo", "stale");
+    await mkdir(join(base, "home", "worktrees", "repo"), { recursive: true });
+    await git(root, ["worktree", "add", "-q", "-b", "elsewhere", target]);
+    await rm(target, { recursive: true, force: true });
+    const { result } = await create(root, "stale");
+    expect(result).toEqual({
+      ok: false,
+      step: "worktree",
+      sentence:
+        "git still lists a worktree at the folder for stale. Run git worktree prune, then try again.",
+      undone: true,
+    });
+    expect(await gitFails(root, ["show-ref", "--verify", "--quiet", "refs/heads/stale"])).toBe(
+      true,
+    );
+    expect(await exists(target)).toBe(false);
+  });
+
+  it("fetches the default branch even when the remote has no fetch refspec", async () => {
+    const upstream = await repository("upstream");
+    await commit(upstream, "a", "first commit\n");
+    const root = join(base, "repo");
+    await run("git", ["clone", "-q", upstream, root], { env: gitEnvironment() });
+    await git(root, ["config", "--unset-all", "remote.origin.fetch"]);
+    const second = await commit(upstream, "b", "second commit\n");
+    const { result, path, detail } = await create(root, "narrow");
+    expect(result).toEqual({ ok: true });
+    expect(detail("start")).toBe("Fetched main from origin.");
+    expect(await git(path, ["rev-parse", "HEAD"])).toBe(second);
+  });
 
   it("starts from the cached copy when the remote is unreachable", async () => {
     const upstream = await repository("upstream");
