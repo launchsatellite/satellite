@@ -20,6 +20,8 @@ A test earns its place when it catches a failure that is real and likely and tha
 
 No tests for glue code, layout, thin wrappers or anything one run of the app proves. No snapshot tests, no tests of mocks, nothing written to raise coverage. A test checks behaviour at its boundary, lives next to its code, and its name says the failure it catches. Example home folders in tests are written as `/Users/<name>/` or `/home/<name>/`, because the guards refuse anything that looks like a real one.
 
+The unit tests run on macOS, Windows and Linux in the release workflow. A path the code checks as absolute is built per system, from `tmpdir()` or `C:\Users\<name>\` on Windows, and a path compared with git's output is compared in the form git prints, with forward slashes. A link to a folder is made as a `"junction"`, which Windows allows without rights and other systems ignore. A test that needs POSIX permissions, an executable hook, a link to a file, a FIFO or a newline in a name skips on Windows with `it.skipIf`.
+
 ## The security boundary
 
 The background process has full access to the machine. The interface has none and talks to it only through one small set of typed messages, each validated with a schema before anything acts on it. Nothing shown in the interface (file contents, pull request text, terminal output, branch names) can ever run a command or read a file. A new message type is a security decision, recorded in `ARCHITECTURE.md`.

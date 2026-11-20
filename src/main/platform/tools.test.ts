@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
 
@@ -124,8 +123,9 @@ describe("runTool", () => {
       const running = runTool("gh", [pidFile], { timeoutMs: 1000 });
       await expect(running).rejects.toThrow("gh did not finish in time");
       child = Number(await readFile(pidFile, "utf8"));
-      await delay(200);
-      expect(isAlive(child)).toBe(false);
+      await vi.waitFor(() => {
+        expect(isAlive(child)).toBe(false);
+      }, 10_000);
     } finally {
       if (child > 0 && isAlive(child)) process.kill(child, "SIGKILL");
       await rm(folder, { recursive: true, force: true });

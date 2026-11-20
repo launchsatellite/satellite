@@ -15,6 +15,12 @@ async function homeWith(content: unknown): Promise<string> {
   return home;
 }
 
+function userPath(path: string): string {
+  return process.platform === "win32"
+    ? `C:\\Users\\<name>\\${path.split("/").join("\\")}`
+    : `/Users/<name>/${path}`;
+}
+
 function workspace(name: string, path: string) {
   return { id: randomUUID(), name, path, branch: name };
 }
@@ -25,7 +31,7 @@ async function setAsideFiles(home: string): Promise<string[]> {
 
 describe("createProjectsFile", () => {
   it("reads a version 1 file as version 2 with no workspaces", async () => {
-    const project = { id: randomUUID(), path: "/Users/<name>/code/alpha" };
+    const project = { id: randomUUID(), path: userPath("code/alpha") };
     const loaded = await createProjectsFile(
       await homeWith({ version: 1, projects: [project] }),
     ).load();
@@ -37,13 +43,13 @@ describe("createProjectsFile", () => {
   });
 
   it("writes version 2 after a change", async () => {
-    const project = { id: randomUUID(), path: "/Users/<name>/code/alpha" };
+    const project = { id: randomUUID(), path: userPath("code/alpha") };
     const home = await homeWith({ version: 1, projects: [project] });
     const file = createProjectsFile(home);
     const { projects } = await file.load();
     const changed = projects.map((stored) => ({
       ...stored,
-      workspaces: [workspace("fix-login", "/Users/<name>/.satellite/worktrees/alpha/fix-login")],
+      workspaces: [workspace("fix-login", userPath(".satellite/worktrees/alpha/fix-login"))],
     }));
     await file.save(changed);
     const written: unknown = JSON.parse(await readFile(join(home, "projects.json"), "utf8"));
@@ -60,13 +66,13 @@ describe("createProjectsFile", () => {
   });
 
   it("sets aside a file with two workspaces on one path", async () => {
-    const path = "/Users/<name>/.satellite/worktrees/alpha/fix-login";
+    const path = userPath(".satellite/worktrees/alpha/fix-login");
     const fileWith = (otherPath: string) => ({
       version: 2,
       projects: [
         {
           id: randomUUID(),
-          path: "/Users/<name>/code/alpha",
+          path: userPath("code/alpha"),
           workspaces: [workspace("fix-login", path), workspace("other", otherPath)],
         },
       ],
@@ -81,7 +87,7 @@ describe("createProjectsFile", () => {
   });
 
   it("sets aside a file that holds one folder twice under another spelling", async () => {
-    const alpha = "/Users/<name>/code/alpha";
+    const alpha = userPath("code/alpha");
     const onProject = await homeWith({
       version: 2,
       projects: [{ id: randomUUID(), path: alpha, workspaces: [workspace("fix-login", alpha)] }],
@@ -91,20 +97,20 @@ describe("createProjectsFile", () => {
       version: 1,
       projects: [
         { id: randomUUID(), path: alpha },
-        { id: randomUUID(), path: "/Users/<name>/code/Alpha" },
+        { id: randomUUID(), path: userPath("code/Alpha") },
       ],
     });
     const loaded = await createProjectsFile(cased).load();
-    const foldsCase = samePath(alpha, "/Users/<name>/code/Alpha");
+    const foldsCase = samePath(alpha, userPath("code/Alpha"));
     expect(loaded.notice).toBe(foldsCase ? setAsideNotice : null);
     expect(loaded.projects).toHaveLength(foldsCase ? 0 : 2);
   });
 
   it("sets aside a project with 21 workspaces", async () => {
     const workspaces = Array.from({ length: 21 }, (_, index) =>
-      workspace(`w${String(index)}`, `/Users/<name>/.satellite/worktrees/alpha/w${String(index)}`),
+      workspace(`w${String(index)}`, userPath(`.satellite/worktrees/alpha/w${String(index)}`)),
     );
-    const project = { id: randomUUID(), path: "/Users/<name>/code/alpha" };
+    const project = { id: randomUUID(), path: userPath("code/alpha") };
     const home = await homeWith({
       version: 2,
       projects: [{ ...project, workspaces }],

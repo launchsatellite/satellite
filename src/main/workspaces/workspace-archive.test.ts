@@ -12,7 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
@@ -60,6 +60,10 @@ const onUnix = process.platform !== "win32";
 let base = "";
 let home = "";
 let config = "";
+
+function asGitPrints(path: string): string {
+  return path.split(sep).join("/");
+}
 
 function gitEnvironment(): Record<string, string> {
   const kept = Object.entries(process.env).filter(
@@ -247,7 +251,7 @@ describe("archiveWorkspace", () => {
         "fix-login is locked in git, so Satellite won't archive it. Run git worktree unlock on it first.",
     });
     expect(removeCalls()).toEqual([]);
-    expect(await listed(project)).toContain(record.path);
+    expect(await listed(project)).toContain(asGitPrints(record.path));
   });
 
   it("removes the worktree and keeps the branch", async () => {
@@ -266,7 +270,7 @@ describe("archiveWorkspace", () => {
     expect(
       removeCalls().filter((args) => args.filter((arg) => arg === "--force").length > 1),
     ).toEqual([]);
-    expect(await listed(project)).not.toContain(record.path);
+    expect(await listed(project)).not.toContain(asGitPrints(record.path));
     expect(await git(project.path, ["branch", "--list", "fix-login"])).toBe("fix-login");
     expect(await git(project.path, ["log", "-1", "--format=%s", "fix-login"])).toBe(
       "fix the login redirect",
@@ -301,7 +305,7 @@ describe("archiveWorkspace", () => {
         "with-lib has submodules checked out, and git would delete their own history with it, so Satellite won't archive it.",
     });
     expect(removeCalls().some((args) => args.includes("--force"))).toBe(false);
-    expect(await listed(project)).toContain(record.path);
+    expect(await listed(project)).toContain(asGitPrints(record.path));
     expect(await exists(join(record.path, "lib", "local.txt"))).toBe(true);
   });
 
@@ -335,7 +339,7 @@ describe("archiveWorkspace", () => {
       expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
         leftover: "worktrees/repo/stuck",
       });
-      expect(await listed(project)).not.toContain(record.path);
+      expect(await listed(project)).not.toContain(asGitPrints(record.path));
       expect(await git(project.path, ["branch", "--list", "stuck"])).toBe("stuck");
       expect(await exists(join(held, "file.txt"))).toBe(true);
     } finally {

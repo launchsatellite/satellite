@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { gitArgs, gitReadMs, runGit } from "./git-command.ts";
 
@@ -23,29 +25,27 @@ vi.mock("../platform/tools.ts", async (importOriginal) => {
 
 describe("runGit", () => {
   it("answers at once for a git that never exits, and starts none in that folder until it does", async () => {
-    const stuck = "/Users/<name>/code/stuck";
+    const stuck = join(tmpdir(), "code", "stuck");
+    const other = join(tmpdir(), "code", "other");
     expect(await runGit(stuck, ["status"], gitReadMs)).toBeUndefined();
     const release = git.exit;
     expect(await runGit(stuck, ["status"], gitReadMs)).toBeUndefined();
     expect(git.folders).toEqual([stuck]);
-    expect(await runGit("/Users/<name>/code/other", ["status"], gitReadMs)).toBeUndefined();
-    expect(git.folders).toEqual([stuck, "/Users/<name>/code/other"]);
+    expect(await runGit(other, ["status"], gitReadMs)).toBeUndefined();
+    expect(git.folders).toEqual([stuck, other]);
     release();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await runGit(stuck, ["status"], gitReadMs);
-    expect(git.folders).toEqual([stuck, "/Users/<name>/code/other", stuck]);
+    expect(git.folders).toEqual([stuck, other, stuck]);
   });
 });
 
 describe("gitArgs", () => {
   it("refuses a folder that would run git somewhere else", () => {
+    const repo = join(tmpdir(), "repo");
     for (const folder of ["", ".", "repo", "../repo"]) {
       expect(() => gitArgs(folder, ["status"])).toThrow();
     }
-    expect(gitArgs("/Users/<name>/repo", ["status"]).slice(0, 3)).toEqual([
-      "--no-optional-locks",
-      "-C",
-      "/Users/<name>/repo",
-    ]);
+    expect(gitArgs(repo, ["status"]).slice(0, 3)).toEqual(["--no-optional-locks", "-C", repo]);
   });
 });

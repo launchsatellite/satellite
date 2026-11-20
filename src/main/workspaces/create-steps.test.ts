@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StartChoice } from "../../shared/bridge-contract.ts";
@@ -37,6 +37,10 @@ const onUnix = process.platform !== "win32";
 
 let base = "";
 let config = "";
+
+function asGitPrints(path: string): string {
+  return path.split(sep).join("/");
+}
 
 function gitEnvironment(): Record<string, string> {
   const kept = Object.entries(process.env).filter(
@@ -119,7 +123,7 @@ async function leftNothing(root: string, name: string, path: string): Promise<vo
   expect(await gitFails(root, ["show-ref", "--verify", "--quiet", `refs/heads/${name}`])).toBe(
     true,
   );
-  expect(await git(root, ["worktree", "list", "--porcelain"])).not.toContain(path);
+  expect(await git(root, ["worktree", "list", "--porcelain"])).not.toContain(asGitPrints(path));
   expect(await exists(path)).toBe(false);
 }
 
@@ -363,7 +367,7 @@ describe("creationSteps", () => {
     expect(await git(root, ["show-ref", "--verify", "refs/heads/kept"])).toContain(
       "refs/heads/kept",
     );
-    expect(await git(root, ["worktree", "list", "--porcelain"])).toContain(target);
+    expect(await git(root, ["worktree", "list", "--porcelain"])).toContain(asGitPrints(target));
     expect(await exists(target)).toBe(true);
   });
 

@@ -68,15 +68,19 @@ describe("prepareWorktreeFolder", () => {
   it("refuses a name that already has a file or a link", async () => {
     const home = await temporaryHome();
     await mkdir(join(home, "worktrees", "repo"), { recursive: true });
-    await symlink(join(home, "nowhere"), join(home, "worktrees", "repo", "quiet-orbit"));
+    await symlink(
+      join(home, "nowhere"),
+      join(home, "worktrees", "repo", "quiet-orbit"),
+      "junction",
+    );
     const answer = await prepareWorktreeFolder(home, "/Users/<name>/code/repo", "quiet-orbit");
     expect(answer.ok).toBe(false);
   });
 
-  it.skipIf(process.platform === "win32")("refuses a worktrees folder that is a link", async () => {
+  it("refuses a worktrees folder that is a link", async () => {
     const home = await temporaryHome();
     const elsewhere = await temporaryHome();
-    await symlink(elsewhere, join(home, "worktrees"));
+    await symlink(elsewhere, join(home, "worktrees"), "junction");
     expect(await prepareWorktreeFolder(home, "/Users/<name>/code/repo", "quiet-orbit")).toEqual({
       ok: false,
       refusal: plainFolderRefusal,
@@ -84,11 +88,11 @@ describe("prepareWorktreeFolder", () => {
     expect(await readdir(elsewhere)).toEqual([]);
   });
 
-  it.skipIf(process.platform === "win32")("refuses a segment folder that is a link", async () => {
+  it("refuses a segment folder that is a link", async () => {
     const home = await temporaryHome();
     const elsewhere = await temporaryHome();
     await mkdir(worktreesRoot(home));
-    await symlink(elsewhere, join(home, "worktrees", "repo"));
+    await symlink(elsewhere, join(home, "worktrees", "repo"), "junction");
     expect(await prepareWorktreeFolder(home, "/Users/<name>/code/repo", "quiet-orbit")).toEqual({
       ok: false,
       refusal: plainFolderRefusal,
@@ -117,25 +121,20 @@ describe("isWorktreeFolder", () => {
     }
   });
 
-  it.skipIf(process.platform === "win32")(
-    "refuses links at the workspace or above it",
-    async () => {
-      const home = await temporaryHome();
-      const outside = await temporaryHome();
-      await mkdir(join(outside, "p", "n"), { recursive: true });
-      await mkdir(join(home, "worktrees", "p"), { recursive: true });
-      await symlink(join(outside, "p", "n"), join(home, "worktrees", "p", "n"));
-      expect(await isWorktreeFolder(home, join(home, "worktrees", "p", "n"))).toBe(false);
-      await symlink(join(outside, "p"), join(home, "worktrees", "q"));
-      expect(await isWorktreeFolder(home, join(home, "worktrees", "q", "n"))).toBe(false);
-      await mkdir(join(home, "worktrees", "r", "n"), { recursive: true });
-      await symlink(join(home, "worktrees", "r"), join(home, "worktrees", "s"));
-      expect(await isWorktreeFolder(home, join(home, "worktrees", "s", "n"))).toBe(false);
-      const linkedHome = await temporaryHome();
-      await symlink(outside, join(linkedHome, "worktrees"));
-      expect(await isWorktreeFolder(linkedHome, join(linkedHome, "worktrees", "p", "n"))).toBe(
-        false,
-      );
-    },
-  );
+  it("refuses links at the workspace or above it", async () => {
+    const home = await temporaryHome();
+    const outside = await temporaryHome();
+    await mkdir(join(outside, "p", "n"), { recursive: true });
+    await mkdir(join(home, "worktrees", "p"), { recursive: true });
+    await symlink(join(outside, "p", "n"), join(home, "worktrees", "p", "n"), "junction");
+    expect(await isWorktreeFolder(home, join(home, "worktrees", "p", "n"))).toBe(false);
+    await symlink(join(outside, "p"), join(home, "worktrees", "q"), "junction");
+    expect(await isWorktreeFolder(home, join(home, "worktrees", "q", "n"))).toBe(false);
+    await mkdir(join(home, "worktrees", "r", "n"), { recursive: true });
+    await symlink(join(home, "worktrees", "r"), join(home, "worktrees", "s"), "junction");
+    expect(await isWorktreeFolder(home, join(home, "worktrees", "s", "n"))).toBe(false);
+    const linkedHome = await temporaryHome();
+    await symlink(outside, join(linkedHome, "worktrees"), "junction");
+    expect(await isWorktreeFolder(linkedHome, join(linkedHome, "worktrees", "p", "n"))).toBe(false);
+  });
 });

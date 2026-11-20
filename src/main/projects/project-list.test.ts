@@ -429,7 +429,7 @@ describe("createProjects", () => {
 
   it("keeps a workspace whose stored path differs from git's by a link or by case", async () => {
     const { base, home, workspace } = await repoWithWorkspace();
-    await symlink(join(home, "worktrees"), join(base, "linked"));
+    await symlink(join(home, "worktrees"), join(base, "linked"), "junction");
     const spellings = [
       join(base, "linked", "repo", "fix-login"),
       workspace.path.replace("fix-login", "FIX-LOGIN"),

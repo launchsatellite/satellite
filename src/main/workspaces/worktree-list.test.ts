@@ -230,7 +230,7 @@ describe("listWorktrees on a git older than 2.36", () => {
   it("asks once with -z, then reads newline records for the rest of the run", async () => {
     older.on = true;
     try {
-      const first = await listWorktrees("/Users/<name>/repo");
+      const first = await listWorktrees(join(tmpdir(), "repo"));
       expect(first?.separator).toBe("\n");
       expect(
         first?.worktrees.map(({ path, branch, prunable }) => [path, branch, prunable]),
@@ -238,7 +238,7 @@ describe("listWorktrees on a git older than 2.36", () => {
         ["/Users/<name>/repo", "main", false],
         ["/Users/<name>/wt/w1", "w1", true],
       ]);
-      await listWorktrees("/Users/<name>/repo");
+      await listWorktrees(join(tmpdir(), "repo"));
       expect(older.calls.map((args) => args.includes("-z"))).toEqual([true, false, false]);
     } finally {
       older.on = false;
