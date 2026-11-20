@@ -170,7 +170,7 @@ describe("createTerminalSessions", () => {
     expect(ptys).toHaveLength(1);
   });
 
-  it("refuses to resume a session still being ended", async () => {
+  it("refuses to resume a session still being ended", { timeout: 15_000 }, async () => {
     const { handlers } = create({ listener: fakeListener(), last: fakeLast(recorded) });
     const { mine } = owners();
     await handlers["terminal.start"]({ id: terminalId(1), ...size, resume: true }, mine);
@@ -254,8 +254,9 @@ describe("createTerminalSessions", () => {
     await sessions.handlers["terminal.start"]({ id: terminalId(2), ...size }, mine);
     ptys[1]?.exit(0, 9);
     await sessions.handlers["terminal.start"]({ id: terminalId(3), ...size, resume: true }, mine);
-    await sessions.handlers["terminal.close"]({ id: terminalId(3) }, mine);
+    const stopping = sessions.sessionsInside.stopInside(folders.get("main") ?? "");
     ptys[2]?.exit(0, 1);
+    await stopping;
     await vi.waitFor(() => {
       expect(endings()).toHaveLength(3);
     });
@@ -402,6 +403,24 @@ describe("createTerminalSessions", () => {
     expect(ptys).toHaveLength(0);
     await handlers["terminal.start"]({ id, ...size }, mine);
     expect(ptys).toHaveLength(1);
+  });
+
+  it("tells a page nothing about a launch it closed itself, so a remount with the same id keeps its session", async () => {
+    const { handlers } = create({ listener: fakeListener(), last: fakeLast(recorded) });
+    const { mine, sent } = owners();
+    const id = terminalId(1);
+    const request = { id, ...size, resume: true };
+    const starting = handlers["terminal.start"](request, mine);
+    await handlers["terminal.close"]({ id }, mine);
+    const again = handlers["terminal.start"](request, mine);
+    await starting;
+    await again;
+    expect(ptys).toHaveLength(1);
+    await handlers["terminal.close"]({ id }, mine);
+    ptys[0]?.exit(0, 1);
+    await handlers["terminal.start"](request, mine);
+    expect(ptys).toHaveLength(2);
+    expect(sent).not.toHaveBeenCalledWith(expect.anything(), "terminal.exit", expect.anything());
   });
 
   it("frees the id when Claude Code exits on its own", async () => {

@@ -70,6 +70,7 @@ interface Session {
   hooked: boolean;
   ended: boolean;
   endedBySatellite: boolean;
+  closedByPage: boolean;
 }
 
 const spawnFailed =
@@ -191,6 +192,17 @@ export function createTerminalSessions({
   const holds = (sessionId: string) =>
     [...alive()].some((session) => session.sessionId === sessionId);
 
+  const untilEnded = async (sessionId: string) => {
+    const holding = [...alive()].filter((session) => session.sessionId === sessionId);
+    if (holding.length > 0 && holding.every((session) => session.ended)) await settled(holding);
+  };
+
+  const tellExit = (session: Session, exitCode: number, ending: SessionEnding) => {
+    if (!session.closedByPage) {
+      session.owner.emit("terminal.exit", { id: session.id, exitCode, ending });
+    }
+  };
+
   const held = (id: string, owner: BridgeOwner): Session => {
     const session = sessions.get(id);
     if (session?.owner !== owner) {
@@ -216,6 +228,7 @@ export function createTerminalSessions({
     if (recorded === undefined) {
       throw new BridgeFailure("not-found", "There's no session to resume here. Start a new one.");
     }
+    await untilEnded(recorded);
     if (holds(recorded)) {
       throw new BridgeFailure("refused", "That session is already open in another tab.");
     }
@@ -258,7 +271,7 @@ export function createTerminalSessions({
       await last.forget(session.workspace, session.sessionId);
     }
     clearTimeout(session.statusTimer);
-    session.owner.emit("terminal.exit", { id: session.id, exitCode, ending });
+    tellExit(session, exitCode, ending);
     settle(session);
     await stopListenerOnceIdle();
   };
@@ -331,6 +344,7 @@ export function createTerminalSessions({
       hooked: false,
       ended: false,
       endedBySatellite: false,
+      closedByPage: false,
     };
     sessions.set(id, session);
     unsettled.add(session);
@@ -346,7 +360,7 @@ export function createTerminalSessions({
     if (session.pty === undefined) {
       await release(session);
       settle(session);
-      owner.emit("terminal.exit", { id, exitCode: 0, ending: "ended" });
+      tellExit(session, 0, "ended");
     }
     return {};
   };
@@ -361,10 +375,7 @@ export function createTerminalSessions({
         }
         const recorded = await last.get(workspace);
         if (recorded === undefined) return { resumable: false };
-        const holding = [...alive()].filter((session) => session.sessionId === recorded);
-        if (holding.length > 0 && holding.every((session) => session.ended)) {
-          await settled(holding);
-        }
+        await untilEnded(recorded);
         return { resumable: !holds(recorded) && (await last.get(workspace)) === recorded };
       },
       "terminal.start": start,
@@ -378,7 +389,9 @@ export function createTerminalSessions({
         }),
       "terminal.close": ({ id }, owner) =>
         answered(() => {
-          end(id, held(id, owner));
+          const session = held(id, owner);
+          session.closedByPage = true;
+          end(id, session);
         }),
       "terminal.ack": ({ id, chars }, owner) =>
         answered(() => {
