@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings 0 .",
-    "typecheck": "tsc -p tsconfig.json && tsc -p src/renderer/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/renderer/tsconfig.json && tsc -p verify/tsconfig.json",
     "test": "vitest run",
     "verify": "node verify/cli.ts",
     "journeys": "node verify/journeys.ts",

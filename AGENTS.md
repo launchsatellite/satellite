@@ -25,6 +25,7 @@ You work autonomously and fast on your own branch, without asking about routine 
 | `specs/` | numbered feature specs, the template and the index |
 | `.claude/skills/` | how to work here, one folder per skill |
 | `scripts/check` | the green checkpoint |
+| `verify/` | the driver, scenarios and stand-ins that prove changes in the real app |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 
 A new top-level folder gets a row here in the same change.
@@ -35,6 +36,7 @@ A new top-level folder gets a row here in the same change.
 | --- | --- |
 | `satellite-workflow` | starting, building or finishing any change, from spec to pull request and until it is merged |
 | `satellite-conventions` | writing or reviewing any code, including when a test is worth writing |
+| `satellite-verify` | proving a change in the real window, writing a scenario or a stand-in step, or adding a journey |
 
 Our own skills are named `satellite-<area>`, so they are easy to find. Write or fix one in the same change whenever you explain something twice or learn how an area really works. A skill is one folder with a `SKILL.md`, frontmatter `name` equal to the folder and a one-line `description` that starts with "Use when", plus a row here. Create a skill only when its area exists.
 

@@ -30,7 +30,7 @@ For a spec, write `plan.md` next to it right before building, with tasks, exact 
 
 ## 5. Prove and simplify
 
-- Run the change through its real entry point and look at the result. A UI change carries before and after screenshots, light and dark.
+- Run the change through its real entry point and look at the result, in the app with skill `satellite-verify`. A UI change carries before and after screenshots, light and dark.
 - A bug is reproduced first, then shown gone.
 - Read `git diff origin/main...` as if someone else wrote it. Every hunk traces to the task, and anything you would not add again goes. Over about 800 changed lines, land a smaller first stage.
 
