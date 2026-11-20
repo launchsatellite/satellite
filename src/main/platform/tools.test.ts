@@ -163,6 +163,23 @@ describe("claudeEnvironment", () => {
     ).toEqual(kept);
   });
 
+  it("drops the editor's askpass with the editor and keeps the user's own", () => {
+    const helper = "/Applications/Editor.app/Contents/Resources/app/extensions/git/dist";
+    expect(
+      claudeEnvironment({
+        PATH: "/usr/bin",
+        GIT_ASKPASS: `${helper}/askpass.sh`,
+        VSCODE_GIT_ASKPASS_MAIN: `${helper}/askpass-main.js`,
+        VSCODE_GIT_ASKPASS_NODE: "/Applications/Editor.app/Contents/MacOS/Editor",
+      }),
+    ).toEqual({ PATH: "/usr/bin" });
+    const own = { GIT_ASKPASS: "/usr/local/bin/my-askpass" };
+    expect(
+      claudeEnvironment({ ...own, VSCODE_GIT_ASKPASS_MAIN: `${helper}/askpass-main.js` }),
+    ).toEqual(own);
+    expect(claudeEnvironment(own)).toEqual(own);
+  });
+
   it("drops the markers in any case on Windows only", () => {
     const env = { Path: "C:\\Windows", ClaudeCode: "1", claude_code_child_session: "1" };
     expect(claudeEnvironment(env, "win32")).toEqual({ Path: "C:\\Windows" });

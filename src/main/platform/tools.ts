@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { posix, win32 } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
+import { samePath } from "./paths.ts";
 import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
@@ -121,6 +123,14 @@ function withLoopback(list: string | undefined): string {
   return list.split(/[\s,]+/).includes(loopback) ? list : `${list},${loopback}`;
 }
 
+function isEditorAskpass(env: Record<string, string>, platform: NodeJS.Platform): boolean {
+  const askpass = env["GIT_ASKPASS"];
+  const editorHelper = env[`${editorPrefix}GIT_ASKPASS_MAIN`];
+  if (askpass === undefined || editorHelper === undefined) return false;
+  const paths = platform === "win32" ? win32 : posix;
+  return samePath(paths.dirname(askpass), paths.dirname(editorHelper), platform);
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -146,6 +156,7 @@ export function claudeEnvironment(
       return !claudeHostKeys.has(name) && !name.startsWith(editorPrefix);
     }),
   );
+  if (isEditorAskpass(env, platform)) delete kept["GIT_ASKPASS"];
   if (!proxyKeys.some((key) => (env[key] ?? "") !== "")) return kept;
   for (const key of noProxyKeys) kept[key] = withLoopback(env[key]);
   return kept;
