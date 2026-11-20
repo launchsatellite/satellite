@@ -20,6 +20,14 @@ export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
   claude: "SATELLITE_CLAUDE",
 };
 
+const appLaunchKeys = new Set([
+  "APPIMAGE",
+  "APPDIR",
+  "ARGV0",
+  "OWD",
+  "CHROME_DESKTOP",
+  "ORIGINAL_XDG_CURRENT_DESKTOP",
+]);
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 
 function stopChild(child: ChildProcess): void {
@@ -69,9 +77,14 @@ export async function resolveTool(tool: Tool): Promise<ResolvedCommand | undefin
 
 export async function childEnvironment(): Promise<Record<string, string>> {
   const environment = await userEnvironment();
-  return Object.fromEntries(
-    Object.entries(environment).filter(([key]) => !key.startsWith("ELECTRON_")),
+  const kept = Object.fromEntries(
+    Object.entries(environment).filter(
+      ([key]) => !key.startsWith("ELECTRON_") && !appLaunchKeys.has(key),
+    ),
   );
+  const desktop = environment["ORIGINAL_XDG_CURRENT_DESKTOP"];
+  if (desktop !== undefined) kept["XDG_CURRENT_DESKTOP"] = desktop;
+  return kept;
 }
 
 export async function runTool(

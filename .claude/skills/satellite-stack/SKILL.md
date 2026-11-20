@@ -82,7 +82,7 @@ Never add an IPC channel, a preload function or an `ipcMain` handler. Everything
 `src/main/platform/` is the only code that spawns a process, imports `node:child_process` or `node-pty`, finds an executable or branches on `process.platform`. The macOS app menu is the one other platform branch. A feature calls in.
 
 - `resolveTool("gh")` and `runTool("git", ["status", "--porcelain=v2"], { timeoutMs })` take a `Tool` and an argument array, never a shell string. `runTool` answers `{ exitCode, stdout, stderr }`, or `undefined` when the tool is missing, and throws when it runs past its time limit, 30 seconds unless the caller asks for less.
-- `childEnvironment()` is the user's login shell environment without `ELECTRON_` variables. Every child gets it.
+- `childEnvironment()` is the user's login shell environment without `ELECTRON_` variables and the AppImage launch variables, with `XDG_CURRENT_DESKTOP` restored. Every child gets it.
 - `resolveInside(root, requested)` answers the real path inside `root`, symlinks followed, or `undefined`. Every path from the interface or a repo goes through it.
 - `spawnPty(command, { cwd, cols, rows, env })` answers a `PtyProcess` whose `kill()` ends the whole tree on every platform.
 - `satelliteHome()` and `prepareSatelliteHome()` own `~/.satellite` and `SATELLITE_HOME`. All state lives there, never in a user's repo.
