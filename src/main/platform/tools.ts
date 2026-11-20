@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { stat } from "node:fs/promises";
 import { posix, win32 } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
-import { samePath } from "./paths.ts";
+import { isFullyQualified, samePath } from "./paths.ts";
 import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
@@ -131,6 +132,14 @@ function isEditorAskpass(env: Record<string, string>, platform: NodeJS.Platform)
   return samePath(paths.dirname(askpass), paths.dirname(editorHelper), platform);
 }
 
+async function isMissingFile(file: string): Promise<boolean> {
+  if (!isFullyQualified(file)) return false;
+  return stat(file).then(
+    (stats) => !stats.isFile(),
+    () => true,
+  );
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -187,7 +196,7 @@ export async function resolveTool(tool: Tool): Promise<ResolvedCommand | undefin
     console.error(error instanceof Error ? error.message : `${tool} has a malformed override`);
     return undefined;
   }
-  if (override !== undefined) return override;
+  if (override !== undefined) return (await isMissingFile(override.file)) ? undefined : override;
   const file = await findExecutable(tool, await userEnvironment());
   return file === undefined ? undefined : { file, args: [] };
 }

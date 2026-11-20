@@ -2,7 +2,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { claudeEnvironment, parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
+import {
+  claudeEnvironment,
+  parseToolOverride,
+  resolveTool,
+  runTool,
+  toolEnvironment,
+} from "./tools.ts";
 
 vi.mock("./user-environment.ts", () => ({
   userEnvironment: () =>
@@ -58,6 +64,20 @@ describe("parseToolOverride", () => {
     for (const value of ["/opt/tools/bin/gh", "[]", '[""]', "[1]", '{"file":"gh"}', "["]) {
       expect(() => parseToolOverride("SATELLITE_GH", value)).toThrow(/SATELLITE_GH/);
     }
+  });
+});
+
+describe("resolveTool", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads an override naming a file that is not there as missing", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "satellite-override-"));
+    vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([join(folder, "missing-claude")]));
+    expect(await resolveTool("claude")).toBeUndefined();
+    vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([process.execPath, "stand-in.ts"]));
+    expect(await resolveTool("claude")).toEqual({ file: process.execPath, args: ["stand-in.ts"] });
   });
 });
 
