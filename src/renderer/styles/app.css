@@ -1,0 +1,93 @@
+@import "@fontsource-variable/funnel-sans";
+@import "@fontsource-variable/funnel-display";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource/geist-pixel";
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --side: #f6f6f3;
+  --raised: #ffffff;
+  --sel: #ecece8;
+  --hover: #f0f0ec;
+  --line: #e7e7e3;
+  --ctl: #d6d6d1;
+  --fg: #0a0a0b;
+  --fg2: #45454b;
+  --dim: #68686f;
+  --sigfg: #c2410c;
+  --add: #eeebff;
+  --addfg: #4a2ee0;
+  --del: #ffede6;
+  --delfg: #c2410c;
+  --accent: #6a4bff;
+  --signal: #ff5a1f;
+  --pri-bg: #0a0a0b;
+  --pri-fg: #f4f4f1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08080a;
+    --side: #0c0c0e;
+    --raised: #161618;
+    --sel: #18181b;
+    --hover: #131315;
+    --line: #1c1c1f;
+    --ctl: #2e2e33;
+    --fg: #ededea;
+    --fg2: #b4b4b8;
+    --dim: #82828a;
+    --sigfg: #ff5a1f;
+    --add: #15122b;
+    --addfg: #a493ff;
+    --del: #2a130b;
+    --delfg: #ff8a5c;
+    --accent: #6a4bff;
+    --signal: #ff5a1f;
+    --pri-bg: #f4f4f1;
+    --pri-fg: #08080a;
+  }
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-side: var(--side);
+  --color-raised: var(--raised);
+  --color-sel: var(--sel);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-ctl: var(--ctl);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-dim: var(--dim);
+  --color-sigfg: var(--sigfg);
+  --color-add: var(--add);
+  --color-addfg: var(--addfg);
+  --color-del: var(--del);
+  --color-delfg: var(--delfg);
+  --color-accent: var(--accent);
+  --color-signal: var(--signal);
+  --color-pri-bg: var(--pri-bg);
+  --color-pri-fg: var(--pri-fg);
+  --font-sans: "Funnel Sans Variable", sans-serif;
+  --font-display: "Funnel Display Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+  --font-pixel: "Geist Pixel", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
