@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   interfaceLimits,
   type InterfaceState,
+  type ProjectView,
   type ThemeChoice,
   type WorkspaceRef,
   type WorkspaceView,
@@ -96,7 +97,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
     useProjects(notify);
   const [creatingIn, setCreatingIn] = useState<string | null>(null);
-  const [archiving, setArchiving] = useState<WorkspaceRef | null>(null);
+  const [archiving, setArchiving] = useState<{
+    project: ProjectView;
+    workspace: WorkspaceView;
+  } | null>(null);
   const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
@@ -194,16 +198,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         ? `${removable.name} in ${removable.parent}`
         : removable.name;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
-  const archivableKey =
-    selectedProject?.missing === null && selectedWorkspace?.key !== "main"
-      ? selectedWorkspace?.key
+  const archivable =
+    selectedProject?.missing === null &&
+    selectedWorkspace !== undefined &&
+    selectedWorkspace.key !== "main"
+      ? selectedProject
       : undefined;
+  const archivableWorkspace = archivable === undefined ? undefined : selectedWorkspace;
   const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const archiveProject = projects?.find((project) => project.id === archiving?.projectId);
-  const archiveWorkspace = archiveProject?.workspaces.find(
-    (workspace) => workspace.key === archiving?.workspace,
-  );
-  const modal = dialogProject !== undefined || archiveWorkspace !== undefined;
+  const modal = dialogProject !== undefined || archiving !== null;
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -231,9 +234,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     });
   }, []);
   const archived = (leftover: string | null) => {
-    if (archiveProject === undefined || archiveWorkspace === undefined) return;
-    const projectId = archiveProject.id;
-    const key = archiveWorkspace.key;
+    if (archiving === null) return;
+    const projectId = archiving.project.id;
+    const { key, name, branch } = archiving.workspace;
     dropWorkspace(projectId, key);
     update(
       (current) =>
@@ -242,10 +245,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           : current,
       true,
     );
-    notify(
-      archivedSentence(String(archiveWorkspace.name), archiveWorkspace.branch, leftover),
-      leftover === null ? "info" : "error",
-    );
+    notify(archivedSentence(String(name), branch, leftover), leftover === null ? "info" : "error");
     setArchiving(null);
     focusSidebarIfLost();
   };
@@ -309,10 +309,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "workspace.archive",
             title: "Archive this workspace",
-            available: archivableKey !== undefined && selectedId !== undefined,
+            available: archivable !== undefined,
             run: () => {
-              if (archivableKey === undefined || selectedId === undefined) return;
-              setArchiving({ projectId: selectedId, workspace: archivableKey });
+              if (archivable === undefined || archivableWorkspace === undefined) return;
+              setArchiving({ project: archivable, workspace: archivableWorkspace });
             },
           },
           {
@@ -348,8 +348,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, [
     modal,
     newWorkspaceIn,
-    archivableKey,
-    selectedId,
+    archivable,
+    archivableWorkspace,
     update,
     add,
     open,
@@ -459,11 +459,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onCreated={created}
           />
         )}
-        {archiveProject !== undefined && archiveWorkspace !== undefined && (
+        {archiving !== null && (
           <ArchiveDialog
-            key={`${archiveProject.id}-${archiveWorkspace.key}`}
-            project={archiveProject}
-            workspace={archiveWorkspace}
+            key={`${archiving.project.id}-${archiving.workspace.key}`}
+            project={archiving.project}
+            workspace={archiving.workspace}
             onClose={closeArchive}
             onArchived={archived}
           />

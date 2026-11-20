@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { BridgeResponse, ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
@@ -8,7 +8,7 @@ import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 type Inspected = BridgeResponse<"workspaces.inspect">;
 type Phase =
   | { kind: "checking" }
-  | { kind: "unreadable"; message: string }
+  | { kind: "unreadable"; message: string; failure: string | null }
   | { kind: "ready"; view: Inspected; notice: boolean; failure: string | null }
   | { kind: "archiving"; view: Inspected; notice: boolean };
 
@@ -105,8 +105,11 @@ function commitsRow(view: Inspected): { pixel: PixelState; text: string; subject
       };
     case "unknown":
       return {
-        pixel: "idle",
-        text: "Satellite couldn't count the commits that aren't pushed.",
+        pixel: "needs-you",
+        text:
+          view.branch === null
+            ? "Satellite couldn't tell whether the commits here are on a branch, so some may be lost."
+            : `Satellite couldn't count the commits that aren't pushed, so it can't rule out a loss. The branch ${branch} stays.`,
         subjects: [],
       };
   }
@@ -131,8 +134,39 @@ function Commits({ view }: { view: Inspected }) {
 }
 
 function losesWork(view: Inspected): boolean {
-  const lostCommits = view.commits.kind === "lost" && view.commits.count > 0;
-  return view.files.length + view.moreFiles > 0 || lostCommits;
+  const { commits } = view;
+  return (
+    view.files.length + view.moreFiles > 0 ||
+    view.repositories > 0 ||
+    view.hidden !== 0 ||
+    commits.kind === "unknown" ||
+    (commits.kind === "lost" && commits.count > 0)
+  );
+}
+
+function hiddenSentence(hidden: number | null): string {
+  if (hidden === null) {
+    return "Satellite couldn't check for files git leaves out of its status, so it can't rule out losing changes there.";
+  }
+  return hidden === 1
+    ? "1 file is marked for git to skip, so its changes aren't listed above and would be deleted."
+    : `${String(hidden)} files are marked for git to skip, so their changes aren't listed above and would be deleted.`;
+}
+
+function repositoriesSentence(count: number): string {
+  return count === 1
+    ? "1 folder here is a repository of its own, and its whole history is deleted with it."
+    : `${String(count)} folders here are repositories of their own, and their whole history is deleted with them.`;
+}
+
+function submodulesSentence(name: string, submodules: Inspected["submodules"]): string {
+  return submodules === "checked-out"
+    ? `${name} has submodules checked out, and git would delete their own history with it, so Satellite won't archive it.`
+    : `Satellite couldn't check whether ${name} has submodules checked out, so it won't archive it.`;
+}
+
+function blocked(view: Inspected): boolean {
+  return view.locked || view.submodules !== "none";
 }
 
 export function ArchiveDialog({ project, workspace, onClose, onArchived }: ArchiveDialogProps) {
@@ -144,29 +178,35 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
 
   const read = useCallback(
-    (notice: boolean) => {
+    (notice: boolean, failure: string | null) => {
       void invoke("workspaces.inspect", { projectId, workspaceId }).then((result) => {
         if (!alive.current) return;
         setPhase(
           result.ok
-            ? { kind: "ready", view: result.value, notice, failure: null }
-            : { kind: "unreadable", message: result.error.message },
+            ? { kind: "ready", view: result.value, notice, failure }
+            : { kind: "unreadable", message: result.error.message, failure },
         );
       });
     },
     [projectId, workspaceId],
   );
 
+  useLayoutEffect(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLButtonElement && active.closest("[role='dialog']") !== null) return;
+    document.querySelector<HTMLElement>("[data-testid='archive-cancel']")?.focus();
+  }, [phase.kind]);
+
   useEffect(() => {
     alive.current = true;
-    read(false);
+    read(false, null);
     return () => {
       alive.current = false;
     };
   }, [read]);
 
   const archive = () => {
-    if (phase.kind !== "ready" || phase.view.locked || submitting.current) return;
+    if (phase.kind !== "ready" || blocked(phase.view) || submitting.current) return;
     submitting.current = true;
     const { view, notice } = phase;
     setPhase({ kind: "archiving", view, notice });
@@ -181,23 +221,25 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
         onArchived(result.value.leftover);
         return;
       }
-      if (result.error.code === "refused" && result.error.message === changedSentence(name)) {
-        setPhase({ kind: "checking" });
-        read(true);
-        return;
-      }
-      setPhase({ kind: "ready", view, notice, failure: result.error.message });
+      const changed =
+        result.error.code === "refused" && result.error.message === changedSentence(name);
+      setPhase({ kind: "checking" });
+      read(changed || notice, changed ? null : result.error.message);
     });
   };
 
   const body = () => {
     if (phase.kind === "checking") {
-      return <p className="text-[13px] text-dim">Checking {name}…</p>;
+      return (
+        <p role="status" className="text-[13px] text-dim">
+          Checking {name}…
+        </p>
+      );
     }
     if (phase.kind === "unreadable") {
       return (
         <p role="alert" data-testid="archive-failure" className="text-[13px] text-sigfg">
-          {phase.message}
+          {phase.failure === null ? phase.message : `${phase.failure} ${phase.message}`}
         </p>
       );
     }
@@ -205,12 +247,22 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
     return (
       <>
         {phase.notice && (
-          <p data-testid="archive-notice" className="text-[13px] text-fg2">
+          <p role="status" data-testid="archive-notice" className="text-[13px] text-fg2">
             {changedSentence(name)}
           </p>
         )}
         <div className="flex flex-col gap-[2px]">
           <Files view={view} />
+          {view.repositories > 0 && (
+            <Row pixel="needs-you" testId="archive-repositories">
+              {repositoriesSentence(view.repositories)}
+            </Row>
+          )}
+          {view.hidden !== 0 && (
+            <Row pixel="needs-you" testId="archive-hidden">
+              {hiddenSentence(view.hidden)}
+            </Row>
+          )}
           <Commits view={view} />
           {view.sessions > 0 && (
             <Row pixel="idle" testId="archive-sessions">
@@ -221,7 +273,13 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
           )}
           <Row pixel="idle">
             Files git ignores, like dependencies and build output, are deleted with the folder.
+            Links to other folders are removed, and what they point to stays.
           </Row>
+          {view.submodules !== "none" && (
+            <Row pixel="needs-you" testId="archive-submodules">
+              {submodulesSentence(name, view.submodules)}
+            </Row>
+          )}
           {view.locked && (
             <Row pixel="needs-you" testId="archive-locked">
               {name} is locked in git, so Satellite won&apos;t archive it. Run git worktree unlock
@@ -251,13 +309,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
     return (
       <>
         <span className="mr-auto">
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            disabled={archiving}
-            testId="archive-cancel"
-            autoFocus
-          >
+          <Button variant="ghost" onClick={onClose} disabled={archiving} testId="archive-cancel">
             Cancel
           </Button>
         </span>
@@ -265,7 +317,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
           <Button
             variant={losesWork(view) ? "danger" : "primary"}
             onClick={archive}
-            disabled={archiving || view.locked}
+            disabled={archiving || blocked(view)}
             testId="archive-confirm"
           >
             {archiving ? "Archiving…" : losesWork(view) ? "Archive anyway" : "Archive workspace"}
