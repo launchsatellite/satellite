@@ -8,6 +8,7 @@ import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
   claudePids,
+  goneTimeoutMs,
   processGone,
   promptTimeoutMs,
   standInInput,
@@ -337,9 +338,12 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
   await visible(session, "command-notifications-on", "in the command menu after the restart");
   const off = await session.page.getByTestId("command-notifications-off").count();
   assert.equal(off, 0, "the command menu offered to turn notifications off after the restart");
-  for (const pid of pids) {
-    assert.ok(processGone(pid), `the stand-in ${String(pid)} outlived the restart`);
-  }
+  await waitUntil(
+    () => pids.every(processGone),
+    goneTimeoutMs,
+    () =>
+      `the stand-ins ${JSON.stringify(pids.filter((pid) => !processGone(pid)))} outlived the restart`,
+  );
 }
 
 export const inboxJourney: Journey = {
