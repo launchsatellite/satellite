@@ -29,6 +29,7 @@
   --volt: #dcff3d;
   --volt-edge: #6b7800;
   --lilac: #c7b9ff;
+  --lilac-edge: #8066d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,6 +57,7 @@
     --volt: #dcff3d;
     --volt-edge: #dcff3d;
     --lilac: #c7b9ff;
+    --lilac-edge: #c7b9ff;
   }
 }
 
@@ -83,6 +85,7 @@
   --color-volt: var(--volt);
   --color-volt-edge: var(--volt-edge);
   --color-lilac: var(--lilac);
+  --color-lilac-edge: var(--lilac-edge);
   --shadow-raised: var(--shadow);
   --font-sans: "Funnel Sans Variable", sans-serif;
   --font-display: "Funnel Display Variable", sans-serif;

@@ -34,6 +34,7 @@ interface ShownToast {
 }
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
+const toastQueueLimit = 3;
 
 function guarded(specs: readonly CommandSpec[], notify: Notify): Command[] {
   const fail = (error: unknown) => {
@@ -53,17 +54,26 @@ function guarded(specs: readonly CommandSpec[], notify: Notify): Command[] {
 }
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
-  const [toast, setToast] = useState<ShownToast | null>(() =>
-    notice === null ? null : { id: 0, message: notice, tone: "info" },
+  const [toasts, setToasts] = useState<ShownToast[]>(() =>
+    notice === null ? [] : [{ id: 1, message: notice, tone: "info" }],
   );
   const notify = useCallback<Notify>((message, tone) => {
-    setToast((shown) => ({ id: (shown?.id ?? 0) + 1, message, tone }));
+    setToasts((queue) => {
+      const shown = { id: Math.max(0, ...queue.map((queued) => queued.id)) + 1, message, tone };
+      if (tone === "error") {
+        const waiting = queue[0]?.tone === "error" ? queue.slice(1) : queue;
+        return [shown, ...waiting].slice(0, toastQueueLimit);
+      }
+      return queue.length >= toastQueueLimit ? queue : [...queue, shown];
+    });
   }, []);
   const dismissToast = useCallback(() => {
-    setToast(null);
+    setToasts((queue) => queue.slice(1));
   }, []);
+  const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
   const { projects, add } = useProjects(notify);
+  const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -131,9 +141,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             shortcut: { key: "o" },
             available: true,
             run: async () => {
-              setToast(null);
-              const added = await add();
-              if (added !== undefined) select(added);
+              dismissToast();
+              const ref = await add();
+              if (ref === undefined) return;
+              setAdded(ref.projectId);
+              select(ref);
             },
           },
           {
@@ -165,7 +177,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         notify,
       ),
     );
-  }, [update, add, select, notify]);
+  }, [update, add, select, notify, dismissToast]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };
@@ -204,10 +216,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       >
         <section
           data-testid="column-projects"
-          aria-label="Projects"
+          aria-label="Sidebar"
           className="relative flex min-h-0 flex-col border-r border-line bg-side"
         >
-          <Sidebar projects={projects} selected={state.selected} onSelect={select} />
+          <Sidebar
+            projects={projects}
+            selected={state.selected}
+            onSelect={select}
+            focusProjectId={added}
+          />
           <ColumnDivider
             side="left"
             value={left}
@@ -247,7 +264,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onOpenWorkspace={select}
           />
         )}
-        {toast !== null && (
+        {toast !== undefined && (
           <Toast
             key={toast.id}
             message={toast.message}

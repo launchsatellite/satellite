@@ -3,6 +3,10 @@ import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/brid
 import { invoke } from "../bridge/bridge-client.ts";
 import type { Notify } from "../ui/toast.tsx";
 
+const listStaleMs = 15_000;
+const listFailure =
+  "Satellite couldn't read the project list. It tries again when the window gets focus.";
+
 export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): string {
   if (project.missing) return "unavailable";
   return workspace.branch ?? "detached";
@@ -15,18 +19,22 @@ export function useProjects(notify: Notify): {
   refresh: () => void;
 } {
   const [projects, setProjects] = useState<ProjectView[]>();
-  const listing = useRef(false);
+  const listingSince = useRef<number | undefined>(undefined);
+  const latest = useRef(0);
   const changes = useRef(0);
   const refresh = useCallback(() => {
-    if (listing.current) return;
-    listing.current = true;
+    const since = listingSince.current;
+    if (since !== undefined && Date.now() - since < listStaleMs) return;
+    latest.current += 1;
+    const request = latest.current;
+    listingSince.current = Date.now();
     void (async () => {
       for (;;) {
         const startedAt = changes.current;
         const result = await invoke("projects.list", {});
+        if (request !== latest.current) return;
         if (!result.ok) {
-          notify(result.error.message, "error");
-          setProjects((current) => current ?? []);
+          notify(listFailure, "error");
           break;
         }
         if (result.value.notice !== null) notify(result.value.notice, "info");
@@ -35,7 +43,7 @@ export function useProjects(notify: Notify): {
           break;
         }
       }
-      listing.current = false;
+      listingSince.current = undefined;
     })();
   }, [notify]);
   useEffect(() => {

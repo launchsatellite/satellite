@@ -1,6 +1,6 @@
 const fnvOffset = 2166136261;
 const fnvPrime = 16777619;
-const colours = ["bg-accent", "bg-lilac", "bg-volt"];
+const colours = ["bg-accent", "bg-lilac-edge", "bg-volt-edge"];
 const cells = Array.from({ length: 25 }, (_, index) => ({
   index,
   bit: Math.floor(index / 5) * 3 + (index % 5 < 3 ? index % 5 : 4 - (index % 5)),

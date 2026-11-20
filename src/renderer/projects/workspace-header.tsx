@@ -14,7 +14,7 @@ export function WorkspaceHeader({
       data-testid="workspace-header"
       className="flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
-      <h1 className="text-[14px] font-semibold">{project.name}</h1>
+      <h1 className="min-w-0 truncate text-[14px] font-semibold">{project.name}</h1>
       <span className="flex-none text-dim">
         <Icon name="branch" size={13} />
       </span>

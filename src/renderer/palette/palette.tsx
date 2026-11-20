@@ -12,6 +12,7 @@ import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
+import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { rankMatches } from "./fuzzy-match.ts";
 
 type PaletteMode = "commands" | "switcher";
@@ -54,15 +55,6 @@ const copy = {
     action: "Open",
   },
 };
-
-function withUniqueTestIds(options: PaletteOption[]): PaletteOption[] {
-  const seen = new Map<string, number>();
-  return options.map((option) => {
-    const count = (seen.get(option.testId) ?? 0) + 1;
-    seen.set(option.testId, count);
-    return count === 1 ? option : { ...option, testId: `${option.testId}-${String(count)}` };
-  });
-}
 
 function commandOptions(query: string, commands: readonly Command[]): PaletteOption[] {
   const listed = commands.filter(
