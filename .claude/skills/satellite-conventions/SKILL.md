@@ -33,8 +33,11 @@ The background process has full access to the machine. The interface has none an
 - **Validate untrusted input once, at the boundary**, then trust it.
 - **Failures are visible.** Every action has an outcome the user sees, and errors say what to do next.
 - **Everything that can grow is bounded**, from lists and retries to scrollback and file watchers.
-- **Comments explain why**, never what. No commented-out code.
-- **Names describe** the domain thing. No `utils` dumping grounds, no re-export-only `index` files.
+- **No comments.** Names, types and small functions carry the meaning. The only comment allowed is a tool directive that carries its reason. Lint refuses the rest.
+- **Names describe** the domain thing. Files and folders are kebab-case. No `utils` dumping grounds, no `index` files, no barrels.
+- **Named exports only.** A default export appears only where a tool requires one.
+- **File order.** Imports, types, constants, private helpers, then exported functions last.
+- **Code lives with its feature.** A folder per feature, with its tests beside the code they check.
 - **Types are real.** No casts to silence the checker. A suppression carries its reason.
 
 ## Dependencies

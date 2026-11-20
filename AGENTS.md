@@ -12,7 +12,7 @@ You work autonomously and fast on your own branch, without asking about routine 
 
 ## Read first, only as far as the task needs
 
-1. `SATELLITE.md`, what the product is and why. It is the source of truth, so when code and doc disagree, say so and never drift silently. (It arrives with the first specs.)
+1. `SATELLITE.md`, what the product is and why. It is the source of truth, so when code and doc disagree, say so and never drift silently.
 2. `specs/README.md`, how features are specified and shipped. Your feature lives in `specs/NNN-<slug>/`.
 3. The skill for the area you touch, in `.claude/skills/`.
 
