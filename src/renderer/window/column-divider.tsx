@@ -56,13 +56,14 @@ export function ColumnDivider({
     if (current?.pointerId !== event.pointerId) return;
     drag.current = null;
     setDragging(false);
-    onCommit(current.value);
+    if (current.value !== current.startValue) onCommit(current.value);
   };
   const press = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     const step = event.key === "ArrowRight" ? keyStep : -keyStep;
-    onCommit(clamp(value + step * direction));
+    const next = clamp(value + step * direction);
+    if (next !== value) onCommit(next);
   };
 
   return (
@@ -75,11 +76,12 @@ export function ColumnDivider({
       aria-label={labels[side]}
       tabIndex={0}
       data-testid={testId}
-      className="group absolute inset-y-0 -right-[2px] z-20 w-[6px] cursor-col-resize touch-none outline-none select-none"
+      className="group absolute inset-y-0 -right-[3px] z-20 w-[6px] cursor-col-resize touch-none outline-none select-none"
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
+      onLostPointerCapture={end}
       onKeyDown={press}
     >
       <span
