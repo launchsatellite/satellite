@@ -251,6 +251,22 @@ describe("createTerminalSessions", () => {
     expect(last.forget).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the record of a resumed session that fails while no listener runs", async () => {
+    const last = fakeLast(recorded);
+    const { handlers } = create({ last });
+    const { mine, sent } = owners();
+    await handlers["terminal.start"]({ id: terminalId(1), ...size, resume: true }, mine);
+    ptys[0]?.exit(1);
+    await vi.waitFor(() => {
+      expect(sent).toHaveBeenCalledWith(expect.anything(), "terminal.exit", {
+        id: terminalId(1),
+        exitCode: 1,
+        ending: "unexpected",
+      });
+    });
+    expect(last.forget).not.toHaveBeenCalled();
+  });
+
   it("tells its page when a hook changes the status", async () => {
     const listener = fakeListener();
     const last = fakeLast();

@@ -88,7 +88,9 @@ function answered(act: () => void): Promise<Record<string, never>> {
 function endingOf(session: Session, exitCode: number, signal: number | undefined): SessionEnding {
   const failed = exitCode !== 0 || signal !== undefined;
   if (!failed || session.endedBySatellite) return "ended";
-  return session.resumed && !session.hooked ? "resume-failed" : "unexpected";
+  return session.resumed && session.hooks !== undefined && !session.hooked
+    ? "resume-failed"
+    : "unexpected";
 }
 
 function isEnded(session: Session): boolean {
