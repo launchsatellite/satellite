@@ -22,6 +22,7 @@ import {
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow, mainWindow } from "./window/main-window.ts";
+import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
@@ -41,7 +42,11 @@ function focusMainWindow(): void {
   window.focus();
 }
 
-async function start(interfaceFile: InterfaceFile, projects: Projects): Promise<void> {
+async function start(
+  interfaceFile: InterfaceFile,
+  projects: Projects,
+  workspaces: Workspaces,
+): Promise<void> {
   await app.whenReady();
   applyThemeChoice((await interfaceFile.load()).state.theme);
   const entryUrl = rendererEntryUrl();
@@ -54,6 +59,7 @@ async function start(interfaceFile: InterfaceFile, projects: Projects): Promise<
       "tools.check": checkTools,
       ...interfaceHandlers(interfaceFile, applyThemeChoice),
       ...projects.handlers,
+      ...workspaces.handlers,
       ...terminals.handlers,
     },
     allowedOrigin(entryUrl),
@@ -83,10 +89,19 @@ const home = prepareHome();
 const interfaceFile = home === undefined ? undefined : createInterfaceFile(home);
 const projects =
   home === undefined ? undefined : createProjects({ home, chooseFolder, window: mainWindow });
-if (interfaceFile !== undefined && projects !== undefined && app.requestSingleInstanceLock()) {
+const workspaces =
+  home === undefined || projects === undefined
+    ? undefined
+    : workspaceHandlers({ home, store: projects.store });
+if (
+  interfaceFile !== undefined &&
+  projects !== undefined &&
+  workspaces !== undefined &&
+  app.requestSingleInstanceLock()
+) {
   registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start(interfaceFile, projects).catch(failStart);
+  start(interfaceFile, projects, workspaces).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
 }
@@ -95,8 +110,14 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   event.preventDefault();
-  const settled = Promise.all([terminals.closeAll(), interfaceFile?.flush(), projects?.flush()]);
-  void Promise.race([settled, delay(quitBoundMs)]).finally(() => {
+  const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
+  const settled = Promise.all([
+    bounded(Promise.all([terminals.closeAll(), interfaceFile?.flush()])),
+    (workspaces?.stopAll() ?? Promise.resolve()).then(() =>
+      bounded(projects?.flush() ?? Promise.resolve()),
+    ),
+  ]);
+  void settled.finally(() => {
     app.quit();
   });
 });

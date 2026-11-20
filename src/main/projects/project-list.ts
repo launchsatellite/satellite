@@ -62,10 +62,6 @@ const deviceDrop =
 const networkDrop =
   "Network folders can't be dropped on Satellite. Use Add a project to choose this one.";
 
-function projectName(path: string): string {
-  return (basename(path) || path).slice(0, nameLimit);
-}
-
 async function isFolder(path: string, inSlot: Slot): Promise<boolean> {
   return inSlot(() => stat(path)).then(
     (stats) => stats.isDirectory(),
@@ -115,6 +111,14 @@ function stillHas(name: string, count: number): string {
   return count === 1
     ? `${name} still has 1 workspace. Archive it first, then remove the project.`
     : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+}
+
+export function projectName(path: string): string {
+  return (basename(path) || path).slice(0, nameLimit);
+}
+
+export function workspaceLimitSentence(project: string): string {
+  return `${project} has 20 workspaces, as many as Satellite holds. Archive one, then make this one.`;
 }
 
 export function createProjects({ home, chooseFolder, window }: ProjectsOptions): Projects {
@@ -251,10 +255,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       await store.project(projectId);
       await changeWorkspaces(projectId, (project) => {
         if (project.workspaces.length >= workspaceLimit) {
-          throw new BridgeFailure(
-            "limit",
-            `${projectName(project.path)} has 20 workspaces, as many as Satellite holds. Archive one, then make this one.`,
-          );
+          throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
         }
         return [...project.workspaces, workspace];
       });

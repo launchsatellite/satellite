@@ -143,6 +143,7 @@ const terminalId = z.uuid();
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
+const startBranch = z.strictObject({ ref: refName, label: z.string().min(1).max(255) });
 
 export const bridgeRequests = {
   "tools.check": { request: empty, response: toolCheck },
@@ -179,6 +180,23 @@ export const bridgeRequests = {
       forgotWorkspaces: z.int().min(0).max(bridgeLimits.workspacesPerProject),
     }),
   },
+  "workspaces.prepare": {
+    request: z.strictObject({ projectId: z.uuid() }),
+    response: z.strictObject({
+      name: workspaceName,
+      start: startView,
+      branches: z.array(startBranch).max(200),
+    }),
+  },
+  "workspaces.create": {
+    request: z.strictObject({
+      operationId: z.uuid(),
+      projectId: z.uuid(),
+      name: workspaceName,
+      start: startChoice,
+    }),
+    response: z.strictObject({ workspace: workspaceView }),
+  },
   "terminal.start": {
     request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),
     response: empty,
@@ -208,6 +226,12 @@ export const bridgeRequests = {
 };
 
 export const bridgeEvents = {
+  "workspaces.step": z.strictObject({
+    operationId: z.uuid(),
+    step: creationStep,
+    state: z.enum(["running", "done", "failed", "undone"]),
+    detail: z.string().min(1).max(300).nullable(),
+  }),
   "terminal.data": z.strictObject({
     id: terminalId,
     data: z.string().min(1).max(bridgeLimits.terminalOutputChars),

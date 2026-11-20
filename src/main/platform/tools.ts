@@ -146,7 +146,7 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
@@ -180,6 +180,15 @@ export async function runTool(
     const timer = setTimeout(() => {
       stop(new Error(`${tool} did not finish in time`));
     }, options.timeoutMs ?? 30_000);
+    const abort = () => {
+      stop(new Error(`${tool} was stopped`));
+    };
+    if (options.signal?.aborted === true) abort();
+    else options.signal?.addEventListener("abort", abort, { once: true });
+    const settle = () => {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abort);
+    };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
       output.size += chunk.length;
       if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
@@ -188,12 +197,12 @@ export async function runTool(
     child.stdout.setEncoding("utf8").on("data", collect("stdout"));
     child.stderr.setEncoding("utf8").on("data", collect("stderr"));
     child.once("error", (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
+      settle();
       if (error.code === "ENOENT") resolve(undefined);
       else reject(new Error(`${tool} did not start (${String(error.code)})`));
     });
     child.once("close", (code, signal) => {
-      clearTimeout(timer);
+      settle();
       clearTimeout(abandon);
       if (failure !== undefined) reject(failure);
       else if (code !== null)

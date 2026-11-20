@@ -15,6 +15,7 @@ const responseSchemas: { [C in BridgeChannel]: { response: z.ZodType<BridgeRespo
   bridgeRequests;
 const eventSchemas: { [E in BridgeEventName]: z.ZodType<BridgeEventPayload<E>> } = bridgeEvents;
 const listeners: { [E in BridgeEventName]: Set<(payload: BridgeEventPayload<E>) => void> } = {
+  "workspaces.step": new Set(),
   "terminal.data": new Set(),
   "terminal.exit": new Set(),
 };

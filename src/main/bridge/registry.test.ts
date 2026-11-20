@@ -42,6 +42,25 @@ function spies() {
     "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() =>
       Promise.resolve({ forgotWorkspaces: 0 }),
     ),
+    "workspaces.prepare": vi.fn<BridgeHandler<"workspaces.prepare">>(() =>
+      Promise.resolve({
+        name: "swift-comet",
+        start: { kind: "local", branch: "main" },
+        branches: [],
+      }),
+    ),
+    "workspaces.create": vi.fn<BridgeHandler<"workspaces.create">>(() =>
+      Promise.resolve({
+        workspace: {
+          key: terminalId,
+          name: "swift-comet",
+          branch: "swift-comet",
+          ahead: null,
+          behind: null,
+          changed: null,
+        },
+      }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -136,6 +155,44 @@ describe("createBridgeRouter", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);
+  });
+
+  it("refuses workspace names that are not branches or that leave the folder", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = {
+      operationId: terminalId,
+      projectId: terminalId,
+      name: "fix-login",
+      start: { kind: "default" },
+    };
+    const payloads = [
+      ...["../x", "a/b", "-x", "Fix", "con", "a".repeat(49), ""].map((name) => ({
+        ...valid,
+        name,
+      })),
+      { ...valid, start: { kind: "ref", ref: "refs/heads/a..b" } },
+      { ...valid, start: { kind: "ref", ref: "HEAD" } },
+      { ...valid, start: { kind: "ref", ref: "--upload-pack=x" } },
+      { ...valid, operationId: "not-a-uuid" },
+      { ...valid, extra: true },
+      { ...valid, start: { kind: "default", ref: "refs/heads/main" } },
+    ];
+    for (const payload of payloads) {
+      const result = await route("workspaces.create", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const payload of [{ projectId: "../x" }, { projectId: terminalId, path: "/tmp" }]) {
+      const result = await route("workspaces.prepare", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    const accepted = await route(
+      "workspaces.create",
+      { ...valid, start: { kind: "ref", ref: "refs/remotes/origin/release" } },
+      owner,
+    );
+    expect(accepted).toMatchObject({ ok: true });
   });
 
   it("refuses a dropped path that is empty or too long", async () => {
