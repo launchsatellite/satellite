@@ -8,6 +8,7 @@ import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
   claudePids,
+  gone,
   goneTimeoutMs,
   processGone,
   promptTimeoutMs,
@@ -343,6 +344,23 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
     goneTimeoutMs,
     () =>
       `the stand-ins ${JSON.stringify(pids.filter((pid) => !processGone(pid)))} outlived the restart`,
+  );
+  await session.page.keyboard.press("Escape");
+  await gone(session, "palette-input", "after closing the command menu");
+  await attributeIs(session, "workspace-repo-beta", "aria-current", "after the restart");
+  await startClaude(session, pids.length + 1);
+  await prompt(session, "beta");
+  await session.page.keyboard.press("Enter");
+  await terminalShows(session, "Allow Bash for both", "in beta after the restart");
+  await visible(session, "inbox-repo-beta", "with beta asking after the restart");
+  await textIs(session, "inbox-count", "1", "with beta asking after the restart");
+  await lastCount(session, 1, "with beta asking after the restart,");
+  await delay(settleMs);
+  const shown = shownOf((await session.notices()).slice(before));
+  assert.deepEqual(
+    shown,
+    [closed],
+    `with notifications kept off and beta asking after the restart, the recorder held ${JSON.stringify(shown)}`,
   );
 }
 
