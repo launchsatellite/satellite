@@ -44,7 +44,7 @@ export function Dialog({
   const titleId = useId();
   const descriptionId = useId();
   const panel = useRef<HTMLDivElement>(null);
-  const [opener] = useState(() => document.activeElement);
+  const [focusedAtRender] = useState(() => document.activeElement);
 
   useLayoutEffect(() => {
     const element = panel.current;
@@ -71,11 +71,20 @@ export function Dialog({
   }, [closable, onClose]);
   useLayoutEffect(() => {
     const element = panel.current;
-    if (element !== null && !element.contains(document.activeElement)) element.focus();
+    const overlay = element?.parentElement;
+    if (element === null || overlay === null || overlay === undefined) return;
+    const focused = document.activeElement;
+    const opener = element.contains(focused) ? focusedAtRender : focused;
+    const behind = [...(overlay.parentElement?.children ?? [])].filter(
+      (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
+    );
+    for (const sibling of behind) sibling.setAttribute("inert", "");
+    if (!element.contains(focused)) element.focus();
     return () => {
+      for (const sibling of behind) sibling.removeAttribute("inert");
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
-  }, [opener]);
+  }, [focusedAtRender]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -99,12 +108,12 @@ export function Dialog({
         className="absolute top-[12vh] left-1/2 flex max-h-[calc(100%-24vh)] w-[min(480px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-[12px] border border-line bg-raised shadow-raised outline-none"
       >
         <div className="px-[18px] pt-4 pb-[6px]">
-          <h2 id={titleId} className="text-[16px] font-semibold">
+          <h2 id={titleId} className="text-[16px] font-semibold break-words">
             {title}
           </h2>
         </div>
         {description !== undefined && (
-          <p id={descriptionId} className="px-[18px] text-[13px] text-dim">
+          <p id={descriptionId} className="px-[18px] text-[13px] break-words text-dim">
             {description}
           </p>
         )}

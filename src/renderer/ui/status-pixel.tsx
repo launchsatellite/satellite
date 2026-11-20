@@ -1,8 +1,10 @@
-type PixelState = "idle" | "ready" | "needs-you";
+export type PixelState = "idle" | "working" | "ready" | "done" | "needs-you";
 
 const looks: Record<PixelState, string> = {
   idle: "bg-dim",
+  working: "bg-accent",
   ready: "bg-volt shadow-[inset_0_0_0_1.5px_var(--volt-edge)]",
+  done: "bg-lilac shadow-[inset_0_0_0_1.5px_var(--lilac-edge)]",
   "needs-you": "bg-signal",
 };
 

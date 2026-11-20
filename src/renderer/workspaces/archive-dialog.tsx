@@ -3,7 +3,7 @@ import type { BridgeResponse, ProjectView, WorkspaceView } from "../../shared/br
 import { invoke } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
-import { StatusPixel } from "../ui/status-pixel.tsx";
+import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 
 type Inspected = BridgeResponse<"workspaces.inspect">;
 type Phase =
@@ -11,7 +11,6 @@ type Phase =
   | { kind: "unreadable"; message: string }
   | { kind: "ready"; view: Inspected; notice: boolean; failure: string | null }
   | { kind: "archiving"; view: Inspected; notice: boolean };
-type PixelState = "idle" | "ready" | "needs-you";
 
 interface ArchiveDialogProps {
   project: ProjectView;
