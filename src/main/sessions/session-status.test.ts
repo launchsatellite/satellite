@@ -74,7 +74,7 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "working",
     "needs-you",
     "working",
-    "needs-you",
+    "done",
     "needs-you",
     "done",
     "stopped",
@@ -146,6 +146,16 @@ describe("nextStatus", () => {
         { name: "Stop" },
       ]),
     ).toEqual(["working", "needs-you", "needs-you", "working", "done"]);
+  });
+
+  it("lets go of a declined permission once the turn has gone quiet", () => {
+    expect(
+      run("idle", [
+        { name: "UserPromptSubmit" },
+        { name: "PermissionRequest" },
+        notification("idle_prompt"),
+      ]),
+    ).toEqual(["working", "needs-you", "done"]);
   });
 
   it("stays done when the idle notice arrives late", () => {

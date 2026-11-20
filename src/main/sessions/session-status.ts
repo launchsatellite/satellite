@@ -18,7 +18,8 @@ const answers = new Set(["elicitation_complete", "elicitation_response"]);
 function afterNotification(current: SessionStatus, type: string | null): SessionStatus {
   if (type !== null && asks.has(type)) return "needs-you";
   if (type !== null && answers.has(type)) return current === "needs-you" ? "working" : current;
-  if (type === "idle_prompt") return current === "working" ? "done" : current;
+  if (type === "idle_prompt")
+    return current === "working" || current === "needs-you" ? "done" : current;
   return current;
 }
 

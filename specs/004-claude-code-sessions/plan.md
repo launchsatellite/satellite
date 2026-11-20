@@ -175,7 +175,7 @@ The pure rules, with their tests. Nothing is wired yet.
     | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
     | idle | idle | idle | working | needs-you | working | needs-you | idle | idle | idle | done | stopped |
     | working | idle | working | working | needs-you | working | needs-you | working | done | working | done | stopped |
-    | needs-you | idle | needs-you | working | needs-you | working | needs-you | working | needs-you | needs-you | done | stopped |
+    | needs-you | idle | needs-you | working | needs-you | working | needs-you | working | done | needs-you | done | stopped |
     | done | idle | done | working | needs-you | working | needs-you | done | done | done | done | stopped |
     | stopped | stopped | stopped | stopped | stopped | stopped | stopped | stopped | stopped | stopped | stopped | stopped |
 
