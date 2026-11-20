@@ -20,7 +20,7 @@
     "test": "vitest run",
     "verify": "node verify/cli.ts",
     "journeys": "node verify/journeys.ts",
-    "postinstall": "node scripts/fix-pty-helper-mode.ts"
+    "postinstall": "node scripts/postinstall.ts"
   },
   "dependencies": {
     "node-pty": "1.1.0",
