@@ -19,6 +19,8 @@ describe("droppedPaths", () => {
     expect(droppedPaths(['/tmp/odd\\".png'])).toBe('"/tmp/odd\\\\\\".png" ');
     expect(droppedPaths(["/tmp/a b\\", "/tmp/c.png"])).toBe('"/tmp/a b\\\\" /tmp/c.png ');
     expect(droppedPaths(["/tmp/$(touch x)`id`.png"])).toBe('"/tmp/$(touch x)`id`.png" ');
+    expect(droppedPaths(["/tmp/a\\", "/tmp/b.png"])).toBe('"/tmp/a\\\\" /tmp/b.png ');
+    expect(droppedPaths(["C:\\shots\\a.png"])).toBe('"C:\\shots\\a.png" ');
   });
 
   it("refuses a name that could submit, run a terminal sequence or hide its text", () => {

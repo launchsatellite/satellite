@@ -1,6 +1,6 @@
 import { holdsHiddenText } from "../../shared/prompt-text.ts";
 
-const plainPath = /^[A-Za-z0-9._/\\:@%+=,~-]+$/;
+const plainPath = /^[A-Za-z0-9._/:@%+=,~-]+$/;
 const quoteOrEnd = /(\\*)("|$)/g;
 
 function quoted(path: string): string {
