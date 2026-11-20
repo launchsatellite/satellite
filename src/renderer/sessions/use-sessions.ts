@@ -17,6 +17,7 @@ export interface SessionTab {
   workspace: WorkspaceRef;
   resume: boolean;
   status: SessionStatus;
+  ready: boolean;
 }
 export interface Sessions {
   tabsOf: (ref: WorkspaceRef) => SessionTab[];
@@ -76,12 +77,16 @@ export function useSessions(notify: Notify): Sessions {
   }, [state.tabs.length]);
   useEffect(
     () =>
-      subscribe("sessions.status", ({ id, status }) => {
+      subscribe("sessions.status", ({ id, status, ready }) => {
         setState((current) =>
-          current.tabs.some((tab) => tab.terminalId === id && tab.status !== status)
+          current.tabs.some(
+            (tab) => tab.terminalId === id && (tab.status !== status || tab.ready !== ready),
+          )
             ? {
                 ...current,
-                tabs: current.tabs.map((tab) => (tab.terminalId === id ? { ...tab, status } : tab)),
+                tabs: current.tabs.map((tab) =>
+                  tab.terminalId === id ? { ...tab, status, ready } : tab,
+                ),
               }
             : current,
         );
@@ -105,6 +110,7 @@ export function useSessions(notify: Notify): Sessions {
         workspace: { projectId: ref.projectId, workspace: ref.workspace },
         resume,
         status: "idle",
+        ready: false,
       };
       setState((current) => ({
         tabs: [...current.tabs, tab],
@@ -118,7 +124,7 @@ export function useSessions(notify: Notify): Sessions {
     setState((current) => ({
       ...current,
       tabs: current.tabs.map((tab) =>
-        tab.key === key ? { ...tab, terminalId, resume: false, status: "idle" } : tab,
+        tab.key === key ? { ...tab, terminalId, resume: false, status: "idle", ready: false } : tab,
       ),
     }));
   }, []);

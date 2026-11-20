@@ -298,7 +298,7 @@ export const bridgeEvents = {
       .max(2 ** 32 - 1),
     ending: sessionEnding,
   }),
-  "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus }),
+  "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus, ready: z.boolean() }),
 };
 
 const bridgeErrorCode = z.enum([

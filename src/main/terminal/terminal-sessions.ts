@@ -66,6 +66,8 @@ interface Session {
   output?: OutputFlow;
   state: SessionState;
   shown: SessionStatus;
+  ready: boolean;
+  shownReady: boolean;
   statusTimer?: NodeJS.Timeout;
   hooked: boolean;
   ended: boolean;
@@ -125,9 +127,14 @@ export function createTerminalSessions({
 
   const showStatus = (session: Session) => {
     if (session.closedByPage || session.statusTimer !== undefined) return;
-    if (session.shown === session.state.status) return;
+    if (session.shown === session.state.status && session.shownReady === session.ready) return;
     session.shown = session.state.status;
-    session.owner.emit("sessions.status", { id: session.id, status: session.shown });
+    session.shownReady = session.ready;
+    session.owner.emit("sessions.status", {
+      id: session.id,
+      status: session.shown,
+      ready: session.shownReady,
+    });
     session.statusTimer = setTimeout(() => {
       session.statusTimer = undefined;
       showStatus(session);
@@ -342,6 +349,8 @@ export function createTerminalSessions({
       finished: Promise.withResolvers(),
       state: { status: "idle", askers: [] },
       shown: "idle",
+      ready: false,
+      shownReady: false,
       hooked: false,
       ended: false,
       endedBySatellite: false,
@@ -411,6 +420,7 @@ export function createTerminalSessions({
       const session = launches.get(launchId);
       if (session === undefined || session.ended) return;
       session.hooked = true;
+      if (event.name === "SessionStart") session.ready = true;
       if (event.name === "SessionStart" && event.sessionId !== null) {
         session.sessionId = event.sessionId;
       }

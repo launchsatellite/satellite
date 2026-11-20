@@ -18,6 +18,8 @@ interface SessionsPaneProps {
 
 const noSession = "Start a Claude Code session in this workspace first.";
 const answerFirst = "Answer Claude Code first, then send this again.";
+const notReady =
+  "Claude Code hasn't told Satellite it's ready yet. Answer what it shows first, or type the request yourself.";
 
 function EmptyWorkspace({
   workspace,
@@ -109,6 +111,10 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
       const target = tab === undefined ? undefined : targets.current.get(tab.terminalId);
       if (tab === undefined || target === undefined) {
         tell(noSession, "error");
+        return;
+      }
+      if (!tab.ready) {
+        tell(notReady, "error");
         return;
       }
       if (tab.status === "needs-you") {

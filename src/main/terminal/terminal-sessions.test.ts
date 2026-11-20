@@ -301,19 +301,42 @@ describe("createTerminalSessions", () => {
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
     expect(last.set).toHaveBeenCalledWith(main, started);
     sessions.hookEvent("4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", { name: "Stop" });
-    expect(statuses()).toEqual([{ id, status: "working" }]);
-    sessions.hookEvent(launchId, { name: "PermissionRequest", agent: "" });
     await vi.waitFor(() => {
       expect(statuses()).toEqual([
-        { id, status: "working" },
-        { id, status: "needs-you" },
+        { id, status: "idle", ready: true },
+        { id, status: "working", ready: true },
       ]);
     });
+    sessions.hookEvent(launchId, { name: "PermissionRequest", agent: "" });
+    await vi.waitFor(() => {
+      expect(statuses().at(-1)).toEqual({ id, status: "needs-you", ready: true });
+    });
+    expect(statuses()).toHaveLength(3);
     ptys[0]?.exit(0);
-    expect(statuses().at(-1)).toEqual({ id, status: "stopped" });
+    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
-    expect(statuses().at(-1)).toEqual({ id, status: "stopped" });
+    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
     expect(last.set).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells its page a session is ready only once its start hook arrives", async () => {
+    const listener = fakeListener();
+    const sessions = create({ listener });
+    const { mine, sent } = owners();
+    const id = terminalId(1);
+    await sessions.handlers["terminal.start"]({ id, ...size }, mine);
+    const launchId = listener.open.mock.calls[0]?.[0] ?? "";
+    const statuses = () =>
+      sent.mock.calls.flatMap(([, event, payload]) =>
+        event === "sessions.status" ? [payload] : [],
+      );
+    sessions.hookEvent(launchId, { name: "Notification", type: "idle_prompt", agent: null });
+    expect(statuses()).toEqual([]);
+    sessions.hookEvent(launchId, { name: "SessionStart", source: "startup", sessionId: null });
+    expect(statuses()).toEqual([{ id, status: "idle", ready: true }]);
+    sessions.hookEvent(launchId, { name: "SessionStart", source: "clear", sessionId: null });
+    await delay(150);
+    expect(statuses()).toEqual([{ id, status: "idle", ready: true }]);
   });
 
   it("shows a busy session's status at most ten times a second", async () => {
@@ -333,7 +356,7 @@ describe("createTerminalSessions", () => {
     sessions.hookEvent(launchId, { name: "Stop" });
     expect(statuses()).toHaveLength(1);
     await vi.waitFor(() => {
-      expect(statuses().at(-1)).toEqual({ id: terminalId(1), status: "done" });
+      expect(statuses().at(-1)).toEqual({ id: terminalId(1), status: "done", ready: false });
     });
     expect(statuses()).toHaveLength(2);
   });
