@@ -18,7 +18,7 @@ export function ToolReadout() {
     void invoke("tools.versions", {}).then(setVersions);
   }, []);
   if (versions === undefined) return null;
-  if (!versions.ok) return <p className="text-[13px] text-dim">{versions.error.message}</p>;
+  if (!versions.ok) return <p className="text-[13px] text-fg2">{versions.error.message}</p>;
   return (
     <ul className="flex flex-col gap-1 font-pixel text-[12px] text-dim uppercase">
       {tools.map((tool) => (

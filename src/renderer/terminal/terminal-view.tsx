@@ -18,25 +18,20 @@ function isShiftEnter(event: KeyboardEvent): boolean {
   );
 }
 
-export function TerminalView({
-  terminalId,
-  onRestart,
-}: {
-  terminalId: string;
-  onRestart?: () => void;
-}) {
+export function TerminalView({ onRestart }: { onRestart: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string>();
 
   useEffect(() => {
     const element = host.current;
     if (element === null) return;
+    const terminalId = crypto.randomUUID();
     const terminal = new Terminal({
       fontFamily: '"Satellite Terminal Mono", monospace',
       fontSize: 13,
       scrollback: 5000,
       allowProposedApi: true,
-      cursorBlink: true,
+      cursorBlink: !matchMedia("(prefers-reduced-motion: reduce)").matches,
       theme: terminalTheme(),
       linkHandler: { activate: () => undefined },
     });
@@ -107,21 +102,21 @@ export function TerminalView({
       terminal.dispose();
       void invoke("terminal.close", { id: terminalId });
     };
-  }, [terminalId]);
+  }, []);
 
   return (
     <div data-testid="terminal" className="flex h-full min-h-0 flex-col bg-bg p-2">
       <div ref={host} className="min-h-0 flex-1" />
-      {notice !== undefined && (
-        <div className="flex items-center gap-3 px-1 pt-2">
-          <p className="text-[13px] text-dim">{notice}</p>
-          {onRestart !== undefined && (
-            <Button testId="start-claude" onClick={onRestart}>
-              Start Claude Code
-            </Button>
-          )}
-        </div>
-      )}
+      <div className={`flex items-center gap-3 px-1 ${notice === undefined ? "" : "pt-2"}`}>
+        <p role="status" data-testid="terminal-notice" className="text-[13px] text-fg2">
+          {notice}
+        </p>
+        {notice !== undefined && (
+          <Button testId="start-claude" onClick={onRestart} autoFocus>
+            Start Claude Code
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
