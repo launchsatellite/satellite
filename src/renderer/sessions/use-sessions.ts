@@ -6,6 +6,7 @@ import {
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
+import { needsSince } from "../inbox/inbox.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { mostUrgent } from "./session-pixel.ts";
@@ -59,17 +60,6 @@ function inPlace(tab: SessionTab, place: string): boolean {
   return placeOf(tab.workspace) === place;
 }
 
-function needsSince(
-  tab: SessionTab,
-  status: SessionStatus,
-  asked: { current: number },
-): number | null {
-  if (status !== "needs-you") return null;
-  if (tab.status === "needs-you" && tab.needsSince !== null) return tab.needsSince;
-  asked.current += 1;
-  return asked.current;
-}
-
 function withoutTabs(state: State, dropped: (tab: SessionTab) => boolean): State {
   const gone = state.tabs.filter(dropped);
   if (gone.length === 0) return state;
@@ -110,7 +100,12 @@ export function useSessions(notify: Notify): Sessions {
                 ...current,
                 tabs: current.tabs.map((tab) =>
                   tab.terminalId === id
-                    ? { ...tab, status, ready, needsSince: needsSince(tab, status, asked) }
+                    ? {
+                        ...tab,
+                        status,
+                        ready,
+                        needsSince: needsSince(tab, status, () => (asked.current += 1)),
+                      }
                     : tab,
                 ),
               }

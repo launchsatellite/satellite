@@ -1,34 +1,64 @@
-import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
 
 interface SessionReason {
   kind: "session";
   workspace: WorkspaceRef;
+  tab: string;
+  terminalId: string;
   session: number;
+  onlySession: boolean;
   since: number;
 }
 export type InboxReason = SessionReason;
+export type InboxTarget = Pick<InboxReason, "workspace" | "tab" | "terminalId">;
 export interface InboxRow {
   workspace: WorkspaceRef;
   since: number;
   reasons: InboxReason[];
 }
 
-const sentences: Record<InboxReason["kind"], (first: InboxReason, count: number) => string> = {
-  session: (first, count) =>
-    count === 1
-      ? `Claude Code is waiting for you in Session ${String(first.session)}.`
-      : `Claude Code is waiting for you in ${String(count)} sessions.`,
+const sentences: Record<InboxReason["kind"], (reasons: readonly InboxReason[]) => string> = {
+  session: ([first, ...rest]) => {
+    if (rest.length > 0) return `${String(rest.length + 1)} sessions need you.`;
+    if (first === undefined || first.onlySession) return "Claude Code needs you.";
+    return `Session ${String(first.session)} needs you.`;
+  },
 };
 
 function placeOf(ref: WorkspaceRef): string {
   return `${ref.projectId}/${ref.workspace}`;
 }
 
+export function needsSince(
+  previous: Pick<SessionTab, "status" | "needsSince">,
+  status: SessionStatus,
+  next: () => number,
+): number | null {
+  if (status !== "needs-you") return null;
+  if (previous.status === "needs-you" && previous.needsSince !== null) return previous.needsSince;
+  return next();
+}
+
 export function inboxReasons(tabs: readonly SessionTab[]): InboxReason[] {
+  const open = new Map<string, number>();
+  for (const tab of tabs) {
+    const place = placeOf(tab.workspace);
+    open.set(place, (open.get(place) ?? 0) + 1);
+  }
   return tabs.flatMap((tab): InboxReason[] =>
     tab.status === "needs-you" && tab.needsSince !== null
-      ? [{ kind: "session", workspace: tab.workspace, session: tab.number, since: tab.needsSince }]
+      ? [
+          {
+            kind: "session",
+            workspace: tab.workspace,
+            tab: tab.key,
+            terminalId: tab.terminalId,
+            session: tab.number,
+            onlySession: open.get(placeOf(tab.workspace)) === 1,
+            since: tab.needsSince,
+          },
+        ]
       : [],
   );
 }
@@ -53,5 +83,7 @@ export function inboxRows(
 
 export function reasonSentence(row: InboxRow): string {
   const [first] = row.reasons;
-  return first === undefined ? "" : sentences[first.kind](first, row.reasons.length);
+  if (first === undefined) return "";
+  const byKind = Map.groupBy(row.reasons, (reason) => reason.kind);
+  return sentences[first.kind](byKind.get(first.kind) ?? []);
 }

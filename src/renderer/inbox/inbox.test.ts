@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
-import { inboxReasons, inboxRows, reasonSentence, type InboxRow } from "./inbox.ts";
+import { inboxReasons, inboxRows, needsSince, reasonSentence, type InboxRow } from "./inbox.ts";
 
 const projectId = "6f1c1a52-8a4e-4a3b-9a59-3c8f0f8f6b1d";
 const alpha: WorkspaceRef = { projectId, workspace: "alpha" };
@@ -34,14 +34,17 @@ function rowsOf(tabs: readonly SessionTab[], listed: (ref: WorkspaceRef) => bool
   }));
 }
 
-function rowWith(sessions: readonly number[]): InboxRow {
+function rowWith(sessions: readonly number[], onlySession = false): InboxRow {
   return {
     workspace: alpha,
     since: 1,
     reasons: sessions.map((session, at) => ({
       kind: "session",
       workspace: alpha,
+      tab: `alpha-${String(session)}`,
+      terminalId: `terminal-alpha-${String(session)}`,
       session,
+      onlySession,
       since: at + 1,
     })),
   };
@@ -94,10 +97,33 @@ describe("inbox", () => {
     ).toEqual([{ workspace: "alpha", since: 1, sessions: [1] }]);
   });
 
-  it("says which session waits, or how many", () => {
-    expect(reasonSentence(rowWith([2]))).toBe("Claude Code is waiting for you in Session 2.");
-    expect(reasonSentence(rowWith([1, 2, 4]))).toBe(
-      "Claude Code is waiting for you in 3 sessions.",
-    );
+  it("says which session waits, or how many, short enough for the sidebar", () => {
+    expect(reasonSentence(rowWith([1], true))).toBe("Claude Code needs you.");
+    expect(reasonSentence(rowWith([2]))).toBe("Session 2 needs you.");
+    expect(reasonSentence(rowWith([1, 2, 4]))).toBe("3 sessions need you.");
+  });
+
+  it("names a session only when its workspace has another, and finds it by its key", () => {
+    const reasons = inboxReasons([
+      tab(alpha, 1, "needs-you", 1),
+      tab(beta, 1, "needs-you", 2),
+      tab(beta, 2, "working", null),
+    ]);
+    expect(reasons.map(({ tab: key, onlySession }) => ({ key, onlySession }))).toEqual([
+      { key: "alpha-1", onlySession: true },
+      { key: "beta-1", onlySession: false },
+    ]);
+  });
+
+  it("keeps when a tab started needing you until it stops, then counts afresh", () => {
+    let counter = 0;
+    const next = () => (counter += 1);
+    const asking = needsSince({ status: "working", needsSince: null }, "needs-you", next);
+    expect(asking).toBe(1);
+    expect(needsSince({ status: "needs-you", needsSince: asking }, "needs-you", next)).toBe(1);
+    expect(needsSince({ status: "needs-you", needsSince: asking }, "working", next)).toBeNull();
+    expect(needsSince({ status: "working", needsSince: null }, "needs-you", next)).toBe(2);
+    expect(needsSince({ status: "idle", needsSince: null }, "done", next)).toBeNull();
+    expect(counter).toBe(2);
   });
 });

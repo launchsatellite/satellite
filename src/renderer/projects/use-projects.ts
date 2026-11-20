@@ -22,6 +22,13 @@ export function repeatedNames(projects: readonly ProjectView[]): Set<string> {
   return repeated;
 }
 
+export function shownParent(
+  project: ProjectView,
+  repeated: ReadonlySet<string>,
+): string | undefined {
+  return repeated.has(project.name) && project.parent !== "" ? project.parent : undefined;
+}
+
 export function useProjects(notify: Notify): {
   projects: ProjectView[] | undefined;
   add: () => Promise<WorkspaceRef | undefined>;

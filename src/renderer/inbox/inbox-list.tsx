@@ -1,21 +1,24 @@
-import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
-import { workspaceLabel } from "../projects/use-projects.ts";
+import { useLayoutEffect, useRef } from "react";
+import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { repeatedNames, shownParent, workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
-import { reasonSentence, type InboxRow } from "./inbox.ts";
+import { reasonSentence, type InboxRow, type InboxTarget } from "./inbox.ts";
 
 interface InboxListProps {
   rows: readonly InboxRow[];
   projects: readonly ProjectView[];
   selected: WorkspaceRef | null;
-  onOpen: (ref: WorkspaceRef) => void;
+  onOpen: (target: InboxTarget) => void;
 }
 interface ShownRow {
+  key: string;
   row: InboxRow;
   testId: string;
   label: string;
   project: string;
+  sentence: string;
 }
 
 const focusRing =
@@ -26,7 +29,12 @@ function countSentence(count: number): string {
   return count === 1 ? "1 workspace needs you." : `${String(count)} workspaces need you.`;
 }
 
+function rowLabel(project: ProjectView, workspace: WorkspaceView): string {
+  return project.missing === null ? workspaceLabel(project, workspace) : (workspace.name ?? "main");
+}
+
 function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]): ShownRow[] {
+  const repeated = repeatedNames(projects);
   return withUniqueTestIds(
     rows.flatMap((row) => {
       const project = projects.find((listed) => listed.id === row.workspace.projectId);
@@ -34,12 +42,15 @@ function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]):
         (listed) => listed.key === row.workspace.workspace,
       );
       if (project === undefined || workspace === undefined) return [];
+      const parent = shownParent(project, repeated);
       return [
         {
+          key: `${project.id}/${workspace.key}`,
           row,
           testId: `inbox-${project.name}-${workspace.name ?? "main"}`,
-          label: workspaceLabel(project, workspace),
-          project: project.name,
+          label: rowLabel(project, workspace),
+          project: parent === undefined ? project.name : `${project.name} in ${parent}`,
+          sentence: reasonSentence(row),
         },
       ];
     }),
@@ -48,10 +59,34 @@ function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]):
 
 export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) {
   const shown = shownRows(rows, projects);
+  const keys = shown.map(({ key }) => key).join("\n");
+  const section = useRef<HTMLElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const focused = useRef<string | null>(null);
+  const before = useRef<string[]>([]);
+  useLayoutEffect(() => {
+    const now = keys === "" ? [] : keys.split("\n");
+    const was = before.current;
+    before.current = now;
+    const key = focused.current;
+    if (key === null || now.includes(key)) return;
+    focused.current = null;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body && active.isConnected) return;
+    const buttons = [...(list.current?.querySelectorAll("button") ?? [])];
+    const next = buttons[Math.min(was.indexOf(key), buttons.length - 1)] ?? section.current;
+    next?.focus();
+  }, [keys]);
   return (
-    <section aria-label="Inbox" data-testid="inbox" className="flex flex-none flex-col gap-px">
+    <section
+      ref={section}
+      tabIndex={-1}
+      aria-label="Inbox"
+      data-testid="inbox"
+      className={`flex flex-none flex-col gap-px rounded-[6px] ${focusRing}`}
+    >
       <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
-        <span className="flex items-center gap-[6px]">
+        <span aria-hidden="true" className="flex items-center gap-[6px]">
           <Icon name="bell" size={12} />
           Inbox
         </span>
@@ -71,18 +106,27 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
           Nothing needs you right now.
         </p>
       ) : (
-        <ul aria-label="Inbox" className="flex flex-col gap-px">
-          {shown.map(({ row, testId, label, project }) => {
+        <ul ref={list} className="flex flex-col gap-px">
+          {shown.map(({ key, row, testId, label, project, sentence }) => {
             const { projectId, workspace } = row.workspace;
             const current = selected?.projectId === projectId && selected.workspace === workspace;
+            const full = `${label}, ${project}. ${sentence}`;
             return (
-              <li key={`${projectId}/${workspace}`}>
+              <li key={key}>
                 <button
                   type="button"
                   data-testid={testId}
-                  aria-current={current ? "true" : undefined}
+                  aria-label={full}
+                  title={full}
+                  onFocus={() => {
+                    focused.current = key;
+                  }}
+                  onBlur={(event) => {
+                    if (event.currentTarget.isConnected) focused.current = null;
+                  }}
                   onClick={() => {
-                    onOpen(row.workspace);
+                    const [oldest] = row.reasons;
+                    if (oldest !== undefined) onOpen(oldest);
                   }}
                   className={`flex w-full items-start gap-[9px] rounded-[6px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
                 >
@@ -92,13 +136,15 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                   <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
                     <span className="flex min-w-0 items-baseline gap-[6px]">
                       <span className="min-w-0 truncate font-medium text-fg">{label}</span>
-                      <span className="min-w-0 truncate text-dim">{project}</span>
+                      <span className="max-w-1/2 min-w-0 flex-none truncate text-dim">
+                        {project}
+                      </span>
                     </span>
                     <span
                       data-testid={`${testId}-reason`}
                       className="min-w-0 truncate text-[12.5px] text-fg2"
                     >
-                      {reasonSentence(row)}
+                      {sentence}
                     </span>
                   </span>
                 </button>

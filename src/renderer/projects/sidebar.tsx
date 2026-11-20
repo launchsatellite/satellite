@@ -14,7 +14,7 @@ import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
-import { repeatedNames, workspaceLabel } from "./use-projects.ts";
+import { repeatedNames, shownParent, workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
@@ -125,7 +125,7 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
     workspaceTestIds: workspaceIds
       .filter((workspace) => workspace.projectId === row.project.id)
       .map((workspace) => workspace.testId),
-    showParent: repeated.has(row.project.name) && row.project.parent !== "",
+    showParent: shownParent(row.project, repeated) !== undefined,
   }));
 }
 

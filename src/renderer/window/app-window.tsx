@@ -10,11 +10,16 @@ import {
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
-import { inboxReasons, inboxRows } from "../inbox/inbox.ts";
+import { inboxReasons, inboxRows, type InboxTarget } from "../inbox/inbox.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
-import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
+import {
+  repeatedNames,
+  shownParent,
+  useProjects,
+  workspaceLabel,
+} from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
@@ -222,9 +227,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           label: workspaceLabel(project, workspace),
           testKey: workspace.name ?? "main",
           project: project.name,
-          ...(repeated.has(project.name) && project.parent !== ""
-            ? { parent: project.parent }
-            : {}),
+          parent: shownParent(project, repeated),
         })),
       );
   }, [projects]);
@@ -234,12 +237,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
   const removableId = removable?.id;
+  const removableParent =
+    removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
-    removable === undefined
-      ? undefined
-      : repeatedNames(projects ?? []).has(removable.name) && removable.parent !== ""
-        ? `${removable.name} in ${removable.parent}`
-        : removable.name;
+    removable === undefined || removableParent === undefined
+      ? removable?.name
+      : `${removable.name} in ${removableParent}`;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
@@ -278,23 +281,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       ),
     [allSessions, projects],
   );
-  const newestInInbox = inbox[0]?.workspace;
+  const newest = inbox[0]?.reasons[0];
+  const newestWorkspace = newest?.workspace;
+  const newestTab = newest?.tab;
+  const newestTerminal = newest?.terminalId;
   const openFromInbox = useCallback(
-    (ref: WorkspaceRef) => {
+    ({ workspace, tab, terminalId }: InboxTarget) => {
       if (modal) return;
-      select(ref);
-      const longest = inbox.find(
-        ({ workspace }) =>
-          workspace.projectId === ref.projectId && workspace.workspace === ref.workspace,
-      )?.reasons[0];
-      const asking = sessions
-        .tabsOf(ref)
-        .find((tab) => tab.number === longest?.session && tab.status === "needs-you");
-      if (asking === undefined) return;
-      activateSession(asking.key);
-      focusSession(asking.terminalId);
+      select(workspace);
+      activateSession(tab);
+      focusSession(terminalId);
     },
-    [modal, select, inbox, sessions, activateSession],
+    [modal, select, activateSession],
   );
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
@@ -455,9 +453,20 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "inbox.newest",
             title: "Go to the newest workspace that needs you",
-            available: newestInInbox !== undefined,
+            available: newestTab !== undefined,
             run: () => {
-              if (newestInInbox !== undefined) openFromInbox(newestInInbox);
+              if (
+                newestWorkspace === undefined ||
+                newestTab === undefined ||
+                newestTerminal === undefined
+              ) {
+                return;
+              }
+              openFromInbox({
+                workspace: newestWorkspace,
+                tab: newestTab,
+                terminalId: newestTerminal,
+              });
             },
           },
           {
@@ -527,7 +536,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     forgetProject,
-    newestInInbox,
+    newestWorkspace,
+    newestTab,
+    newestTerminal,
     openFromInbox,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
