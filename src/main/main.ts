@@ -22,6 +22,7 @@ import {
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow, mainWindow } from "./window/main-window.ts";
+import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
 const terminals = createTerminalSessions();
@@ -77,6 +78,7 @@ function prepareHome(): string | undefined {
   }
 }
 
+prepareVerification();
 const home = prepareHome();
 const interfaceFile = home === undefined ? undefined : createInterfaceFile(home);
 const projects =

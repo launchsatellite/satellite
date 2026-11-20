@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
 import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -85,6 +85,7 @@ const stopSignals: NodeJS.Signals[] =
     ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
     : ["SIGINT", "SIGTERM", "SIGHUP"];
 const cleanups = new Set<() => Promise<unknown>>();
+const startedApps = new Set<ChildProcess>();
 let signalHandlersInstalled = false;
 let stopping = false;
 
@@ -103,9 +104,27 @@ async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
   process.exit(128 + constants.signals[signal]);
 }
 
+function killStartedAppsNow(): void {
+  for (const child of startedApps) {
+    const pid = child.pid;
+    if (pid === undefined || hasExited(child)) continue;
+    if (process.platform === "win32") {
+      const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
+      spawnSync(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true });
+      continue;
+    }
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
+  }
+}
+
 function stopOnSignals(): void {
   if (signalHandlersInstalled) return;
   signalHandlersInstalled = true;
+  process.on("exit", killStartedAppsNow);
   for (const signal of stopSignals) {
     process.on(signal, () => {
       void stopForSignal(signal);
@@ -187,6 +206,7 @@ function appEnvironment(
   );
   if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
   env["SATELLITE_HOME"] = home;
+  env["SATELLITE_VERIFY_DRIVER_PID"] = String(process.pid);
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
   env["SATELLITE_VERIFY_LOG"] = log;
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
@@ -351,6 +371,10 @@ async function startApp(
     windowsHide: true,
   });
   running.child = child;
+  startedApps.add(child);
+  child.once("exit", () => {
+    startedApps.delete(child);
+  });
   const collect = (chunk: Buffer): void => {
     running.output = (running.output + chunk.toString()).slice(-outputTailLength);
   };
@@ -362,6 +386,8 @@ async function startApp(
   for (const context of browser.contexts()) recordErrors(context, consoleErrors);
   const page = await findAppPage(browser, origin);
   await page.emulateMedia({ colorScheme: null, reducedMotion: "reduce" });
+  const protocol = await page.context().newCDPSession(page);
+  await protocol.send("Emulation.setFocusEmulationEnabled", { enabled: true });
   running.page = page;
   await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
   return page;

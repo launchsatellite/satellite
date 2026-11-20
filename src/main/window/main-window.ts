@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { BrowserWindow, nativeTheme } from "electron";
+import { runsQuietly } from "./verification.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
 let created: BrowserWindow | undefined;
@@ -9,6 +10,7 @@ export function mainWindow(): BrowserWindow | undefined {
 }
 
 export async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
+  const quiet = runsQuietly();
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -17,12 +19,17 @@ export async function createMainWindow(entryUrl: string): Promise<BrowserWindow>
     title: "Satellite",
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#08080A" : "#FFFFFF",
-    webPreferences: secureWebPreferences(join(import.meta.dirname, "../preload/preload.cjs")),
+    webPreferences: {
+      ...secureWebPreferences(join(import.meta.dirname, "../preload/preload.cjs")),
+      backgroundThrottling: !quiet,
+    },
   });
   created = window;
-  window.once("ready-to-show", () => {
-    window.show();
-  });
+  if (!quiet) {
+    window.once("ready-to-show", () => {
+      window.show();
+    });
+  }
   await window.loadURL(entryUrl);
   return window;
 }
