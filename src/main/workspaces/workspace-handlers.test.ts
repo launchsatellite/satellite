@@ -71,6 +71,7 @@ function fakeStore(projects: StoredProject[]): ProjectStore {
       return Promise.resolve();
     },
     removeWorkspace: () => Promise.resolve(),
+    writable: () => Promise.resolve(true),
   };
 }
 
@@ -352,5 +353,81 @@ describe("workspaceHandlers", () => {
     });
     await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
     expect(store.busy.has(record.id)).toBe(false);
+  });
+
+  it("refuses a creation while the project list can't be saved, before any step", async () => {
+    const project = await repository("repo");
+    const store = { ...fakeStore([project]), writable: () => Promise.resolve(false) };
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner, events } = recordingOwner();
+    await expect(
+      handlers["workspaces.create"](request(project.id, "unsaved"), owner),
+    ).rejects.toMatchObject({
+      code: "failed",
+      message:
+        "Satellite can't save its project list right now, so it won't make a workspace. Restart Satellite, then try again.",
+    });
+    expect(events).toEqual([]);
+    expect(store.creating.size).toBe(0);
+  });
+
+  it("answers false to a cancel that arrives once the workspace is being saved", async () => {
+    const project = await repository("repo");
+    const saving = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const plain = fakeStore([project]);
+    const store = {
+      ...plain,
+      async addWorkspace(projectId: string, workspace: StoredWorkspace) {
+        saving.resolve(undefined);
+        await release.promise;
+        await plain.addWorkspace(projectId, workspace);
+      },
+    };
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner } = recordingOwner();
+    const asked = request(project.id, "kept");
+    const work = handlers["workspaces.create"](asked, owner);
+    await saving.promise;
+    expect(
+      await handlers["workspaces.cancel"](
+        { operationId: asked.operationId, projectId: project.id },
+        owner,
+      ),
+    ).toEqual({ canceled: false });
+    release.resolve(undefined);
+    expect((await work).workspace.name).toBe("kept");
+  });
+
+  it("holds prepare, inspect and archive to four at once between them", async () => {
+    const project = await repository("repo");
+    const waiting = new Promise<StoredProject>(() => undefined);
+    const store = { ...fakeStore([project]), project: () => waiting };
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner } = recordingOwner();
+    for (let index = 0; index < 4; index += 1) {
+      void handlers["workspaces.prepare"]({ projectId: randomUUID() }, owner);
+    }
+    const busy = { code: "refused", message: "Satellite is checking other workspaces. Try again." };
+    await expect(
+      handlers["workspaces.prepare"]({ projectId: randomUUID() }, owner),
+    ).rejects.toMatchObject(busy);
+    const workspace = { projectId: project.id, workspaceId: randomUUID() };
+    await expect(handlers["workspaces.inspect"](workspace, owner)).rejects.toMatchObject(busy);
+    await expect(
+      handlers["workspaces.archive"]({ ...workspace, fingerprint: "0".repeat(64) }, owner),
+    ).rejects.toMatchObject(busy);
   });
 });

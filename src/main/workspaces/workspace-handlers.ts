@@ -25,6 +25,7 @@ interface Creation {
   projectId: string;
   ownerId: number;
   stop: AbortController;
+  saving: boolean;
 }
 interface WorkspaceOptions {
   home: string;
@@ -44,11 +45,14 @@ export interface Workspaces {
 }
 
 const creationsAtOnce = 4;
-const inspectionsAtOnce = 4;
+const readsAtOnce = 4;
 const creationStopMs = 20_000;
 
 const detailLimit = 300;
 const canceledSentence = "You stopped making the workspace.";
+const busyReading = "Satellite is checking other workspaces. Try again.";
+const notSavable =
+  "Satellite can't save its project list right now, so it won't make a workspace. Restart Satellite, then try again.";
 
 function unavailable(name: string): BridgeFailure {
   return new BridgeFailure(
@@ -81,6 +85,21 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
   const running = new Set<Promise<unknown>>();
   const creations = new Map<string, Creation>();
   const inspections = new Map<string, Promise<BridgeResponse<"workspaces.inspect">>>();
+  const preparations = new Map<string, Promise<BridgeResponse<"workspaces.prepare">>>();
+  const archives = new Set<string>();
+  const readsFull = () => inspections.size + preparations.size + archives.size >= readsAtOnce;
+  const shared = <T>(pending: Map<string, Promise<T>>, key: string, work: () => Promise<T>) => {
+    const running = pending.get(key);
+    if (running !== undefined) return running;
+    if (readsFull()) return Promise.reject(new BridgeFailure("refused", busyReading));
+    const started = work();
+    pending.set(key, started);
+    const settle = () => {
+      pending.delete(key);
+    };
+    started.then(settle, settle);
+    return started;
+  };
   const track = <T>(work: Promise<T>, settled: () => void): Promise<T> => {
     running.add(work);
     const settle = () => {
@@ -109,6 +128,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
     request: CreationRequest,
     owner: BridgeOwner,
     signal: AbortSignal,
+    creation: Creation,
   ) => {
     const { operationId, name, start } = request;
     const taken = await nameTaken(home, project.path, name, projectLabel);
@@ -122,6 +142,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
       start,
       signal,
       save: async (workspace) => {
+        creation.saving = true;
         await store.addWorkspace(project.id, workspace);
         made = workspace;
       },
@@ -157,11 +178,12 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
       await answerWithin(Promise.allSettled([...running]), creationStopMs);
     },
     handlers: {
-      "workspaces.prepare": async ({ projectId }) => {
-        const project = await store.project(projectId);
-        await availableName(project);
-        return prepareWorkspace(project.path, home);
-      },
+      "workspaces.prepare": ({ projectId }) =>
+        shared(preparations, projectId, async () => {
+          const project = await store.project(projectId);
+          await availableName(project);
+          return prepareWorkspace(project.path, home);
+        }),
       "workspaces.create": async ({ operationId, projectId, name, start }, owner) => {
         const project = await store.project(projectId);
         const projectLabel = await availableName(project);
@@ -185,9 +207,20 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
         }
         store.creating.add(projectId);
         const stop = new AbortController();
-        creations.set(operationId, { projectId, ownerId: owner.id, stop });
+        const creation = { projectId, ownerId: owner.id, stop, saving: false };
+        creations.set(operationId, creation);
         const signal = AbortSignal.any([quitting.signal, stop.signal]);
-        const work = create(project, projectLabel, { operationId, name, start }, owner, signal);
+        const work = store.writable().then((writable) => {
+          if (!writable) throw new BridgeFailure("failed", notSavable);
+          return create(
+            project,
+            projectLabel,
+            { operationId, name, start },
+            owner,
+            signal,
+            creation,
+          );
+        });
         return track(work, () => {
           store.creating.delete(projectId);
           creations.delete(operationId);
@@ -196,31 +229,18 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
       "workspaces.cancel": async ({ operationId, projectId }, owner) => {
         await store.project(projectId);
         const creation = creations.get(operationId);
-        if (creation?.projectId !== projectId || creation.ownerId !== owner.id) {
+        if (creation?.projectId !== projectId || creation.ownerId !== owner.id || creation.saving) {
           return { canceled: false };
         }
         creation.stop.abort(canceledSentence);
         return { canceled: true };
       },
-      "workspaces.inspect": ({ projectId, workspaceId }) => {
-        const key = `${projectId}/${workspaceId}`;
-        const pending = inspections.get(key);
-        if (pending !== undefined) return pending;
-        if (inspections.size >= inspectionsAtOnce) {
-          return Promise.reject(
-            new BridgeFailure("refused", "Satellite is checking other workspaces. Try again."),
-          );
-        }
-        const inspection = recordOf(store, projectId, workspaceId).then(({ project, record }) =>
-          inspectWorkspace(home, project, record, sessions.countInside(record.path)),
-        );
-        inspections.set(key, inspection);
-        const settle = () => {
-          inspections.delete(key);
-        };
-        inspection.then(settle, settle);
-        return inspection;
-      },
+      "workspaces.inspect": ({ projectId, workspaceId }) =>
+        shared(inspections, `${projectId}/${workspaceId}`, () =>
+          recordOf(store, projectId, workspaceId).then(({ project, record }) =>
+            inspectWorkspace(home, project, record, sessions.countInside(record.path)),
+          ),
+        ),
       "workspaces.archive": ({ projectId, workspaceId, fingerprint }) => {
         if (quitting.signal.aborted) {
           return Promise.reject(new BridgeFailure("failed", "Satellite is quitting."));
@@ -230,9 +250,12 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
             new BridgeFailure("refused", "Satellite is already archiving that workspace."),
           );
         }
+        if (readsFull()) return Promise.reject(new BridgeFailure("refused", busyReading));
         store.busy.add(workspaceId);
+        archives.add(workspaceId);
         return track(archive(projectId, workspaceId, fingerprint), () => {
           store.busy.delete(workspaceId);
+          archives.delete(workspaceId);
         });
       },
     },
