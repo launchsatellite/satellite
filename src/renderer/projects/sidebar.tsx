@@ -1,6 +1,7 @@
 import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
 import type { CommandId } from "../commands/command-registry.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
@@ -12,11 +13,13 @@ interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
+  onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
 }
 interface ProjectRow {
   project: ProjectView;
   testId: string;
+  newWorkspaceTestId: string;
   workspaceTestIds: string[];
   showParent: boolean;
 }
@@ -109,6 +112,7 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
   );
   return rows.map((row) => ({
     ...row,
+    newWorkspaceTestId: `new-workspace-${row.testId.slice("project-".length)}`,
     workspaceTestIds: workspaceIds
       .filter((workspace) => workspace.projectId === row.project.id)
       .map((workspace) => workspace.testId),
@@ -117,14 +121,16 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
 }
 
 function ProjectRows({
-  row: { project, testId, workspaceTestIds, showParent },
+  row: { project, testId, newWorkspaceTestId, workspaceTestIds, showParent },
   selected,
   onSelect,
+  onNewWorkspace,
   focus,
 }: {
   row: ProjectRow;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
+  onNewWorkspace: (projectId: string) => void;
   focus: boolean;
 }) {
   return (
@@ -138,8 +144,21 @@ function ProjectRows({
         {showParent && (
           <span className="min-w-0 truncate font-medium text-dim">{project.parent}</span>
         )}
-        {project.missing !== null && (
+        {project.missing !== null ? (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
+        ) : (
+          <span className="ml-auto flex-none">
+            <Button
+              variant="ghost"
+              size="small"
+              icon="plus"
+              label={`New workspace in ${project.name}`}
+              testId={newWorkspaceTestId}
+              onClick={() => {
+                onNewWorkspace(project.id);
+              }}
+            />
+          </span>
         )}
       </div>
       <ul aria-label={project.name} className="flex flex-col gap-px">
@@ -172,7 +191,13 @@ function ProjectRows({
   );
 }
 
-export function Sidebar({ projects, selected, onSelect, focusProjectId }: SidebarProps) {
+export function Sidebar({
+  projects,
+  selected,
+  onSelect,
+  onNewWorkspace,
+  focusProjectId,
+}: SidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
       <CommandRow
@@ -211,6 +236,7 @@ export function Sidebar({ projects, selected, onSelect, focusProjectId }: Sideba
               row={row}
               selected={selected}
               onSelect={onSelect}
+              onNewWorkspace={onNewWorkspace}
               focus={row.project.id === focusProjectId}
             />
           ))}

@@ -10,6 +10,7 @@ export type CommandId =
   | "palette.switcher"
   | "project.add"
   | "project.remove"
+  | "workspace.new"
   | "tools.check"
   | "theme.system"
   | "theme.light"

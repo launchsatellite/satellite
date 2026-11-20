@@ -4,6 +4,7 @@ import {
   type InterfaceState,
   type ThemeChoice,
   type WorkspaceRef,
+  type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
@@ -16,6 +17,7 @@ import { ClaudePane } from "../proving/claude-pane.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
+import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
@@ -43,13 +45,14 @@ function forgotSentence(name: string, workspaces: number): string {
   return `Satellite forgot ${name} and its ${counted}. Every folder stays where it is.`;
 }
 
-function guarded(specs: readonly CommandSpec[], notify: Notify): Command[] {
+function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean): Command[] {
   const fail = (error: unknown) => {
     console.error("A command failed", error);
     notify(commandFailure, "error");
   };
   return specs.map((spec) => ({
     ...spec,
+    available: spec.available && !modal,
     run: () => {
       try {
         void Promise.resolve(spec.run()).catch(fail);
@@ -80,7 +83,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
-  const { projects, add, drop, remove, refresh } = useProjects(notify);
+  const { projects, add, drop, remove, upsertWorkspace, refresh } = useProjects(notify);
+  const [creatingIn, setCreatingIn] = useState<string | null>(null);
   const [added, setAdded] = useState<string>();
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
@@ -177,6 +181,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       : repeatedNames(projects ?? []).has(removable.name) && removable.parent !== ""
         ? `${removable.name} in ${removable.parent}`
         : removable.name;
+  const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
+  const dialogProject = projects?.find((project) => project.id === creatingIn);
+  const modal = dialogProject !== undefined;
+  const closeNewWorkspace = useCallback(() => {
+    setCreatingIn(null);
+  }, []);
+  const created = (workspace: WorkspaceView) => {
+    if (dialogProject === undefined) return;
+    upsertWorkspace(dialogProject.id, workspace);
+    select({ projectId: dialogProject.id, workspace: workspace.key });
+    notify(`${String(workspace.name)} is ready in ${dialogProject.name}.`, "info");
+    setCreatingIn(null);
+  };
   const focusSidebarIfLost = useCallback(() => {
     requestAnimationFrame(() => {
       const active = document.activeElement;
@@ -236,6 +253,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "workspace.new",
+            title: "New workspace",
+            shortcut: { key: "n" },
+            available: newWorkspaceIn !== undefined,
+            run: () => {
+              if (newWorkspaceIn !== undefined) setCreatingIn(newWorkspaceIn);
+            },
+          },
+          {
             id: "palette.switcher",
             title: "Go to a workspace",
             shortcut: { key: "p" },
@@ -262,9 +288,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
         ],
         notify,
+        modal,
       ),
     );
   }, [
+    modal,
+    newWorkspaceIn,
     update,
     add,
     open,
@@ -322,6 +351,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             projects={projects}
             selected={state.selected}
             onSelect={select}
+            onNewWorkspace={setCreatingIn}
             focusProjectId={added}
           />
           <ColumnDivider
@@ -363,6 +393,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             }}
             switcher={switcher}
             onOpenWorkspace={select}
+          />
+        )}
+        {dialogProject !== undefined && (
+          <NewWorkspaceDialog
+            key={dialogProject.id}
+            project={dialogProject}
+            onClose={closeNewWorkspace}
+            onCreated={created}
           />
         )}
         {toast !== undefined && (

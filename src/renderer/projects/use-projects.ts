@@ -27,6 +27,8 @@ export function useProjects(notify: Notify): {
   add: () => Promise<WorkspaceRef | undefined>;
   drop: (path: string) => Promise<WorkspaceRef | undefined>;
   remove: (projectId: string) => Promise<number | undefined>;
+  upsertWorkspace: (projectId: string, workspace: WorkspaceView) => void;
+  dropWorkspace: (projectId: string, key: string) => void;
   refresh: () => void;
 } {
   const [projects, setProjects] = useState<ProjectView[]>();
@@ -109,5 +111,36 @@ export function useProjects(notify: Notify): {
     },
     [notify],
   );
-  return { projects, add, drop, remove, refresh };
+  const changeWorkspaces = useCallback(
+    (projectId: string, change: (workspaces: WorkspaceView[]) => WorkspaceView[]) => {
+      changes.current += 1;
+      setProjects((current) =>
+        current?.map((project) =>
+          project.id === projectId
+            ? { ...project, workspaces: change(project.workspaces) }
+            : project,
+        ),
+      );
+    },
+    [],
+  );
+  const upsertWorkspace = useCallback(
+    (projectId: string, workspace: WorkspaceView) => {
+      changeWorkspaces(projectId, (workspaces) =>
+        workspaces.some((listed) => listed.key === workspace.key)
+          ? workspaces.map((listed) => (listed.key === workspace.key ? workspace : listed))
+          : [...workspaces, workspace],
+      );
+    },
+    [changeWorkspaces],
+  );
+  const dropWorkspace = useCallback(
+    (projectId: string, key: string) => {
+      changeWorkspaces(projectId, (workspaces) =>
+        workspaces.filter((listed) => listed.key !== key),
+      );
+    },
+    [changeWorkspaces],
+  );
+  return { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh };
 }

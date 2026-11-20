@@ -1,0 +1,62 @@
+{
+  "description": "A clone of a local upstream whose main moved on since the last fetch, with a release branch, a .worktreeinclude and ignored files in the main folder.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+        {
+          "write": {
+            "path": ".gitignore",
+            "content": ".env\n*.log\n*.local.json\nnode_modules/\n"
+          }
+        },
+        {
+          "write": {
+            "path": ".worktreeinclude",
+            "content": ".env\nconfig/*.local.json\nscratch.txt\n"
+          }
+        },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] },
+        { "git": ["switch", "-c", "release"] },
+        { "write": { "path": "RELEASE.md", "content": "Release notes.\n" } },
+        { "git": ["add", "RELEASE.md"] },
+        { "git": ["commit", "-m", "release notes"] },
+        { "git": ["switch", "main"] },
+        { "write": { "path": "CHANGELOG.md", "content": "Second commit.\n" } },
+        { "git": ["add", "CHANGELOG.md"] },
+        { "git": ["commit", "-m", "second commit"] }
+      ]
+    }
+  ],
+  "repo": [
+    { "git": ["clone", "../folders/upstream", "."] },
+    { "git": ["branch", "release", "origin/release"] },
+    { "git": ["switch", "-C", "main", "HEAD~1"] },
+    { "git": ["update-ref", "refs/remotes/origin/main", "HEAD"] },
+    { "write": { "path": ".env", "content": "API_URL=http://localhost:3000\n" } },
+    { "write": { "path": "config/dev.local.json", "content": "{}\n" } },
+    { "write": { "path": "notes.log", "content": "ignored and not listed\n" } },
+    { "write": { "path": "node_modules/pkg/.env", "content": "inside an ignored folder\n" } },
+    { "write": { "path": "scratch.txt", "content": "untracked and not ignored\n" } }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

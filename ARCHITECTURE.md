@@ -174,7 +174,8 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | `src/renderer/commands/` | The command registry, the platform shortcut matcher and the provider that runs a command from its shortcut or its button |
 | `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share |
 | `src/renderer/setup/` | The tool check card, shown on first run and from the command menu |
-| `src/renderer/ui/` | Shared interface parts, the button, the key hint, the line icons, the pixel avatar, the status pixel and the toast |
+| `src/renderer/workspaces/` | The New workspace dialog, which prepares a name and a start, makes the workspace and shows each step as it runs |
+| `src/renderer/ui/` | Shared interface parts, the button, the dialog, the key hint, the line icons, the pixel avatar, the status pixel and the toast |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens and the raised shadow for light and dark, mapped to Tailwind utilities |
 | `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
