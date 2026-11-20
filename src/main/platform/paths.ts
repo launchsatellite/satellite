@@ -2,6 +2,8 @@ import { realpath } from "node:fs/promises";
 import { isAbsolute, join, posix, relative, sep, win32 } from "node:path";
 
 const windowsFullyQualified = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
+const windowsDevicePath = /^[\\/]{2}[?.](?:[\\/]|$)/;
+const windowsNetworkPath = /^[\\/]{2}/;
 
 async function realpathOrUndefined(path: string): Promise<string | undefined> {
   try {
@@ -24,7 +26,17 @@ export function isFullyQualified(
   path: string,
   platform: NodeJS.Platform = process.platform,
 ): boolean {
-  return platform === "win32" ? windowsFullyQualified.test(path) : posix.isAbsolute(path);
+  if (platform !== "win32") return posix.isAbsolute(path);
+  return windowsFullyQualified.test(path) && !windowsDevicePath.test(path);
+}
+
+export function isNetworkPath(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32" && windowsNetworkPath.test(path);
+}
+
+function comparablePath(path: string, platform: NodeJS.Platform = process.platform): string {
+  const full = platform === "win32" ? win32.resolve(path) : posix.resolve(path);
+  return platform === "win32" || platform === "darwin" ? full.toLowerCase() : full;
 }
 
 export function samePath(
@@ -32,9 +44,20 @@ export function samePath(
   b: string,
   platform: NodeJS.Platform = process.platform,
 ): boolean {
-  const resolved = (path: string) => {
-    const full = platform === "win32" ? win32.resolve(path) : posix.resolve(path);
-    return platform === "win32" || platform === "darwin" ? full.toLowerCase() : full;
-  };
-  return resolved(a) === resolved(b);
+  return comparablePath(a, platform) === comparablePath(b, platform);
+}
+
+export function isInsidePath(
+  parent: string,
+  child: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const paths = platform === "win32" ? win32 : posix;
+  const fromParent = paths.relative(
+    comparablePath(parent, platform),
+    comparablePath(child, platform),
+  );
+  return (
+    fromParent !== ".." && !fromParent.startsWith(`..${paths.sep}`) && !paths.isAbsolute(fromParent)
+  );
 }

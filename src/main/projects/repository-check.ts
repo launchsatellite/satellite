@@ -1,8 +1,8 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, sep } from "node:path";
+import { basename, dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
-import { isFullyQualified, samePath } from "../platform/paths.ts";
+import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
 
 export type RevParse =
@@ -22,7 +22,6 @@ interface FolderRead {
 
 export const gitReadTimeoutMs = 5000;
 export const folderReadMs = 6000;
-export const gitReadFlags = ["-c", "core.fsmonitor=false"];
 
 const revParseArgs = [
   "rev-parse",
@@ -33,6 +32,7 @@ const revParseArgs = [
   "--git-common-dir",
   "--show-toplevel",
 ];
+const ownFolder = "That folder belongs to Satellite itself. Add a repository from somewhere else.";
 const missingFolder = "That folder no longer exists. Choose another one.";
 const slowFolder =
   "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.";
@@ -64,14 +64,8 @@ async function readFolder(folder: string, home: string): Promise<FolderRead | un
 
 async function boundedRead(folder: string, home: string): Promise<FolderRead | undefined | "slow"> {
   const read = readFolder(folder, home);
-  const controller = new AbortController();
-  const expired = delay(folderReadMs, undefined, { signal: controller.signal }).then(
-    (): "slow" => "slow",
-    () => undefined,
-  );
-  const answer = await Promise.race([read, expired]);
-  controller.abort();
-  if (answer !== "slow") return answer;
+  const answer = await answerWithin(read, folderReadMs);
+  if (answer !== "late") return answer;
   const pending = read.finally(() => {
     if (unanswered === pending) unanswered = undefined;
   });
@@ -79,15 +73,10 @@ async function boundedRead(folder: string, home: string): Promise<FolderRead | u
   return "slow";
 }
 
-function isInside(parent: string, child: string): boolean {
-  const fromParent = relative(parent, child);
-  return fromParent !== ".." && !fromParent.startsWith(`..${sep}`) && !isAbsolute(fromParent);
-}
-
 async function revParse(folder: string): Promise<RevParse> {
   let run: ToolRun | undefined;
   try {
-    run = await runTool("git", ["-C", folder, ...gitReadFlags, ...revParseArgs], {
+    run = await runTool("git", ["-C", folder, ...revParseArgs], {
       timeoutMs: gitReadTimeoutMs,
     });
   } catch {
@@ -104,6 +93,19 @@ async function revParse(folder: string): Promise<RevParse> {
 
 function refuse(refusal: string): RepositoryCheck {
   return { ok: false, refusal };
+}
+
+export async function answerWithin<T>(work: Promise<T>, ms: number): Promise<T | "late"> {
+  const controller = new AbortController();
+  const late = delay(ms, undefined, { signal: controller.signal }).then(
+    (): "late" => "late",
+    (): "late" => "late",
+  );
+  try {
+    return await Promise.race([work, late]);
+  } finally {
+    controller.abort();
+  }
 }
 
 export function parseRevParse(run: ToolRun): RevParse {
@@ -138,9 +140,7 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   if (dirname(real) === real) {
     return refuse("That's a whole drive. Choose the folder a repository was cloned into.");
   }
-  if (isInside(read.home, real)) {
-    return refuse("That folder belongs to Satellite itself. Add a repository from somewhere else.");
-  }
+  if (isInsidePath(read.home, real)) return refuse(ownFolder);
   const name = folderName(real);
   const parsed = await revParse(real);
   switch (parsed.kind) {
@@ -174,6 +174,7 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   }
   const root = await realFolder(parsed.toplevel);
   if (root === undefined) return refuse(missingFolder);
+  if (isInsidePath(read.home, root)) return refuse(ownFolder);
   if (!samePath(root, real)) {
     const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);

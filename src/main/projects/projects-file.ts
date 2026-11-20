@@ -1,5 +1,6 @@
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { z } from "zod";
+import { isFullyQualified } from "../platform/paths.ts";
 import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "../state/json-file.ts";
 
 export interface StoredProject {
@@ -21,7 +22,11 @@ export const projectLimit = 200;
 
 const storedProject = z.strictObject({
   id: z.uuid(),
-  path: z.string().min(1).max(4096).refine(isAbsolute),
+  path: z
+    .string()
+    .min(1)
+    .max(4096)
+    .refine((path) => isFullyQualified(path)),
 });
 const fileSchema = z
   .strictObject({ version: z.literal(1), projects: z.array(storedProject).max(projectLimit) })

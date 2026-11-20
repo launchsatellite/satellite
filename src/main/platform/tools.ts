@@ -15,6 +15,14 @@ export interface ToolRun {
   readonly stderr: string;
 }
 
+export class AbandonedRun extends Error {
+  readonly exited: Promise<void>;
+  constructor(message: string, exited: Promise<void>) {
+    super(message);
+    this.exited = exited;
+  }
+}
+
 export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
   gh: "SATELLITE_GH",
   claude: "SATELLITE_CLAUDE",
@@ -157,7 +165,7 @@ export async function runTool(
       abandon = setTimeout(() => {
         child.stdout.destroy();
         child.stderr.destroy();
-        reject(reason);
+        reject(new AbandonedRun(reason.message, exited));
       }, settleGraceMs);
     };
     const timer = setTimeout(() => {

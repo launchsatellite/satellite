@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { lstat, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
-import { samePath } from "../platform/paths.ts";
+import { isNetworkPath, samePath } from "../platform/paths.ts";
 import { createProjectsFile, projectLimit, type StoredProject } from "./projects-file.ts";
-import { checkRepository, folderReadMs } from "./repository-check.ts";
+import { answerWithin, checkRepository, folderReadMs } from "./repository-check.ts";
 import { mainWorkspace } from "./workspaces.ts";
 
 type Missing = NonNullable<ProjectView["missing"]>;
+type Slot = <T>(work: () => Promise<T>) => Promise<T>;
 
 interface ProjectsOptions {
   home: string;
@@ -26,22 +26,42 @@ export interface Projects {
 }
 
 const branchReads = 8;
+const folderReadSlots = 2;
+const saveBoundMs = 10_000;
 const nameLimit = 255;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
+const networkDrop =
+  "Network folders can't be dropped on Satellite. Use Add a project to choose this one.";
 
 function projectName(path: string): string {
   return (basename(path) || path).slice(0, nameLimit);
 }
 
-async function isFolder(path: string): Promise<boolean> {
-  return stat(path).then(
+function createSlots(size: number): Slot {
+  let free = size;
+  const waiting: (() => void)[] = [];
+  return async (work) => {
+    if (free > 0) free -= 1;
+    else await new Promise<void>((resolve) => waiting.push(resolve));
+    try {
+      return await work();
+    } finally {
+      const next = waiting.shift();
+      if (next === undefined) free += 1;
+      else next();
+    }
+  };
+}
+
+async function isFolder(path: string, inSlot: Slot): Promise<boolean> {
+  return inSlot(() => stat(path)).then(
     (stats) => stats.isDirectory(),
     () => false,
   );
 }
 
-async function exists(path: string): Promise<boolean> {
-  return lstat(path).then(
+async function exists(path: string, inSlot: Slot): Promise<boolean> {
+  return inSlot(() => lstat(path)).then(
     () => true,
     () => false,
   );
@@ -57,9 +77,11 @@ function unavailable(project: StoredProject, missing: Missing = "folder"): Proje
   };
 }
 
-async function readProject(project: StoredProject): Promise<ProjectView> {
-  if (!(await isFolder(project.path))) return unavailable(project);
-  if (!(await exists(join(project.path, ".git")))) return unavailable(project, "repository");
+async function readProject(project: StoredProject, inSlot: Slot): Promise<ProjectView> {
+  if (!(await isFolder(project.path, inSlot))) return unavailable(project);
+  if (!(await exists(join(project.path, ".git"), inSlot))) {
+    return unavailable(project, "repository");
+  }
   return {
     ...unavailable(project),
     missing: null,
@@ -71,16 +93,8 @@ async function boundedView(
   project: StoredProject,
   read: Promise<ProjectView>,
 ): Promise<ProjectView> {
-  const controller = new AbortController();
-  const expired = delay(folderReadMs, undefined, { signal: controller.signal }).then(
-    () => unavailable(project),
-    () => unavailable(project),
-  );
-  try {
-    return await Promise.race([read, expired]);
-  } finally {
-    controller.abort();
-  }
+  const answer = await answerWithin(read, folderReadMs);
+  return answer === "late" ? unavailable(project) : answer;
 }
 
 async function inBatches<T, R>(items: readonly T[], size: number, map: (item: T) => Promise<R>) {
@@ -100,10 +114,11 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let changing: Promise<unknown> = Promise.resolve();
   let listing: { list: StoredProject[]; views: Promise<ProjectView[]> } | undefined;
   const pendingReads = new Map<string, Promise<ProjectView>>();
+  const inSlot = createSlots(folderReadSlots);
   const projectView = (project: StoredProject) => {
     let read = pendingReads.get(project.id);
     if (read === undefined) {
-      read = readProject(project).finally(() => {
+      read = readProject(project, inSlot).finally(() => {
         pendingReads.delete(project.id);
       });
       pendingReads.set(project.id, read);
@@ -120,7 +135,9 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       const list = await current();
       projects = change(list);
       try {
-        await file.save(projects);
+        if ((await answerWithin(file.save(projects), saveBoundMs)) === "late") {
+          throw new Error(`projects.json took longer than ${String(saveBoundMs)} ms to save`);
+        }
       } catch (error) {
         projects = list;
         console.error("Satellite could not write projects.json", error);
@@ -184,7 +201,10 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         if (folder === undefined) return { outcome: "canceled" };
         return { outcome: "added", project: await addOne(folder) };
       },
-      "projects.drop": async ({ path }) => ({ project: await addOne(path) }),
+      "projects.drop": async ({ path }) => {
+        if (isNetworkPath(path)) throw new BridgeFailure("refused", networkDrop);
+        return { project: await addOne(path) };
+      },
       "projects.remove": async ({ projectId }) => {
         const list = await current();
         const removed = list.find((project) => project.id === projectId);
