@@ -153,7 +153,7 @@ electron-builder packages `out/` and `package.json` into `release/` from `electr
 - **Fuses.** Running as Node, `NODE_OPTIONS`, the Node inspector arguments and extra `file://` privileges are off. ASAR integrity validation and loading the app only from the ASAR are on. Integrity is checked on macOS and Windows, and Linux has no such check. Cookie encryption is off, because Satellite stores no cookies and loads no remote content, and turning it on gives each build a keychain item that an ad-hoc signature, new with every build, can make macOS ask about.
 - **Checksums.** `node scripts/checksums.ts <folder> <label>` writes `SHA256SUMS-<label>.txt` in `sha256sum` format for every package directly in the folder.
 
-The release workflow, `.github/workflows/release.yml`, packages on macOS, Windows and Linux at once, reads the fuses, runs the journeys against the packaged app built for each runner's own processor and writes the checksums and the licence notices beside the packages. A failing journey uploads `verify-output/`, which the release never picks up. A pushed version tag runs it and, once all three pass, drafts a GitHub release with the packages, one `SHA256SUMS.txt` and `third-party-licenses.md`. A push to a `platforms/` branch or a manual run, even on a tag, builds and proves without publishing, and a branch push is how the matrix runs before a merge, because a manual run only exists for workflows on the default branch. On Linux the journeys run under `xvfb`, with unprivileged user namespaces allowed so Chromium keeps its own sandbox on Ubuntu 24.04. A new push to the same branch cancels the run before it, while a tag run always finishes and installs without the shared npm cache. Every step runs in bash, Windows included.
+The release workflow, `.github/workflows/release.yml`, runs the unit tests and packages on macOS, Windows and Linux at once, reads the fuses, runs the journeys against the packaged app built for each runner's own processor and writes the checksums and the licence notices beside the packages. A failing journey uploads `verify-output/`, which the release never picks up. A pushed version tag runs it and, once all three pass, drafts a GitHub release with the packages, one `SHA256SUMS.txt` and `third-party-licenses.md`. A push to a `platforms/` branch or a manual run, even on a tag, builds and proves without publishing, and a branch push is how the matrix runs before a merge, because a manual run only exists for workflows on the default branch. On Linux the journeys run under `xvfb`, with unprivileged user namespaces allowed so Chromium keeps its own sandbox on Ubuntu 24.04. A new push to the same branch cancels the run before it, while a tag run always finishes and installs without the shared npm cache. Every step runs in bash, Windows included.
 
 ## Folder layout
 
@@ -193,7 +193,7 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | `scripts/checksums.ts` | Writes the checksum file for a folder of packages |
 | `scripts/third-party-licenses.ts` | The build step that completes the third-party licence notices |
 | `.github/workflows/ci.yml` | Runs `./scripts/check` and `npm run build` on Linux for every pull request and every push to `main` |
-| `.github/workflows/release.yml` | Packages and proves the three platforms, and drafts a release for a tag |
+| `.github/workflows/release.yml` | Runs the unit tests, packages and proves the three platforms, and drafts a release for a tag |
 
 ## Decisions
 

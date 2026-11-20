@@ -1,7 +1,8 @@
 name: Release
 
-# Packages Satellite on three platforms and proves each packaged app with the journeys. A tag drafts
-# a release, a platforms/ branch only builds and proves, so the matrix can run before a merge.
+# Runs the unit tests, packages Satellite on three platforms and proves each packaged app with the
+# journeys. A tag drafts a release, a platforms/ branch only builds and proves, so the matrix can
+# run before a merge.
 on:
   push:
     tags: ["v*"]
@@ -47,6 +48,7 @@ jobs:
           node-version-file: .nvmrc
           cache: ${{ !startsWith(github.ref, 'refs/tags/') && 'npm' || '' }}
       - run: npm ci
+      - run: npm run test
       - run: npm run build
       - run: npx electron-builder ${{ matrix.package }} --publish never
       - run: npx @electron/fuses read --app "${{ matrix.app }}"
