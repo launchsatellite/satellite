@@ -1,0 +1,238 @@
+import { constants } from "node:fs";
+import { type FileHandle, lstat, mkdir, open, opendir } from "node:fs/promises";
+import { join } from "node:path";
+import { reservedWorkspaceNames } from "../../shared/workspace-name.ts";
+import type { IncludeMatcher } from "./worktree-include.ts";
+
+export interface IncludeSelection {
+  files: string[];
+  links: number;
+}
+
+type Overflow = "too-many" | "too-large";
+
+interface Collection {
+  visited: number;
+  files: string[];
+  bytes: number;
+  links: number;
+}
+
+const entryLimit = 100_000;
+const fileLimit = 10_000;
+const byteLimit = 1_073_741_824;
+const chunkBytes = 1_048_576;
+const changedUnderfootCodes = new Set([
+  "EEXIST",
+  "ELOOP",
+  "EMLINK",
+  "ENAMETOOLONG",
+  "ENOENT",
+  "ENOTDIR",
+]);
+const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
+const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
+const readFlags = constants.O_RDONLY | noFollow | nonBlocking;
+const createFlags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow;
+
+async function unlessChanged<T>(work: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await work();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      changedUnderfootCodes.has(String(error.code))
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function isSafeName(name: string): boolean {
+  if (name === "" || name === "." || name === "..") return false;
+  if (name.includes("\\") || name.includes("\0")) return false;
+  if (process.platform !== "win32") return true;
+  const stem = (name.split(".")[0] ?? "").toLowerCase();
+  return !name.includes(":") && !/[. ]$/.test(name) && !reservedWorkspaceNames.has(stem);
+}
+
+function safeSegments(path: string): string[] | undefined {
+  const segments = path.split("/");
+  return segments.every(isSafeName) ? segments : undefined;
+}
+
+async function keepFile(
+  root: string,
+  relative: string,
+  collection: Collection,
+): Promise<Overflow | undefined> {
+  const entry = await unlessChanged(() => lstat(join(root, relative)));
+  if (entry === undefined) return undefined;
+  if (entry.isSymbolicLink()) collection.links += 1;
+  if (!entry.isFile()) return undefined;
+  collection.files.push(relative);
+  collection.bytes += entry.size;
+  if (collection.files.length > fileLimit) return "too-many";
+  return collection.bytes > byteLimit ? "too-large" : undefined;
+}
+
+async function walkFolder(
+  root: string,
+  start: string,
+  whole: boolean,
+  matcher: IncludeMatcher,
+  collection: Collection,
+): Promise<Overflow | undefined> {
+  const pending = [{ folder: start, whole }];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const { folder } = next;
+    const folderWhole = next.whole;
+    const entries = await unlessChanged(() => opendir(join(root, folder)));
+    if (entries === undefined) continue;
+    for await (const entry of entries) {
+      collection.visited += 1;
+      if (collection.visited > entryLimit) return "too-many";
+      if (!isSafeName(entry.name)) continue;
+      const child = `${folder}/${entry.name}`;
+      if (entry.isSymbolicLink()) {
+        collection.links += 1;
+      } else if (entry.isDirectory()) {
+        const childWhole = folderWhole || matcher.matches(child, true);
+        if (childWhole || matcher.reaches(child))
+          pending.push({ folder: child, whole: childWhole });
+      } else if (entry.isFile() && (folderWhole || matcher.matches(child, false))) {
+        const overflow = await keepFile(root, child, collection);
+        if (overflow !== undefined) return overflow;
+      }
+    }
+  }
+  return undefined;
+}
+
+async function collectFolder(
+  root: string,
+  relative: string,
+  matcher: IncludeMatcher,
+  collection: Collection,
+): Promise<Overflow | undefined> {
+  const whole = matcher.matches(relative, true);
+  if (!whole && !matcher.reaches(relative)) return undefined;
+  const entry = await unlessChanged(() => lstat(join(root, relative)));
+  if (entry?.isSymbolicLink() === true) collection.links += 1;
+  if (entry?.isDirectory() !== true) return undefined;
+  return walkFolder(root, relative, whole, matcher, collection);
+}
+
+async function isPlainFolder(path: string): Promise<boolean> {
+  const entry = await unlessChanged(() => lstat(path));
+  return entry !== undefined && entry.isDirectory() && !entry.isSymbolicLink();
+}
+
+async function parentsArePlain(base: string, segments: readonly string[]): Promise<boolean> {
+  for (let length = 1; length < segments.length; length += 1) {
+    if (!(await isPlainFolder(join(base, ...segments.slice(0, length))))) return false;
+  }
+  return true;
+}
+
+async function makePlainParents(base: string, segments: readonly string[]): Promise<boolean> {
+  for (let length = 1; length < segments.length; length += 1) {
+    const folder = join(base, ...segments.slice(0, length));
+    await unlessChanged(() => mkdir(folder));
+    if (!(await isPlainFolder(folder))) return false;
+  }
+  return true;
+}
+
+async function copyBytes(source: FileHandle, destination: FileHandle, size: number): Promise<void> {
+  const buffer = Buffer.alloc(Math.min(size, chunkBytes));
+  let position = 0;
+  while (position < size) {
+    const { bytesRead } = await source.read(
+      buffer,
+      0,
+      Math.min(buffer.length, size - position),
+      position,
+    );
+    if (bytesRead === 0) return;
+    let written = 0;
+    while (written < bytesRead) {
+      written += (await destination.write(buffer, written, bytesRead - written)).bytesWritten;
+    }
+    position += bytesRead;
+  }
+}
+
+async function copyOne(
+  root: string,
+  worktree: string,
+  relative: string,
+  room: number,
+): Promise<number | undefined> {
+  const segments = safeSegments(relative);
+  if (segments === undefined || !(await parentsArePlain(root, segments))) return undefined;
+  const sourcePath = join(root, ...segments);
+  const before = await unlessChanged(() => lstat(sourcePath));
+  if (before?.isFile() !== true) return undefined;
+  const source = await unlessChanged(() => open(sourcePath, readFlags));
+  if (source === undefined) return undefined;
+  try {
+    const info = await source.stat();
+    const unchanged = info.isFile() && info.dev === before.dev && info.ino === before.ino;
+    if (!unchanged || info.size > room) return undefined;
+    if (!(await makePlainParents(worktree, segments))) return undefined;
+    const destinationPath = join(worktree, ...segments);
+    const destination = await unlessChanged(() =>
+      open(destinationPath, createFlags, info.mode & 0o777),
+    );
+    if (destination === undefined) return undefined;
+    try {
+      await copyBytes(source, destination, info.size);
+    } finally {
+      await destination.close();
+    }
+    return info.size;
+  } finally {
+    await source.close();
+  }
+}
+
+export async function collectIncludedFiles(
+  root: string,
+  ignored: readonly string[],
+  matcher: IncludeMatcher,
+): Promise<IncludeSelection | Overflow> {
+  const collection: Collection = { visited: 0, files: [], bytes: 0, links: 0 };
+  for (const entry of ignored) {
+    collection.visited += 1;
+    if (collection.visited > entryLimit) return "too-many";
+    const isFolder = entry.endsWith("/");
+    const relative = isFolder ? entry.slice(0, -1) : entry;
+    if (safeSegments(relative) === undefined) continue;
+    const overflow = isFolder
+      ? await collectFolder(root, relative, matcher, collection)
+      : matcher.matches(relative, false)
+        ? await keepFile(root, relative, collection)
+        : undefined;
+    if (overflow !== undefined) return overflow;
+  }
+  return { files: collection.files, links: collection.links };
+}
+
+export async function copyIncludedFiles(
+  root: string,
+  worktree: string,
+  files: readonly string[],
+): Promise<{ copied: number; skipped: number }> {
+  let copied = 0;
+  let bytes = 0;
+  for (const relative of files) {
+    const size = await copyOne(root, worktree, relative, byteLimit - bytes);
+    if (size === undefined) continue;
+    copied += 1;
+    bytes += size;
+  }
+  return { copied, skipped: files.length - copied };
+}
