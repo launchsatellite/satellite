@@ -55,7 +55,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
   try {
     await withTimeout(journey.run(recorded), journeyTimeoutMs, `journey ${journey.name}`);
   } catch (error) {
-    failure = errorReason(error);
+    failure = errorReason(error).split("\n")[0];
     if (!session.page.isClosed()) {
       await recorded.screenshot(`${journey.name}-failure`).catch(() => undefined);
     }

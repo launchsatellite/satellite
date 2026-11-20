@@ -51,8 +51,8 @@ async function main(): Promise<void> {
       rows: process.stdout.rows,
     });
   });
-  for (const step of scenario.claude.script) await play(step);
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  for (const step of scenario.claude.script) await play(step);
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (data: string) => {
     appendStandInEvent({ type: "input", data });

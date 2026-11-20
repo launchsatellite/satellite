@@ -4,7 +4,7 @@ import type { AppSession } from "../driver.ts";
 const pollMs = 100;
 
 export const promptTimeoutMs = 60_000;
-export const goneTimeoutMs = 5_000;
+export const goneTimeoutMs = process.platform === "win32" ? 15_000 : 5_000;
 
 export function processGone(pid: number): boolean {
   try {

@@ -63,7 +63,12 @@ async function drawnTerminalSize(page: Page): Promise<TerminalSize | null> {
 
 async function checkWindow(page: Page): Promise<void> {
   for (const column of columns) {
-    assert.ok(await page.getByTestId(column).isVisible(), `${column} is not visible`);
+    await page
+      .getByTestId(column)
+      .waitFor()
+      .catch(() => {
+        throw new Error(`${column} is not visible`);
+      });
   }
   await page.getByTestId("tool-git").waitFor();
   const git = (await page.getByTestId("tool-git").textContent()) ?? "";
@@ -97,6 +102,8 @@ async function checkInput(session: AppSession): Promise<void> {
 }
 
 async function checkResize(session: AppSession): Promise<void> {
+  const initial = await drawnTerminalSize(session.page);
+  assert.ok(initial !== null, "the terminal draws no rows to measure");
   const before = (await session.standInEvents()).length;
   await session.page.setViewportSize(resizedViewport);
   let drawn: TerminalSize | null = null;
@@ -112,23 +119,25 @@ async function checkResize(session: AppSession): Promise<void> {
       const size = drawn;
       return (
         size !== null &&
+        size.rows !== initial.rows &&
         resizes.some((resize) => resize.cols === size.cols && resize.rows === size.rows)
       );
     },
     promptTimeoutMs,
     () =>
-      `the stand-in got no resize to the drawn size ${JSON.stringify(drawn)}, only ${JSON.stringify(resizes)}`,
+      `the terminal went from ${JSON.stringify(initial)} to ${JSON.stringify(drawn)} and the stand-in got the resizes ${JSON.stringify(resizes)}`,
   );
 }
 
 async function checkDiff(page: Page): Promise<void> {
   const editor = page.getByTestId("diff").locator(".monaco-diff-editor");
-  assert.equal(await editor.count(), 1, "diff holds no Monaco diff editor");
   for (const side of ["original", "modified"]) {
-    assert.ok(
-      await editor.locator(`.editor.${side}`).isVisible(),
-      `the diff has no visible ${side} side`,
-    );
+    await editor
+      .locator(`.editor.${side}`)
+      .waitFor({ timeout: promptTimeoutMs })
+      .catch(() => {
+        throw new Error(`the diff showed no ${side} side`);
+      });
   }
 }
 
@@ -158,7 +167,11 @@ async function run(session: AppSession): Promise<void> {
     goneTimeoutMs,
     `the second stand-in (pid ${String(secondPid)}) still ran after quit`,
   );
-  assert.deepEqual(session.consoleErrors, [], "the window logged console errors");
+  assert.equal(
+    session.consoleErrors.length,
+    0,
+    `the window logged ${String(session.consoleErrors.length)} console errors, the first is ${JSON.stringify(session.consoleErrors[0])}`,
+  );
 }
 
 export const launchJourney: Journey = { name: "launch", scenario: "default", run };

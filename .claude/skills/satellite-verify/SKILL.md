@@ -65,7 +65,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 `verify/stand-ins/gh.ts` and `verify/stand-ins/claude.ts` run with the Node that runs the driver, passed to the app through `SATELLITE_GH` and `SATELLITE_CLAUDE`. They find their scenario through `SATELLITE_VERIFY_SCENARIO`.
 
 - **gh** prints its answer and exits with its code. Without an answer it prints `stand-in gh has no answer for <args>` and exits 1.
-- **claude** prints `version` for `--version`. Otherwise it plays the script, then reads stdin raw, echoes every chunk (ESC then CR echoes as a new line) and exits on Ctrl+C or Ctrl+D.
+- **claude** prints `version` for `--version`. Otherwise it puts stdin in raw mode, so nothing typed after its banner is line edited, plays the script, then echoes every chunk (ESC then CR echoes as a new line) and exits on Ctrl+C or Ctrl+D.
 
 Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, `resize` with `cols` and `rows`, and `child` with the `pid` of a started child. Startup calls such as `gh --version` appear once on the built and packaged targets. The dev target runs React in development mode, whose strict mode runs every effect twice, so count events on a built run.
 
@@ -79,7 +79,7 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## In code
 
-`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason` and `outputDir`. Journeys use it directly.
+`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. A second `close()` answers the first one's result. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason` and `outputDir`. Journeys use it directly.
 
 ## Journeys
 
@@ -91,17 +91,17 @@ npm run --silent journeys -- [--app <executable>]
 
 To prove a packaged app on macOS, run `npm run build`, then `npx electron-builder --mac --arm64 --publish never`, then the journeys with `--app release/mac-arm64/Satellite.app/Contents/MacOS/Satellite`. Windows and Linux are proven by pushing the branch as `platforms/<slug>`, which runs the release workflow without publishing.
 
-It builds once for the built target, runs every journey in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind.
+It builds once for the built target, runs every journey in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, the reason cut to its first line, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind.
 
 | Journey | Scenario | Proves |
 | --- | --- | --- |
-| `launch` | `default` | three columns, the tool readout, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
-| `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke` and `onEvent`, no new window, no navigation away, no remote fetch, no path escaping the `app://` root, no microphone, no notifications, and the bridge refusing a bad payload and an unknown channel |
+| `launch` | `default` | three columns, the tool readout, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
+| `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke` and `onEvent`, the content security policy refusing an inline script, a `data:` fetch, a remote fetch, image and frame, microphone, camera and notifications reading denied, no path escaping the `app://` root, the bridge refusing a bad payload and an unknown channel, and no new window or navigation reaching a remote address |
 | `quit` | `flood` | quitting mid flood ends the stand-in and its child that ignores hangup |
 
-A journey is `{ name, scenario, run(session) }` in `verify/journeys/<name>.ts`, listed in `verify/journeys.ts`. It asserts with `node:assert/strict` and a message that says what went wrong, and waits on conditions with `waitUntil` from `verify/journeys/conditions.ts`, never on fixed sleeps, because CI runners and Windows are slower. A check that something stays refused is the one place a short settle is right. Process checks use `processGone`, which works on all three platforms. Keep the suite short, since it runs three times per release.
+A journey is `{ name, scenario, run(session) }` in `verify/journeys/<name>.ts`, listed in `verify/journeys.ts`. It asserts with `node:assert/strict` and a message that says what went wrong, and waits on conditions with `waitUntil` from `verify/journeys/conditions.ts`, never on fixed sleeps, because CI runners and Windows are slower. A check that something stays refused is the one place a short settle is right. The boundary journey routes `https://example.com` to a local empty reply, so a guard that lets a request through is caught at once with no network, and a refusal is read from a `securitypolicyviolation` event or a permission state rather than from a failed load. Process checks use `processGone`, which works on all three platforms. Keep the suite short, since it runs three times per release.
 
-Before trusting a new check, turn its guard off for one run and see the journey fail with a legible reason. Note that two guards back each other up in places. Navigation is refused by `will-navigate` and `will-frame-navigate` alike, and the URL parser already folds `%2e%2e` segments, so only an encoded slash such as `..%2f` reaches the protocol's path confinement.
+Before trusting a new check, turn its guard off for one run and see the journey fail with a legible reason. Note that two guards back each other up in places. Navigation is refused by `will-navigate` and `will-frame-navigate` alike, and the URL parser already folds `%2e%2e` segments, so only an encoded slash such as `..%2f` reaches the protocol's path confinement. `..%5c` means something only on Windows, and Chromium refuses a `file:` navigation from `app://` by itself, so neither proves a guard on its own. `sandbox` and `nodeIntegration` cannot be seen from the page, and the protocol's host and method checks and the sender check cannot be reached from it, so unit tests beside them pin those. The paste is a synthetic event, so it proves the terminal and the bridge carry it, not the platform's paste shortcut.
 
 ## Feature map
 

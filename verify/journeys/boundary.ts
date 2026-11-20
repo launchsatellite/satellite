@@ -5,7 +5,17 @@ import { z } from "zod";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 
+interface PolicyProbe {
+  inlineScriptRan: boolean;
+  dataFetch: string;
+  remoteFetch: string;
+  violations: string[];
+}
+
+const remote = "https://example.com";
 const settleMs = 1_000;
+const violationTimeoutMs = 10_000;
+const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
 const refusedAnswer = z.object({ ok: z.literal(false), error: z.object({ code: z.string() }) });
 const escapingPaths = [
   "app://satellite/%2e%2e/%2e%2e/package.json",
@@ -56,35 +66,75 @@ async function checkNoNode(page: Page): Promise<void> {
   assert.deepEqual(
     keys,
     ["invoke", "onEvent"],
-    "window.satellite exposes more or less than invoke and onEvent",
+    `window.satellite should expose only invoke and onEvent, it exposes ${JSON.stringify(keys)}`,
   );
 }
 
-async function checkNavigation(page: Page, appUrl: string): Promise<void> {
-  const pagesBefore = openPages(page);
-  const opened = await page.evaluate(() => window.open("https://example.com") === null);
-  assert.ok(opened, "window.open returned a window");
-  await delay(settleMs);
-  assert.equal(openPages(page), pagesBefore, "window.open made a new page");
-  for (const target of ["https://example.com", "file:///"]) {
-    await page
-      .evaluate((url) => {
-        location.assign(url);
-      }, target)
-      .catch(() => undefined);
-    await delay(settleMs);
-    assert.equal(page.url(), appUrl, `the window navigated to ${target}`);
+async function probePolicy(page: Page): Promise<PolicyProbe> {
+  return page.evaluate(
+    async ({ origin, directives, timeoutMs }) => {
+      const violations = new Set<string>();
+      addEventListener("securitypolicyviolation", (event) => {
+        violations.add(event.effectiveDirective);
+      });
+      const script = document.createElement("script");
+      script.textContent = "window.satelliteInlineScriptRan = true";
+      document.head.append(script);
+      script.remove();
+      const settle = (request: Promise<unknown>) =>
+        request.then(
+          () => "resolved",
+          () => "rejected",
+        );
+      const dataFetch = await settle(fetch("data:text/plain,satellite"));
+      const remoteFetch = await settle(fetch(`${origin}/fetch`));
+      const image = new Image();
+      image.src = `${origin}/image.png`;
+      const frame = document.createElement("iframe");
+      frame.src = `${origin}/frame`;
+      document.body.append(frame);
+      const deadline = Date.now() + timeoutMs;
+      while (!directives.every((directive) => violations.has(directive)) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      frame.remove();
+      return {
+        inlineScriptRan: Reflect.get(window, "satelliteInlineScriptRan") === true,
+        dataFetch,
+        remoteFetch,
+        violations: [...violations],
+      };
+    },
+    { origin: remote, directives: policyDirectives, timeoutMs: violationTimeoutMs },
+  );
+}
+
+async function checkPolicy(page: Page): Promise<void> {
+  const probe = await probePolicy(page);
+  assert.ok(!probe.inlineScriptRan, "an inline script ran, so the content security policy is off");
+  assert.equal(probe.dataFetch, "rejected", "a fetch of a data: address was not refused");
+  assert.equal(probe.remoteFetch, "rejected", "a fetch of a remote address was not refused");
+  for (const directive of policyDirectives) {
+    assert.ok(
+      probe.violations.includes(directive),
+      `the content security policy reported no ${directive} refusal, only ${JSON.stringify(probe.violations)}`,
+    );
   }
 }
 
-async function checkRequests(page: Page): Promise<void> {
-  const remote = await page.evaluate(() =>
-    fetch("https://example.com").then(
-      () => "resolved",
-      () => "rejected",
-    ),
-  );
-  assert.equal(remote, "rejected", "a fetch of a remote address was not refused");
+async function checkPermissions(page: Page): Promise<void> {
+  const states = await page.evaluate(async () => ({
+    microphone: (await navigator.permissions.query({ name: "microphone" })).state,
+    camera: (await navigator.permissions.query({ name: "camera" })).state,
+    notifications: Notification.permission,
+    notificationRequest: await Notification.requestPermission(),
+  }));
+  for (const [permission, state] of Object.entries(states)) {
+    assert.equal(state, "denied", `the ${permission} permission reads ${state}, not denied`);
+  }
+}
+
+async function checkPaths(page: Page): Promise<void> {
   for (const url of escapingPaths) {
     const status = await page.evaluate(
       (target) => fetch(target).then((response) => response.status),
@@ -92,38 +142,55 @@ async function checkRequests(page: Page): Promise<void> {
     );
     assert.equal(status, 404, `${url} answered ${String(status)}, not 404`);
   }
-  const microphone = await page.evaluate(() =>
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(
-      () => "resolved",
-      () => "rejected",
-    ),
-  );
-  assert.equal(microphone, "rejected", "the microphone request was not refused");
-  const notifications = await page.evaluate(() => Notification.requestPermission());
-  assert.equal(notifications, "denied", "the notification permission was not denied");
 }
 
 async function checkBridge(page: Page): Promise<void> {
+  const invalid = await bridgeCode(page, "terminal.resize", { id: "x" });
   assert.equal(
-    await bridgeCode(page, "terminal.resize", { id: "x" }),
+    invalid,
     "invalid-request",
-    "terminal.resize with a bad payload was not refused as invalid-request",
+    `terminal.resize with a bad payload answered ${invalid}, not invalid-request`,
   );
+  const unknown = await bridgeCode(page, "__proto__", {});
   assert.equal(
-    await bridgeCode(page, "__proto__", {}),
+    unknown,
     "unknown-channel",
-    "the __proto__ channel was not refused as unknown-channel",
+    `the __proto__ channel answered ${unknown}, not unknown-channel`,
   );
+}
+
+async function checkLeaving(page: Page, appUrl: string, reached: string[]): Promise<void> {
+  const pagesBefore = openPages(page);
+  const denied = await page.evaluate((url) => window.open(url) === null, `${remote}/window`);
+  assert.ok(denied, "window.open returned a window");
+  for (const target of [`${remote}/navigate`, "file:///"]) {
+    await page
+      .evaluate((url) => {
+        location.assign(url);
+      }, target)
+      .catch(() => undefined);
+  }
+  await delay(settleMs);
+  assert.deepEqual(reached, [], `the window reached ${reached.join(" and ")}`);
+  assert.equal(openPages(page), pagesBefore, "window.open made a new page");
+  assert.equal(page.url(), appUrl, `the window left the app for ${page.url()}`);
 }
 
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   const appUrl = page.url();
+  const reached: string[] = [];
+  await page.context().route(`${remote}/**`, (route) => {
+    reached.push(route.request().url());
+    return route.fulfill({ status: 200, contentType: "text/html", body: "" });
+  });
   await checkNoNode(page);
-  await checkNavigation(page, appUrl);
-  await checkRequests(page);
+  await checkPolicy(page);
+  await checkPermissions(page);
+  await checkPaths(page);
   await checkBridge(page);
   await session.screenshot("boundary");
+  await checkLeaving(page, appUrl, reached);
 }
 
 export const boundaryJourney: Journey = { name: "boundary", scenario: "default", run };

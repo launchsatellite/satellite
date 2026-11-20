@@ -451,6 +451,24 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const appPageReady = page;
   const app = child;
   const connection = browser;
+  let closing: Promise<CloseResult> | undefined;
+  const closeOnce = async (): Promise<CloseResult> => {
+    await withTimeout(
+      appPageReady.evaluate(() => {
+        window.close();
+      }),
+      pageCallTimeoutMs,
+      "closing the window",
+    ).catch(() => undefined);
+    const exitedOnItsOwn = await waitForExit(app, exitTimeoutMs);
+    await forceStop(app);
+    await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
+      () => undefined,
+    );
+    const leftover = await removeTemp(temp, options.keep);
+    cleanups.delete(abandon);
+    return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
+  };
   return {
     page: appPageReady,
     home,
@@ -464,22 +482,9 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await appPageReady.screenshot({ path, timeout: startTimeoutMs });
       return path;
     },
-    async close() {
-      await withTimeout(
-        appPageReady.evaluate(() => {
-          window.close();
-        }),
-        pageCallTimeoutMs,
-        "closing the window",
-      ).catch(() => undefined);
-      const exitedOnItsOwn = await waitForExit(app, exitTimeoutMs);
-      await forceStop(app);
-      await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
-        () => undefined,
-      );
-      const leftover = await removeTemp(temp, options.keep);
-      cleanups.delete(abandon);
-      return leftover === undefined ? { exitedOnItsOwn } : { exitedOnItsOwn, leftover };
+    close() {
+      closing ??= closeOnce();
+      return closing;
     },
   };
 }
