@@ -1,0 +1,7 @@
+*.md
+*.html
+package-lock.json
+out
+release
+verify-output
+.superpowers

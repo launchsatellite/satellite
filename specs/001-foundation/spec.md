@@ -1,6 +1,6 @@
 # 001 Foundation
 
-Status **Approved** · Depends on **none**
+Status **In progress** · Depends on **none**
 
 ## Why
 
