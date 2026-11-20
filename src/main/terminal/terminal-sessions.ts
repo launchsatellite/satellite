@@ -4,17 +4,22 @@ import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/
 import { spawnPty, type PtyProcess } from "../platform/pty.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
 import { childEnvironment, resolveTool } from "../platform/tools.ts";
+import { createOutputFlow, type OutputFlow } from "./output-flow.ts";
 
 type TerminalHandlers = Pick<
   BridgeHandlers,
-  "terminal.start" | "terminal.write" | "terminal.resize" | "terminal.close"
+  "terminal.start" | "terminal.write" | "terminal.resize" | "terminal.close" | "terminal.ack"
 >;
 
 interface Session {
   readonly owner: BridgeOwner;
   pty?: PtyProcess;
+  output?: OutputFlow;
   ended: boolean;
 }
+
+const spawnFailed =
+  "Claude Code couldn't start. Nothing in your project changed. Start it again, and reinstall Claude Code if it keeps failing.";
 
 async function workingFolder(): Promise<string> {
   const folder = process.cwd();
@@ -32,14 +37,22 @@ function answered(act: () => void): Promise<Record<string, never>> {
   });
 }
 
-export function createTerminalSessions(): { handlers: TerminalHandlers; closeAll(): void } {
+export function createTerminalSessions(): {
+  handlers: TerminalHandlers;
+  closeAll(): Promise<void>;
+} {
   const sessions = new Map<string, Session>();
   const watchedOwners = new WeakSet<BridgeOwner>();
+  const ending = new Set<Promise<void>>();
 
   const end = (id: string, session: Session) => {
     if (sessions.get(id) === session) sessions.delete(id);
     session.ended = true;
-    session.pty?.kill();
+    session.output?.stop();
+    const killing = session.pty?.kill();
+    if (killing === undefined) return;
+    ending.add(killing);
+    void killing.finally(() => ending.delete(killing));
   };
 
   const held = (id: string, owner: BridgeOwner): Session => {
@@ -72,12 +85,31 @@ export function createTerminalSessions(): { handlers: TerminalHandlers; closeAll
     }
     const [env, cwd] = await Promise.all([childEnvironment(), workingFolder()]);
     if (session.ended) return;
-    const pty = spawnPty(command, { cwd, env, ...size });
+    let pty: PtyProcess;
+    try {
+      pty = spawnPty(command, { cwd, env, ...size });
+    } catch (error) {
+      console.error("Claude Code could not start", error);
+      throw new BridgeFailure("failed", spawnFailed);
+    }
+    const output = createOutputFlow({
+      emit(data) {
+        session.owner.emit("terminal.data", { id, data });
+      },
+      pause() {
+        pty.pause();
+      },
+      resume() {
+        pty.resume();
+      },
+    });
     session.pty = pty;
+    session.output = output;
     pty.onData((data) => {
-      session.owner.emit("terminal.data", { id, data });
+      output.push(data);
     });
     pty.onExit((exitCode) => {
+      output.finish();
       if (sessions.get(id) === session) sessions.delete(id);
       session.ended = true;
       session.owner.emit("terminal.exit", { id, exitCode });
@@ -119,9 +151,14 @@ export function createTerminalSessions(): { handlers: TerminalHandlers; closeAll
         answered(() => {
           end(id, held(id, owner));
         }),
+      "terminal.ack": ({ id, chars }, owner) =>
+        answered(() => {
+          held(id, owner).output?.ack(chars);
+        }),
     },
-    closeAll() {
+    async closeAll() {
       for (const [id, session] of sessions) end(id, session);
+      await Promise.all(ending);
     },
   };
 }

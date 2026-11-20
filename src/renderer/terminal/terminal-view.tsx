@@ -4,24 +4,13 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import { bridgeLimits } from "../../shared/bridge-contract.ts";
+import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
+import { Button } from "../ui/button.tsx";
 import "./terminal-font.css";
 import { terminalTheme } from "./terminal-theme.ts";
 
 const newlineSequence = "\u001b\r";
-
-function chunks(data: string): string[] {
-  const pieces: string[] = [];
-  let start = 0;
-  while (start < data.length) {
-    let end = Math.min(start + bridgeLimits.terminalWriteChars, data.length);
-    const last = data.charCodeAt(end - 1);
-    if (end < data.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
-    pieces.push(data.slice(start, end));
-    start = end;
-  }
-  return pieces;
-}
 
 function isShiftEnter(event: KeyboardEvent): boolean {
   return (
@@ -29,7 +18,13 @@ function isShiftEnter(event: KeyboardEvent): boolean {
   );
 }
 
-export function TerminalView({ terminalId }: { terminalId: string }) {
+export function TerminalView({
+  terminalId,
+  onRestart,
+}: {
+  terminalId: string;
+  onRestart?: () => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string>();
 
@@ -43,6 +38,7 @@ export function TerminalView({ terminalId }: { terminalId: string }) {
       allowProposedApi: true,
       cursorBlink: true,
       theme: terminalTheme(),
+      linkHandler: { activate: () => undefined },
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -53,7 +49,10 @@ export function TerminalView({ terminalId }: { terminalId: string }) {
     terminal.focus();
 
     const stopData = subscribe("terminal.data", ({ id, data }) => {
-      if (id === terminalId) terminal.write(data);
+      if (id !== terminalId) return;
+      terminal.write(data, () => {
+        void invoke("terminal.ack", { id, chars: data.length });
+      });
     });
     const stopExit = subscribe("terminal.exit", ({ id }) => {
       if (id === terminalId) setNotice("Claude Code ended.");
@@ -67,7 +66,7 @@ export function TerminalView({ terminalId }: { terminalId: string }) {
       if (!result.ok) setNotice(result.error.message);
     });
     const send = (data: string) => {
-      for (const chunk of chunks(data)) {
+      for (const chunk of textChunks(data, bridgeLimits.terminalWriteChars)) {
         queue = queue.then(() => invoke("terminal.write", { id: terminalId, data: chunk }));
       }
     };
@@ -113,7 +112,16 @@ export function TerminalView({ terminalId }: { terminalId: string }) {
   return (
     <div data-testid="terminal" className="flex h-full min-h-0 flex-col bg-bg p-2">
       <div ref={host} className="min-h-0 flex-1" />
-      {notice !== undefined && <p className="px-1 pt-2 text-[13px] text-dim">{notice}</p>}
+      {notice !== undefined && (
+        <div className="flex items-center gap-3 px-1 pt-2">
+          <p className="text-[13px] text-dim">{notice}</p>
+          {onRestart !== undefined && (
+            <Button testId="start-claude" onClick={onRestart}>
+              Start Claude Code
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ export type BridgeResult<T> =
 
 export const bridgeLimits = {
   terminalWriteChars: 65536,
+  terminalOutputChars: 65536,
   terminals: 16,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
@@ -50,10 +51,20 @@ export const bridgeRequests = {
     request: z.strictObject({ id: terminalId }),
     response: empty,
   },
+  "terminal.ack": {
+    request: z.strictObject({
+      id: terminalId,
+      chars: z.int().min(1).max(bridgeLimits.terminalOutputChars),
+    }),
+    response: empty,
+  },
 };
 
 export const bridgeEvents = {
-  "terminal.data": z.strictObject({ id: terminalId, data: z.string() }),
+  "terminal.data": z.strictObject({
+    id: terminalId,
+    data: z.string().min(1).max(bridgeLimits.terminalOutputChars),
+  }),
   "terminal.exit": z.strictObject({ id: terminalId, exitCode: z.int() }),
 };
 

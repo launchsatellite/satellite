@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
@@ -19,6 +20,8 @@ function allowedOrigin(entryUrl: string): string {
 }
 
 const terminals = createTerminalSessions();
+const quitBoundMs = 2500;
+let quitting = false;
 
 async function start(): Promise<void> {
   await app.whenReady();
@@ -46,8 +49,13 @@ start().catch((error: unknown) => {
   app.exit(1);
 });
 
-app.on("before-quit", () => {
-  terminals.closeAll();
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  quitting = true;
+  event.preventDefault();
+  void Promise.race([terminals.closeAll(), delay(quitBoundMs)]).finally(() => {
+    app.quit();
+  });
 });
 
 app.on("window-all-closed", () => {

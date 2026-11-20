@@ -41,10 +41,11 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 | --- | --- | --- | --- |
 | `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters | Takes no input. The tools run with fixed arguments and no shell. |
 | `terminal.start` | Starts Claude Code in a terminal with a given id and size | Program must be `claude`, id a UUID, 2 to 500 columns, 1 to 300 rows, 16 terminals | The interface names no executable, path or argument. The background process resolves `claude` itself. |
-| `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches the terminal it was started for, the same as typing. |
+| `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches a terminal the same page started. It is exactly typing into Claude Code, so whoever can send it can run anything Claude Code can, its `!` shell included. The integrity of the interface (no remote content, the content security policy, terminal output drawn as text) is what guards command execution. |
 | `terminal.resize` | Resizes a terminal | 2 to 500 columns, 1 to 300 rows | Bounded integers only. |
 | `terminal.close` | Ends a terminal | UUID id | An id is data, never a path or a name. |
-| `terminal.data` event | Streams terminal output to the window that owns it | | Shown as text by the terminal and never run. |
+| `terminal.ack` | Tells the background process how much output the terminal has drawn | UUID id, 1 to 65536 characters | Only lowers the count of unacknowledged output for a terminal the same page owns, clamped at what was sent, so a wrong ack can at worst resume output early. |
+| `terminal.data` event | Streams terminal output to the window that owns it | 1 to 65536 characters per event | Shown as text by the terminal and never run. |
 | `terminal.exit` event | Tells the window a terminal ended, with its exit code | Integer exit code | Data only. |
 
 ## Platform
@@ -61,8 +62,12 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 The right column runs the real Claude Code in a terminal Satellite owns. The background process holds the pseudo terminal and the interface draws it with xterm.js.
 
 - **Ownership.** The interface picks a UUID for each terminal, subscribes to its events, and only then asks to start it, so no early output is lost. A terminal belongs to the page load that started it. Write, resize and close from any other page answer `not-found`, and a duplicate id is refused.
-- **Cleanup.** When the owner ends, through a reload, a crash or a closed window, its terminals are killed, even one still starting. Quitting kills every terminal. A kill ends the whole process tree. On macOS and Linux the terminal's process group and every descendant found with `ps` get `SIGHUP`, then `SIGKILL` two seconds later. On Windows `taskkill /T /F` ends the tree before the pseudo terminal closes. Claude Code's own tools run as its descendants, so a terminal that ends leaves nothing behind.
+- **Cleanup.** When the owner ends, through a reload, a crash or a closed window, its terminals are killed, even one still starting. On macOS and Linux a kill lists processes once with `ps`, then sends `SIGHUP` to the terminal's process group and to every descendant. When the terminal has exited and nothing from that list is left, the kill is done. Otherwise, two seconds after it began, everything from the list that still runs, and anything those processes started since, gets `SIGKILL`. A process is matched by its pid and start time, so a reused pid is never signalled. On Windows `taskkill /T /F` ends the tree, then the pseudo terminal closes.
+- **Quit.** Quitting waits until every terminal has been killed this way, at most two and a half seconds, then exits. So Claude Code, its tools and anything that ignores `SIGHUP` end with Satellite. A process that fully detaches before the kill, by leaving the process group and losing its parent to the system, is out of reach and survives.
 - **Limits.** 16 terminals at once. Input is split into writes of at most 65536 characters and sent through one queue per terminal, so a large paste arrives whole and in order. Scrollback keeps 5000 lines.
+- **Output flow.** The background process gathers output for 8 milliseconds and sends it in events of at most 65536 characters. The interface acknowledges each event once xterm.js has drawn it. With more than 256 KiB of output unacknowledged the pseudo terminal is paused, and it resumes once that falls to 32 KiB, so a flood of output never piles up in memory. A terminal that ends is resumed first, so a page that is gone never holds a process paused.
+- **Failures.** A failed start or an ended session shows one sentence and a button that starts a fresh terminal. A spawn failure says that Claude Code couldn't start and nothing in the project changed.
+- **Links.** Links in terminal output do nothing yet, so output can never open a dialog or a window.
 - **Environment.** Claude Code starts in the app's working folder, or the home folder when that is not a folder, with the user's environment plus `TERM=xterm-256color` and `COLORTERM=truecolor`.
 - **DOM renderer.** xterm.js draws with its default DOM renderer. A GPU renderer would need another dependency, and Claude Code's own terminal guidance turns GPU acceleration off in embedded terminals because it garbles text.
 - **Terminal font.** The DOM renderer draws block and box characters from the font, and Geist Mono's block glyphs are shorter than its line box, which leaves seams between rows in Claude Code's logo. The terminal uses Geist Mono under its own family name with ascent and descent overrides that match the block glyphs, so blocks join with no gap and lines sit tight. A taller line height was rejected because it brings the seams back.
@@ -77,8 +82,8 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 | `src/main/main.ts` | Startup order. Home, scheme, hardening, protocol, bridge, window |
 | `src/main/bridge/` | The router that validates every request, the sender check, the per-page owners and the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
-| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, and the pseudo terminal |
-| `src/main/terminal/` | The terminal sessions and who owns them |
+| `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the pseudo terminal and ending process trees |
+| `src/main/terminal/` | The terminal sessions, who owns them and their output flow |
 | `src/main/tools/` | Tool versions for the left column |
 | `src/preload/preload.ts` | Exposes `window.satellite` |
 | `src/renderer/entry.tsx` | Loads the four typefaces, then renders the window |

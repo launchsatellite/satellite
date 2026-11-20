@@ -13,6 +13,7 @@ function spies() {
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
     "terminal.close": vi.fn<BridgeHandler<"terminal.close">>(() => Promise.resolve({})),
+    "terminal.ack": vi.fn<BridgeHandler<"terminal.ack">>(() => Promise.resolve({})),
   } satisfies BridgeHandlers;
   return handlers;
 }
@@ -80,6 +81,24 @@ describe("createBridgeRouter", () => {
     const route = createBridgeRouter(handlers);
     const result = await route("terminal.close", { id: "../../etc" }, owner);
     expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    noHandlerRan(handlers);
+  });
+
+  it("refuses an ack that is not a positive count within one output event", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const payloads = [
+      { id: terminalId, chars: 0 },
+      { id: terminalId, chars: -5 },
+      { id: terminalId, chars: 1.5 },
+      { id: terminalId, chars: 65537 },
+      { id: terminalId, chars: "10" },
+      { id: terminalId, chars: 10, extra: true },
+    ];
+    for (const payload of payloads) {
+      const result = await route("terminal.ack", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
     noHandlerRan(handlers);
   });
 
