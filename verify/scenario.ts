@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { z } from "zod";
 import { resolveInside } from "../src/main/platform/paths.ts";
 
@@ -58,7 +58,9 @@ export async function loadScenario(
   if (!parsed.success) {
     throw new Error(`scenario ${name} is invalid\n${z.prettifyError(parsed.error)}`);
   }
-  const seedsProjects = parsed.data.home?.some((seeded) => seeded.path === "projects.json");
+  const seedsProjects = parsed.data.home?.some(
+    (seeded) => normalize(seeded.path) === "projects.json",
+  );
   if (parsed.data.workspaces !== undefined && seedsProjects === true) {
     throw new Error(`scenario ${name} seeds projects.json twice`);
   }
