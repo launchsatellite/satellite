@@ -1,7 +1,9 @@
 import { constants } from "node:fs";
-import { type FileHandle, lstat, mkdir, open, opendir } from "node:fs/promises";
+import type { BigIntStats } from "node:fs";
+import { type FileHandle, lstat, mkdir, open, opendir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { reservedWorkspaceNames } from "../../shared/workspace-name.ts";
+import { isInsidePath } from "../platform/paths.ts";
 import type { IncludeMatcher } from "./worktree-include.ts";
 
 export interface IncludeSelection {
@@ -9,9 +11,15 @@ export interface IncludeSelection {
   links: number;
 }
 
-type Overflow = "too-many" | "too-large";
+export interface CopyLimit {
+  deadline: number;
+  signal: AbortSignal;
+}
+
+type Overflow = "too-many" | "too-large" | "too-slow";
 
 interface Collection {
+  limit: CopyLimit;
   visited: number;
   files: string[];
   bytes: number;
@@ -30,24 +38,41 @@ const changedUnderfootCodes = new Set([
   "ENOENT",
   "ENOTDIR",
 ]);
+const unreadableCodes = new Set([...changedUnderfootCodes, "EACCES", "EPERM"]);
 const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
 const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
-const readFlags = constants.O_RDONLY | noFollow | nonBlocking;
+const noTerminal = "O_NOCTTY" in constants ? constants.O_NOCTTY : 0;
+const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const createFlags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow;
 
-async function unlessChanged<T>(work: () => Promise<T>): Promise<T | undefined> {
+async function unless<T>(
+  codes: ReadonlySet<string>,
+  work: () => Promise<T>,
+): Promise<T | undefined> {
   try {
     return await work();
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      changedUnderfootCodes.has(String(error.code))
-    ) {
+    if (error instanceof Error && "code" in error && codes.has(String(error.code))) {
       return undefined;
     }
     throw error;
   }
+}
+
+async function unlessChanged<T>(work: () => Promise<T>): Promise<T | undefined> {
+  return unless(changedUnderfootCodes, work);
+}
+
+async function unlessUnreadable<T>(work: () => Promise<T>): Promise<T | undefined> {
+  return unless(unreadableCodes, work);
+}
+
+function isStopped(limit: CopyLimit): boolean {
+  return limit.signal.aborted || Date.now() > limit.deadline;
+}
+
+function sameFile(a: BigIntStats, b: BigIntStats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
 }
 
 function isSafeName(name: string): boolean {
@@ -68,7 +93,7 @@ async function keepFile(
   relative: string,
   collection: Collection,
 ): Promise<Overflow | undefined> {
-  const entry = await unlessChanged(() => lstat(join(root, relative)));
+  const entry = await unlessUnreadable(() => lstat(join(root, relative)));
   if (entry === undefined) return undefined;
   if (entry.isSymbolicLink()) collection.links += 1;
   if (!entry.isFile()) return undefined;
@@ -89,11 +114,12 @@ async function walkFolder(
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const { folder } = next;
     const folderWhole = next.whole;
-    const entries = await unlessChanged(() => opendir(join(root, folder)));
+    const entries = await unlessUnreadable(() => opendir(join(root, folder)));
     if (entries === undefined) continue;
     for await (const entry of entries) {
       collection.visited += 1;
       if (collection.visited > entryLimit) return "too-many";
+      if (isStopped(collection.limit)) return "too-slow";
       if (!isSafeName(entry.name)) continue;
       const child = `${folder}/${entry.name}`;
       if (entry.isSymbolicLink()) {
@@ -119,7 +145,7 @@ async function collectFolder(
 ): Promise<Overflow | undefined> {
   const whole = matcher.matches(relative, true);
   if (!whole && !matcher.reaches(relative)) return undefined;
-  const entry = await unlessChanged(() => lstat(join(root, relative)));
+  const entry = await unlessUnreadable(() => lstat(join(root, relative)));
   if (entry?.isSymbolicLink() === true) collection.links += 1;
   if (entry?.isDirectory() !== true) return undefined;
   return walkFolder(root, relative, whole, matcher, collection);
@@ -146,54 +172,76 @@ async function makePlainParents(base: string, segments: readonly string[]): Prom
   return true;
 }
 
-async function copyBytes(source: FileHandle, destination: FileHandle, size: number): Promise<void> {
+async function copyBytes(
+  source: FileHandle,
+  destination: FileHandle,
+  size: number,
+  limit: CopyLimit,
+): Promise<boolean> {
   const buffer = Buffer.alloc(Math.min(size, chunkBytes));
   let position = 0;
   while (position < size) {
+    if (isStopped(limit)) return false;
     const { bytesRead } = await source.read(
       buffer,
       0,
       Math.min(buffer.length, size - position),
       position,
     );
-    if (bytesRead === 0) return;
+    if (bytesRead === 0)
+      throw new Error("a file .worktreeinclude names shrank while it was copied");
     let written = 0;
     while (written < bytesRead) {
       written += (await destination.write(buffer, written, bytesRead - written)).bytesWritten;
     }
     position += bytesRead;
   }
+  return true;
+}
+
+async function opensWhatWasChecked(
+  source: FileHandle,
+  sourcePath: string,
+  realRoot: string,
+  checked: BigIntStats,
+): Promise<BigIntStats | undefined> {
+  const opened = await source.stat({ bigint: true });
+  if (!opened.isFile() || !sameFile(opened, checked)) return undefined;
+  const resolved = await unlessChanged(() => realpath(sourcePath));
+  if (resolved === undefined || !isInsidePath(realRoot, resolved)) return undefined;
+  const now = await unlessChanged(() => lstat(resolved, { bigint: true }));
+  return now?.isFile() === true && sameFile(now, opened) ? opened : undefined;
 }
 
 async function copyOne(
-  root: string,
-  worktree: string,
+  paths: { root: string; realRoot: string; worktree: string },
   relative: string,
   room: number,
-): Promise<number | undefined> {
+  limit: CopyLimit,
+): Promise<number | undefined | "too-slow"> {
   const segments = safeSegments(relative);
-  if (segments === undefined || !(await parentsArePlain(root, segments))) return undefined;
-  const sourcePath = join(root, ...segments);
-  const before = await unlessChanged(() => lstat(sourcePath));
-  if (before?.isFile() !== true) return undefined;
+  if (segments === undefined || !(await parentsArePlain(paths.root, segments))) return undefined;
+  const sourcePath = join(paths.root, ...segments);
+  const checked = await unlessChanged(() => lstat(sourcePath, { bigint: true }));
+  if (checked?.isFile() !== true) return undefined;
   const source = await unlessChanged(() => open(sourcePath, readFlags));
   if (source === undefined) return undefined;
   try {
-    const info = await source.stat();
-    const unchanged = info.isFile() && info.dev === before.dev && info.ino === before.ino;
-    if (!unchanged || info.size > room) return undefined;
-    if (!(await makePlainParents(worktree, segments))) return undefined;
-    const destinationPath = join(worktree, ...segments);
+    const opened = await opensWhatWasChecked(source, sourcePath, paths.realRoot, checked);
+    if (opened === undefined || opened.size > BigInt(room)) return undefined;
+    const size = Number(opened.size);
+    if (!(await makePlainParents(paths.worktree, segments))) return undefined;
+    const destinationPath = join(paths.worktree, ...segments);
     const destination = await unlessChanged(() =>
-      open(destinationPath, createFlags, info.mode & 0o777),
+      open(destinationPath, createFlags, Number(opened.mode) & 0o777),
     );
     if (destination === undefined) return undefined;
     try {
-      await copyBytes(source, destination, info.size);
+      if (!(await copyBytes(source, destination, size, limit))) return "too-slow";
     } finally {
       await destination.close();
     }
-    return info.size;
+    return size;
   } finally {
     await source.close();
   }
@@ -203,11 +251,13 @@ export async function collectIncludedFiles(
   root: string,
   ignored: readonly string[],
   matcher: IncludeMatcher,
+  limit: CopyLimit,
 ): Promise<IncludeSelection | Overflow> {
-  const collection: Collection = { visited: 0, files: [], bytes: 0, links: 0 };
+  const collection: Collection = { limit, visited: 0, files: [], bytes: 0, links: 0 };
   for (const entry of ignored) {
     collection.visited += 1;
     if (collection.visited > entryLimit) return "too-many";
+    if (isStopped(limit)) return "too-slow";
     const isFolder = entry.endsWith("/");
     const relative = isFolder ? entry.slice(0, -1) : entry;
     if (safeSegments(relative) === undefined) continue;
@@ -225,11 +275,15 @@ export async function copyIncludedFiles(
   root: string,
   worktree: string,
   files: readonly string[],
-): Promise<{ copied: number; skipped: number }> {
+  limit: CopyLimit,
+): Promise<{ copied: number; skipped: number } | "too-slow"> {
+  const paths = { root, realRoot: await realpath(root), worktree };
   let copied = 0;
   let bytes = 0;
   for (const relative of files) {
-    const size = await copyOne(root, worktree, relative, byteLimit - bytes);
+    if (isStopped(limit)) return "too-slow";
+    const size = await copyOne(paths, relative, byteLimit - bytes, limit);
+    if (size === "too-slow") return size;
     if (size === undefined) continue;
     copied += 1;
     bytes += size;

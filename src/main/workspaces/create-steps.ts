@@ -443,13 +443,14 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (ignored?.exitCode !== 0) throw new StepFailure("git couldn't list the ignored files.");
       const matcher = createIncludeMatcher(parseWorktreeInclude(text));
       const entries = ignored.stdout.split("\0").filter((entry) => entry !== "");
+      const limit = { deadline, signal };
       const selection = await beforeDeadline(
-        collectIncludedFiles(root, entries, matcher),
+        collectIncludedFiles(root, entries, matcher, limit),
         deadline,
         signal,
       );
       stopIfQuitting(signal);
-      if (selection === "late") throw new StepFailure(includeTooSlow);
+      if (selection === "late" || selection === "too-slow") throw new StepFailure(includeTooSlow);
       if (selection === "too-many" || selection === "too-large") {
         throw new StepFailure(includeTooMuch);
       }
@@ -460,16 +461,14 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
       }
-      let copied = 0;
-      let skipped = selection.links;
-      for (const file of selection.files) {
-        stopIfQuitting(signal);
-        if (Date.now() > deadline) throw new StepFailure(includeTooSlow);
-        const one = await copyIncludedFiles(root, folder.path, [file]);
-        copied += one.copied;
-        skipped += one.skipped;
-      }
-      return copiedDetail(copied, skipped);
+      const copy = await beforeDeadline(
+        copyIncludedFiles(root, folder.path, selection.files, limit),
+        deadline,
+        signal,
+      );
+      stopIfQuitting(signal);
+      if (copy === "late" || copy === "too-slow") throw new StepFailure(includeTooSlow);
+      return copiedDetail(copy.copied, copy.skipped + selection.links);
     },
     undo: () => Promise.resolve(true),
   };
