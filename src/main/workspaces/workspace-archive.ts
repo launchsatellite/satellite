@@ -17,13 +17,19 @@ import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
-import { mountInside, removeWorktree, type Kept } from "./worktree-removal.ts";
+import {
+  boundaryInside,
+  removeWorktree,
+  uncheckedBecause,
+  uncheckedFix,
+  type Kept,
+} from "./worktree-removal.ts";
 
 export type InspectView = BridgeResponse<"workspaces.inspect">;
 export type ArchiveResult = BridgeResponse<"workspaces.archive">;
 type Submodules = InspectView["submodules"];
 interface Inspection {
-  view: Omit<InspectView, "mount" | "sessions" | "fingerprint">;
+  view: Omit<InspectView, "boundary" | "sessions" | "fingerprint">;
   core: string;
   identity: FolderIdentity;
 }
@@ -196,11 +202,11 @@ function fingerprintOf(core: string, sessions: number): string {
 }
 
 function keptFailure(name: string, kept: Kept, linksRemoved: number): BridgeFailure {
-  switch (kept.cause) {
+  switch (kept.kind) {
     case "unchecked":
       return new BridgeFailure(
         "refused",
-        `Satellite couldn't check all of ${name} for links to other folders, so it won't let git delete it. Nothing was removed.`,
+        `Satellite won't let git delete ${name}, because ${uncheckedBecause(kept.why)}. ${uncheckedFix(kept.why, "try again")} Nothing was removed.`,
       );
     case "mount":
       return new BridgeFailure(
@@ -262,8 +268,8 @@ export async function inspectWorkspace(
   sessions: number,
 ): Promise<InspectView> {
   const { view, core } = await readInspection(home, project, record);
-  const mount = await mountInside(record.path);
-  return { ...view, mount, sessions, fingerprint: fingerprintOf(core, sessions) };
+  const boundary = await boundaryInside(record.path);
+  return { ...view, boundary, sessions, fingerprint: fingerprintOf(core, sessions) };
 }
 
 export async function archiveWorkspace(

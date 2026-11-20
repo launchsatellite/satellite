@@ -213,7 +213,14 @@ export const bridgeRequests = {
       repositories: count,
       hidden: count.nullable(),
       submodules: z.enum(["none", "checked-out", "unknown"]),
-      mount: z.string().min(1).max(300).nullable(),
+      boundary: z.discriminatedUnion("kind", [
+        z.strictObject({ kind: z.literal("clear") }),
+        z.strictObject({ kind: z.literal("mount"), at: z.string().min(1).max(300) }),
+        z.strictObject({
+          kind: z.literal("unchecked"),
+          why: z.enum(["unreadable", "limits", "late"]),
+        }),
+      ]),
       commits: lossView,
       sessions: z.int().min(0).max(bridgeLimits.terminals),
       locked: z.boolean(),

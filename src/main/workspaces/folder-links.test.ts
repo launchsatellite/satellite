@@ -46,7 +46,7 @@ describe("findLinks", () => {
     await symlink(outside, linked, "junction");
     await symlink(outside, join(root, "top-link"), "junction");
     const found = await findLinks(root, open());
-    expect(found.complete).toBe(true);
+    expect(found.unchecked).toBeNull();
     expect(found.links.sort()).toEqual([linked, join(root, "top-link")].sort());
   });
 
@@ -63,18 +63,34 @@ describe("findLinks", () => {
     const mounted = join(root, "data");
     await mkdir(join(mounted, "deeper"), { recursive: true });
     const found = await findLinks(root, open(), onAnotherDevice(mounted));
-    expect(found).toMatchObject({ complete: false, mount: mounted });
+    expect(found).toMatchObject({ mount: mounted, unchecked: null });
     expect((await findLinks(root, open())).mount).toBeNull();
+  });
+
+  it("still finds a folder on another device beside a folder it can't read", async () => {
+    const unreadable = join(root, "b");
+    const mounted = join(root, "a", "data");
+    await mkdir(unreadable);
+    await mkdir(mounted, { recursive: true });
+    const devices = onAnotherDevice(mounted);
+    const read: ReadEntry = (path) =>
+      path === unreadable
+        ? Promise.reject(Object.assign(new Error("denied"), { code: "EACCES" }))
+        : devices(path);
+    expect(await findLinks(root, open(), read)).toMatchObject({
+      mount: mounted,
+      unchecked: "unreadable",
+    });
   });
 
   it("says when it stopped at its bounds", async () => {
     await mkdir(join(root, "a", "b", "c"), { recursive: true });
-    expect((await findLinks(root, open(2))).complete).toBe(false);
-    expect((await findLinks(root, open(1000, 1))).complete).toBe(false);
+    expect((await findLinks(root, open(2))).unchecked).toBe("limits");
+    expect((await findLinks(root, open(1000, 1))).unchecked).toBe("limits");
     expect(
-      (await findLinks(root, { entries: 1000, depth: 64, deadline: Date.now() - 1 })).complete,
-    ).toBe(false);
-    expect((await findLinks(root, open(1000, 3))).complete).toBe(true);
+      (await findLinks(root, { entries: 1000, depth: 64, deadline: Date.now() - 1 })).unchecked,
+    ).toBe("limits");
+    expect((await findLinks(root, open(1000, 3))).unchecked).toBeNull();
   });
 });
 

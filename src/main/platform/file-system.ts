@@ -50,10 +50,6 @@ export function isTooLongForCheckouts(
   return platform === "win32" && path.length > windowsPathLimit;
 }
 
-export function linkWalkMustFinish(platform: NodeJS.Platform = process.platform): boolean {
-  return platform === "win32";
-}
-
 export async function isLinkedFolder(path: string): Promise<boolean> {
   return process.platform === "win32" && !samePath(await realpath(path), path);
 }

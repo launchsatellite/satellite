@@ -8,10 +8,11 @@ export interface LinkBounds {
   depth: number;
   deadline: number;
 }
+export type Unchecked = "unreadable" | "limits";
 export interface FoundLinks {
   links: string[];
-  complete: boolean;
   mount: string | null;
+  unchecked: Unchecked | null;
 }
 export type ReadEntry = (path: string) => Promise<BigIntStats>;
 type Kind = "link" | "folder" | "mount" | "other" | "gone" | "unreadable";
@@ -44,41 +45,36 @@ export async function findLinks(
   try {
     device = (await read(root)).dev;
   } catch {
-    return { links, complete: false, mount: null };
+    return { links, mount: null, unchecked: "unreadable" };
   }
   const folders = [{ path: root, depth: 0 }];
   let entries = 0;
-  let complete = true;
+  let unchecked: Unchecked | null = null;
   let mount: string | null = null;
-  while (complete) {
-    const folder = folders.pop();
-    if (folder === undefined) break;
-    let dir;
+  walk: for (let folder = folders.pop(); folder !== undefined; folder = folders.pop()) {
     try {
-      dir = await opendir(folder.path);
-    } catch {
-      complete = false;
-      break;
-    }
-    for await (const entry of dir) {
-      entries += 1;
-      if (entries > bounds.entries || Date.now() > bounds.deadline) {
-        complete = false;
-        break;
+      for await (const entry of await opendir(folder.path)) {
+        entries += 1;
+        if (entries > bounds.entries || Date.now() > bounds.deadline) {
+          unchecked = "limits";
+          break walk;
+        }
+        if (entry.isFile()) continue;
+        const path = join(folder.path, entry.name);
+        const kind = entry.isSymbolicLink() ? "link" : await kindOf(path, device, read);
+        if (kind === "link") links.push(path);
+        else if (kind === "mount") {
+          mount = path;
+          break walk;
+        } else if (kind === "unreadable") unchecked ??= "unreadable";
+        else if (kind === "folder" && folder.depth + 1 > bounds.depth) unchecked = "limits";
+        else if (kind === "folder") folders.push({ path, depth: folder.depth + 1 });
       }
-      if (entry.isFile()) continue;
-      const path = join(folder.path, entry.name);
-      const kind = entry.isSymbolicLink() ? "link" : await kindOf(path, device, read);
-      if (kind === "link") links.push(path);
-      else if (kind === "mount") mount = path;
-      else if (kind === "unreadable") complete = false;
-      else if (kind === "folder" && folder.depth + 1 > bounds.depth) complete = false;
-      else if (kind === "folder") folders.push({ path, depth: folder.depth + 1 });
-      if (mount !== null) complete = false;
-      if (!complete) break;
+    } catch {
+      unchecked ??= "unreadable";
     }
   }
-  return { links, complete, mount };
+  return { links, mount, unchecked };
 }
 
 export async function removeLink(path: string): Promise<boolean> {

@@ -72,7 +72,7 @@ function spies() {
         repositories: 0,
         hidden: 0,
         submodules: "none",
-        mount: null,
+        boundary: { kind: "clear" },
         commits: { kind: "no-remote" },
         sessions: 0,
         locked: false,

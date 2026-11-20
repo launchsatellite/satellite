@@ -20,7 +20,7 @@ import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { runGit } from "./git-command.ts";
 import { archiveWorkspace, inspectWorkspace, parseIndex } from "./workspace-archive.ts";
 import { listWorktrees } from "./worktree-list.ts";
-import { mountInside, removeWorktree } from "./worktree-removal.ts";
+import { boundaryInside, removeWorktree } from "./worktree-removal.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -522,14 +522,38 @@ describe("removeWorktree", () => {
       if (path === mounted) entry.dev += 1n;
       return entry;
     };
-    expect(await mountInside(record.path, read)).toBe("data");
-    expect(await mountInside(record.path)).toBeNull();
+    expect(await boundaryInside(record.path, read)).toEqual({ kind: "mount", at: "data" });
+    expect(await boundaryInside(record.path)).toEqual({ kind: "clear" });
     expect(
       await removeWorktree(project.path, record.path, { force: true, locked: false, read }),
-    ).toEqual({ kind: "kept", kept: { cause: "mount", at: "data" }, linksRemoved: 0 });
+    ).toEqual({ kind: "kept", kept: { kind: "mount", at: "data" }, linksRemoved: 0 });
     expect(removeCalls()).toEqual([]);
     expect(await listed(project)).toContain(asGitPrints(record.path));
     expect(await readFile(join(mounted, "remote.md"), "utf8")).toBe("On another drive.\n");
+    expect(await exists(join(record.path, "linked"))).toBe(true);
+  });
+
+  it("leaves a worktree it can't see whole as it is, on every system", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "hidden");
+    const outside = join(base, "outside");
+    await mkdir(outside);
+    await symlink(outside, join(record.path, "linked"), "junction");
+    const closed = join(record.path, "closed");
+    await mkdir(closed);
+    const read = (path: string) =>
+      path === closed
+        ? Promise.reject(Object.assign(new Error("denied"), { code: "EACCES" }))
+        : lstat(path, { bigint: true });
+    expect(await boundaryInside(record.path, read)).toEqual({
+      kind: "unchecked",
+      why: "unreadable",
+    });
+    expect(
+      await removeWorktree(project.path, record.path, { force: true, locked: false, read }),
+    ).toEqual({ kind: "kept", kept: { kind: "unchecked", why: "unreadable" }, linksRemoved: 0 });
+    expect(removeCalls()).toEqual([]);
+    expect(await listed(project)).toContain(asGitPrints(record.path));
     expect(await exists(join(record.path, "linked"))).toBe(true);
   });
 });

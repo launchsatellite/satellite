@@ -167,8 +167,26 @@ function submodulesSentence(name: string, submodules: Inspected["submodules"]): 
     : `Satellite couldn't check whether ${name} has submodules checked out, so it won't archive it.`;
 }
 
+function boundarySentence(name: string, boundary: Inspected["boundary"]): string {
+  switch (boundary.kind) {
+    case "clear":
+      return "";
+    case "mount":
+      return `${name} holds a folder from another drive at ${boundary.at}, so Satellite won't archive it. Unmount it first.`;
+    case "unchecked":
+      switch (boundary.why) {
+        case "unreadable":
+          return `Satellite can't read every folder in ${name}, so it can't rule out a folder from another drive there and won't archive it. Make its folders readable, then try again.`;
+        case "limits":
+          return `${name} holds more than Satellite checks for links and folders from another drive, so it won't archive it. Check that it holds no folder from another drive, then remove it with git worktree remove in a terminal.`;
+        case "late":
+          return `A folder in ${name} didn't answer within 60 seconds, so Satellite won't archive it. Check the drives mounted inside it, then try again.`;
+      }
+  }
+}
+
 function blocked(view: Inspected): boolean {
-  return view.locked || view.submodules !== "none" || view.mount !== null;
+  return view.locked || view.submodules !== "none" || view.boundary.kind !== "clear";
 }
 
 export function ArchiveDialog({ project, workspace, onClose, onArchived }: ArchiveDialogProps) {
@@ -282,10 +300,9 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
               {submodulesSentence(name, view.submodules)}
             </Row>
           )}
-          {view.mount !== null && (
-            <Row pixel="needs-you" testId="archive-mount">
-              {name} holds a folder from another drive at {view.mount}, so Satellite won&apos;t
-              archive it. Unmount it first.
+          {view.boundary.kind !== "clear" && (
+            <Row pixel="needs-you" testId="archive-boundary">
+              {boundarySentence(name, view.boundary)}
             </Row>
           )}
           {view.locked && (

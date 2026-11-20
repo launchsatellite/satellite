@@ -37,7 +37,7 @@ import { suggestName } from "./workspace-names.ts";
 import { listWorktrees } from "./worktree-list.ts";
 import type { CreationResult, CreationStepRun } from "./workspace-creation.ts";
 import { StepFailure } from "./workspace-creation.ts";
-import { removeWorktree, type Kept } from "./worktree-removal.ts";
+import { removeWorktree, uncheckedBecause, uncheckedFix, type Kept } from "./worktree-removal.ts";
 
 export interface CreationContext {
   home: string;
@@ -400,11 +400,13 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
         const listing = await listWorktrees(root);
         if (listing === undefined) return false;
         const entry = listing.worktrees.find((worktree) => samePath(worktree.path, folder.path));
-        const removal = await removeWorktree(root, folder.path, {
-          force: true,
-          locked: entry?.locked === true,
-        });
-        if (removal.kind === "kept") return leftSentence(context, removal.kept);
+        if (entry !== undefined) {
+          const removal = await removeWorktree(root, folder.path, {
+            force: true,
+            locked: entry.locked,
+          });
+          if (removal.kind === "kept") return leftSentence(context, removal.kept);
+        }
         if (await isSafeWorktree(home, folder)) {
           await rm(folder.path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
         }
@@ -578,9 +580,9 @@ function leftSentence(context: CreationContext, kept: Kept): string {
   const { root, name } = context;
   const folder = `worktrees/${projectSegment(root)}/${name}`;
   const left = `Satellite left the worktree in ${folder} in the Satellite home`;
-  switch (kept.cause) {
+  switch (kept.kind) {
     case "unchecked":
-      return `${left}, because it couldn't check all of it for links to other folders. The branch ${name} stays.`;
+      return `${left}, because ${uncheckedBecause(kept.why)}. The branch ${name} stays. ${uncheckedFix(kept.why, `archive ${name}`)}`;
     case "mount":
       return `${left}, because a folder from another drive is mounted at ${kept.at} inside it. The branch ${name} stays. Unmount it, then archive ${name}.`;
     case "link":
