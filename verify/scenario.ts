@@ -9,7 +9,13 @@ export type RepoStep = z.infer<typeof repoStepSchema>;
 const kebabCase = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const scenariosRoot = join(import.meta.dirname, "scenarios");
 const repoStepSchema = z.union([
-  z.strictObject({ write: z.strictObject({ path: z.string().min(1), content: z.string() }) }),
+  z.strictObject({
+    write: z.strictObject({
+      path: z.string().min(1),
+      content: z.string(),
+      executable: z.boolean().optional(),
+    }),
+  }),
   z.strictObject({ git: z.array(z.string()).min(1) }),
 ]);
 const ghAnswerSchema = z.strictObject({

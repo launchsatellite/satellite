@@ -114,6 +114,18 @@ function parseStep(raw: string): Step {
       const testId = needsValue();
       return step(({ session }) => session.page.getByTestId(testId).click());
     }
+    case "select": {
+      const choice = needsValue();
+      const separator = choice.indexOf(":");
+      const testId = choice.slice(0, separator);
+      const label = choice.slice(separator + 1);
+      if (separator === -1 || testId === "" || label === "") {
+        throw new Error("step select needs <testid>:<label>, as in select=workspace-start:main");
+      }
+      return step(async ({ session }) => {
+        await session.page.getByTestId(testId).selectOption({ label });
+      });
+    }
     case "type": {
       const text = needsValue();
       return step(async ({ session }) => {
