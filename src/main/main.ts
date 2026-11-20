@@ -92,7 +92,9 @@ async function start({
   );
   const window = await createMainWindow(entryUrl);
   window.on("focus", () => {
-    windowTookFocus(notices.seen);
+    windowTookFocus(() => {
+      notices.seen();
+    });
   });
 }
 
