@@ -13,23 +13,25 @@ export function WorkspaceHeader({
   return (
     <header
       data-testid="workspace-header"
-      className="flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
+      className="@container flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
       <h1 className="max-w-[45%] min-w-10 truncate text-[14px] font-semibold">
         {workspace.name ?? project.name}
       </h1>
       {workspace.name !== null && (
-        <span className="min-w-0 truncate text-[13px] text-dim">{project.name}</span>
+        <span className="hidden min-w-[4ch] truncate text-[13px] text-dim @md:block">
+          {project.name}
+        </span>
       )}
       {project.missing === null && (
-        <>
-          <span className="flex-none text-dim">
+        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @sm:flex">
+          <span className="flex-none">
             <Icon name="branch" size={13} />
           </span>
-          <span className="min-w-0 truncate font-mono text-[12px] text-dim">
+          <span className="min-w-0 truncate font-mono text-[12px]">
             {workspaceLabel(project, workspace)}
           </span>
-        </>
+        </span>
       )}
       <span className="ml-auto flex flex-none items-center gap-1">
         {workspace.key !== "main" && (
