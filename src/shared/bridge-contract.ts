@@ -53,6 +53,7 @@ export const workspaceView = z.strictObject({
 export const projectView = z.strictObject({
   id: z.uuid(),
   name: z.string().min(1).max(255),
+  parent: z.string().max(255),
   missing: z.boolean(),
   workspaces: z.array(workspaceView).max(1),
 });

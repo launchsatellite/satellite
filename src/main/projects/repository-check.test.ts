@@ -3,8 +3,19 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { checkRepository, parseRevParse } from "./repository-check.ts";
+
+vi.mock("../platform/user-environment.ts", () => ({
+  userEnvironment: () =>
+    Promise.resolve(
+      Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+    ),
+}));
 
 const run = promisify(execFile);
 const isWindows = process.platform === "win32";
@@ -46,6 +57,10 @@ beforeAll(async () => {
   await git(base, ["init", "-q", "--bare", "bare.git"]);
   await git(join(base, "repo"), ["worktree", "add", "-q", join(base, "linked")]);
 }, 30_000);
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterAll(async () => {
   await rm(base, { recursive: true, force: true });
@@ -111,6 +126,16 @@ describe("parseRevParse", () => {
     });
   });
 
+  it("recognises a git too old for absolute paths", () => {
+    expect(
+      parseRevParse({
+        exitCode: 0,
+        stdout: "--path-format=absolute\nfalse\nfalse\n.git\n.git\n/Users/<name>/repo\n",
+        stderr: "",
+      }),
+    ).toEqual({ kind: "outdated" });
+  });
+
   it("recognises a folder owned by another user", () => {
     expect(
       parseRevParse({
@@ -172,6 +197,16 @@ describe("checkRepository", () => {
     expect(await checkRepository(join(base, "-dash repo") + "/", home)).toEqual({
       ok: true,
       root: await realpath(join(base, "-dash repo")),
+    });
+  });
+
+  it("refuses a plain folder with its sentence under a German locale", async () => {
+    vi.stubEnv("LANG", "de_DE.UTF-8");
+    vi.stubEnv("LC_ALL", "de_DE.UTF-8");
+    vi.stubEnv("LANGUAGE", "de");
+    expect(await checkRepository(join(base, "plain"), home)).toEqual({
+      ok: false,
+      refusal: "plain is not a git repository. Choose the folder a repository was cloned into.",
     });
   });
 

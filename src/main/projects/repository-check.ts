@@ -10,6 +10,7 @@ export type RevParse =
   | { kind: "git-dir" }
   | { kind: "not-a-repository" }
   | { kind: "untrusted" }
+  | { kind: "outdated" }
   | { kind: "unknown" };
 export type RepositoryCheck = { ok: true; root: string } | { ok: false; refusal: string };
 
@@ -66,6 +67,7 @@ export function parseRevParse(run: ToolRun): RevParse {
   const lines = run.stdout.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   const [bare, insideGitDir, gitDir, commonDir, toplevel] = lines;
+  if (bare === "--path-format=absolute") return { kind: "outdated" };
   if (bare === "true") return { kind: "bare" };
   if (insideGitDir === "true") return { kind: "git-dir" };
   if (
@@ -110,6 +112,10 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
       );
     case "untrusted":
       return refuse(`git doesn't trust ${name} because another user owns it.`);
+    case "outdated":
+      return refuse(
+        "Satellite needs git 2.31 or newer to read the folder. Update git, then try again.",
+      );
     case "unknown":
       return refuse(`git couldn't read ${name}. Nothing was added.`);
     case "work-tree":
@@ -120,10 +126,11 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
       `${name} is a worktree of another repository. Add the repository's main folder instead.`,
     );
   }
-  if (!samePath(parsed.toplevel, real)) {
-    const root = basename(parsed.toplevel);
-    return refuse(`${name} is inside the repository ${root}. Add ${root} itself instead.`);
-  }
   const root = await realFolder(parsed.toplevel);
-  return root === undefined ? refuse(missingFolder) : { ok: true, root };
+  if (root === undefined) return refuse(missingFolder);
+  if (!samePath(root, real)) {
+    const rootName = basename(root);
+    return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
+  }
+  return { ok: true, root };
 }

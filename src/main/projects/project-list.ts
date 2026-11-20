@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
@@ -21,6 +22,7 @@ export interface Projects {
 }
 
 const branchReads = 8;
+const projectCheckMs = 6000;
 const nameLimit = 255;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
 
@@ -35,14 +37,36 @@ async function isFolder(path: string): Promise<boolean> {
   );
 }
 
-async function projectView(project: StoredProject): Promise<ProjectView> {
-  const missing = !(await isFolder(project.path));
+function unavailable(project: StoredProject): ProjectView {
   return {
     id: project.id,
     name: projectName(project.path),
-    missing,
-    workspaces: [missing ? { key: "main", branch: null } : await mainWorkspace(project.path)],
+    parent: projectName(dirname(project.path)),
+    missing: true,
+    workspaces: [{ key: "main", branch: null }],
   };
+}
+
+async function readProject(project: StoredProject): Promise<ProjectView> {
+  if (!(await isFolder(project.path))) return unavailable(project);
+  return {
+    ...unavailable(project),
+    missing: false,
+    workspaces: [await mainWorkspace(project.path)],
+  };
+}
+
+async function projectView(project: StoredProject): Promise<ProjectView> {
+  const controller = new AbortController();
+  const expired = delay(projectCheckMs, undefined, { signal: controller.signal }).then(
+    () => unavailable(project),
+    () => unavailable(project),
+  );
+  try {
+    return await Promise.race([readProject(project), expired]);
+  } finally {
+    controller.abort();
+  }
 }
 
 async function inBatches<T, R>(items: readonly T[], size: number, map: (item: T) => Promise<R>) {
@@ -58,6 +82,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let projects: StoredProject[] | undefined;
   let noticeGiven = false;
   let choosing = false;
+  let listing: Promise<ProjectView[]> | undefined;
   const current = async () => {
     const loaded = await file.load();
     projects ??= [...loaded.projects];
@@ -101,7 +126,10 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         const { notice } = await file.load();
         const shown = noticeGiven ? null : notice;
         noticeGiven = true;
-        return { projects: await inBatches(list, branchReads, projectView), notice: shown };
+        listing ??= inBatches(list, branchReads, projectView).finally(() => {
+          listing = undefined;
+        });
+        return { projects: await listing, notice: shown };
       },
       "projects.choose": async () => {
         if (choosing) throw new BridgeFailure("refused", "The folder dialog is already open.");
