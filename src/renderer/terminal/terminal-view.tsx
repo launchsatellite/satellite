@@ -18,6 +18,7 @@ import { leads } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
+import { linkFollow } from "./link-follow.ts";
 import "./terminal-font.css";
 import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
 import { terminalTheme } from "./terminal-theme.ts";
@@ -78,13 +79,12 @@ export function TerminalView({
   useEffect(() => {
     const element = host.current;
     if (element === null) return;
-    const follow = (event: MouseEvent, text: string, asks: boolean) => {
-      if (!opensLink(event)) return;
+    const follow = (event: MouseEvent, text: string) => {
+      const step = linkFollow(text, opensLink(event));
+      if (step === null) return;
       const { onAskLink: ask, notify: tell } = outward.current;
-      const href = URL.parse(text)?.href;
-      if (href === undefined) openLink(text, tell);
-      else if (!asks && (href === text || href === `${text}/`)) openLink(href, tell);
-      else ask(href);
+      if ("ask" in step) ask(step.ask);
+      else void openLink(step.refuse, tell);
     };
     const terminal = new Terminal({
       fontFamily: '"Satellite Terminal Mono", monospace',
@@ -95,7 +95,7 @@ export function TerminalView({
       theme: terminalTheme(),
       linkHandler: {
         activate: (event, text) => {
-          follow(event, text, true);
+          follow(event, text);
         },
       },
     });
@@ -104,7 +104,7 @@ export function TerminalView({
     terminal.loadAddon(new Unicode11Addon());
     terminal.loadAddon(
       new WebLinksAddon((event, text) => {
-        follow(event, text, false);
+        follow(event, text);
       }),
     );
     terminal.unicode.activeVersion = "11";

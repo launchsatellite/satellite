@@ -12,10 +12,10 @@ interface LinkDialogProps {
 const label = "text-[12px] text-dim";
 const mono = "font-mono text-[12px] break-all text-fg select-all";
 
-export function openLink(url: string, notify: Notify): void {
-  void invoke("links.open", { url }).then((result) => {
-    if (!result.ok) notify(result.error.message, "error");
-  });
+export async function openLink(url: string, notify: Notify): Promise<boolean> {
+  const result = await invoke("links.open", { url });
+  if (!result.ok) notify(result.error.message, "error");
+  return result.ok;
 }
 
 export function LinkDialog({ address, onClose, notify }: LinkDialogProps) {
@@ -29,20 +29,23 @@ export function LinkDialog({ address, onClose, notify }: LinkDialogProps) {
       closable
       footer={
         <>
+          <span className="order-last">
+            <Button
+              onClick={() => {
+                void openLink(address, notify).then((opened) => {
+                  if (opened) onClose();
+                });
+              }}
+              testId="link-open"
+            >
+              Open in browser
+            </Button>
+          </span>
           <span className="mr-auto">
             <Button variant="ghost" onClick={onClose} testId="link-cancel">
               Cancel
             </Button>
           </span>
-          <Button
-            onClick={() => {
-              openLink(address, notify);
-              onClose();
-            }}
-            testId="link-open"
-          >
-            Open in browser
-          </Button>
         </>
       }
     >
