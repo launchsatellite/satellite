@@ -32,6 +32,9 @@ export const scenarioSchema = z.strictObject({
   folders: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),
+  workspaces: z
+    .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
+    .optional(),
   gh: z.array(ghAnswerSchema),
   claude: z.union([
     z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
@@ -54,6 +57,10 @@ export async function loadScenario(
   const parsed = scenarioSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error(`scenario ${name} is invalid\n${z.prettifyError(parsed.error)}`);
+  }
+  const seedsProjects = parsed.data.home?.some((seeded) => seeded.path === "projects.json");
+  if (parsed.data.workspaces !== undefined && seedsProjects === true) {
+    throw new Error(`scenario ${name} seeds projects.json twice`);
   }
   return { dir, file, scenario: parsed.data };
 }
