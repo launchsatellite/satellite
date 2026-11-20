@@ -154,7 +154,8 @@ app.on("before-quit", (event) => {
   const settled = Promise.all([
     bounded(
       Promise.all([
-        parts?.terminals.closeAll().then(() => parts.last.flush()),
+        parts?.terminals.closeAll(),
+        parts?.last.flush(),
         parts?.interfaceFile.flush(),
       ]),
     ),

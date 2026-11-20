@@ -29,6 +29,17 @@ describe("createLastSessions", () => {
     expect(await reloaded.get(other)).toBe(second);
   });
 
+  it("saves a change still waiting in line when flushed", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "satellite-last-")));
+    const last = createLastSessions(home);
+    void last.set(main, first);
+    void last.set(other, second);
+    await last.flush();
+    const reloaded = createLastSessions(home);
+    expect(await reloaded.get(main)).toBe(first);
+    expect(await reloaded.get(other)).toBe(second);
+  });
+
   it("ignores a session id that is not a UUID", async () => {
     const home = await realpath(await mkdtemp(join(tmpdir(), "satellite-last-")));
     const last = createLastSessions(home);

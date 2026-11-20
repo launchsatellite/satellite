@@ -95,6 +95,9 @@ export function createLastSessions(home: string): LastSessions {
         return kept.length === last.length ? undefined : kept;
       });
     },
-    flush: () => writer.flush(),
+    async flush() {
+      await changes;
+      await writer.flush();
+    },
   };
 }
