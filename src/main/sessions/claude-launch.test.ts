@@ -41,6 +41,7 @@ describe("claudeArgs", () => {
   it("refuses a settings path that is not absolute", () => {
     for (const file of ["--help", "-x", "", "sessions/settings.json"]) {
       expect(() => claudeArgs({ kind: "new", sessionId }, file)).toThrow(Error);
+      expect(() => claudeArgs({ kind: "resume", sessionId }, file)).toThrow(Error);
     }
   });
 });
