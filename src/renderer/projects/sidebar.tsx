@@ -14,7 +14,8 @@ import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
-import { repeatedNames, shownParent, workspaceLabel } from "./use-projects.ts";
+import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
   projects: readonly ProjectView[] | undefined;

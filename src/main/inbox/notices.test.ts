@@ -42,7 +42,7 @@ function setup() {
       : new Promise((resolve) => setTimeout(resolve, slow)));
     if (state.failing.has(name)) throw new Error("projects.json could not be read");
     if (state.gone.has(name)) return undefined;
-    return { project: "repo", workspace: name === "main" ? null : `w${name}` };
+    return { project: "repo", parent: null, workspace: name === "main" ? null : `w${name}` };
   });
   const notices = createNotices({
     inFront: () => state.front,
@@ -273,7 +273,8 @@ describe("createNotices", () => {
     });
     const notices = createNotices({
       inFront: () => false,
-      subject: (workspace) => Promise.resolve({ project: "repo", workspace: nameOf(workspace) }),
+      subject: (workspace) =>
+        Promise.resolve({ project: "repo", parent: null, workspace: nameOf(workspace) }),
       show,
       setBadge: () => undefined,
       open: () => undefined,

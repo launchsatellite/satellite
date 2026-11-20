@@ -15,12 +15,8 @@ import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbo
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
-import {
-  repeatedNames,
-  shownParent,
-  useProjects,
-  workspaceLabel,
-} from "../projects/use-projects.ts";
+import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
 import { focusSession } from "../sessions/focus-session.ts";

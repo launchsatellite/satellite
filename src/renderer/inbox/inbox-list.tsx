@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
-import { repeatedNames, shownParent, workspaceLabel } from "../projects/use-projects.ts";
+import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";

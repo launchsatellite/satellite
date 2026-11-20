@@ -59,6 +59,7 @@ function fakeStore(projects: StoredProject[]): ProjectStore {
         () => false,
       ),
     creating: new Set(),
+    list: () => Promise.resolve(projects),
     project(projectId) {
       const found = projects.find((project) => project.id === projectId);
       if (found === undefined) {

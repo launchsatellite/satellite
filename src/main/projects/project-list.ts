@@ -41,6 +41,7 @@ interface ProjectRead {
   answer: Promise<ProjectAnswer>;
 }
 export interface ProjectStore {
+  list(): Promise<StoredProject[]>;
   project(projectId: string): Promise<StoredProject>;
   available(project: StoredProject): Promise<boolean>;
   addWorkspace(projectId: string, workspace: StoredWorkspace): Promise<void>;
@@ -325,6 +326,7 @@ export function createProjects({
     creating,
     available: async (project) => (await checkedWithin(project)).checked === null,
     writable: async () => (await file.load()).writable,
+    list: current,
     async project(projectId) {
       const found = (await current()).find((project) => project.id === projectId);
       if (found === undefined) throw new BridgeFailure("not-found", notInSatellite);

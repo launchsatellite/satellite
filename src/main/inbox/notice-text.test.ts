@@ -7,14 +7,14 @@ const unsafe = ["<", ">", "&", '"', "\n", "\u202e", "\u0007"];
 
 describe("noticeText", () => {
   it("names the workspace and its project", () => {
-    expect(noticeText([{ project: "repo", workspace: "alpha" }])).toEqual({
+    expect(noticeText([{ project: "repo", parent: null, workspace: "alpha" }])).toEqual({
       title: "alpha needs you",
       body: "Claude Code is waiting for you in repo.",
     });
   });
 
   it("names the project for its main workspace", () => {
-    expect(noticeText([{ project: "repo", workspace: null }])).toEqual({
+    expect(noticeText([{ project: "repo", parent: null, workspace: null }])).toEqual({
       title: "repo needs you",
       body: "Claude Code is waiting for you in the main workspace.",
     });
@@ -23,9 +23,9 @@ describe("noticeText", () => {
   it("counts several workspaces", () => {
     expect(
       noticeText([
-        { project: "repo", workspace: "alpha" },
-        { project: "repo", workspace: null },
-        { project: "other", workspace: "beta" },
+        { project: "repo", parent: null, workspace: "alpha" },
+        { project: "repo", parent: null, workspace: null },
+        { project: "other", parent: null, workspace: "beta" },
       ]),
     ).toEqual({
       title: "3 workspaces need you",
@@ -34,14 +34,14 @@ describe("noticeText", () => {
   });
 
   it("keeps markup, control and direction characters out of a name", () => {
-    const named = noticeText([{ project: hostile, workspace: hostile }]);
+    const named = noticeText([{ project: hostile, parent: null, workspace: hostile }]);
     for (const text of [named.title, named.body]) {
       for (const character of unsafe) expect(text).not.toContain(character);
     }
-    expect(noticeText([{ project: '<>&"\n\u202e\u0007', workspace: null }]).title).toBe(
-      "a project needs you",
-    );
-    expect(noticeText([{ project: "repo", workspace: "\u2066\u0000" }]).title).toBe(
+    expect(
+      noticeText([{ project: '<>&"\n\u202e\u0007', parent: null, workspace: null }]).title,
+    ).toBe("a project needs you");
+    expect(noticeText([{ project: "repo", parent: null, workspace: "\u2066\u0000" }]).title).toBe(
       "a workspace needs you",
     );
   });
@@ -57,8 +57,8 @@ describe("noticeText", () => {
     expect(Array.from(noticeName(long, "a project"))).toHaveLength(noticeNameLimit);
     expect(noticeName(`${"a".repeat(31)}  b`, "a project")).toBe("a".repeat(31));
     for (const subject of [
-      { project: long, workspace: long },
-      { project: long, workspace: null },
+      { project: long, parent: long, workspace: long },
+      { project: long, parent: long, workspace: null },
     ]) {
       const { title, body } = noticeText([subject]);
       expect(bytes(title)).toBeLessThanOrEqual(256);
@@ -71,7 +71,7 @@ describe("noticeText", () => {
       expect(noticeName(raw, "a project")).toBe("a project");
     }
     expect(noticeName("\u0301app", "a project")).toBe("app");
-    expect(noticeText([{ project: "...", workspace: "()" }])).toEqual({
+    expect(noticeText([{ project: "...", parent: null, workspace: "()" }])).toEqual({
       title: "a workspace needs you",
       body: "Claude Code is waiting for you in a project.",
     });
@@ -83,5 +83,21 @@ describe("noticeText", () => {
     const cluster = "\u0915\u093f";
     expect(noticeName(cluster.repeat(20), "a project")).toBe(cluster.repeat(16));
     expect(noticeName("a".repeat(1_000_000), "a project")).toBe("a".repeat(noticeNameLimit));
+  });
+
+  it("names the parent folder when two projects share a name", () => {
+    expect(noticeText([{ project: "app", parent: "one", workspace: "alpha" }])).toEqual({
+      title: "alpha needs you",
+      body: "Claude Code is waiting for you in app in one.",
+    });
+    expect(noticeText([{ project: "app", parent: "two", workspace: null }]).title).toBe(
+      "app in two needs you",
+    );
+    expect(noticeText([{ project: "app", parent: "<>", workspace: null }]).title).toBe(
+      "app in a folder needs you",
+    );
+    expect(noticeText([{ project: "app", parent: "p".repeat(40), workspace: null }]).title).toBe(
+      `app in ${"p".repeat(16)} needs you`,
+    );
   });
 });

@@ -26,6 +26,7 @@ async function setUp() {
 function storeOf(...answers: StoredProject[]): ProjectStore {
   let calls = 0;
   return {
+    list: () => Promise.resolve(answers),
     project: () => {
       const answer = answers[Math.min(calls, answers.length - 1)];
       calls += 1;
