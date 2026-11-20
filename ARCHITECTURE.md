@@ -120,8 +120,10 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
 | `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
 | `src/renderer/window/` | The three columns, their dividers, how widths fit the window and the interface state hook |
-| `src/renderer/ui/` | Shared interface parts such as the primary button |
-| `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
+| `src/renderer/commands/` | The command registry, the platform shortcut matcher and the provider that runs a command from its shortcut or its button |
+| `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share |
+| `src/renderer/ui/` | Shared interface parts, the button, the key hint and the line icons |
+| `src/renderer/styles/app.css` | The `DESIGN.md` app tokens and the raised shadow for light and dark, mapped to Tailwind utilities |
 | `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
 | `electron-builder.yml` | Packages `out/` into `release/` with the fuses |

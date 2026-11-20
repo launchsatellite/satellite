@@ -25,6 +25,10 @@
   --signal: #ff5a1f;
   --pri-bg: #0a0a0b;
   --pri-fg: #f4f4f1;
+  --shadow: 0 16px 40px rgb(10 10 11 / 0.12);
+  --volt: #dcff3d;
+  --volt-edge: #6b7800;
+  --lilac: #c7b9ff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +52,10 @@
     --signal: #ff5a1f;
     --pri-bg: #f4f4f1;
     --pri-fg: #08080a;
+    --shadow: 0 16px 40px rgb(0 0 0 / 0.55);
+    --volt: #dcff3d;
+    --volt-edge: #dcff3d;
+    --lilac: #c7b9ff;
   }
 }
 
@@ -72,6 +80,10 @@
   --color-signal: var(--signal);
   --color-pri-bg: var(--pri-bg);
   --color-pri-fg: var(--pri-fg);
+  --color-volt: var(--volt);
+  --color-volt-edge: var(--volt-edge);
+  --color-lilac: var(--lilac);
+  --shadow-raised: var(--shadow);
   --font-sans: "Funnel Sans Variable", sans-serif;
   --font-display: "Funnel Display Variable", sans-serif;
   --font-mono: "Geist Mono Variable", monospace;
