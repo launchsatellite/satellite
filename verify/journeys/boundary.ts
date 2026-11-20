@@ -4,6 +4,7 @@ import type { Page } from "playwright-core";
 import { z } from "zod";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { processGone, promptTimeoutMs, startClaude, waitUntil } from "./conditions.ts";
 
 interface PolicyProbe {
   inlineScriptRan: boolean;
@@ -13,6 +14,7 @@ interface PolicyProbe {
 }
 
 const remote = "https://example.com";
+const stillHere = "still here";
 const settleMs = 1_000;
 const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
@@ -176,6 +178,17 @@ async function checkLeaving(page: Page, appUrl: string, reached: string[]): Prom
   assert.equal(page.url(), appUrl, `the window left the app for ${page.url()}`);
 }
 
+async function checkTerminalSurvives(session: AppSession, pid: number): Promise<void> {
+  assert.ok(!processGone(pid), "a refused navigation ended Claude Code");
+  await session.page.keyboard.type(stillHere);
+  await waitUntil(
+    async () =>
+      (await session.page.getByTestId("terminal").textContent())?.includes(stillHere) === true,
+    promptTimeoutMs,
+    "after a refused navigation the terminal no longer echoed what was typed",
+  );
+}
+
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   const appUrl = page.url();
@@ -190,7 +203,9 @@ async function run(session: AppSession): Promise<void> {
   await checkPaths(page);
   await checkBridge(page);
   await session.screenshot("boundary");
+  const pid = await startClaude(session, 1);
   await checkLeaving(page, appUrl, reached);
+  await checkTerminalSurvives(session, pid);
 }
 
 export const boundaryJourney: Journey = { name: "boundary", scenario: "default", run };

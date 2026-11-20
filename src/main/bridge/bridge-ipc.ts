@@ -16,9 +16,7 @@ function watchPage(contents: WebContents, pages: PageOwners<WebContents>): void 
   };
   contents.on("destroyed", end);
   contents.on("render-process-gone", end);
-  contents.on("did-start-navigation", (details) => {
-    if (details.isMainFrame && !details.isSameDocument) end();
-  });
+  contents.on("did-navigate", end);
 }
 
 export function registerBridge(handlers: BridgeHandlers, allowedOrigin: string): void {

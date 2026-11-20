@@ -36,7 +36,7 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 - **Validation first.** Channels are looked up in a `Map`, so names like `__proto__` or `constructor` find nothing. Every payload is parsed with its strict schema before the handler runs, so a wrong type, a missing field or an extra key is refused with `invalid-request`.
 - **Errors.** A handler throws `BridgeFailure` for outcomes the user sees. Any other error is logged in the background process and answered as `failed` with no stack.
 - **Trust nothing back.** The interface parses every answer and every event with the same contract, so it never acts on a shape it did not expect.
-- **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or it reloads, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. So nothing a page started outlives it, even when a request was still in flight.
+- **Lifetime.** Each page load is one bridge owner. When the window is destroyed, its renderer dies or a new document commits in its main frame, the owner ends. Its cleanups run, a cleanup added later runs at once, its events are dropped, and the next page load gets a new owner. A navigation the hardening refuses never commits, so the page and everything it started keep running. A request the old page sends while a reload is still loading lands on the old owner, so nothing a page started outlives it.
 
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
