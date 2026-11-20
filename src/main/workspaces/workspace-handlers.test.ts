@@ -108,15 +108,16 @@ describe("workspaceHandlers", () => {
     const { handlers } = workspaceHandlers({ home: join(base, "home"), store });
     const create = handlers["workspaces.create"];
     const { owner } = recordingOwner();
-    const [first, again] = await Promise.allSettled([
+    const same = await Promise.allSettled([
       create(request(projects[0]?.id ?? "", "same-one"), owner),
       create(request(projects[0]?.id ?? "", "same-two"), owner),
     ]);
-    expect(first.status).toBe("fulfilled");
-    expect(again).toMatchObject({
-      status: "rejected",
-      reason: { code: "refused", message: "Satellite is already making a workspace in one." },
-    });
+    expect(same.filter((answer) => answer.status === "fulfilled")).toHaveLength(1);
+    expect(same.filter((answer) => answer.status === "rejected")).toMatchObject([
+      {
+        reason: { code: "refused", message: "Satellite is already making a workspace in one." },
+      },
+    ]);
     const answers = await Promise.allSettled(
       projects.map((project) => create(request(project.id, "parallel"), owner)),
     );
@@ -197,11 +198,11 @@ describe("workspaceHandlers", () => {
       store: fakeStore([project]),
     });
     const { owner } = recordingOwner();
-    for (const answer of [
-      handlers["workspaces.prepare"]({ projectId: project.id }, owner),
-      handlers["workspaces.create"](request(project.id, "nowhere"), owner),
+    for (const ask of [
+      () => handlers["workspaces.prepare"]({ projectId: project.id }, owner),
+      () => handlers["workspaces.create"](request(project.id, "nowhere"), owner),
     ]) {
-      await expect(answer).rejects.toMatchObject({
+      await expect(ask()).rejects.toMatchObject({
         code: "refused",
         message: "gone isn't available right now, so Satellite can't make a workspace in it.",
       });
