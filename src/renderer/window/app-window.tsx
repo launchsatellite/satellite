@@ -211,7 +211,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     if (dialogProject === undefined) return;
     upsertWorkspace(dialogProject.id, workspace);
     select({ projectId: dialogProject.id, workspace: workspace.key });
-    notify(`${String(workspace.name)} is ready in ${dialogProject.name}.`, "info");
+    if (workspace.name !== null)
+      notify(`${workspace.name} is ready in ${dialogProject.name}.`, "info");
     setCreatingIn(null);
   };
   const closeArchive = useCallback(() => {
@@ -300,7 +301,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             shortcut: { key: "n" },
             available: newWorkspaceIn !== undefined,
             run: () => {
-              if (newWorkspaceIn !== undefined) setCreatingIn(newWorkspaceIn);
+              if (newWorkspaceIn === undefined) return;
+              setPalette(null);
+              setCreatingIn(newWorkspaceIn);
             },
           },
           {

@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type RefObject,
-} from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type {
   BridgeResponse,
   CreationStep,
@@ -20,7 +12,7 @@ import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
-import { StatusPixel } from "../ui/status-pixel.tsx";
+import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 
 type Prepared = BridgeResponse<"workspaces.prepare">;
 type StepState = "pending" | "running" | "done" | "failed" | "undone";
@@ -28,7 +20,7 @@ type Phase =
   | { kind: "reading" }
   | { kind: "unavailable"; message: string }
   | { kind: "form"; prepared: Prepared }
-  | { kind: "running"; prepared: Prepared }
+  | { kind: "running"; prepared: Prepared; operationId: string; stopping: boolean }
   | { kind: "failed"; prepared: Prepared; message: string };
 type Steps = Record<CreationStep, { state: StepState; detail: string | null }>;
 
@@ -44,10 +36,10 @@ const field =
   "h-8 rounded-[8px] border border-ctl bg-side px-[10px] text-[13px] text-fg outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgb(106_75_255/0.22)] disabled:opacity-[0.38]";
 const fieldLabel = "text-[12px] font-semibold text-fg2";
 const readout = "ml-auto font-pixel text-[12px] text-dim uppercase";
-const pixels: Record<StepState, "idle" | "ready" | "needs-you"> = {
+const pixels: Record<StepState, PixelState> = {
   pending: "idle",
-  running: "idle",
-  done: "ready",
+  running: "working",
+  done: "done",
   failed: "needs-you",
   undone: "idle",
 };
@@ -91,23 +83,13 @@ function chosenStart(value: string): StartChoice {
   return value === defaultStart ? { kind: "default" } : { kind: "ref", ref: value };
 }
 
-function StepRows({
-  steps,
-  name,
-  listRef,
-}: {
-  steps: Steps;
-  name: string;
-  listRef: RefObject<HTMLOListElement | null>;
-}) {
+function StepRows({ steps, name }: { steps: Steps; name: string }) {
   return (
     <ol
-      ref={listRef}
       data-testid="workspace-steps"
       aria-live="polite"
       aria-label="Steps"
-      tabIndex={-1}
-      className="flex-none overflow-hidden rounded-[10px] border border-line outline-none"
+      className="flex-none overflow-hidden rounded-[10px] border border-line"
     >
       {stepOrder.map((step) => {
         const { state, detail } = steps[step];
@@ -151,7 +133,6 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
   const problemId = useId();
   const startId = useId();
   const input = useRef<HTMLInputElement>(null);
-  const stepList = useRef<HTMLOListElement>(null);
   const failure = useRef<HTMLParagraphElement>(null);
   const submitting = useRef(false);
   const unsubscribe = useRef<(() => void) | undefined>(undefined);
@@ -185,8 +166,6 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     if (phase.kind === "form") {
       input.current?.focus();
       input.current?.select();
-    } else if (phase.kind === "running") {
-      stepList.current?.focus();
     } else if (phase.kind === "failed") {
       failure.current?.scrollIntoView({ block: "nearest" });
     }
@@ -203,7 +182,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     let reported = false;
     setRefusal(null);
     setSteps(pendingSteps());
-    setPhase({ kind: "running", prepared: phase.prepared });
+    setPhase({ kind: "running", prepared: phase.prepared, operationId, stopping: false });
     unsubscribe.current = subscribe("workspaces.step", (event) => {
       if (event.operationId !== operationId) return;
       reported = true;
@@ -242,6 +221,12 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     });
   };
 
+  const stopCreation = () => {
+    if (phase.kind !== "running" || phase.stopping) return;
+    setPhase({ ...phase, stopping: true });
+    void invoke("workspaces.cancel", { operationId: phase.operationId, projectId });
+  };
+
   const pressInName = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
     event.preventDefault();
@@ -250,7 +235,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
 
   const body = () => {
     if (phase.kind === "reading") {
-      return <p className="text-[13px] text-dim">Reading {projectName}…</p>;
+      return <p className="text-[13px] break-words text-dim">Reading {projectName}…</p>;
     }
     if (phase.kind === "unavailable") {
       return (
@@ -288,9 +273,10 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
             onKeyDown={pressInName}
           />
           <p
+            key={refusal ?? "typed"}
             id={problemId}
             data-testid="workspace-name-problem"
-            aria-live="polite"
+            role={refusal === null ? undefined : "alert"}
             className={`text-[12px] ${shownProblem === null ? "text-dim" : "text-sigfg"}`}
           >
             {shownProblem ?? "The branch takes the same name."}
@@ -330,7 +316,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
             terminal.
           </p>
         ) : (
-          <StepRows steps={steps} name={name} listRef={stepList} />
+          <StepRows steps={steps} name={name} />
         )}
         {phase.kind === "failed" && (
           <p
@@ -358,8 +344,18 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
       return (
         <>
           <span className="mr-auto min-w-0 text-[12px] text-dim">
-            This closes once git finishes. Quitting Satellite undoes the workspace.
+            Cancel stops git and undoes what was made.
           </span>
+          <Button
+            key="stop"
+            variant="ghost"
+            autoFocus
+            disabled={phase.stopping}
+            onClick={stopCreation}
+            testId="cancel-creation"
+          >
+            Cancel
+          </Button>
           <Button onClick={create} disabled testId="create-workspace">
             Creating…
           </Button>
