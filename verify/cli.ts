@@ -1,8 +1,16 @@
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { stripVTControlCharacters } from "node:util";
 import type { Page } from "playwright-core";
-import { buildApp, launchApp, type AppSession, type AppTarget } from "./driver.ts";
+import {
+  buildApp,
+  errorReason,
+  launchApp,
+  LaunchFailure,
+  readTree,
+  withTimeout,
+  type AppSession,
+  type AppTarget,
+} from "./driver.ts";
 
 interface StepContext {
   session: AppSession;
@@ -10,6 +18,7 @@ interface StepContext {
 }
 interface Step {
   step: string;
+  timeoutMs: number;
   run: (context: StepContext) => Promise<unknown>;
 }
 interface StepResult {
@@ -17,7 +26,17 @@ interface StepResult {
   ok: boolean;
   value?: unknown;
   error?: string;
+  output?: string;
   tree?: unknown;
+}
+interface Output {
+  scenario: string;
+  home: string | null;
+  repo: string | null;
+  steps: StepResult[];
+  consoleErrors: string[];
+  screenshots: string[];
+  leftover?: string;
 }
 interface Arguments {
   scenario: string;
@@ -34,10 +53,6 @@ const waitLimitMs = 60_000;
 const stepTimeoutMs = 15_000;
 const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 
-function reason(error: unknown): string {
-  return stripVTControlCharacters(error instanceof Error ? error.message : String(error));
-}
-
 function boundedInt(text: string, step: string, min: number, max: number): number {
   const value = Number(text);
   if (!Number.isInteger(value) || value < min || value > max) {
@@ -46,43 +61,42 @@ function boundedInt(text: string, step: string, min: number, max: number): numbe
   return value;
 }
 
-async function readTree(page: Page): Promise<unknown> {
-  const aria = await page.locator("body").ariaSnapshot();
-  const testIds = await page.locator("[data-testid]").evaluateAll(
-    (elements, limit) =>
-      elements.map((element) => {
-        const box = element.getBoundingClientRect();
-        const text = element instanceof HTMLElement ? element.innerText : element.textContent;
-        return {
-          testId: element.getAttribute("data-testid") ?? "",
-          visible:
-            box.width > 0 &&
-            box.height > 0 &&
-            element.checkVisibility({ visibilityProperty: true }),
-          text: text.slice(0, limit),
-        };
-      }),
-    textLimit,
-  );
-  return { aria, testIds };
+const noFocus = "nothing in the window has focus, click an element first";
+
+async function focusedTestId(page: Page): Promise<string> {
+  const testId = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return null;
+    return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
+  });
+  if (testId === null) throw new Error(noFocus);
+  return testId;
 }
 
-async function paste(page: Page, text: string): Promise<void> {
-  await page.evaluate((data) => {
+async function paste(page: Page, text: string): Promise<string> {
+  const target = await page.evaluate((data) => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) return null;
     const transfer = new DataTransfer();
     transfer.setData("text/plain", data);
-    const target = document.activeElement ?? document.body;
-    target.dispatchEvent(
+    active.dispatchEvent(
       new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
     );
+    return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
   }, text);
+  if (target === null) throw new Error(noFocus);
+  return target;
 }
 
 function parseStep(raw: string): Step {
   const separator = raw.indexOf("=");
   const name = separator === -1 ? raw : raw.slice(0, separator);
   const value = separator === -1 ? "" : raw.slice(separator + 1);
-  const step = (run: Step["run"]): Step => ({ step: raw, run });
+  const step = (run: Step["run"], timeoutMs = stepTimeoutMs): Step => ({
+    step: raw,
+    timeoutMs,
+    run,
+  });
   const needsValue = (): string => {
     if (value === "") throw new Error(`step ${name} needs a value, as in ${name}=...`);
     return value;
@@ -102,7 +116,11 @@ function parseStep(raw: string): Step {
     }
     case "type": {
       const text = needsValue();
-      return step(({ session }) => session.page.keyboard.type(text));
+      return step(async ({ session }) => {
+        const target = await focusedTestId(session.page);
+        await session.page.keyboard.type(text);
+        return target;
+      });
     }
     case "press": {
       const key = needsValue();
@@ -135,12 +153,14 @@ function parseStep(raw: string): Step {
     }
     case "wait": {
       const ms = boundedInt(needsValue(), name, 0, waitLimitMs);
-      return step(() => delay(ms));
+      return step(() => delay(ms), ms + stepTimeoutMs);
     }
     case "wait-for": {
       const testId = needsValue();
-      return step(({ session }) =>
-        session.page.getByTestId(testId).waitFor({ state: "visible", timeout: waitLimitMs }),
+      return step(
+        ({ session }) =>
+          session.page.getByTestId(testId).waitFor({ state: "visible", timeout: waitLimitMs }),
+        waitLimitMs + stepTimeoutMs,
       );
     }
     case "shot": {
@@ -195,73 +215,82 @@ async function runSteps(
 ): Promise<StepContext & { results: StepResult[] }> {
   const context: StepContext = { session, screenshots: [] };
   const results: StepResult[] = [];
-  for (const { step, run } of steps) {
+  for (const { step, timeoutMs, run } of steps) {
     try {
-      const value = await run(context);
+      const value = await withTimeout(run(context), timeoutMs, `step ${step}`);
       results.push(value === undefined ? { step, ok: true } : { step, ok: true, value });
     } catch (error) {
-      const tree = await readTree(session.page).catch((treeError: unknown) => reason(treeError));
-      results.push({ step, ok: false, error: reason(error), tree });
+      const tree = await readTree(session.page).catch((treeError: unknown) =>
+        errorReason(treeError),
+      );
+      results.push({ step, ok: false, error: errorReason(error), tree });
       break;
     }
   }
   return { ...context, results };
 }
 
-function print(output: unknown): void {
+function print(output: Output): boolean {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  return output.steps.every((result) => result.ok) && output.leftover === undefined;
 }
 
-function report(failure: { scenario: string; failedStep: string; error: unknown }): false {
-  print({
-    scenario: failure.scenario,
-    steps: [{ step: failure.failedStep, ok: false, error: reason(failure.error) }],
+function failed(scenario: string, step: string, error: unknown): Output {
+  const output: Output = {
+    scenario,
+    home: null,
+    repo: null,
+    steps: [{ step, ok: false, error: errorReason(error) }],
     consoleErrors: [],
     screenshots: [],
-  });
-  return false;
+  };
+  if (!(error instanceof LaunchFailure)) return output;
+  return {
+    ...output,
+    home: error.home ?? null,
+    repo: error.repo ?? null,
+    steps: [{ step, ok: false, error: errorReason(error), output: error.output, tree: error.tree }],
+    consoleErrors: error.consoleErrors,
+  };
 }
 
 async function main(): Promise<boolean> {
-  const fallbackScenario = process.argv[2] ?? "";
   let args: Arguments;
   try {
     args = parseArguments(process.argv.slice(2));
   } catch (error) {
-    return report({ scenario: fallbackScenario, failedStep: "arguments", error });
+    return print(failed(process.argv[2] ?? "", "arguments", error));
   }
   if (args.target.kind === "built") {
     try {
       await buildApp();
     } catch (error) {
-      return report({ scenario: args.scenario, failedStep: "build", error });
+      return print(failed(args.scenario, "build", error));
     }
   }
   let session: AppSession;
   try {
     session = await launchApp(args);
   } catch (error) {
-    return report({ scenario: args.scenario, failedStep: "launch", error });
+    return print(failed(args.scenario, "launch", error));
   }
-  const stop = (): void => {
-    void session.close().finally(() => process.exit(130));
-  };
-  process.once("SIGINT", stop);
   session.page.setDefaultTimeout(stepTimeoutMs);
-  const { results, screenshots } = await runSteps(session, args.steps).finally(() =>
-    session.close(),
-  );
-  process.off("SIGINT", stop);
-  const ok = results.every((result) => result.ok);
-  print({
+  const { results, screenshots } = await runSteps(session, args.steps);
+  const output: Output = {
     scenario: args.scenario,
     home: session.home,
     repo: session.repo,
     steps: results,
     consoleErrors: session.consoleErrors,
     screenshots,
-  });
-  return ok;
+  };
+  try {
+    const { leftover } = await session.close();
+    if (leftover !== undefined) output.leftover = leftover;
+  } catch (error) {
+    results.push({ step: "close", ok: false, error: errorReason(error) });
+  }
+  return print(output);
 }
 
 process.exitCode = (await main()) ? 0 : 1;

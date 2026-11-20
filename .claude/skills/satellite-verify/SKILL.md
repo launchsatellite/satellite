@@ -19,9 +19,11 @@ npm run --silent verify -- <scenario> [--dev | --app <executable>] [--real-claud
 | --- | --- | --- |
 | none | built | `electron-vite build`, then Electron with the repo root as the app |
 | `--dev` | dev | `electron-vite dev` with hot reload, the interface served from `http://localhost` |
-| `--app <executable>` | packaged | a packaged app from `release/`, nothing is built |
+| `--app <executable>` | packaged | a packaged app from `release/`, nothing is built. Name the executable itself, `Satellite.app/Contents/MacOS/Satellite` on macOS, `Satellite.exe` on Windows, the AppImage on Linux |
 
 Every target runs with the scenario's throwaway repo as its working folder, so a terminal the app opens starts inside it.
+
+Built and dev runs in one checkout must not overlap, because each rewrites `out/`. A second run fails fast while `verify-output/run.lock` names a live run, so parallel work takes its own worktree.
 
 ## Steps
 
@@ -32,10 +34,10 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `tree` | reads the window | `aria`, the accessibility snapshot of the body, and `testIds`, each `{ testId, visible, text }` with text cut at 2000 characters |
 | `text=<testid>` | reads one element's text | the text, cut at 2000 characters |
 | `click=<testid>` | clicks an element | |
-| `type=<text>` | types into the focused element | |
+| `type=<text>` | types into the focused element, failing when nothing has focus | the focused test id |
 | `press=<key>` | presses a key, such as `Enter`, `Shift+Enter` or `Control+C` | |
-| `paste=<text>` | dispatches a paste event with the text on the focused element | |
-| `paste-size=<n>` | pastes `n` generated characters, `abc…xyz0…9` repeated, up to 1000000 | |
+| `paste=<text>` | dispatches a paste event with the text on the focused element, failing when nothing has focus | the focused test id |
+| `paste-size=<n>` | pastes `n` generated characters, `abc…xyz0…9` repeated, up to 1000000 | the focused test id |
 | `resize=<width>x<height>` | sets the viewport size | |
 | `theme=light` or `theme=dark` | emulates the system color scheme | |
 | `wait=<ms>` | waits, up to 60000 | |
@@ -43,9 +45,9 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
 
-Other steps time out after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
+`wait` gets its own length plus 15 seconds and `wait-for` gets 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
 
-The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, tree? }], consoleErrors, screenshots }`, and the exit code is 1 when any step failed. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch` with the reason and the app's last output.
+The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, output?, tree? }], consoleErrors, screenshots, leftover? }`. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch`, and a failed launch adds the app's last output and the window tree when one exists. `home` and `repo` are `null` until the temp folder exists. A failed close adds a `close` entry, and `leftover` names a temp folder that could not be deleted. The exit code is 1 when any step failed or something was left over.
 
 ## Scenarios
 
@@ -63,11 +65,11 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - **gh** prints its answer and exits with its code. Without an answer it prints `stand-in gh has no answer for <args>` and exits 1.
 - **claude** prints `version` for `--version`. Otherwise it plays the script, then reads stdin raw, echoes every chunk (ESC then CR echoes as a new line) and exits on Ctrl+C or Ctrl+D.
 
-Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, and `resize` with `cols` and `rows`.
+Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, and `resize` with `cols` and `rows`. The window usually loads twice at launch, once more after the driver starts listening so no startup error is missed, so startup calls such as `gh --version` can appear twice.
 
 ## Home, output and cleanup
 
-Each run makes `satellite-verify-*` in the system temp folder with `home/` as `SATELLITE_HOME`, `repo/` and `stand-ins.jsonl`. The user's own `~/.satellite` is never touched. The run closes the window, kills the process tree after 10 seconds if it is still alive, and deletes the temp folder unless `--keep` is set. Screenshots land in `verify-output/<scenario>-<timestamp>/`, which Git ignores.
+Each run makes `satellite-verify-*` in the system temp folder, its real path, with `home/` as `SATELLITE_HOME`, `repo/` and `stand-ins.jsonl`. The user's own `~/.satellite` is never touched. The app gets the driver's environment without `GIT_*`, `CLAUDECODE`, `CLAUDE_CODE_*`, `NODE_OPTIONS` and `ELECTRON_RUN_AS_NODE`, and the recipe's `git` runs without the inherited `GIT_*` too. The run closes the window, kills the process tree once it exits or after 10 seconds, and deletes the temp folder unless `--keep` is set. SIGINT, SIGTERM and SIGHUP, plus SIGBREAK on Windows, stop the build or the app and delete the temp folder the same way. Only a `SIGKILL` of the driver leaves the app running. Screenshots land in `verify-output/<scenario>-<timestamp>/`, which Git ignores.
 
 ## Real Claude Code
 
@@ -75,7 +77,7 @@ Each run makes `satellite-verify-*` in the system temp folder with `home/` as `S
 
 ## In code
 
-`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, plus `buildApp()` and `outputDir`. Journeys use it directly.
+`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)` and `close()`, which answers `{ leftover? }`. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason` and `outputDir`. Journeys use it directly.
 
 ## Feature map
 

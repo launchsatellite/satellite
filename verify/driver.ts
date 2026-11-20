@@ -1,11 +1,13 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFileSync, unlinkSync } from "node:fs";
+import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { chromium, type Browser, type Page } from "playwright-core";
-import { buildRepo } from "./repo-recipe.ts";
+import { stripVTControlCharacters } from "node:util";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { buildRepo, withoutGitVariables } from "./repo-recipe.ts";
 import { loadScenario, type RepoStep } from "./scenario.ts";
 import { readStandInEvents, type StandInEvent } from "./stand-ins/stand-in-log.ts";
 
@@ -17,6 +19,9 @@ export interface LaunchOptions {
   realClaude?: boolean;
   keep?: boolean;
 }
+export interface CloseResult {
+  leftover?: string;
+}
 export interface AppSession {
   page: Page;
   home: string;
@@ -24,9 +29,12 @@ export interface AppSession {
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
-  close(): Promise<void>;
+  close(): Promise<CloseResult>;
 }
-
+export interface WindowTree {
+  aria: string;
+  testIds: { testId: string; visible: boolean; text: string }[];
+}
 interface AppCommand {
   file: string;
   args: string[];
@@ -39,13 +47,94 @@ const electronVite = join(repoRoot, "node_modules/electron-vite/bin/electron-vit
 const devElectron = join(import.meta.dirname, "dev-electron.ts");
 const startTimeoutMs = 60_000;
 const exitTimeoutMs = 10_000;
+const pageCallTimeoutMs = 5_000;
 const outputTailLength = 4000;
 const consoleErrorLimit = 200;
+const textLimit = 2000;
 const devToolsLine = /DevTools listening on (ws:\/\/\S+)/;
 const shotName = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const strippedVariables = new Set(["ELECTRON_RUN_AS_NODE", "NODE_OPTIONS", "SATELLITE_CLAUDE"]);
+const strippedVariables = new Set([
+  "ELECTRON_RUN_AS_NODE",
+  "NODE_OPTIONS",
+  "SATELLITE_CLAUDE",
+  "CLAUDECODE",
+]);
+const strippedPrefixes = ["CLAUDE_CODE_"];
+const stopSignals: NodeJS.Signals[] =
+  process.platform === "win32"
+    ? ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
+    : ["SIGINT", "SIGTERM", "SIGHUP"];
+const cleanups = new Set<() => Promise<unknown>>();
+let signalHandlersInstalled = false;
+let stopping = false;
 
 export const outputDir = join(repoRoot, "verify-output");
+
+const lockFile = join(outputDir, "run.lock");
+let lockHeld = false;
+
+async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
+  if (stopping) return;
+  stopping = true;
+  await Promise.allSettled([...cleanups].map((cleanup) => cleanup()));
+  process.exit(128 + constants.signals[signal]);
+}
+
+function stopOnSignals(): void {
+  if (signalHandlersInstalled) return;
+  signalHandlersInstalled = true;
+  for (const signal of stopSignals) {
+    process.on(signal, () => {
+      void stopForSignal(signal);
+    });
+  }
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && "code" in error && error.code === "EPERM";
+  }
+}
+
+function releaseLock(): void {
+  try {
+    if (readFileSync(lockFile, "utf8") === String(process.pid)) unlinkSync(lockFile);
+  } catch {
+    return;
+  }
+}
+
+async function takeLock(): Promise<boolean> {
+  try {
+    const handle = await open(lockFile, "wx");
+    await handle.writeFile(String(process.pid));
+    await handle.close();
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") return false;
+    throw error;
+  }
+}
+
+async function holdCheckoutLock(): Promise<void> {
+  if (lockHeld) return;
+  await mkdir(outputDir, { recursive: true });
+  if (!(await takeLock())) {
+    const owner = Number(await readFile(lockFile, "utf8").catch(() => ""));
+    if (Number.isInteger(owner) && owner > 0 && isAlive(owner)) {
+      throw new Error(
+        `another verify run (process ${String(owner)}) is using this checkout. Wait for it to finish or run from your own worktree.`,
+      );
+    }
+    await unlink(lockFile).catch(() => undefined);
+    if (!(await takeLock())) throw new Error("another verify run took this checkout just now");
+  }
+  lockHeld = true;
+  process.once("exit", releaseLock);
+}
 
 function command(target: AppTarget, repo: string): AppCommand {
   const debugging = "--remote-debugging-port=0";
@@ -68,13 +157,20 @@ function standIn(tool: "claude" | "gh"): string {
   return JSON.stringify([process.execPath, join(import.meta.dirname, "stand-ins", `${tool}.ts`)]);
 }
 
+function isStripped(key: string): boolean {
+  const upper = key.toUpperCase();
+  return (
+    strippedVariables.has(upper) || strippedPrefixes.some((prefix) => upper.startsWith(prefix))
+  );
+}
+
 function appEnvironment(
   options: LaunchOptions,
   home: string,
   log: string,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !strippedVariables.has(key)),
+    Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
   );
   if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
   env["SATELLITE_HOME"] = home;
@@ -91,17 +187,18 @@ function hasExited(child: ChildProcess): boolean {
 
 function killTree(child: ChildProcess): void {
   const pid = child.pid;
-  if (pid === undefined || hasExited(child)) return;
-  if (process.platform === "win32") {
-    const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
-    execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+  if (pid === undefined) return;
+  if (process.platform !== "win32") {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      child.kill("SIGKILL");
+    }
     return;
   }
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    child.kill("SIGKILL");
-  }
+  if (hasExited(child)) return;
+  const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
+  execFile(taskkill, ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, () => undefined);
 }
 
 async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -139,8 +236,7 @@ function waitForDevTools(child: ChildProcess, output: () => string): Promise<str
     }
     function fail(reason: string): void {
       cleanup();
-      const tail = output();
-      reject(new Error(tail === "" ? `${reason}.` : `${reason}. Its output ended with\n${tail}`));
+      reject(new Error(reason));
     }
     child.stderr?.on("data", onData);
     child.once("exit", onExit);
@@ -168,31 +264,97 @@ async function prepareFolders(
   });
 }
 
-async function stopApp(child: ChildProcess, browser: Browser | undefined): Promise<void> {
-  if (!(await waitForExit(child, exitTimeoutMs))) {
-    killTree(child);
-    await waitForExit(child, exitTimeoutMs);
-  }
+async function forceStop(child: ChildProcess): Promise<void> {
+  killTree(child);
+  await waitForExit(child, exitTimeoutMs);
   child.stdout?.destroy();
   child.stderr?.destroy();
-  await browser?.close().catch(() => undefined);
 }
 
-async function removeTemp(temp: string, keep: boolean | undefined): Promise<void> {
-  if (keep !== true) await rm(temp, { recursive: true, force: true, maxRetries: 5 });
+async function removeTemp(temp: string, keep: boolean | undefined): Promise<string | undefined> {
+  if (keep === true) return undefined;
+  try {
+    await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    return undefined;
+  } catch {
+    return temp;
+  }
+}
+
+function appPage(browser: Browser, origin: string): Page | undefined {
+  return browser
+    .contexts()
+    .flatMap((context) => context.pages())
+    .find((candidate) => candidate.url().startsWith(origin));
 }
 
 async function findAppPage(browser: Browser, origin: string): Promise<Page> {
   const deadline = Date.now() + startTimeoutMs;
   while (Date.now() < deadline) {
-    const page = browser
-      .contexts()
-      .flatMap((context) => context.pages())
-      .find((candidate) => candidate.url().startsWith(origin));
+    const page = appPage(browser, origin);
     if (page !== undefined) return page;
     await delay(100);
   }
   throw new Error(`no page with origin ${origin} appeared`);
+}
+
+function recordErrors(context: BrowserContext, consoleErrors: string[]): void {
+  const record = (text: string): void => {
+    if (consoleErrors.length < consoleErrorLimit) consoleErrors.push(text);
+  };
+  context.on("console", (message) => {
+    if (message.type() === "error") record(message.text());
+  });
+  context.on("weberror", (error) => {
+    record(error.error().message);
+  });
+}
+
+export class LaunchFailure extends Error {
+  output = "";
+  consoleErrors: string[] = [];
+  tree: WindowTree | string | undefined;
+  home: string | undefined;
+  repo: string | undefined;
+}
+
+export function errorReason(error: unknown): string {
+  return stripVTControlCharacters(error instanceof Error ? error.message : String(error));
+}
+
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, what: string): Promise<T> {
+  const controller = new AbortController();
+  const timeout = delay(timeoutMs, undefined, { signal: controller.signal }).then(() => {
+    throw new Error(`${what} did not finish within ${String(timeoutMs / 1000)} seconds`);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    controller.abort();
+  });
+}
+
+export async function readTree(page: Page): Promise<WindowTree> {
+  const aria = await page.locator("body").ariaSnapshot({ timeout: pageCallTimeoutMs });
+  const testIds = await withTimeout(
+    page.locator("[data-testid]").evaluateAll(
+      (elements, limit) =>
+        elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          const text = element instanceof HTMLElement ? element.innerText : element.textContent;
+          return {
+            testId: element.getAttribute("data-testid") ?? "",
+            visible:
+              box.width > 0 &&
+              box.height > 0 &&
+              element.checkVisibility({ visibilityProperty: true }),
+            text: text.slice(0, limit),
+          };
+        }),
+      textLimit,
+    ),
+    pageCallTimeoutMs,
+    "reading the window",
+  );
+  return { aria, testIds };
 }
 
 export function electronBinary(): string {
@@ -202,20 +364,33 @@ export function electronBinary(): string {
 }
 
 export async function buildApp(): Promise<void> {
+  stopOnSignals();
+  await holdCheckoutLock();
   const child = spawn(process.execPath, [electronVite, "build"], {
     cwd: repoRoot,
     stdio: ["ignore", 2, 2],
   });
-  const code = await new Promise<number | null>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", resolve);
-  });
-  if (code !== 0) throw new Error(`electron-vite build failed with code ${String(code)}`);
+  const cleanup = async (): Promise<void> => {
+    child.kill("SIGKILL");
+    await waitForExit(child, exitTimeoutMs);
+  };
+  cleanups.add(cleanup);
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", resolve);
+    });
+    if (code !== 0) throw new Error(`electron-vite build failed with code ${String(code)}`);
+  } finally {
+    cleanups.delete(cleanup);
+  }
 }
 
 export async function launchApp(options: LaunchOptions): Promise<AppSession> {
+  stopOnSignals();
+  if (options.target.kind !== "packaged") await holdCheckoutLock();
   const { scenario } = await loadScenario(options.scenario);
-  const temp = await mkdtemp(join(tmpdir(), "satellite-verify-"));
+  const temp = await realpath(await mkdtemp(join(tmpdir(), "satellite-verify-")));
   const home = join(temp, "home");
   const repo = join(temp, "repo");
   const log = join(temp, "stand-ins.jsonl");
@@ -223,8 +398,21 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
+  const consoleErrors: string[] = [];
+  let output = "";
   let child: ChildProcess | undefined;
   let browser: Browser | undefined;
+  let page: Page | undefined;
+  const abandon = async (): Promise<string | undefined> => {
+    if (child !== undefined) await forceStop(child);
+    await withTimeout(
+      browser?.close() ?? Promise.resolve(),
+      pageCallTimeoutMs,
+      "disconnecting",
+    ).catch(() => undefined);
+    return removeTemp(temp, options.keep);
+  };
+  cleanups.add(abandon);
   try {
     await prepareFolders(temp, home, repo, scenario.repo);
     const { file, args, cwd, origin } = command(options.target, repo);
@@ -235,56 +423,67 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       detached: process.platform !== "win32",
       windowsHide: true,
     });
-    let output = "";
     const collect = (chunk: Buffer): void => {
       output = (output + chunk.toString()).slice(-outputTailLength);
     };
     child.stdout?.on("data", collect);
     child.stderr?.on("data", collect);
-    browser = await chromium.connectOverCDP(await waitForDevTools(child, () => output));
-    const page = await findAppPage(browser, origin);
-    const consoleErrors: string[] = [];
-    const record = (text: string): void => {
-      if (consoleErrors.length < consoleErrorLimit) consoleErrors.push(text);
-    };
-    page.on("console", (message) => {
-      if (message.type() === "error") record(message.text());
-    });
-    page.on("pageerror", (error) => {
-      record(error.message);
-    });
-    await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
-    const app = child;
-    const connection = browser;
-    return {
-      page,
-      home,
-      repo,
-      consoleErrors,
-      standInEvents: () => readStandInEvents(log),
-      async screenshot(name) {
-        if (!shotName.test(name)) throw new Error(`screenshot name ${name} must be kebab-case`);
-        const path = join(shots, `${name}.png`);
-        await mkdir(shots, { recursive: true });
-        await page.screenshot({ path });
-        return path;
-      },
-      async close() {
-        await page
-          .evaluate(() => {
-            window.close();
-          })
-          .catch(() => undefined);
-        await stopApp(app, connection);
-        await removeTemp(temp, options.keep);
-      },
-    };
-  } catch (error) {
-    if (child !== undefined) {
-      killTree(child);
-      await stopApp(child, browser);
+    const address = await waitForDevTools(child, () => output);
+    browser = await chromium.connectOverCDP(address, { timeout: startTimeoutMs });
+    for (const context of browser.contexts()) recordErrors(context, consoleErrors);
+    const loadedBeforeListening = appPage(browser, origin);
+    page = loadedBeforeListening ?? (await findAppPage(browser, origin));
+    if (loadedBeforeListening !== undefined) {
+      await page.waitForLoadState("load", { timeout: startTimeoutMs });
+      await page.reload({ waitUntil: "domcontentloaded", timeout: startTimeoutMs });
     }
-    await removeTemp(temp, options.keep);
-    throw error;
+    await page.getByTestId("app-window").waitFor({ timeout: startTimeoutMs });
+  } catch (error) {
+    const failure = new LaunchFailure(errorReason(error), { cause: error });
+    failure.output = output;
+    failure.consoleErrors = consoleErrors;
+    failure.tree =
+      page === undefined
+        ? undefined
+        : await readTree(page).catch((treeError: unknown) => errorReason(treeError));
+    failure.home = home;
+    failure.repo = repo;
+    await abandon();
+    cleanups.delete(abandon);
+    throw failure;
   }
+  const appPageReady = page;
+  const app = child;
+  const connection = browser;
+  return {
+    page: appPageReady,
+    home,
+    repo,
+    consoleErrors,
+    standInEvents: () => readStandInEvents(log),
+    async screenshot(name) {
+      if (!shotName.test(name)) throw new Error(`screenshot name ${name} must be kebab-case`);
+      const path = join(shots, `${name}.png`);
+      await mkdir(shots, { recursive: true });
+      await appPageReady.screenshot({ path, timeout: startTimeoutMs });
+      return path;
+    },
+    async close() {
+      await withTimeout(
+        appPageReady.evaluate(() => {
+          window.close();
+        }),
+        pageCallTimeoutMs,
+        "closing the window",
+      ).catch(() => undefined);
+      await waitForExit(app, exitTimeoutMs);
+      await forceStop(app);
+      await withTimeout(connection.close(), pageCallTimeoutMs, "disconnecting").catch(
+        () => undefined,
+      );
+      const leftover = await removeTemp(temp, options.keep);
+      cleanups.delete(abandon);
+      return leftover === undefined ? {} : { leftover };
+    },
+  };
 }
