@@ -9,6 +9,19 @@ export function mainWindow(): BrowserWindow | undefined {
   return created === undefined || created.isDestroyed() ? undefined : created;
 }
 
+export function bringToFront(): void {
+  const window = mainWindow();
+  if (window === undefined) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+
+export function windowInFront(): boolean {
+  const window = mainWindow();
+  return window !== undefined && window.isVisible() && !window.isMinimized() && window.isFocused();
+}
+
 export async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
   const quiet = runsQuietly();
   const window = new BrowserWindow({

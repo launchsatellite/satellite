@@ -19,6 +19,7 @@ const listeners: { [E in BridgeEventName]: Set<(payload: BridgeEventPayload<E>) 
   "terminal.data": new Set(),
   "terminal.exit": new Set(),
   "sessions.status": new Set(),
+  "notices.open": new Set(),
 };
 let listening = false;
 

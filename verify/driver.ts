@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { z } from "zod";
 import { endWindowsTree } from "../src/main/platform/process-tree.ts";
 import { buildRepo, withoutGitVariables, writeInside } from "./repo-recipe.ts";
 import { loadScenario, type Scenario } from "./scenario.ts";
@@ -25,6 +26,7 @@ export interface CloseResult {
   exitedOnItsOwn: boolean;
   leftover?: string;
 }
+export type RecordedNotice = z.infer<typeof recordedNotice>;
 export interface AppSession {
   readonly page: Page;
   home: string;
@@ -36,6 +38,7 @@ export interface AppSession {
   dropFolder(path: string): Promise<void>;
   dropFiles(testId: string, paths: string[]): Promise<void>;
   openedLinks(): Promise<string[]>;
+  notices(): Promise<RecordedNotice[]>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
@@ -60,6 +63,7 @@ interface AppPaths {
   log: string;
   dialog: string;
   links: string;
+  notices: string;
   missingClaude: string | undefined;
 }
 interface AppCommand {
@@ -69,6 +73,11 @@ interface AppCommand {
   origin: string;
 }
 
+const recordedNotice = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("notice"), title: z.string(), body: z.string() }),
+  z.strictObject({ kind: z.literal("close") }),
+  z.strictObject({ kind: z.literal("badge"), count: z.int() }),
+]);
 const repoRoot = join(import.meta.dirname, "..");
 const electronVite = join(repoRoot, "node_modules/electron-vite/bin/electron-vite.js");
 const devElectron = join(import.meta.dirname, "dev-electron.ts");
@@ -207,7 +216,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, userHome, gitConfig, log, dialog, links, missingClaude }: AppPaths,
+  { home, userHome, gitConfig, log, dialog, links, notices, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const keepsUserHome = options.realClaude === true;
   const env: Record<string, string | undefined> = Object.fromEntries(
@@ -224,6 +233,7 @@ function appEnvironment(
   env["SATELLITE_VERIFY_LOG"] = log;
   env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
   env["SATELLITE_VERIFY_LINKS"] = links;
+  env["SATELLITE_VERIFY_NOTICES"] = notices;
   env["SATELLITE_GH"] = standIn("gh");
   if (!keepsUserHome) {
     env["HOME"] = userHome;
@@ -560,9 +570,10 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
   const links = join(temp, "links.txt");
+  const notices = join(temp, "notices.jsonl");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
   const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
-  const paths = { home, repo, userHome, gitConfig, log, dialog, links, missingClaude };
+  const paths = { home, repo, userHome, gitConfig, log, dialog, links, notices, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -639,6 +650,16 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");
       return text.split("\n").filter((line) => line !== "");
+    },
+    async notices() {
+      const text = await readFile(notices, "utf8").catch((error: unknown) => {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
+        throw error;
+      });
+      return text
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => recordedNotice.parse(JSON.parse(line)));
     },
     consoleErrors,
     standInEvents: () => readStandInEvents(log),

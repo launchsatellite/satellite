@@ -7,6 +7,7 @@ import {
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
+import type { Needing } from "../inbox/notices.ts";
 import { isInsidePath } from "../platform/paths.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
 import { spawnPty, windowsPty, type PtyProcess } from "../platform/pty.ts";
@@ -48,6 +49,7 @@ interface TerminalOptions {
   folder: (ref: WorkspaceRef) => Promise<string>;
   listener: Promise<HookListener | undefined>;
   last: LastSessions;
+  onNeeding: (needing: readonly Needing[]) => void;
 }
 interface Session {
   readonly id: string;
@@ -109,6 +111,7 @@ export function createTerminalSessions({
   folder,
   listener,
   last,
+  onNeeding,
 }: TerminalOptions): TerminalSessions {
   const sessions = new Map<string, Session>();
   const unsettled = new Set<Session>();
@@ -139,6 +142,14 @@ export function createTerminalSessions({
       session.statusTimer = undefined;
       showStatus(session);
     }, statusGapMs);
+  };
+
+  const tellNeeding = () => {
+    onNeeding(
+      [...sessions.values()].flatMap(({ ended, state, workspace, owner }) =>
+        !ended && state.status === "needs-you" ? [{ workspace, owner }] : [],
+      ),
+    );
   };
 
   const release = (session: Session) => {
@@ -176,6 +187,7 @@ export function createTerminalSessions({
     if (sessions.get(id) === session) sessions.delete(id);
     if (session.ended) return;
     session.ended = true;
+    tellNeeding();
     session.endedBySatellite = true;
     session.output?.stop();
     const killing = session.pty?.kill();
@@ -270,6 +282,7 @@ export function createTerminalSessions({
     if (sessions.get(session.id) === session) sessions.delete(session.id);
     session.ended = true;
     session.state = nextState(session.state, { name: "Exit" });
+    tellNeeding();
     clearTimeout(session.statusTimer);
     session.statusTimer = undefined;
     showStatus(session);
@@ -424,6 +437,7 @@ export function createTerminalSessions({
         void last.set(session.workspace, session.sessionId);
       }
       session.state = nextState(session.state, event);
+      tellNeeding();
       showStatus(session);
     },
     async closeAll() {

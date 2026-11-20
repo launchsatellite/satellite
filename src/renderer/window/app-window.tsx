@@ -7,10 +7,11 @@ import {
   type WorkspaceRef,
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
+import { subscribe } from "../bridge/bridge-client.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
-import { inboxReasons, inboxRows, type InboxTarget } from "../inbox/inbox.ts";
+import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
@@ -293,6 +294,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       focusSession(terminalId);
     },
     [modal, select, activateSession],
+  );
+  const fromNotice = useRef({ inbox, openFromInbox });
+  useEffect(() => {
+    fromNotice.current = { inbox, openFromInbox };
+  }, [inbox, openFromInbox]);
+  useEffect(
+    () =>
+      subscribe("notices.open", ({ workspace }) => {
+        const { inbox: rows, openFromInbox: openRow } = fromNotice.current;
+        const target = noticeTarget(rows, workspace);
+        if (target !== undefined) openRow(target);
+      }),
+    [],
   );
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);

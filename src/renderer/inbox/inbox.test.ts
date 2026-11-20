@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
-import { inboxReasons, inboxRows, needsSince, reasonSentence, type InboxRow } from "./inbox.ts";
+import {
+  inboxReasons,
+  inboxRows,
+  needsSince,
+  noticeTarget,
+  reasonSentence,
+  type InboxRow,
+} from "./inbox.ts";
 
 const projectId = "6f1c1a52-8a4e-4a3b-9a59-3c8f0f8f6b1d";
 const alpha: WorkspaceRef = { projectId, workspace: "alpha" };
@@ -125,5 +132,30 @@ describe("inbox", () => {
     expect(needsSince({ status: "working", needsSince: null }, "needs-you", next)).toBe(2);
     expect(needsSince({ status: "idle", needsSince: null }, "done", next)).toBeNull();
     expect(counter).toBe(2);
+  });
+
+  it("opens a clicked notification's workspace only while it still needs you", () => {
+    const rows = inboxRows(
+      inboxReasons([
+        tab(beta, 1, "needs-you", 3),
+        tab(alpha, 1, "needs-you", 2),
+        tab(alpha, 2, "needs-you", 1),
+      ]),
+      ({ workspace }) => workspace !== "gamma",
+    );
+    expect(noticeTarget(rows, alpha)).toEqual({
+      kind: "session",
+      workspace: alpha,
+      tab: "alpha-2",
+      terminalId: "terminal-alpha-2",
+      session: 2,
+      onlySession: false,
+      since: 1,
+    });
+    expect(noticeTarget(rows, { projectId, workspace: "main" })).toBeUndefined();
+    expect(
+      noticeTarget(rows, { projectId: "7a2d2b63-9b5f-4b4c-8b6a-4d9f1f9f7c2e", workspace: "alpha" }),
+    ).toBeUndefined();
+    expect(noticeTarget([], beta)).toBeUndefined();
   });
 });

@@ -87,3 +87,10 @@ export function reasonSentence(row: InboxRow): string {
   const byKind = Map.groupBy(row.reasons, (reason) => reason.kind);
   return sentences[first.kind](byKind.get(first.kind) ?? []);
 }
+
+export function noticeTarget(
+  rows: readonly InboxRow[],
+  workspace: WorkspaceRef,
+): InboxTarget | undefined {
+  return rows.find((row) => placeOf(row.workspace) === placeOf(workspace))?.reasons[0];
+}

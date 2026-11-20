@@ -272,6 +272,8 @@ function parseStep(raw: string): Step {
     }
     case "log":
       return step(({ session }) => session.standInEvents());
+    case "notices":
+      return step(({ session }) => session.notices());
     case "restart":
       return step(async ({ session }) => {
         await session.relaunch();

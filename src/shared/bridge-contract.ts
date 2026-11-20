@@ -308,6 +308,7 @@ export const bridgeEvents = {
     ending: sessionEnding,
   }),
   "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus, ready: z.boolean() }),
+  "notices.open": z.strictObject({ workspace: workspaceRef }),
 };
 
 const bridgeErrorCode = z.enum([
