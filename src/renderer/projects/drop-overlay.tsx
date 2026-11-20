@@ -26,6 +26,12 @@ export function useFolderDrop({ accepts, onFolder, notify }: FolderDropOptions):
     const leave = (event: DragEvent) => {
       if (event.relatedTarget === null) setShown(false);
     };
+    const hide = () => {
+      setShown(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShown(false);
+    };
     const drop = (event: DragEvent) => {
       event.preventDefault();
       setShown(false);
@@ -42,13 +48,19 @@ export function useFolderDrop({ accepts, onFolder, notify }: FolderDropOptions):
       }
       onFolder(path);
     };
-    window.addEventListener("dragover", over);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop);
+    window.addEventListener("dragover", over, true);
+    window.addEventListener("dragleave", leave, true);
+    window.addEventListener("drop", drop, true);
+    window.addEventListener("dragend", hide, true);
+    window.addEventListener("blur", hide);
+    window.addEventListener("keydown", escape, true);
     return () => {
-      window.removeEventListener("dragover", over);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("drop", drop);
+      window.removeEventListener("dragover", over, true);
+      window.removeEventListener("dragleave", leave, true);
+      window.removeEventListener("drop", drop, true);
+      window.removeEventListener("dragend", hide, true);
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("keydown", escape, true);
     };
   }, [accepts, onFolder, notify]);
   return shown;
