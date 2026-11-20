@@ -35,8 +35,10 @@ function Row({
   children: ReactNode;
 }) {
   return (
-    <div data-testid={testId} className="flex min-h-8 items-center gap-[10px] text-[13px]">
-      <StatusPixel state={pixel} />
+    <div data-testid={testId} className="flex min-h-8 items-start gap-[10px] py-[6px] text-[13px]">
+      <span className="mt-[6px] flex flex-none">
+        <StatusPixel state={pixel} />
+      </span>
       <span className="min-w-0 break-words">{children}</span>
     </div>
   );
@@ -166,7 +168,7 @@ function submodulesSentence(name: string, submodules: Inspected["submodules"]): 
 }
 
 function blocked(view: Inspected): boolean {
-  return view.locked || view.submodules !== "none";
+  return view.locked || view.submodules !== "none" || view.mount !== null;
 }
 
 export function ArchiveDialog({ project, workspace, onClose, onArchived }: ArchiveDialogProps) {
@@ -251,7 +253,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
             {changedSentence(name)}
           </p>
         )}
-        <div className="flex flex-col gap-[2px]">
+        <div className="flex flex-col gap-1">
           <Files view={view} />
           {view.repositories > 0 && (
             <Row pixel="needs-you" testId="archive-repositories">
@@ -280,6 +282,12 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
               {submodulesSentence(name, view.submodules)}
             </Row>
           )}
+          {view.mount !== null && (
+            <Row pixel="needs-you" testId="archive-mount">
+              {name} holds a folder from another drive at {view.mount}, so Satellite won&apos;t
+              archive it. Unmount it first.
+            </Row>
+          )}
           {view.locked && (
             <Row pixel="needs-you" testId="archive-locked">
               {name} is locked in git, so Satellite won&apos;t archive it. Run git worktree unlock
@@ -299,9 +307,20 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
   const footer = () => {
     if (phase.kind === "unreadable") {
       return (
-        <Button variant="ghost" onClick={onClose} testId="archive-cancel">
-          Close
-        </Button>
+        <>
+          <Button variant="ghost" onClick={onClose} testId="archive-cancel">
+            Close
+          </Button>
+          <Button
+            onClick={() => {
+              setPhase({ kind: "checking" });
+              read(false, null);
+            }}
+            testId="archive-retry"
+          >
+            Try again
+          </Button>
+        </>
       );
     }
     const view = phase.kind === "checking" ? undefined : phase.view;

@@ -85,7 +85,7 @@ export const startView = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("remote"),
     remote: z.string().min(1).max(100),
-    branch: z.string().min(1).max(255),
+    branch: z.string().min(1).max(255).nullable(),
   }),
   z.strictObject({ kind: z.literal("local"), branch: z.string().min(1).max(255).nullable() }),
   z.strictObject({ kind: z.literal("empty") }),
@@ -213,6 +213,7 @@ export const bridgeRequests = {
       repositories: count,
       hidden: count.nullable(),
       submodules: z.enum(["none", "checked-out", "unknown"]),
+      mount: z.string().min(1).max(300).nullable(),
       commits: lossView,
       sessions: z.int().min(0).max(bridgeLimits.terminals),
       locked: z.boolean(),

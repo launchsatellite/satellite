@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import type { BigIntStats } from "node:fs";
 import { type FileHandle, lstat, mkdir, open, opendir, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import { reservedWorkspaceNames } from "../../shared/workspace-name.ts";
+import { isSafeFileName, noFollow, nonBlocking, noTerminal } from "../platform/file-system.ts";
 import { isInsidePath } from "../platform/paths.ts";
 import type { IncludeMatcher } from "./worktree-include.ts";
 
@@ -39,9 +39,6 @@ const changedUnderfootCodes = new Set([
   "ENOTDIR",
 ]);
 const unreadableCodes = new Set([...changedUnderfootCodes, "EACCES", "EPERM"]);
-const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
-const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
-const noTerminal = "O_NOCTTY" in constants ? constants.O_NOCTTY : 0;
 const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const createFlags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow;
 
@@ -75,17 +72,9 @@ function sameFile(a: BigIntStats, b: BigIntStats): boolean {
   return a.dev === b.dev && a.ino === b.ino;
 }
 
-function isSafeName(name: string): boolean {
-  if (name === "" || name === "." || name === "..") return false;
-  if (name.includes("\\") || name.includes("\0")) return false;
-  if (process.platform !== "win32") return true;
-  const stem = (name.split(".")[0] ?? "").toLowerCase();
-  return !name.includes(":") && !/[. ]$/.test(name) && !reservedWorkspaceNames.has(stem);
-}
-
 function safeSegments(path: string): string[] | undefined {
   const segments = path.split("/");
-  return segments.every(isSafeName) ? segments : undefined;
+  return segments.every((segment) => isSafeFileName(segment)) ? segments : undefined;
 }
 
 async function keepFile(
@@ -120,7 +109,7 @@ async function walkFolder(
       collection.visited += 1;
       if (collection.visited > entryLimit) return "too-many";
       if (isStopped(collection.limit)) return "too-slow";
-      if (!isSafeName(entry.name)) continue;
+      if (!isSafeFileName(entry.name)) continue;
       const child = `${folder}/${entry.name}`;
       if (entry.isSymbolicLink()) {
         collection.links += 1;

@@ -64,6 +64,7 @@ describe("runCreation", () => {
       step: "files",
       sentence: "files broke.",
       undone: true,
+      left: null,
     });
     expect(calls).toEqual([
       "run start",
@@ -127,6 +128,7 @@ describe("runCreation", () => {
       step: "worktree",
       sentence: "git couldn't check out the worktree, or one of the repository's hooks failed.",
       undone: true,
+      left: null,
     });
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();

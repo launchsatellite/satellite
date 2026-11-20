@@ -94,6 +94,7 @@ async function create(
   start: StartChoice = { kind: "default" },
   signal: AbortSignal = new AbortController().signal,
   failSave = false,
+  beforeFailing?: (path: string) => Promise<void>,
 ) {
   const home = join(base, "home");
   await mkdir(home, { recursive: true });
@@ -106,10 +107,12 @@ async function create(
     name,
     start,
     signal,
-    save: (workspace) => {
-      if (failSave) return Promise.reject(new BridgeFailure("failed", "The disk said no."));
+    save: async (workspace) => {
+      if (failSave) {
+        await beforeFailing?.(workspace.path);
+        throw new BridgeFailure("failed", "The disk said no.");
+      }
       saved.push(workspace);
-      return Promise.resolve();
     },
   });
   const result = await runCreation(steps, (event) => reports.push(event));
@@ -224,6 +227,7 @@ describe("creationSteps", () => {
       sentence:
         ".worktreeinclude isn't a plain file of at most 64 KiB, so Satellite won't read it.",
       undone: true,
+      left: null,
     });
     await leftNothing(root, "linked", path);
   });
@@ -231,13 +235,17 @@ describe("creationSteps", () => {
   it.skipIf(!onUnix)("undoes the branch and the worktree when a hook fails", async () => {
     const root = await repository();
     await commit(root, "a", "first commit\n");
-    await hook(root, "post-checkout", "exit 1");
+    await hook(root, "post-checkout", "echo 'npm ERR! the network is down' >&2; exit 1");
     const { result, reports, saved, path } = await create(root, "broken");
+    expect(
+      reports.find((event) => event.step === "worktree" && event.state === "failed")?.detail,
+    ).toContain("npm ERR! the network is down");
     expect(result).toEqual({
       ok: false,
       step: "worktree",
       sentence: "git couldn't check out the worktree, or one of the repository's hooks failed.",
       undone: true,
+      left: null,
     });
     expect(reports.filter((event) => event.state === "undone").map((event) => event.step)).toEqual([
       "worktree",
@@ -246,6 +254,71 @@ describe("creationSteps", () => {
     expect(saved).toEqual([]);
     await leftNothing(root, "broken", path);
   });
+
+  it("removes a link made during creation before undoing it, never what it points to", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    const outside = join(base, "outside");
+    await mkdir(join(outside, "src"), { recursive: true });
+    await writeFile(join(outside, "src", "keep.md"), "Mine.\n");
+    const { result, path } = await create(
+      root,
+      "linked",
+      { kind: "default" },
+      undefined,
+      true,
+      (folder) => symlink(outside, join(folder, "node_modules-link"), "junction"),
+    );
+    expect(result).toEqual({
+      ok: false,
+      step: "save",
+      sentence: "Satellite couldn't save the workspace list.",
+      undone: true,
+      left: null,
+    });
+    await leftNothing(root, "linked", path);
+    expect(await readFile(join(outside, "src", "keep.md"), "utf8")).toBe("Mine.\n");
+  });
+
+  it.skipIf(!onUnix)(
+    "leaves the worktree and says where when a link inside it can't be removed",
+    async () => {
+      const root = await repository();
+      await commit(root, "a", "first commit\n");
+      const outside = join(base, "outside");
+      await mkdir(outside);
+      let held = "";
+      const { result, path } = await create(
+        root,
+        "held",
+        { kind: "default" },
+        undefined,
+        true,
+        async (folder) => {
+          held = join(folder, "held");
+          await mkdir(held);
+          await symlink(outside, join(held, "link"));
+          await chmod(held, 0o500);
+        },
+      );
+      try {
+        expect(result).toEqual({
+          ok: false,
+          step: "save",
+          sentence: "Satellite couldn't save the workspace list.",
+          undone: false,
+          left: "Satellite left the worktree in worktrees/repo/held in the Satellite home, because it couldn't remove the link held/link inside it. The branch held stays.",
+        });
+        expect(await git(root, ["worktree", "list", "--porcelain"])).toContain(asGitPrints(path));
+        expect(await git(root, ["show-ref", "--verify", "refs/heads/held"])).toContain(
+          "refs/heads/held",
+        );
+        expect(await exists(join(held, "link"))).toBe(true);
+      } finally {
+        await chmod(held, 0o700);
+      }
+    },
+  );
 
   it("never deletes a branch that already existed", async () => {
     const root = await repository();
@@ -258,6 +331,7 @@ describe("creationSteps", () => {
       step: "branch",
       sentence: "A branch named taken already exists in repo. Pick another name.",
       undone: true,
+      left: null,
     });
     expect(await git(root, ["rev-parse", "refs/heads/taken"])).toBe(first);
     expect(await exists(path)).toBe(false);
@@ -280,6 +354,7 @@ describe("creationSteps", () => {
         step: "branch",
         sentence: `repo already has a branch named ${clash}, which git can't keep next to ${name} on every system. Pick another name.`,
         undone: true,
+        left: null,
       });
       expect(await exists(path)).toBe(false);
     }
@@ -322,6 +397,7 @@ describe("creationSteps", () => {
         sentence:
           "A folder named racing is already in Satellite's worktrees for repo. Pick another name.",
         undone: true,
+        left: null,
       });
       expect(await readFile(join(target, "keep.txt"), "utf8")).toBe("keep\n");
       expect(await gitFails(root, ["show-ref", "--verify", "--quiet", "refs/heads/racing"])).toBe(
@@ -349,6 +425,7 @@ describe("creationSteps", () => {
       step: "save",
       sentence: "Satellite couldn't save the workspace list.",
       undone: true,
+      left: null,
     });
     await leftNothing(root, "unsaved", path);
   });
@@ -385,6 +462,7 @@ describe("creationSteps", () => {
       sentence:
         "git still lists a worktree at the folder for stale. Run git worktree prune, then try again.",
       undone: true,
+      left: null,
     });
     expect(await gitFails(root, ["show-ref", "--verify", "--quiet", "refs/heads/stale"])).toBe(
       true,
@@ -433,6 +511,7 @@ describe("creationSteps", () => {
       sentence:
         "Satellite couldn't reach origin and has no copy of main yet. Connect, or start from a branch you have.",
       undone: true,
+      left: null,
     });
   });
 
@@ -471,6 +550,7 @@ describe("creationSteps", () => {
       step: "start",
       sentence: "repo has no commits yet. Make a first commit, then make a workspace.",
       undone: true,
+      left: null,
     });
     expect(await exists(path)).toBe(false);
   });
@@ -496,6 +576,7 @@ describe("creationSteps", () => {
       step: "worktree",
       sentence: "Satellite stopped making the workspace because it is quitting.",
       undone: true,
+      left: null,
     });
     expect(Date.now() - started).toBeLessThan(15_000);
     await leftNothing(root, "quitting", path);
@@ -514,6 +595,12 @@ describe("prepareWorkspace", () => {
     const prepared = await prepareWorkspace(root, home);
     expect(prepared.name).toMatch(/^[a-z]+-[a-z]+$/);
     expect(prepared.start).toEqual({ kind: "remote", remote: "origin", branch: "main" });
+    await git(root, ["remote", "set-head", "origin", "-d"]);
+    expect((await prepareWorkspace(root, home)).start).toEqual({
+      kind: "remote",
+      remote: "origin",
+      branch: null,
+    });
     expect(prepared.branches.map((branch) => branch.ref).sort()).toEqual([
       "refs/heads/main",
       "refs/remotes/origin/main",

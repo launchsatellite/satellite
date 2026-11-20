@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+import { isSafeFileName, isTooLongForCheckouts, linkWalkMustFinish } from "./file-system.ts";
+
+describe("file system rules", () => {
+  it("refuses names Windows reads as devices or streams only on Windows", () => {
+    for (const name of ["a:b.json", "nul.json", "dot.json.", "space.json "]) {
+      expect(isSafeFileName(name, "win32")).toBe(false);
+      expect(isSafeFileName(name, "linux")).toBe(true);
+    }
+    for (const name of ["", ".", "..", "back\\slash"])
+      expect(isSafeFileName(name, "darwin")).toBe(false);
+    expect(isSafeFileName("ok.json", "win32")).toBe(true);
+  });
+
+  it("holds a workspace folder to 150 characters on Windows only", () => {
+    const path = `C:\\${"a".repeat(148)}`;
+    expect(isTooLongForCheckouts(path, "win32")).toBe(true);
+    expect(isTooLongForCheckouts(path.slice(0, 150), "win32")).toBe(false);
+    expect(isTooLongForCheckouts(path, "linux")).toBe(false);
+  });
+
+  it("asks the link walk to finish before git deletes only on Windows", () => {
+    expect(linkWalkMustFinish("win32")).toBe(true);
+    expect(linkWalkMustFinish("darwin")).toBe(false);
+    expect(linkWalkMustFinish("linux")).toBe(false);
+  });
+});

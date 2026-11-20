@@ -5,6 +5,14 @@ import { join } from "node:path";
 import type { StartChoice, StartView } from "../../shared/bridge-contract.ts";
 import { isBranchName, isStartRef } from "../../shared/workspace-name.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
+import {
+  errorCode,
+  folderIdentity,
+  noFollow,
+  nonBlocking,
+  sameIdentity,
+  type FolderIdentity,
+} from "../platform/file-system.ts";
 import { samePath } from "../platform/paths.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import type { StoredWorkspace } from "../projects/projects-file.ts";
@@ -16,7 +24,6 @@ import {
   lsRemoteMs,
   runGit,
   worktreeAddMs,
-  worktreeRemoveMs,
 } from "./git-command.ts";
 import { collectIncludedFiles, copyIncludedFiles } from "./include-copy.ts";
 import { createIncludeMatcher, parseWorktreeInclude } from "./worktree-include.ts";
@@ -30,6 +37,7 @@ import { suggestName } from "./workspace-names.ts";
 import { listWorktrees } from "./worktree-list.ts";
 import type { CreationResult, CreationStepRun } from "./workspace-creation.ts";
 import { StepFailure } from "./workspace-creation.ts";
+import { removeWorktree, type Kept } from "./worktree-removal.ts";
 
 export interface CreationContext {
   home: string;
@@ -45,10 +53,8 @@ export interface PreparedWorkspace {
   start: StartView;
   branches: { ref: string; label: string }[];
 }
-interface MadeFolder {
+interface MadeFolder extends FolderIdentity {
   path: string;
-  dev: number;
-  ino: number;
 }
 interface Shared {
   oid: string | null;
@@ -56,6 +62,7 @@ interface Shared {
   folder: MadeFolder | null;
   worktreeLeft: boolean;
 }
+type DefaultStart = { remote: null } | { remote: string; branch: string | null };
 
 const includeFilesMs = 120_000;
 
@@ -68,8 +75,12 @@ const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const includeLimit = 65536;
 const branchListLimit = 200;
 const branchLabelLimit = 255;
-const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
-const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
+const excerptLines = 6;
+const excerptLimit = 300;
+const escapeCharacter = String.fromCharCode(27);
+const hiddenMarks = new Set([
+  0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069,
+]);
 const quitSentence = "Satellite stopped making the workspace because it is quitting.";
 const checkoutSentence =
   "git couldn't check out the worktree, or one of the repository's hooks failed.";
@@ -80,10 +91,6 @@ const includeTooMuch =
   ".worktreeinclude matches more than 10000 files or 1 GiB. Narrow it, then try again.";
 const includeTooSlow =
   "Copying the files .worktreeinclude lists took longer than 2 minutes. Narrow it, then try again.";
-
-function errorCode(error: unknown): unknown {
-  return error instanceof Error && "code" in error ? error.code : undefined;
-}
 
 function label(ref: string): string {
   const prefix = startPrefixes.find((candidate) => ref.startsWith(candidate));
@@ -100,18 +107,42 @@ function stopIfQuitting(signal: AbortSignal): void {
   throw new StepFailure(typeof reason === "string" ? reason : quitSentence);
 }
 
+async function inStep<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof BridgeFailure) throw new StepFailure(error.message);
+    throw error;
+  }
+}
+
 async function git(
   root: string,
   args: readonly string[],
   timeoutMs: number,
   signal?: AbortSignal,
 ): Promise<ToolRun | undefined> {
-  try {
-    return await runGit(root, args, timeoutMs, signal);
-  } catch (error) {
-    if (error instanceof BridgeFailure) throw new StepFailure(error.message);
-    throw error;
-  }
+  return inStep(() => runGit(root, args, timeoutMs, signal));
+}
+
+function isShown(character: string): boolean {
+  const code = character.codePointAt(0) ?? 0;
+  if (code === 10) return true;
+  return code >= 32 && !(code >= 127 && code <= 159) && !hiddenMarks.has(code);
+}
+
+function excerptOf(stderr: string): string | null {
+  const [first = "", ...rest] = stderr.split(escapeCharacter);
+  const plain = first + rest.map((part) => part.replace(/^\[[0-9;?]*[A-Za-z]/, "")).join("");
+  const lines = plain
+    .replace(/./gsu, (character) => (isShown(character) ? character : ""))
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .slice(-excerptLines);
+  const text = lines.join("\n");
+  if (text === "") return null;
+  return text.length <= excerptLimit ? text : `…${text.slice(-(excerptLimit - 1))}`;
 }
 
 function pickRemote(stdout: string): string | null {
@@ -120,14 +151,8 @@ function pickRemote(stdout: string): string | null {
   return chosen !== undefined && chosen !== null && remotePattern.test(chosen) ? chosen : null;
 }
 
-async function chosenRemote(root: string): Promise<string | null> {
-  const run = await git(root, ["remote"], gitReadMs);
-  if (run?.exitCode !== 0) throw new Error("git remote did not answer");
-  return pickRemote(run.stdout);
-}
-
 async function cachedDefault(root: string, remote: string): Promise<string | null> {
-  const run = await git(
+  const run = await runGit(
     root,
     ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`],
     gitReadMs,
@@ -136,6 +161,14 @@ async function cachedDefault(root: string, remote: string): Promise<string | nul
   const ref = run?.exitCode === 0 ? run.stdout.trim() : "";
   const branch = ref.startsWith(prefix) ? ref.slice(prefix.length) : "";
   return isBranchName(branch) ? branch : null;
+}
+
+async function defaultStart(root: string): Promise<DefaultStart | undefined> {
+  const run = await runGit(root, ["remote"], gitReadMs);
+  if (run?.exitCode !== 0) return undefined;
+  const remote = pickRemote(run.stdout);
+  if (remote === null) return { remote };
+  return { remote, branch: await cachedDefault(root, remote) };
 }
 
 async function remoteDefault(root: string, remote: string, signal: AbortSignal) {
@@ -185,12 +218,7 @@ async function isListed(root: string, path: string): Promise<boolean | undefined
 }
 
 async function isMadeFolder(folder: MadeFolder): Promise<boolean> {
-  try {
-    const entry = await lstat(folder.path);
-    return entry.isDirectory() && entry.dev === folder.dev && entry.ino === folder.ino;
-  } catch {
-    return false;
-  }
+  return sameIdentity(await folderIdentity(folder.path), folder);
 }
 
 async function isGone(path: string): Promise<boolean> {
@@ -220,9 +248,11 @@ async function startFromMain(root: string, project: string, shared: Shared): Pro
 
 async function startFromDefault(context: CreationContext, shared: Shared): Promise<string> {
   const { root, project, signal } = context;
-  const remote = await chosenRemote(root);
-  if (remote === null) return startFromMain(root, project, shared);
-  const branch = (await cachedDefault(root, remote)) ?? (await remoteDefault(root, remote, signal));
+  const found = await inStep(() => defaultStart(root));
+  if (found === undefined) throw new Error("git remote did not answer");
+  if (found.remote === null) return startFromMain(root, project, shared);
+  const { remote } = found;
+  const branch = found.branch ?? (await remoteDefault(root, remote, signal));
   stopIfQuitting(signal);
   if (branch === null) {
     throw new StepFailure(
@@ -320,8 +350,9 @@ async function makeLeafFolder(path: string, name: string, segment: string): Prom
       `A folder named ${name} is already in Satellite's worktrees for ${segment}. Pick another name.`,
     );
   }
-  const made = await lstat(path);
-  return { path, dev: made.dev, ino: made.ino };
+  const made = await folderIdentity(path);
+  if (made === undefined) throw new Error("the new worktree folder is not a folder");
+  return { path, ...made };
 }
 
 async function isSafeWorktree(home: string, folder: MadeFolder): Promise<boolean> {
@@ -350,7 +381,12 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
         signal,
       );
       stopIfQuitting(signal);
-      if (added?.exitCode !== 0) throw new StepFailure(checkoutSentence);
+      if (added?.exitCode !== 0) {
+        throw new StepFailure(
+          checkoutSentence,
+          added === undefined ? null : excerptOf(added.stderr),
+        );
+      }
       if ((await isListed(root, folder.path)) !== true || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(checkoutSentence);
       }
@@ -364,14 +400,11 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
         const listing = await listWorktrees(root);
         if (listing === undefined) return false;
         const entry = listing.worktrees.find((worktree) => samePath(worktree.path, folder.path));
-        if (entry !== undefined) {
-          const force = entry.locked ? ["--force", "--force"] : ["--force"];
-          await git(
-            root,
-            ["worktree", "remove", ...force, "--end-of-options", folder.path],
-            worktreeRemoveMs,
-          );
-        }
+        const removal = await removeWorktree(root, folder.path, {
+          force: true,
+          locked: entry?.locked === true,
+        });
+        if (removal.kind === "kept") return leftSentence(context, removal.kept);
         if (await isSafeWorktree(home, folder)) {
           await rm(folder.path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
         }
@@ -383,7 +416,7 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
   };
 }
 
-async function readAll(path: string, expected: { dev: number; ino: number }): Promise<string> {
+async function readAll(path: string, expected: FolderIdentity): Promise<string> {
   let handle;
   try {
     handle = await open(path, constants.O_RDONLY | noFollow | nonBlocking);
@@ -391,7 +424,7 @@ async function readAll(path: string, expected: { dev: number; ino: number }): Pr
     throw new StepFailure(includeUnreadable);
   }
   try {
-    const info = await handle.stat();
+    const info = await handle.stat({ bigint: true });
     if (!info.isFile() || info.dev !== expected.dev || info.ino !== expected.ino) {
       throw new StepFailure(includeUnreadable);
     }
@@ -413,12 +446,14 @@ async function readInclude(root: string): Promise<string | null> {
   const path = join(root, ".worktreeinclude");
   let entry;
   try {
-    entry = await lstat(path);
+    entry = await lstat(path, { bigint: true });
   } catch (error) {
     if (errorCode(error) === "ENOENT") return null;
     throw new StepFailure(includeUnreadable);
   }
-  if (!entry.isFile() || entry.size > includeLimit) throw new StepFailure(includeUnreadable);
+  if (!entry.isFile() || entry.size > BigInt(includeLimit)) {
+    throw new StepFailure(includeUnreadable);
+  }
   return readAll(path, entry);
 }
 
@@ -493,9 +528,13 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
       }
-      const copy = await copyIncludedFiles(root, folder.path, selection.files, limit);
+      const copy = await beforeDeadline(
+        copyIncludedFiles(root, folder.path, selection.files, limit),
+        deadline,
+        signal,
+      );
       stopIfQuitting(signal);
-      if (copy === "too-slow") throw new StepFailure(includeTooSlow);
+      if (copy === "late" || copy === "too-slow") throw new StepFailure(includeTooSlow);
       return copiedDetail(copy.copied, copy.skipped + selection.links);
     },
     undo: () => Promise.resolve(true),
@@ -535,6 +574,20 @@ async function refList(root: string, args: readonly string[]): Promise<string[]>
   return run?.exitCode === 0 ? run.stdout.split("\n").filter((ref) => ref !== "") : [];
 }
 
+function leftSentence(context: CreationContext, kept: Kept): string {
+  const { root, name } = context;
+  const folder = `worktrees/${projectSegment(root)}/${name}`;
+  const left = `Satellite left the worktree in ${folder} in the Satellite home`;
+  switch (kept.cause) {
+    case "unchecked":
+      return `${left}, because it couldn't check all of it for links to other folders. The branch ${name} stays.`;
+    case "mount":
+      return `${left}, because a folder from another drive is mounted at ${kept.at} inside it. The branch ${name} stays. Unmount it, then archive ${name}.`;
+    case "link":
+      return `${left}, because it couldn't remove the link ${kept.at} inside it. The branch ${name} stays.`;
+  }
+}
+
 export function branchTakenSentence(name: string, project: string): string {
   return `A branch named ${name} already exists in ${project}. Pick another name.`;
 }
@@ -558,9 +611,11 @@ export function failureSentence(
   project: string,
 ): string {
   if (result.step === "start") return result.sentence;
-  return result.undone
-    ? `${result.sentence} Satellite removed what it had made, so nothing changed.`
-    : `${result.sentence} Satellite couldn't undo all of it. Check git worktree list and the branch ${name} in ${project}.`;
+  if (result.undone)
+    return `${result.sentence} Satellite removed what it had made, so nothing changed.`;
+  return result.left === null
+    ? `${result.sentence} Satellite couldn't undo all of it. Check git worktree list and the branch ${name} in ${project}.`
+    : `${result.sentence} ${result.left}`;
 }
 
 export function creationSteps(context: CreationContext): CreationStepRun[] {
@@ -591,10 +646,10 @@ export async function prepareWorkspace(root: string, home: string): Promise<Prep
   let start: StartView = { kind: "local", branch: mainBranch };
   if (main?.head === null) start = { kind: "empty" };
   else {
-    const remotes = await runGit(root, ["remote"], gitReadMs);
-    const remote = remotes?.exitCode === 0 ? pickRemote(remotes.stdout) : null;
-    const branch = remote === null ? null : await cachedDefault(root, remote);
-    if (remote !== null && branch !== null) start = { kind: "remote", remote, branch };
+    const found = await defaultStart(root);
+    if (found !== undefined && found.remote !== null) {
+      start = { kind: "remote", remote: found.remote, branch: found.branch };
+    }
   }
   const refs = await refList(root, [
     "--sort=-committerdate",

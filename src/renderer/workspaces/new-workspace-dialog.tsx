@@ -21,7 +21,7 @@ type Phase =
   | { kind: "unavailable"; message: string }
   | { kind: "form"; prepared: Prepared }
   | { kind: "running"; prepared: Prepared; operationId: string; stopping: boolean }
-  | { kind: "failed"; prepared: Prepared; message: string };
+  | { kind: "failed"; prepared: Prepared; message: string; stopped: boolean };
 type Steps = Record<CreationStep, { state: StepState; detail: string | null }>;
 
 interface NewWorkspaceDialogProps {
@@ -72,7 +72,9 @@ function stepTitle(step: CreationStep, name: string): string {
 }
 
 function defaultLabel(start: StartView, project: string): string {
-  if (start.kind === "remote") return `Latest ${start.branch} from ${start.remote}`;
+  if (start.kind === "remote") {
+    return `Latest ${start.branch ?? "default branch"} from ${start.remote}`;
+  }
   if (start.kind === "local" && start.branch !== null) {
     return `${start.branch}, where ${project} is now`;
   }
@@ -109,7 +111,7 @@ function StepRows({ steps, name }: { steps: Steps; name: string }) {
             <StatusPixel state={pixels[state]} />
             <span className="flex min-w-0 flex-col py-2">
               <span className="break-words">{stepTitle(step, name)}</span>
-              {detail !== null && (
+              {detail !== null && state !== "failed" && (
                 <span className="text-[12px] font-normal break-words text-dim">{detail}</span>
               )}
             </span>
@@ -133,8 +135,9 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
   const problemId = useId();
   const startId = useId();
   const input = useRef<HTMLInputElement>(null);
-  const failure = useRef<HTMLParagraphElement>(null);
+  const failure = useRef<HTMLDivElement>(null);
   const submitting = useRef(false);
+  const stopping = useRef(false);
   const unsubscribe = useRef<(() => void) | undefined>(undefined);
   const alive = useRef(true);
   const [phase, setPhase] = useState<Phase>({ kind: "reading" });
@@ -172,12 +175,17 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
   }, [phase.kind]);
 
   const problem = workspaceNameProblem(name);
+  const failedDetail =
+    stepOrder
+      .map((step) => steps[step])
+      .find((entry) => entry.state === "failed" && entry.detail !== null)?.detail ?? undefined;
   const canCreate =
     phase.kind === "form" && problem === null && phase.prepared.start.kind !== "empty";
 
   const create = () => {
     if (!canCreate || submitting.current) return;
     submitting.current = true;
+    stopping.current = false;
     const operationId = crypto.randomUUID();
     let reported = false;
     setRefusal(null);
@@ -189,10 +197,11 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
       setSteps((current) => {
         const before = current[event.step];
         const keepsFailure = before.state === "failed" && event.state === "undone";
+        const stopped = stopping.current && event.state === "failed";
         return {
           ...current,
           [event.step]: {
-            state: keepsFailure ? "failed" : event.state,
+            state: stopped ? "undone" : keepsFailure ? "failed" : event.state,
             detail: event.detail ?? before.detail,
           },
         };
@@ -213,7 +222,12 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
       }
       submitting.current = false;
       if (reported) {
-        setPhase({ kind: "failed", prepared: phase.prepared, message: result.error.message });
+        setPhase({
+          kind: "failed",
+          prepared: phase.prepared,
+          message: result.error.message,
+          stopped: stopping.current,
+        });
         return;
       }
       setRefusal(result.error.message);
@@ -223,6 +237,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
 
   const stopCreation = () => {
     if (phase.kind !== "running" || phase.stopping) return;
+    stopping.current = true;
     setPhase({ ...phase, stopping: true });
     void invoke("workspaces.cancel", { operationId: phase.operationId, projectId });
   };
@@ -319,14 +334,24 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
           <StepRows steps={steps} name={name} />
         )}
         {phase.kind === "failed" && (
-          <p
-            ref={failure}
-            role="alert"
-            data-testid="workspace-failure"
-            className="text-[13px] text-sigfg"
-          >
-            {phase.message}
-          </p>
+          <div ref={failure} className="flex flex-col gap-[6px]">
+            <p
+              role={phase.stopped ? "status" : "alert"}
+              data-testid="workspace-failure"
+              className={`text-[13px] ${phase.stopped ? "text-fg2" : "text-sigfg"}`}
+            >
+              {phase.message}
+            </p>
+            {failedDetail !== undefined && (
+              <pre
+                data-testid="workspace-failure-output"
+                aria-label="What git said"
+                className="max-h-[120px] overflow-y-auto rounded-[8px] bg-side px-[10px] py-2 font-mono text-[12px] break-words whitespace-pre-wrap text-fg2"
+              >
+                {failedDetail}
+              </pre>
+            )}
+          </div>
         )}
       </>
     );

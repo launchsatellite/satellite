@@ -5,7 +5,7 @@ const windowsFullyQualified = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
 const windowsDevicePath = /^[\\/]{2}[?.](?:[\\/]|$)/;
 const windowsNetworkPath = /^[\\/]{2}/;
 
-async function realpathOrUndefined(path: string): Promise<string | undefined> {
+export async function realpathOrUndefined(path: string): Promise<string | undefined> {
   try {
     return await realpath(path);
   } catch {

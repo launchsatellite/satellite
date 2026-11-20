@@ -2,13 +2,21 @@ import { lstat, mkdir, mkdtemp, readdir, realpath, symlink, writeFile } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { findLinks, removeLink } from "./folder-links.ts";
+import { findLinks, removeLink, type ReadEntry } from "./folder-links.ts";
 
 const onWindows = process.platform === "win32";
 
 let base = "";
 let root = "";
 let outside = "";
+
+function onAnotherDevice(mounted: string): ReadEntry {
+  return async (path) => {
+    const entry = await lstat(path, { bigint: true });
+    if (path === mounted) entry.dev += 1n;
+    return entry;
+  };
+}
 
 function open(entries = 1000, depth = 64) {
   return { entries, depth, deadline: Date.now() + 10_000 };
@@ -49,6 +57,14 @@ describe("findLinks", () => {
     expect(found.links.sort()).toEqual(
       [join(root, "file-link"), join(root, "node_modules", "dangling")].sort(),
     );
+  });
+
+  it("stops at a folder on another device and names it", async () => {
+    const mounted = join(root, "data");
+    await mkdir(join(mounted, "deeper"), { recursive: true });
+    const found = await findLinks(root, open(), onAnotherDevice(mounted));
+    expect(found).toMatchObject({ complete: false, mount: mounted });
+    expect((await findLinks(root, open())).mount).toBeNull();
   });
 
   it("says when it stopped at its bounds", async () => {

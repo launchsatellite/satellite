@@ -3,27 +3,29 @@ import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { BridgeResponse, LossView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
+import {
+  folderIdentity,
+  isMissing,
+  sameIdentity,
+  type FolderIdentity,
+} from "../platform/file-system.ts";
 import { samePath } from "../platform/paths.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { hasRemote, parseCount } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
-import { findLinks, linkWalkLimits, removeLink } from "./folder-links.ts";
-import { gitReadMs, runGit, worktreeRemoveMs } from "./git-command.ts";
+import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
+import { mountInside, removeWorktree, type Kept } from "./worktree-removal.ts";
 
 export type InspectView = BridgeResponse<"workspaces.inspect">;
 export type ArchiveResult = BridgeResponse<"workspaces.archive">;
 type Submodules = InspectView["submodules"];
-interface Identity {
-  dev: bigint;
-  ino: bigint;
-}
 interface Inspection {
-  view: Omit<InspectView, "sessions" | "fingerprint">;
+  view: Omit<InspectView, "mount" | "sessions" | "fingerprint">;
   core: string;
-  identity: Identity;
+  identity: FolderIdentity;
 }
 interface IndexRead {
   hidden: number;
@@ -38,7 +40,6 @@ const gitlinkChecks = 1000;
 const countCap = 1_000_000;
 const notOnAnyRef = ["--not", "--branches", "--remotes", "--tags", "--"];
 const notOnRemote = ["--not", "--remotes", "--"];
-const uncleanAnswer = "contains modified or untracked files, use --force to delete it";
 const submoduleAnswer = "working trees containing submodules cannot be moved or removed";
 const indexLine = /^(\S) (\d{6}) [0-9a-f]+ \d\t(.+)$/s;
 const oldGitSentence =
@@ -55,23 +56,10 @@ function hashOf(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-async function identityOf(path: string): Promise<Identity | undefined> {
-  try {
-    const entry = await lstat(path, { bigint: true });
-    return entry.isDirectory() ? { dev: entry.dev, ino: entry.ino } : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function sameIdentity(a: Identity | undefined, b: Identity): boolean {
-  return a?.dev === b.dev && a.ino === b.ino;
-}
-
 async function exists(path: string): Promise<boolean> {
   return lstat(path).then(
     () => true,
-    (error: unknown) => !(error instanceof Error && "code" in error && error.code === "ENOENT"),
+    (error: unknown) => !isMissing(error),
   );
 }
 
@@ -142,8 +130,7 @@ async function hasModulesFolder(folder: string): Promise<boolean | undefined> {
   const modules = isAbsolute(answer) ? answer : resolve(folder, answer);
   return lstat(modules).then(
     (entry) => entry.isDirectory(),
-    (error: unknown) =>
-      error instanceof Error && "code" in error && error.code === "ENOENT" ? false : undefined,
+    (error: unknown) => (isMissing(error) ? false : undefined),
   );
 }
 
@@ -170,7 +157,7 @@ async function readInspection(
 ): Promise<Inspection> {
   const failure = unreadable(record.name);
   if (!(await isConfined(home, project, record))) throw failure;
-  const identity = await identityOf(record.path);
+  const identity = await folderIdentity(record.path);
   if (identity === undefined) throw failure;
   const listing = await listWorktrees(project.path);
   if (listing === undefined) throw failure;
@@ -208,47 +195,32 @@ function fingerprintOf(core: string, sessions: number): string {
   return hashOf([core, sessions]);
 }
 
-async function removeLinks(path: string, name: string): Promise<number> {
-  const found = await findLinks(path, {
-    entries: linkWalkLimits.entries,
-    depth: linkWalkLimits.depth,
-    deadline: Date.now() + linkWalkLimits.ms,
-  });
-  if (!found.complete && process.platform === "win32") {
-    throw new BridgeFailure(
-      "refused",
-      `Satellite couldn't check all of ${name} for links to other folders, so it won't let git delete it. Nothing was removed.`,
-    );
-  }
-  let removed = 0;
-  for (const link of found.links) {
-    if (!(await removeLink(link))) {
-      throw new BridgeFailure(
-        "failed",
-        `Satellite couldn't remove a link inside ${name}, so it won't let git delete the folder. Links it removed before are gone, and what they pointed to is untouched.`,
+function keptFailure(name: string, kept: Kept, linksRemoved: number): BridgeFailure {
+  switch (kept.cause) {
+    case "unchecked":
+      return new BridgeFailure(
+        "refused",
+        `Satellite couldn't check all of ${name} for links to other folders, so it won't let git delete it. Nothing was removed.`,
       );
-    }
-    removed += 1;
+    case "mount":
+      return new BridgeFailure(
+        "refused",
+        `${name} holds a folder from another drive at ${kept.at}, so Satellite won't archive it. Unmount it, then try again. Nothing was removed.`,
+      );
+    case "link":
+      return new BridgeFailure(
+        "failed",
+        linksRemoved > 0
+          ? `Satellite couldn't remove the link ${kept.at} inside ${name}, so it won't let git delete the folder. Links it removed before are gone, and what they pointed to is untouched.`
+          : `Satellite couldn't remove the link ${kept.at} inside ${name}, so it won't let git delete the folder. Nothing was removed.`,
+      );
   }
-  return removed;
 }
 
-async function removeWorktree(
-  root: string,
-  path: string,
-  name: string,
-  linksRemoved: number,
-): Promise<void> {
-  let forced = false;
-  let run = await runGit(root, ["worktree", "remove", "--end-of-options", path], worktreeRemoveMs);
-  if (run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer)) {
-    forced = true;
-    run = await runGit(
-      root,
-      ["worktree", "remove", "--force", "--end-of-options", path],
-      worktreeRemoveMs,
-    );
-  }
+async function removeFromGit(root: string, path: string, name: string): Promise<void> {
+  const removal = await removeWorktree(root, path, { force: false, locked: false });
+  if (removal.kind === "kept") throw keptFailure(name, removal.kept, removal.linksRemoved);
+  const { run, forced, linksRemoved } = removal;
   if (run === undefined) {
     throw new BridgeFailure(
       "failed",
@@ -290,7 +262,8 @@ export async function inspectWorkspace(
   sessions: number,
 ): Promise<InspectView> {
   const { view, core } = await readInspection(home, project, record);
-  return { ...view, sessions, fingerprint: fingerprintOf(core, sessions) };
+  const mount = await mountInside(record.path);
+  return { ...view, mount, sessions, fingerprint: fingerprintOf(core, sessions) };
 }
 
 export async function archiveWorkspace(
@@ -324,10 +297,9 @@ export async function archiveWorkspace(
   await sessions.stopInside(path);
   const latest = await readInspection(home, project, record);
   if (latest.core !== seen.core) throw changed;
-  const linksRemoved = await removeLinks(path, name);
-  await removeWorktree(project.path, path, name, linksRemoved);
+  await removeFromGit(project.path, path, name);
   if (
-    sameIdentity(await identityOf(path), latest.identity) &&
+    sameIdentity(await folderIdentity(path), latest.identity) &&
     (await isConfined(home, project, record))
   ) {
     await rm(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(

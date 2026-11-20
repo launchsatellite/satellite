@@ -3,7 +3,7 @@ import type { CreationStep } from "../../shared/bridge-contract.ts";
 export interface CreationStepRun {
   id: CreationStep;
   run(): Promise<string | null>;
-  undo?: () => Promise<boolean>;
+  undo?: () => Promise<boolean | string>;
 }
 export interface StepReport {
   step: CreationStep;
@@ -11,9 +11,16 @@ export interface StepReport {
   detail: string | null;
 }
 export type CreationResult =
-  { ok: true } | { ok: false; step: CreationStep; sentence: string; undone: boolean };
+  | { ok: true }
+  | { ok: false; step: CreationStep; sentence: string; undone: boolean; left: string | null };
 
-export class StepFailure extends Error {}
+export class StepFailure extends Error {
+  detail: string | null;
+  constructor(sentence: string, detail: string | null = null) {
+    super(sentence);
+    this.detail = detail;
+  }
+}
 
 const unexpectedSentences: Record<CreationStep, string> = {
   start: "Something went wrong in Satellite. Try again.",
@@ -29,7 +36,7 @@ function sentenceFor(step: CreationStep, error: unknown): string {
   return unexpectedSentences[step];
 }
 
-async function undoOne(step: CreationStepRun): Promise<boolean> {
+async function undoOne(step: CreationStepRun): Promise<boolean | string> {
   if (step.undo === undefined) return true;
   try {
     return await step.undo();
@@ -51,17 +58,20 @@ export async function runCreation(
     try {
       detail = await step.run();
     } catch (error) {
-      report({ step: step.id, state: "failed", detail: null });
+      const detail = error instanceof StepFailure ? error.detail : null;
+      report({ step: step.id, state: "failed", detail });
       const sentence = sentenceFor(step.id, error);
       let undone = true;
+      let left: string | null = null;
       for (const undoing of started) {
         const answered = await undoOne(undoing);
-        if (answered && undoing.undo !== undefined) {
+        if (answered === true && undoing.undo !== undefined) {
           report({ step: undoing.id, state: "undone", detail: null });
         }
-        undone &&= answered;
+        if (typeof answered === "string") left ??= answered;
+        undone &&= answered === true;
       }
-      return { ok: false, step: step.id, sentence, undone };
+      return { ok: false, step: step.id, sentence, undone, left };
     }
     report({ step: step.id, state: "done", detail });
   }

@@ -20,6 +20,7 @@ import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { runGit } from "./git-command.ts";
 import { archiveWorkspace, inspectWorkspace, parseIndex } from "./workspace-archive.ts";
 import { listWorktrees } from "./worktree-list.ts";
+import { mountInside, removeWorktree } from "./worktree-removal.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -427,7 +428,7 @@ describe("archiveWorkspace", () => {
       ).rejects.toMatchObject({
         code: "failed",
         message:
-          "Satellite couldn't remove a link inside stuck, so it won't let git delete the folder. Links it removed before are gone, and what they pointed to is untouched.",
+          "Satellite couldn't remove the link held/link inside stuck, so it won't let git delete the folder. Nothing was removed.",
       });
       expect(removeCalls()).toEqual([]);
       expect(await listed(project)).toContain(asGitPrints(record.path));
@@ -502,5 +503,33 @@ describe("archiveWorkspace", () => {
       message: "Satellite couldn't read stray, so it won't archive it. Try again.",
     });
     expect(vi.mocked(runGit)).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeWorktree", () => {
+  it("leaves a worktree that holds a folder on another device as it is, links included", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "mounted");
+    const outside = join(base, "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "keep.md"), "Mine.\n");
+    await symlink(outside, join(record.path, "linked"), "junction");
+    const mounted = join(record.path, "data");
+    await mkdir(mounted);
+    await writeFile(join(mounted, "remote.md"), "On another drive.\n");
+    const read = async (path: string) => {
+      const entry = await lstat(path, { bigint: true });
+      if (path === mounted) entry.dev += 1n;
+      return entry;
+    };
+    expect(await mountInside(record.path, read)).toBe("data");
+    expect(await mountInside(record.path)).toBeNull();
+    expect(
+      await removeWorktree(project.path, record.path, { force: true, locked: false, read }),
+    ).toEqual({ kind: "kept", kept: { cause: "mount", at: "data" }, linksRemoved: 0 });
+    expect(removeCalls()).toEqual([]);
+    expect(await listed(project)).toContain(asGitPrints(record.path));
+    expect(await readFile(join(mounted, "remote.md"), "utf8")).toBe("On another drive.\n");
+    expect(await exists(join(record.path, "linked"))).toBe(true);
   });
 });

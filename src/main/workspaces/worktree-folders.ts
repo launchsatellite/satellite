@@ -1,18 +1,19 @@
 import { lstat, mkdir, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { reservedWorkspaceNames, workspaceNameProblem } from "../../shared/workspace-name.ts";
-import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
+import { errorCode, isTooLongForCheckouts } from "../platform/file-system.ts";
+import {
+  isFullyQualified,
+  isInsidePath,
+  realpathOrUndefined,
+  samePath,
+} from "../platform/paths.ts";
 
 type PreparedFolder = { ok: true; path: string; segment: string } | { ok: false; refusal: string };
 
 const segmentLimit = 48;
-const windowsPathLimit = 150;
 const plainFolderRefusal =
   "Satellite's worktrees folder isn't a plain folder, so it won't make a workspace there.";
-
-function errorCode(error: unknown): unknown {
-  return error instanceof Error && "code" in error ? error.code : undefined;
-}
 
 function trimEdges(segment: string): string {
   return segment.replace(/^[.-]+/, "").replace(/[.-]+$/, "");
@@ -34,14 +35,6 @@ async function makePlainFolder(path: string): Promise<boolean> {
     if (errorCode(error) !== "EEXIST") throw error;
   }
   return isPlainFolder(path);
-}
-
-async function realpathOrUndefined(path: string): Promise<string | undefined> {
-  try {
-    return await realpath(path);
-  } catch {
-    return undefined;
-  }
 }
 
 export function worktreesRoot(home: string): string {
@@ -86,7 +79,7 @@ export async function prepareWorktreeFolder(
       refusal: `A folder named ${name} is already in Satellite's worktrees for ${segment}. Pick another name.`,
     };
   }
-  if (process.platform === "win32" && path.length > windowsPathLimit) {
+  if (isTooLongForCheckouts(path)) {
     return {
       ok: false,
       refusal: "That workspace's folder would be too long for Windows. Pick a shorter name.",
