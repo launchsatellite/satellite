@@ -9,9 +9,18 @@ files:
   - package.json
   - "!node_modules/node-pty/prebuilds/!(${platform}-${arch})/**"
   - "!node_modules/node-pty/{deps,src,scripts,third_party}/**"
-asar: true
+  - "!node_modules/node-addon-api/**"
+  - "!**/*.test.js"
+  - "!**/*.map"
+  - "!out/renderer/third-party-licenses.md"
+extraResources:
+  - from: out/renderer/third-party-licenses.md
+    to: third-party-licenses.md
+asar:
+  smartUnpack: false
 asarUnpack:
-  - node_modules/node-pty/**
+  - node_modules/node-pty/prebuilds/**
+  - node_modules/node-pty/build/Release/**
 npmRebuild: false
 publish: null
 electronFuses:

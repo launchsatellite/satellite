@@ -27,7 +27,7 @@ Electron, TypeScript, React and Tailwind in one ESM npm package on Node 24. elec
 | `src/shared/` | `bridge-contract.ts` (every schema), `satellite-api.ts` (IPC names, the `window.satellite` type), `content-security-policy.ts`, `text-chunks.ts` |
 | `verify/` | Driver, scenarios, stand-ins and journeys, skill `satellite-verify` |
 | `lint/` | The `no-comments` rule |
-| `scripts/` | `check`, `postinstall.ts`, `checksums.ts` |
+| `scripts/` | `check`, `postinstall.ts`, `checksums.ts`, `third-party-licenses.ts` |
 | `packaging/` | `icon.png` |
 
 ## Where a new feature goes
@@ -146,9 +146,9 @@ The app reads `SATELLITE_HOME`, an absolute path that replaces `~/.satellite`, a
 
 ## Native modules and packaging
 
-- **node-pty** is N-API, so one build runs in Node and Electron and nothing is rebuilt (`npmRebuild: false`). macOS and Windows use its bundled builds, and Linux compiles it at install, which needs python3, make and a C++ compiler. Only `src/main/platform/pty.ts` imports it.
+- **node-pty** is N-API, so one build runs in Node and Electron and packaging never rebuilds it (`npmRebuild: false`). macOS and Windows use its bundled builds. Linux has none, so `npm ci` compiles it with node-gyp, which needs python3, make and a C++ compiler, and the Linux package then needs a glibc at least as new as the build machine's. Only `src/main/platform/pty.ts` imports it.
 - **The spawn helper.** node-pty ships its macOS `spawn-helper` without the executable bit, and every spawn then fails with `posix_spawnp failed`. `npm run postinstall` restores it. `npm rebuild node-pty` does not.
 - **Electron's binary** is fetched by `postinstall`, since the electron package installs nothing by itself. CI's check job skips it with `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, because it never launches the app.
 - **Windows kills.** node-pty's own kill forks a helper, and with the run-as-Node fuse off a fork starts a second Satellite. `PtyProcess.kill()` ends the tree with `taskkill` first and calls node-pty's kill only when the exit never comes. Never call node-pty's kill directly.
-- **Packaging.** `electron-builder.yml` ships `out/` and `package.json` as `app.asar`, unpacks node-pty, keeps only this platform's node-pty build and flips the fuses. A runtime dependency with native code needs the same `asarUnpack` and `files` treatment. macOS packages are ad-hoc signed. To package one Mac architecture, `npm run build`, then `npx electron-builder --mac --arm64 --publish never`.
+- **Packaging.** `electron-builder.yml` ships `out/` and `package.json` as `app.asar`, unpacks only node-pty's native files with smart unpacking off, keeps only this platform's node-pty build, drops tests, source maps and `node-addon-api`, puts `third-party-licenses.md` in the resources folder and flips the fuses. A runtime dependency with native code needs the same `asarUnpack` and `files` treatment, and its licence reaches the notices by itself because `scripts/third-party-licenses.ts` adds every runtime dependency. macOS packages are ad-hoc signed. To package one Mac architecture, `npm run build`, then `npx electron-builder --mac --arm64 --publish never`.
 - **Release.** `.github/workflows/release.yml` packages and runs the journeys on macOS, Windows and Linux. A `v*` tag drafts a release when all three pass. Pushing a branch named `platforms/<slug>` runs the same matrix without publishing, which is how Windows and Linux are proven before a merge.
