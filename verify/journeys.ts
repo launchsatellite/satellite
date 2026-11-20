@@ -48,6 +48,8 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     },
     home: session.home,
     repo: session.repo,
+    folder: (name) => session.folder(name),
+    answerFolderDialog: (path) => session.answerFolderDialog(path),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: () => session.relaunch(),

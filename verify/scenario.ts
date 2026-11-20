@@ -29,6 +29,9 @@ export const scenarioSchema = z.strictObject({
   description: z.string(),
   repo: z.array(repoStepSchema),
   home: z.array(z.strictObject({ path: z.string().min(1), content: z.string() })).optional(),
+  folders: z
+    .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
+    .optional(),
   gh: z.array(ghAnswerSchema),
   claude: z.strictObject({ version: z.string(), script: z.array(claudeStepSchema) }),
 });

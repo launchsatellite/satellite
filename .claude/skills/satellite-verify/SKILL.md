@@ -44,6 +44,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `wait-for=<testid>` | waits up to 60 seconds for an element to be visible | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
+| `choose-folder=<target>` | sets what the next folder dialog answers. `repo` is the working repo, `cancel` cancels, anything else is `folders/<target>` in the temp folder, such as `alpha`, `alpha/src` or a folder that does not exist | |
 | `restart` | closes the app and launches it again on the same home, repo and log, so saved state can be read back | |
 
 `consoleErrors` holds console errors, uncaught errors and unhandled rejections from the first render on, because the driver attaches before the page runs or, when the page already ran, the protocol replays what it buffered.
@@ -59,6 +60,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - `description` says what world it sets up.
 - `repo` builds the throwaway repo in order. `{ "write": { "path", "content" } }` writes a file inside it and `{ "git": [args] }` runs the real `git` there, with no system config and a global config naming `Satellite Verify`.
 - `home` optionally lists `{ path, content }` files written inside the Satellite home before launch, with the same confinement as the repo's writes, such as a cut off `interface.json`. A scenario seeds `interface.json` with `"theme": "light"` unless its description says otherwise, so its screenshots never depend on the machine's own setting.
+- `folders` optionally lists `{ name, steps }`, each built like `repo` in `folders/<name>` beside it, with a kebab-case name. They are the folders a `choose-folder` step can pick.
 - `gh` lists canned answers, `{ args, stdout?, stderr?, exitCode? }`. The stand-in answers the first entry whose `args` equal its own exactly.
 - `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`.
 
@@ -73,7 +75,7 @@ Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. E
 
 ## Home, output and cleanup
 
-Each run makes `satellite-verify-*` in the system temp folder, its real path, with `home/` as `SATELLITE_HOME`, `repo/` and `stand-ins.jsonl`. The user's own `~/.satellite` is never touched. The app gets the driver's environment without `GIT_*`, `CLAUDECODE`, `CLAUDE_CODE_*`, `NODE_OPTIONS` and `ELECTRON_RUN_AS_NODE`, and the recipe's `git` runs without the inherited `GIT_*` too. The run closes the window, kills the process tree once it exits or after 10 seconds, and deletes the temp folder unless `--keep` is set. SIGINT, SIGTERM and SIGHUP, plus SIGBREAK on Windows, stop the build or the app and delete the temp folder the same way. Only a `SIGKILL` of the driver leaves the app running. Screenshots land in `verify-output/<scenario>-<timestamp>/`, which Git ignores.
+Each run makes `satellite-verify-*` in the system temp folder, its real path, with `home/` as `SATELLITE_HOME`, `repo/`, `folders/`, `stand-ins.jsonl` and `folder-dialog.txt`. `SATELLITE_VERIFY_FOLDER_DIALOG` points the app at that file, so the folder dialog never opens and its trimmed content is the chosen folder, a missing or empty file meaning canceled. The user's own `~/.satellite` is never touched. The app gets the driver's environment without `GIT_*`, `CLAUDECODE`, `CLAUDE_CODE_*`, `NODE_OPTIONS` and `ELECTRON_RUN_AS_NODE`, and the recipe's `git` runs without the inherited `GIT_*` too. The run closes the window, kills the process tree once it exits or after 10 seconds, and deletes the temp folder unless `--keep` is set. SIGINT, SIGTERM and SIGHUP, plus SIGBREAK on Windows, stop the build or the app and delete the temp folder the same way. Only a `SIGKILL` of the driver leaves the app running. Screenshots land in `verify-output/<scenario>-<timestamp>/`, which Git ignores.
 
 ## Real Claude Code
 
@@ -81,7 +83,7 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 
 ## In code
 
-`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)`, `relaunch()` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. `relaunch()` closes the app and launches it again in the same temp folder, after which `page` answers the new page, so a wrapper forwards `page` with a getter rather than copying it. A second `close()` answers the first one's result. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason`, `outputDir`, `isProcessAlive(pid)`, which counts a process it may not signal as alive, `pasteIntoFocus(page, text)` and `generatedText(size)`, the text `paste-size` sends. Journeys use it directly.
+`verify/driver.ts` exports `launchApp({ scenario, target, realClaude?, keep? })`, which returns an `AppSession` with the Playwright `page`, `home`, `repo`, `consoleErrors`, `standInEvents()`, `screenshot(name)`, `folder(name)`, the path of `folders/<name>`, `answerFolderDialog(path | undefined)`, `relaunch()` and `close()`, which answers `{ exitedOnItsOwn, leftover? }`, where `exitedOnItsOwn` says the app quit within 10 seconds of its window closing, before any kill. `relaunch()` closes the app and launches it again in the same temp folder, after which `page` answers the new page, so a wrapper forwards `page` with a getter rather than copying it. A second `close()` answers the first one's result. A failed launch throws `LaunchFailure` carrying `output`, `consoleErrors`, `tree`, `home` and `repo`. It also exports `buildApp()`, `readTree(page)`, `withTimeout`, `errorReason`, `outputDir`, `isProcessAlive(pid)`, which counts a process it may not signal as alive, `pasteIntoFocus(page, text)` and `generatedText(size)`, the text `paste-size` sends. Journeys use it directly.
 
 ## Journeys
 
@@ -97,7 +99,7 @@ It builds once for the built target, runs every journey in order, each in a fres
 
 | Journey | Scenario | Proves |
 | --- | --- | --- |
-| `launch` | `default` | three columns, the tool readout, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
+| `launch` | `default` | three columns, the tool readout, the working repo added through the folder dialog, Claude Code starting, typing, Shift+Enter and a 100000 character paste arriving whole and in order, a resize that changes the rows reaching the stand-in, the diff's two sides, a reload ending the first stand-in, a quit ending the app and the second stand-in, and no console errors |
 | `boundary` | `default` | no Node in the window, `window.satellite` holding only `invoke` and `onEvent`, the content security policy refusing an inline script, a `data:` fetch, a remote fetch, image and frame, microphone, camera and notifications reading denied, no path escaping the `app://` root, the bridge refusing a bad payload and an unknown channel, no new window or navigation reaching a remote address, and Claude Code still running and echoing after those refused navigations |
 | `quit` | `flood` | quitting mid flood ends the stand-in and its child that ignores hangup |
 
@@ -114,3 +116,4 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 001 Foundation, the security boundary | `default` | `boundary` |
 | 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |
 | 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
+| 002 Shell and projects, adding repositories, refusing other folders, the quick switcher and restoring the selection | `two-projects` | `launch` |

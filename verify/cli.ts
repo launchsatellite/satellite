@@ -4,6 +4,7 @@ import type { Page } from "playwright-core";
 import {
   buildApp,
   errorReason,
+  folderTarget,
   generatedText,
   launchApp,
   pasteIntoFocus,
@@ -79,6 +80,12 @@ async function paste(page: Page, text: string): Promise<string> {
   const target = await pasteIntoFocus(page, text);
   if (target === undefined) throw new Error(noFocus);
   return target;
+}
+
+function chosenFolder(session: AppSession, target: string): string | undefined {
+  if (target === "cancel") return undefined;
+  if (target === "repo") return session.repo;
+  return session.folder(target);
 }
 
 function parseStep(raw: string): Step {
@@ -162,6 +169,13 @@ function parseStep(raw: string): Step {
         screenshots.push(path);
         return path;
       });
+    }
+    case "choose-folder": {
+      const target = needsValue();
+      if (!folderTarget.test(target)) {
+        throw new Error("step choose-folder needs repo, cancel or a folder like alpha/src");
+      }
+      return step(({ session }) => session.answerFolderDialog(chosenFolder(session, target)));
     }
     case "log":
       return step(({ session }) => session.standInEvents());

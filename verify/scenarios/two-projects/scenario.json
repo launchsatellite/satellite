@@ -1,0 +1,41 @@
+{
+  "description": "Two repositories and a plain folder beside the working repo, with gh signed in.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "folders": [
+    {
+      "name": "alpha",
+      "steps": [
+        { "write": { "path": "src/index.ts", "content": "export const alpha = 1;\n" } },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    },
+    {
+      "name": "beta",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Beta\n" } },
+        { "git": ["init", "-b", "develop"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    },
+    { "name": "notes", "steps": [{ "write": { "path": "README.md", "content": "# Notes\n" } }] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [{ "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" }],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

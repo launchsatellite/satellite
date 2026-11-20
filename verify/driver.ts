@@ -28,6 +28,8 @@ export interface AppSession {
   readonly page: Page;
   home: string;
   repo: string;
+  folder(name: string): string;
+  answerFolderDialog(path: string | undefined): Promise<void>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
@@ -43,6 +45,12 @@ interface RunningApp {
   browser?: Browser;
   page?: Page;
   output: string;
+}
+interface AppPaths {
+  home: string;
+  repo: string;
+  log: string;
+  dialog: string;
 }
 interface AppCommand {
   file: string;
@@ -83,6 +91,7 @@ const pasteAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 let lockHeld = false;
 
 export const outputDir = outputFolder;
+export const folderTarget = /^[a-z0-9-]+(?:\/[a-z0-9.-]+)*$/;
 
 async function stopForSignal(signal: NodeJS.Signals): Promise<void> {
   if (stopping) return;
@@ -168,8 +177,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  home: string,
-  log: string,
+  { home, log, dialog }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
@@ -178,6 +186,7 @@ function appEnvironment(
   env["SATELLITE_HOME"] = home;
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
   env["SATELLITE_VERIFY_LOG"] = log;
+  env["SATELLITE_VERIFY_FOLDER_DIALOG"] = dialog;
   env["SATELLITE_GH"] = standIn("gh");
   if (options.realClaude !== true) env["SATELLITE_CLAUDE"] = standIn("claude");
   return env;
@@ -259,11 +268,17 @@ async function prepareFolders(
     gitconfig,
     "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
   );
-  await buildRepo(repo, scenario.repo, {
+  const gitEnv = {
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: gitconfig,
     GIT_TERMINAL_PROMPT: "0",
-  });
+  };
+  await buildRepo(repo, scenario.repo, gitEnv);
+  for (const folder of scenario.folders ?? []) {
+    const target = join(temp, "folders", folder.name);
+    await mkdir(target, { recursive: true });
+    await buildRepo(target, folder.steps, gitEnv);
+  }
 }
 
 async function forceStop(child: ChildProcess): Promise<void> {
@@ -315,7 +330,7 @@ function recordErrors(context: BrowserContext, consoleErrors: string[]): void {
 
 async function startApp(
   options: LaunchOptions,
-  paths: { home: string; repo: string; log: string },
+  paths: AppPaths,
   running: RunningApp,
   consoleErrors: string[],
 ): Promise<Page> {
@@ -323,7 +338,7 @@ async function startApp(
   running.output = "";
   const child = spawn(file, args, {
     cwd,
-    env: appEnvironment(options, paths.home, paths.log),
+    env: appEnvironment(options, paths),
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
     windowsHide: true,
@@ -448,7 +463,8 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const home = join(temp, "home");
   const repo = join(temp, "repo");
   const log = join(temp, "stand-ins.jsonl");
-  const paths = { home, repo, log };
+  const dialog = join(temp, "folder-dialog.txt");
+  const paths = { home, repo, log, dialog };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -509,6 +525,14 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     home,
     repo,
+    folder(name) {
+      const segments = name.split("/");
+      if (!folderTarget.test(name) || segments.some((part) => part === "." || part === "..")) {
+        throw new Error(`folder ${name} must be kebab-case segments joined by /`);
+      }
+      return join(temp, "folders", ...segments);
+    },
+    answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
     async screenshot(name) {

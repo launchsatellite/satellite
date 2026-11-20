@@ -139,6 +139,9 @@ async function checkDiff(page: Page): Promise<void> {
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   await checkWindow(page);
+  await session.answerFolderDialog(session.repo);
+  await page.getByTestId("add-first-project").click();
+  await page.getByTestId("diff").waitFor({ timeout: promptTimeoutMs });
   const firstPid = await startClaude(session, 1);
   await checkInput(session);
   await checkResize(session);
