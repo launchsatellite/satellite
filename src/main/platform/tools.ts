@@ -81,6 +81,7 @@ const proxyKeys = [
   "all_proxy",
 ];
 const noProxyKeys = ["NO_PROXY", "no_proxy"];
+const claudeNestingKeys = new Set(["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION"]);
 const loopback = "127.0.0.1";
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
@@ -116,8 +117,14 @@ export function toolEnvironment(tool: Tool, env: Record<string, string>): Record
   return env;
 }
 
-export function claudeEnvironment(env: Record<string, string>): Record<string, string> {
-  const kept = Object.fromEntries(Object.entries(env).filter(([key]) => key !== "CLAUDECODE"));
+export function claudeEnvironment(
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const nameOf = (key: string) => (platform === "win32" ? key.toUpperCase() : key);
+  const kept = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !claudeNestingKeys.has(nameOf(key))),
+  );
   if (!proxyKeys.some((key) => (env[key] ?? "") !== "")) return kept;
   for (const key of noProxyKeys) kept[key] = withLoopback(env[key]);
   return kept;

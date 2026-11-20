@@ -116,6 +116,18 @@ describe("claudeEnvironment", () => {
     ).toEqual({ PATH: "/usr/bin", ANTHROPIC_BASE_URL: "https://llm.example.com" });
   });
 
+  it("drops the child session marker that hides a session from resume", () => {
+    expect(claudeEnvironment({ PATH: "/usr/bin", CLAUDE_CODE_CHILD_SESSION: "1" })).toEqual({
+      PATH: "/usr/bin",
+    });
+  });
+
+  it("drops the markers in any case on Windows only", () => {
+    const env = { Path: "C:\\Windows", ClaudeCode: "1", claude_code_child_session: "1" };
+    expect(claudeEnvironment(env, "win32")).toEqual({ Path: "C:\\Windows" });
+    expect(claudeEnvironment(env, "linux")).toEqual(env);
+  });
+
   it("keeps loopback away from a proxy", () => {
     expect(claudeEnvironment({ HTTPS_PROXY: "http://proxy.example.com:8080" })).toEqual({
       HTTPS_PROXY: "http://proxy.example.com:8080",
