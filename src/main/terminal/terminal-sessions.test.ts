@@ -393,6 +393,48 @@ describe("createTerminalSessions", () => {
     });
   });
 
+  it("changes no resume record once quitting has begun, so the saved record is the last one", async () => {
+    const listener = fakeListener();
+    const last = fakeLast();
+    const sessions = create({ listener, last });
+    const { mine } = owners();
+    await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    const launchId = listener.open.mock.calls[0]?.[0] ?? "";
+    const started = "3e4f5a6b-7c8d-4e9f-8a1b-2c3d4e5f6a7b";
+    sessions.hookEvent(launchId, { name: "SessionStart", source: "startup", sessionId: started });
+    const quitting = sessions.closeAll();
+    sessions.hookEvent(launchId, { name: "UserPromptSubmit" });
+    ptys[0]?.exit(0, 1);
+    await quitting;
+    expect(last.set).not.toHaveBeenCalled();
+  });
+
+  it("tells the page when an archive ends a start before it spawns", async () => {
+    const pending = Promise.withResolvers<string | undefined>();
+    const last = fakeLast();
+    last.get.mockImplementation(() => pending.promise);
+    const sessions = create({ last });
+    const { mine, sent } = owners();
+    const starting = sessions.handlers["terminal.start"](
+      { id: terminalId(1), ...size, resume: true },
+      mine,
+    );
+    await vi.waitFor(() => {
+      expect(last.get).toHaveBeenCalled();
+    });
+    expect(sessions.sessionsInside.countInside(folders.get("main") ?? "")).toBe(1);
+    const stopping = sessions.sessionsInside.stopInside(folders.get("main") ?? "");
+    pending.resolve(recorded);
+    await starting;
+    await stopping;
+    expect(ptys).toHaveLength(0);
+    expect(sent).toHaveBeenCalledWith(expect.anything(), "terminal.exit", {
+      id: terminalId(1),
+      exitCode: 0,
+      ending: "ended",
+    });
+  });
+
   it("cancels a start closed by its own page, so the same id starts again", async () => {
     const { handlers } = create();
     const { mine } = owners();
