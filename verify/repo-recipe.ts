@@ -9,11 +9,18 @@ const run = promisify(execFile);
 async function writeInside(target: string, path: string, content: string): Promise<void> {
   const file = resolve(target, path);
   const fromTarget = relative(target, file);
-  if (fromTarget === "" || fromTarget.startsWith(`..${sep}`) || isAbsolute(fromTarget)) {
+  const climbsOut = fromTarget === ".." || fromTarget.startsWith(`..${sep}`);
+  if (fromTarget === "" || climbsOut || isAbsolute(fromTarget)) {
     throw new Error(`repo step writes ${path}, which is outside the repo`);
   }
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, content);
+}
+
+export function withoutGitVariables(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.toUpperCase().startsWith("GIT_")),
+  );
 }
 
 export async function buildRepo(
@@ -21,7 +28,7 @@ export async function buildRepo(
   steps: RepoStep[],
   gitEnv: Record<string, string>,
 ): Promise<void> {
-  const env = { ...process.env, ...gitEnv };
+  const env = { ...withoutGitVariables(process.env), ...gitEnv };
   for (const step of steps) {
     if ("write" in step) {
       await writeInside(target, step.write.path, step.write.content);
