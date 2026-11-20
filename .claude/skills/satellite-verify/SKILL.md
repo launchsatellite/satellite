@@ -39,7 +39,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `paste=<text>` | dispatches a paste event with the text on the focused element, failing when nothing has focus | the focused test id |
 | `paste-size=<n>` | pastes `n` generated characters, `abc…xyz0…9` repeated, up to 1000000 | the focused test id |
 | `resize=<width>x<height>` | sets the viewport size | |
-| `theme=light` or `theme=dark` | emulates the system color scheme | |
+| `theme=light` or `theme=dark` | emulates the system color scheme, which also hides the theme chosen in Satellite. Without it the window follows the real system and the chosen theme | |
 | `wait=<ms>` | waits, up to 60000 | |
 | `wait-for=<testid>` | waits up to 60 seconds for an element to be visible | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
