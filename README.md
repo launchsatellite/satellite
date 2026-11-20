@@ -10,7 +10,7 @@ Early. The foundation runs, one window with the three columns, the real Claude C
 
 ## Install
 
-A Satellite build is a dmg or zip for macOS (arm64 and x64), an installer for Windows (x64), or an AppImage or deb for Linux (x64), with a `SHA256SUMS.txt` beside it. Builds carry no paid signature, so each system asks once before it opens one.
+A Satellite build is a dmg or zip for macOS (arm64 and x64), an installer for Windows (x64), or an AppImage or deb for Linux (x64), with a `SHA256SUMS.txt` and `third-party-licenses.md` beside it. Builds carry no paid signature, so macOS and Windows each ask once before they open one.
 
 **Check the download.** Run the check in the folder that holds the package and `SHA256SUMS.txt`. Each line it prints must end in `OK`.
 
@@ -36,7 +36,7 @@ chmod +x <package>.AppImage
 ./<package>.AppImage
 ```
 
-Ubuntu 24.04 limits unprivileged user namespaces, which Chromium's sandbox relies on, so the AppImage stops at start there. Install the deb instead, which adds an AppArmor profile for Satellite. Never run Satellite with `--no-sandbox`.
+The Linux build needs a distribution at least as new as Ubuntu 24.04. Ubuntu 24.04 limits unprivileged user namespaces, which Chromium's sandbox relies on, so the AppImage stops at start there. Install the deb instead, which adds an AppArmor profile for Satellite. Never run Satellite with `--no-sandbox`.
 
 ## Run from source
 

@@ -19,7 +19,7 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | --- | --- |
 | `specs/` | numbered feature specs, the template and the index |
 | `.claude/skills/` | how to work here, one folder per skill |
-| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns or knows the operating system |
+| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu |
 | `src/preload/` | the preload that exposes `window.satellite` |
 | `src/renderer/` | the sandboxed interface, React and Tailwind, one folder per feature plus `ui/` |
 | `src/shared/` | the bridge contract and other code both processes import |
@@ -45,13 +45,13 @@ Our own skills are named `satellite-<area>`, so they are easy to find. Write or 
 ## Commands
 
 ```sh
-npm ci                                       # install, also restores the pty helper and fetches Electron
-npm run dev                                  # the app with hot reload
-npm run verify -- <scenario> [step ...]      # launch the real app in a scenario and print JSON
-npm run journeys                             # the journeys against the built app
-npm run build && npm run package             # installers for this machine in release/
-./scripts/check                              # the green checkpoint, guards, format, lint, typecheck and tests
-./guards/test.sh                             # proves every guard still fires
+npm ci                                           # install, also restores the pty helper and fetches Electron
+npm run dev                                      # the app with hot reload
+npm run --silent verify -- <scenario> [step ...] # launch the real app in a scenario and print JSON
+npm run journeys                                 # the journeys against the built app
+npm run build && npm run package                 # installers for this machine in release/
+./scripts/check                                  # the green checkpoint, guards, format, lint, typecheck and tests
+./guards/test.sh                                 # proves every guard still fires
 ```
 
 ## Autonomy

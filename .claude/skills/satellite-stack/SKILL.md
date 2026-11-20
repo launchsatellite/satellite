@@ -5,30 +5,11 @@ description: "Use when adding or changing code in any part of Satellite, to know
 
 # Satellite stack
 
-Electron, TypeScript, React and Tailwind in one ESM npm package on Node 24. electron-vite builds it into `out/`, electron-builder packages it into `release/`. `ARCHITECTURE.md` says why each boundary is where it is, and skill `satellite-conventions` holds the rules every line follows. This skill is how to put code in the right place and prove it.
+Electron, TypeScript, React and Tailwind in one ESM npm package on the Node named in `.nvmrc`. electron-vite builds it into `out/`, electron-builder packages it into `release/`. `ARCHITECTURE.md` says why each boundary is where it is, and skill `satellite-conventions` holds the rules every line follows. This skill is how to put code in the right place and prove it.
 
 ## Folder map
 
-| Path | Holds |
-| --- | --- |
-| `src/main/main.ts` | Startup in order. The Satellite home, the `app://` scheme, the single-instance lock, then menu, hardening, protocol, bridge and window, and a quit that waits for terminals |
-| `src/main/bridge/` | `registry.ts` validates and routes, `sender-check.ts`, `page-owners.ts` (one owner per page load), `bridge-ipc.ts` the IPC wiring |
-| `src/main/window/` | The window, the role-only menu, the `app://` protocol and the hardening |
-| `src/main/platform/` | Satellite home, `resolveInside`, the login shell environment, finding and running tools, the pseudo terminal, ending process trees |
-| `src/main/terminal/`, `src/main/tools/` | Feature folders. Terminal sessions and output flow, tool versions |
-| `src/preload/preload.ts` | `window.satellite` with `invoke` and `onEvent`. It never grows |
-| `src/renderer/entry.tsx` | Loads the fonts, then renders `AppWindow` |
-| `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
-| `src/renderer/window/` | The three columns |
-| `src/renderer/ui/` | Shared parts from `DESIGN.md`. Only `button.tsx` exists |
-| `src/renderer/terminal/`, `src/renderer/diff/` | `TerminalView` on xterm.js, `DiffView` on Monaco, both reusable |
-| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that fill the columns. A feature that takes over a column replaces the proving part there |
-| `src/renderer/styles/app.css` | The app tokens, light and dark, mapped to Tailwind |
-| `src/shared/` | `bridge-contract.ts` (every schema), `satellite-api.ts` (IPC names, the `window.satellite` type), `content-security-policy.ts`, `text-chunks.ts` |
-| `verify/` | Driver, scenarios, stand-ins and journeys, skill `satellite-verify` |
-| `lint/` | The `no-comments` rule |
-| `scripts/` | `check`, `postinstall.ts`, `checksums.ts`, `third-party-licenses.ts` |
-| `packaging/` | `icon.png` |
+The Folder layout section of `ARCHITECTURE.md` maps every folder and the files that matter, so the map lives in one place.
 
 ## Where a new feature goes
 

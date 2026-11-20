@@ -49,7 +49,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 
 `wait` gets its own length plus 15 seconds and `wait-for` gets 75 seconds. Every other step fails after 15 seconds. Paste goes through a synthetic event because the app denies the clipboard permission.
 
-The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, output?, tree? }], consoleErrors, screenshots, leftover? }`. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch`, and a failed launch adds the app's last output and the window tree when one exists. `home` and `repo` are `null` until the temp folder exists. A failed close adds a `close` entry, and `leftover` names a temp folder that could not be deleted. The exit code is 1 when any step failed or something was left over.
+The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, output?, tree? }], consoleErrors, screenshots, leftover? }`. When arguments, the build or the launch fail, `steps` holds one entry named `arguments`, `build` or `launch`, and a failed launch adds the app's last output and the window tree when one exists. `home` and `repo` are `null` until the temp folder exists. A failed close adds a `close` entry, and `leftover` names a temp folder that could not be deleted. The exit code is 1 when any step failed or something was left over. It does not count `consoleErrors`, so read them.
 
 ## Scenarios
 
@@ -110,4 +110,4 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 001 Foundation, the window and the tool readout | `default` | `launch` |
 | 001 Foundation, the terminal, the diff and reload cleanup | `default` | `launch` |
 | 001 Foundation, the security boundary | `default` | `boundary` |
-| 001 Foundation, terminal output flow and process cleanup | `flood` | `quit` |
+| 001 Foundation, process cleanup in the middle of a flood. Pausing and resuming output is pinned by `src/main/terminal/output-flow.test.ts`, not by a journey | `flood` | `quit` |

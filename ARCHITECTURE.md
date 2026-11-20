@@ -66,7 +66,7 @@ The right column runs the real Claude Code in a terminal Satellite owns. The bac
 - **Cleanup.** When the owner ends, through a reload, a crash or a closed window, its terminals are killed, even one still starting. On macOS and Linux a kill lists processes once with `ps`, taken from `/bin` or `/usr/bin` and never searched in `PATH`, then sends `SIGHUP` to the terminal's process group and to every descendant. When the terminal has exited and nothing from that list is left, the kill is done. Otherwise, two seconds after it began, everything from the list that still runs, and anything those processes started since, gets `SIGKILL`. A process is matched by its pid and start time, so a reused pid is never signalled. On Windows `taskkill /T /F` ends the tree, then the kill waits up to two seconds for the pseudo terminal to report the exit. Only when it never does is node-pty's own kill called, because that kill starts a helper with `fork`, which the packaged app's run-as-Node fuse turns into a second Satellite. The single-instance lock makes such a launch quit at once. node-pty's spawn, write, resize, pause and resume never fork.
 - **Quit.** Quitting refuses new terminals and waits until every terminal has been killed this way, then exits. The wait is bounded by the kill's own worst case, the two second grace plus two process listings of at most a second each, plus half a second. So Claude Code, its tools and anything that ignores `SIGHUP` end with Satellite. A process that fully detaches before the kill, by leaving the process group and losing its parent to the system, is out of reach and survives.
 - **Limits.** 16 terminals at once, a terminal still being killed included. Input is split into writes of at most 65536 characters and sent through one queue per terminal, so a large paste arrives whole and in order. Scrollback keeps 5000 lines.
-- **Output flow.** The background process gathers output for 8 milliseconds and sends it in events of at most 65536 characters. The interface acknowledges each event once xterm.js has drawn it. With more than 256 KiB of output unacknowledged the pseudo terminal is paused, and it resumes once that falls to 32 KiB, so a flood of output never piles up in memory. A terminal that ends is resumed first, so a page that is gone never holds a process paused.
+- **Output flow.** The background process gathers output for 8 milliseconds and sends it in events of at most 65536 characters. The interface acknowledges each event once xterm.js has processed it. With more than 256 KiB of output unacknowledged the pseudo terminal is paused, and it resumes once that falls to 32 KiB, so a flood of output never piles up in memory. A terminal that ends is resumed first, so a page that is gone never holds a process paused.
 - **Failures.** A failed start or an ended session shows one sentence in a status region, so screen readers announce it, and a button that starts a fresh terminal. Focus moves to that button, because xterm.js takes Tab as input and would otherwise hold the keyboard. A spawn failure says that Claude Code couldn't start and nothing in the project changed.
 - **Links.** A click on a link in terminal output does nothing, so output can never open a dialog, a window or the browser.
 - **Environment.** Claude Code starts in the app's working folder, or the home folder when that is the filesystem root, as it is for an app opened from the Dock or Finder, or not a folder, with the user's environment plus `TERM=xterm-256color` and `COLORTERM=truecolor`.
@@ -104,21 +104,21 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | Path | What |
 | --- | --- |
 | `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, menu, hardening, protocol, bridge, window, and the quit that waits for terminals |
-| `src/main/bridge/` | The router that validates every request, the sender check, the per-page owners and the IPC wiring |
+| `src/main/bridge/` | `registry.ts` the router that validates every request, `sender-check.ts`, `page-owners.ts` the per-page owners and `bridge-ipc.ts` the IPC wiring |
 | `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
 | `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the pseudo terminal and ending process trees |
 | `src/main/terminal/` | The terminal sessions, who owns them and their output flow |
 | `src/main/tools/` | Tool versions for the left column |
-| `src/preload/preload.ts` | Exposes `window.satellite` |
+| `src/preload/preload.ts` | Exposes `window.satellite` with `invoke` and `onEvent`. It never grows |
 | `src/renderer/entry.tsx` | Loads the five font families, then renders the window |
-| `src/renderer/bridge/` | The typed client that checks every answer and event |
-| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end |
+| `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
+| `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end. A feature that takes over a column replaces the proving part there |
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
 | `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
 | `src/renderer/window/` | The three columns |
 | `src/renderer/ui/` | Shared interface parts such as the primary button |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
-| `src/shared/` | Code both processes import |
+| `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |
 | `electron.vite.config.ts` | Builds main, preload and renderer into `out/` |
 | `electron-builder.yml` | Packages `out/` into `release/` with the fuses |
 | `packaging/` | The app icon electron-builder turns into each platform's format |
@@ -142,7 +142,7 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 | The unicode11 addon | The graphemes addon | It gives the cell widths Claude Code expects, and the graphemes addon is experimental. |
 | A driver over the Chrome DevTools Protocol, `--remote-debugging-port=0` | Playwright's `_electron.launch` | `_electron.launch` waits for the Node inspector, which the inspect arguments fuse turns off, so it could never drive the packaged app the release proves. |
 | The `app://` protocol | `file://` | A standard, secure scheme with one handler that confines every path to `out/renderer` and sets the policy on every response. `file://` reaches the whole disk and has no real origin for the sender check. |
-| TypeScript 6 | TypeScript 7 | Typed lint needs the JavaScript compiler API, and typescript-eslint supports TypeScript only below 6.1. |
+| The TypeScript compiler written in TypeScript | The native TypeScript compiler | Typed lint needs the JavaScript compiler API, which only the compiler written in TypeScript offers, and typescript-eslint supports only that one. |
 | Terminal ids chosen by the interface, which subscribes before it starts | The background process buffering early output until the interface asks | Nothing is lost and nothing has to be held or bounded in between. |
 | Output batching with `terminal.ack` and a paused pseudo terminal | Streaming output with no flow control | It is the only way to bound memory when a command floods the terminal. |
 | Only `.exe` and `.com` on Windows | Running `.cmd` and `.bat` shims | A batch file needs a shell that re-parses its arguments, so a branch or file name could become a command. A shim install shows as missing. |
