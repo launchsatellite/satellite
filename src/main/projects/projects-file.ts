@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { z } from "zod";
 import { bridgeLimits, workspaceName } from "../../shared/bridge-contract.ts";
-import { isFullyQualified } from "../platform/paths.ts";
+import { comparablePath, isFullyQualified } from "../platform/paths.ts";
 import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "../state/json-file.ts";
 
 export interface StoredWorkspace {
@@ -65,9 +65,8 @@ const fileSchema = z.union([version1, version2]).refine(({ projects }) => {
   const workspaces = projects.flatMap((project) => project.workspaces);
   return (
     allDifferent(projects.map((project) => project.id)) &&
-    allDifferent(projects.map((project) => project.path)) &&
     allDifferent(workspaces.map((workspace) => workspace.id)) &&
-    allDifferent(workspaces.map((workspace) => workspace.path))
+    allDifferent([...projects, ...workspaces].map((entry) => comparablePath(entry.path)))
   );
 });
 const notices: Record<JsonReadOutcome["kind"], string | null> = {

@@ -38,7 +38,7 @@ export function isNetworkPath(path: string, platform: NodeJS.Platform = process.
   return platform === "win32" && windowsNetworkPath.test(path);
 }
 
-function comparablePath(path: string, platform: NodeJS.Platform = process.platform): string {
+export function comparablePath(path: string, platform: NodeJS.Platform = process.platform): string {
   const full = platform === "win32" ? win32.resolve(path) : posix.resolve(path);
   return platform === "win32" || platform === "darwin" ? full.toLowerCase() : full;
 }

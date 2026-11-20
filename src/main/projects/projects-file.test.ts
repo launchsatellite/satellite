@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { samePath } from "../platform/paths.ts";
 import { createProjectsFile } from "./projects-file.ts";
 
 const setAsideNotice =
@@ -77,6 +78,26 @@ describe("createProjectsFile", () => {
     expect(await setAsideFiles(home)).toHaveLength(1);
     const apart = await homeWith(fileWith(`${path}-2`));
     expect((await createProjectsFile(apart).load()).projects[0]?.workspaces).toHaveLength(2);
+  });
+
+  it("sets aside a file that holds one folder twice under another spelling", async () => {
+    const alpha = "/Users/<name>/code/alpha";
+    const onProject = await homeWith({
+      version: 2,
+      projects: [{ id: randomUUID(), path: alpha, workspaces: [workspace("fix-login", alpha)] }],
+    });
+    expect((await createProjectsFile(onProject).load()).notice).toBe(setAsideNotice);
+    const cased = await homeWith({
+      version: 1,
+      projects: [
+        { id: randomUUID(), path: alpha },
+        { id: randomUUID(), path: "/Users/<name>/code/Alpha" },
+      ],
+    });
+    const loaded = await createProjectsFile(cased).load();
+    const foldsCase = samePath(alpha, "/Users/<name>/code/Alpha");
+    expect(loaded.notice).toBe(foldsCase ? setAsideNotice : null);
+    expect(loaded.projects).toHaveLength(foldsCase ? 0 : 2);
   });
 
   it("sets aside a project with 21 workspaces", async () => {
