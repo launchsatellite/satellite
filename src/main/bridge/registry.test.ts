@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { defaultInterfaceState } from "../../shared/bridge-contract.ts";
 import type { BridgeHandler, BridgeHandlers, BridgeOwner } from "./registry.ts";
 import { BridgeFailure, createBridgeRouter } from "./registry.ts";
 
@@ -9,6 +10,10 @@ function spies() {
     "tools.versions": vi.fn<BridgeHandler<"tools.versions">>(() =>
       Promise.resolve({ git: "git version 2.50.1", gh: null, claude: null }),
     ),
+    "interface.load": vi.fn<BridgeHandler<"interface.load">>(() =>
+      Promise.resolve({ state: defaultInterfaceState, notice: null }),
+    ),
+    "interface.save": vi.fn<BridgeHandler<"interface.save">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -97,6 +102,25 @@ describe("createBridgeRouter", () => {
     ];
     for (const payload of payloads) {
       const result = await route("terminal.ack", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
+  it("refuses interface state out of bounds", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const columns = defaultInterfaceState.columns;
+    const states = [
+      { ...defaultInterfaceState, columns: { ...columns, left: 199 } },
+      { ...defaultInterfaceState, columns: { ...columns, left: 361 } },
+      { ...defaultInterfaceState, columns: { ...columns, right: 641 } },
+      { ...defaultInterfaceState, theme: "sepia" },
+      { ...defaultInterfaceState, selected: { projectId: terminalId, workspace: "other" } },
+      { ...defaultInterfaceState, extra: true },
+    ];
+    for (const state of states) {
+      const result = await route("interface.save", { state }, owner);
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);

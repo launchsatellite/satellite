@@ -24,6 +24,7 @@ The interface is treated as untrusted. Whatever it shows can never run a command
 - **The `app://` protocol.** The interface loads from `app://satellite/index.html`, a standard and secure scheme, never from `file://`. The handler answers only `GET` for host `satellite`, decodes the path and confines it to `out/renderer` with `resolveInside`, which follows symlinks before it checks. It serves regular files only, so a folder is never handed to the file loader. Anything refused gets a 404. Every response, the 404 included, carries the production policy and `X-Content-Type-Options: nosniff`.
 - **Development server.** `ELECTRON_RENDERER_URL` points the window at the dev server only when the app is not packaged, so an environment variable can never aim a packaged app at remote content.
 - **Satellite home.** All state lives in the Satellite home, `~/.satellite` or the path in `SATELLITE_HOME`, which must be fully qualified, with a drive letter or a share on Windows. It is created before the app is ready and set to mode `0700` on every start on macOS and Linux, so an older, looser folder is tightened. Electron's `userData` is `app-data` inside it, so caches and storage never land anywhere else.
+- **State files.** Satellite's own state is JSON files in the Satellite home, each read once through a strict zod schema with a `version` of 1. A file that is unreadable, invalid or from an unknown version is renamed to `<name>.unreadable-<milliseconds>.json` beside it, never deleted, and the app starts from defaults and says so once. A write goes to `.<file>.<uuid>.tmp` with mode `0600`, is synced, then renamed over the file, and writes to one file run one at a time. Leftover temp files are deleted on the first read. `interface.json` holds the column widths, the selection and the theme, and it is read before the window opens so the theme is applied through `nativeTheme.themeSource` before the first paint.
 - **Menu.** A minimal menu built from roles only, with no links. The app menu on macOS (about, hide, quit), Edit (undo, redo, cut, copy, paste, select all) and Window (minimize, close). View with reload and developer tools exists only when the app is not packaged. The Edit roles are what make copy and paste work on macOS.
 - **One instance per home.** The app takes Electron's single-instance lock, which Electron scopes to the `userData` folder, so to the Satellite home. A second launch on the same home quits at once and the first window comes to the front. Launches with their own `SATELLITE_HOME`, like every verify run, never collide.
 - **Failed start.** If the Satellite home cannot be prepared, the window cannot be created or its entry cannot load, the background process logs one sentence and exits with code 1, so no process lingers without a window.
@@ -41,6 +42,8 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
 | `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters. Requests that arrive while a run is going share it, so at most one `--version` per tool runs at a time | Takes no input. The tools run with fixed arguments and no shell, and no number of requests starts more than three processes at once. |
+| `interface.load` | Answers the saved interface state and, once per app run, the sentence saying a corrupt file was set aside | Empty request, the notice at most 300 characters | Takes no input and answers only what the interface itself saved. |
+| `interface.save` | Stores the whole interface state in `interface.json` and applies its theme | Strict state, column widths as bounded integers, the theme one of three names, the selection a UUID and `main` | Every field is bounded data. The file name is fixed, nothing in the request is a path, and the worst a hostile page can do is change the layout or theme. |
 | `terminal.start` | Starts Claude Code in a terminal with a given id and size | Program must be `claude`, id a UUID, 2 to 500 columns, 1 to 300 rows, 16 terminals | The interface names no executable, path or argument. The background process resolves `claude` itself. |
 | `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches a terminal the same page started. It is exactly typing into Claude Code, so whoever can send it can run anything Claude Code can, its `!` shell included. The integrity of the interface (no remote content, the content security policy, terminal output drawn as text) is what guards command execution. |
 | `terminal.resize` | Resizes a terminal | 2 to 500 columns, 1 to 300 rows | Bounded integers only. |
@@ -103,19 +106,20 @@ The release workflow, `.github/workflows/release.yml`, packages on macOS, Window
 
 | Path | What |
 | --- | --- |
-| `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, menu, hardening, protocol, bridge, window, and the quit that waits for terminals |
+| `src/main/main.ts` | Startup order. Home, scheme, single-instance lock, the saved interface state and its theme, menu, hardening, protocol, bridge, window, and the quit that waits for terminals |
 | `src/main/bridge/` | `registry.ts` the router that validates every request, `sender-check.ts`, `page-owners.ts` the per-page owners and `bridge-ipc.ts` the IPC wiring |
-| `src/main/window/` | The window, the menu, the `app://` protocol and the hardening |
+| `src/main/window/` | The window, the menu, the `app://` protocol, the hardening and the theme choice |
 | `src/main/platform/` | The Satellite home, path confinement, the login shell environment, finding and running tools, the pseudo terminal and ending process trees |
+| `src/main/state/` | The JSON state files, `json-file.ts` with the reader that sets a bad file aside and the serialised atomic writer, and `interface-file.ts` with the interface state and its bridge handlers |
 | `src/main/terminal/` | The terminal sessions, who owns them and their output flow |
 | `src/main/tools/` | Tool versions for the left column |
 | `src/preload/preload.ts` | Exposes `window.satellite` with `invoke` and `onEvent`. It never grows |
-| `src/renderer/entry.tsx` | Loads the five font families, then renders the window |
+| `src/renderer/entry.tsx` | Loads the five font families and the saved interface state, then renders the window |
 | `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
 | `src/renderer/proving/` | The tool readout, the Claude Code pane and the sample diff that prove the bridge, the terminal and the diff end to end. A feature that takes over a column replaces the proving part there |
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens and its font |
 | `src/renderer/diff/` | The read-only diff view and its Monaco worker and theme |
-| `src/renderer/window/` | The three columns |
+| `src/renderer/window/` | The three columns, their dividers, how widths fit the window and the interface state hook |
 | `src/renderer/ui/` | Shared interface parts such as the primary button |
 | `src/renderer/styles/app.css` | The `DESIGN.md` app tokens for light and dark, mapped to Tailwind utilities |
 | `src/shared/` | Code both processes import, `bridge-contract.ts` with every schema, `satellite-api.ts` with the IPC names and the `window.satellite` type, `content-security-policy.ts` and `text-chunks.ts`. It imports nothing from Electron, Node or the DOM |

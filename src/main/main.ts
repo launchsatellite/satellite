@@ -4,6 +4,7 @@ import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { treeKillBoundMs } from "./platform/process-tree.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import { createInterfaceFile, interfaceHandlers } from "./state/interface-file.ts";
 import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
 import { toolVersions } from "./tools/tool-versions.ts";
 import {
@@ -15,6 +16,7 @@ import {
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
 import { createMainWindow } from "./window/main-window.ts";
+import { applyThemeChoice } from "./window/theme.ts";
 
 const terminals = createTerminalSessions();
 const quitBoundMs = treeKillBoundMs + 500;
@@ -32,8 +34,10 @@ function focusMainWindow(): void {
   window.focus();
 }
 
-async function start(): Promise<void> {
+async function start(home: string): Promise<void> {
   await app.whenReady();
+  const interfaceFile = createInterfaceFile(home);
+  applyThemeChoice((await interfaceFile.load()).state.theme);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
   hardenSession(session.defaultSession);
@@ -42,6 +46,7 @@ async function start(): Promise<void> {
   registerBridge(
     {
       "tools.versions": toolVersions,
+      ...interfaceHandlers(interfaceFile, applyThemeChoice),
       ...terminals.handlers,
     },
     allowedOrigin(entryUrl),
@@ -55,22 +60,23 @@ function failStart(error: unknown): void {
   app.exit(1);
 }
 
-function prepareHome(): boolean {
+function prepareHome(): string | undefined {
   try {
-    app.setPath("userData", join(prepareSatelliteHome(), "app-data"));
-    return true;
+    const home = prepareSatelliteHome();
+    app.setPath("userData", join(home, "app-data"));
+    return home;
   } catch (error) {
     failStart(error);
-    return false;
+    return undefined;
   }
 }
 
-const homeReady = prepareHome();
-if (homeReady && app.requestSingleInstanceLock()) {
+const home = prepareHome();
+if (home !== undefined && app.requestSingleInstanceLock()) {
   registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start().catch(failStart);
-} else if (homeReady) {
+  start(home).catch(failStart);
+} else if (home !== undefined) {
   app.exit(0);
 }
 
