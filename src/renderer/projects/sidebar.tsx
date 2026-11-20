@@ -44,12 +44,12 @@ function CommandRow({
       onClick={found?.run}
       className={`flex h-7 w-full flex-none items-center gap-[9px] rounded-[6px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 hover:bg-hover ${focusRing}`}
     >
-      <span className="text-dim">
+      <span className="flex-none text-dim">
         <Icon name={icon} size={15} />
       </span>
-      {text}
+      <span className="min-w-0 truncate">{text}</span>
       {shortcut !== undefined && (
-        <span className="ml-auto">
+        <span className="ml-auto flex-none">
           <KeyHint keys={shortcut} />
         </span>
       )}
