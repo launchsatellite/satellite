@@ -11,6 +11,7 @@ const standInEventSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("input"), data: z.string() }),
   z.strictObject({ type: z.literal("resize"), cols: z.int(), rows: z.int() }),
+  z.strictObject({ type: z.literal("child"), pid: z.int() }),
 ]);
 
 export type StandInEvent = z.infer<typeof standInEventSchema>;

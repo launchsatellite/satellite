@@ -16,6 +16,8 @@ const ghAnswerSchema = z.strictObject({
 const claudeStepSchema = z.union([
   z.strictObject({ print: z.string() }),
   z.strictObject({ wait: z.int().min(0).max(60_000) }),
+  z.strictObject({ flood: z.int().min(1).max(50_000_000) }),
+  z.strictObject({ child: z.literal("ignores-hangup") }),
 ]);
 
 export const scenarioSchema = z.strictObject({

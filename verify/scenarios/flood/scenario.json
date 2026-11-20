@@ -1,0 +1,19 @@
+{
+  "description": "A fresh repo with a stand-in Claude Code that starts a child ignoring SIGHUP, prints four million characters as fast as the terminal takes them, then waits at its prompt.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "gh": [{ "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" }],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      { "child": "ignores-hangup" },
+      { "flood": 4000000 },
+      { "print": "> " }
+    ]
+  }
+}

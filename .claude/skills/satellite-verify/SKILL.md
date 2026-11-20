@@ -58,7 +58,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - `description` says what world it sets up.
 - `repo` builds the throwaway repo in order. `{ "write": { "path", "content" } }` writes a file inside it and `{ "git": [args] }` runs the real `git` there, with no system config and a global config naming `Satellite Verify`.
 - `gh` lists canned answers, `{ args, stdout?, stderr?, exitCode? }`. The stand-in answers the first entry whose `args` equal its own exactly.
-- `claude` holds the `version` line and a `script` of `{ "print": text }` and `{ "wait": ms }` steps, played when the stand-in starts.
+- `claude` holds the `version` line and a `script` played when the stand-in starts. `{ "print": text }` prints, `{ "wait": ms }` waits, `{ "flood": chars }` prints that many characters as numbered lines as fast as the terminal takes them, then `flood done <lines> lines`, and `{ "child": "ignores-hangup" }` starts a child process that ignores `SIGHUP`.
 
 ## Stand-ins
 
@@ -67,7 +67,7 @@ A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenari
 - **gh** prints its answer and exits with its code. Without an answer it prints `stand-in gh has no answer for <args>` and exits 1.
 - **claude** prints `version` for `--version`. Otherwise it plays the script, then reads stdin raw, echoes every chunk (ESC then CR echoes as a new line) and exits on Ctrl+C or Ctrl+D.
 
-Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, and `resize` with `cols` and `rows`. Startup calls such as `gh --version` appear once on the built and packaged targets. The dev target runs React in development mode, whose strict mode runs every effect twice, so count events on a built run.
+Both append JSON lines to `SATELLITE_VERIFY_LOG`, read back by the `log` step. Events are `start` with `tool`, `pid` and `args`, `input` with `data`, `resize` with `cols` and `rows`, and `child` with the `pid` of a started child. Startup calls such as `gh --version` appear once on the built and packaged targets. The dev target runs React in development mode, whose strict mode runs every effect twice, so count events on a built run.
 
 ## Home, output and cleanup
 
@@ -86,3 +86,4 @@ Each run makes `satellite-verify-*` in the system temp folder, its real path, wi
 | Feature | Scenario | Journey |
 | --- | --- | --- |
 | 001 Foundation, the window and the tool readout | `default` | none |
+| 001 Foundation, terminal output flow and process cleanup | `flood` | none |
