@@ -95,6 +95,8 @@ electron-builder packages `out/` and `package.json` into `release/` from `electr
 - **Fuses.** Running as Node, `NODE_OPTIONS`, the Node inspector arguments and extra `file://` privileges are off. ASAR integrity validation and loading the app only from the ASAR are on. Integrity is checked on macOS and Windows, and Linux has no such check. Cookie encryption is off, because Satellite stores no cookies and loads no remote content, and turning it on gives each build a keychain item that an ad-hoc signature, new with every build, can make macOS ask about.
 - **Checksums.** `node scripts/checksums.ts <folder> <label>` writes `SHA256SUMS-<label>.txt` in `sha256sum` format for every package directly in the folder.
 
+The release workflow, `.github/workflows/release.yml`, packages on macOS, Windows and Linux at once, reads the fuses, runs the journeys against each packaged app and writes the checksums. A failing journey uploads `verify-output/`. A version tag runs it and, once all three pass, drafts a GitHub release with the packages and one `SHA256SUMS.txt`. A push to a `platforms/` branch or a manual run builds and proves without publishing, and a branch push is how the matrix runs before a merge, because a manual run only exists for workflows on the default branch. On Linux the journeys run under `xvfb`, with unprivileged user namespaces allowed so Chromium keeps its own sandbox on Ubuntu 24.04. Every step runs in bash, Windows included.
+
 ## Folder layout
 
 | Path | What |
@@ -119,3 +121,4 @@ electron-builder packages `out/` and `package.json` into `release/` from `electr
 | `electron-builder.yml` | Packages `out/` into `release/` with the fuses |
 | `packaging/` | The app icon electron-builder turns into each platform's format |
 | `scripts/checksums.ts` | Writes the checksum file for a folder of packages |
+| `.github/workflows/release.yml` | Packages and proves the three platforms, and drafts a release for a tag |
