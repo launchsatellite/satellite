@@ -42,6 +42,6 @@ Projects, workspaces, sessions and every view. Each has its own spec.
 - [x] A read-only diff of two texts renders side by side. Proof, a screenshot from the driver.
 - [x] A bridge message with a wrong shape is refused before any handler runs. Proof, a unit test.
 - [x] The interface cannot navigate, open a window or reach Node. Proof, a journey that tries each.
-- [ ] `./scripts/check` is green locally and in CI.
-- [ ] The release workflow, started by hand or from a `platforms/` branch, packages all three platforms and passes every journey on each. Proof, the run link.
+- [x] `./scripts/check` is green locally and in CI.
+- [x] The release workflow, started by hand or from a `platforms/` branch, packages all three platforms and passes every journey on each. Proof, [the run](https://github.com/launchsatellite/satellite/actions/runs/44702636638).
 - [x] The driver launches a scenario, returns the window as structured data and saves a screenshot. Proof, its output.
