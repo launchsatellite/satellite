@@ -176,13 +176,29 @@ describe("createTerminalSessions", () => {
     await handlers["terminal.start"]({ id: terminalId(1), ...size, resume: true }, mine);
     ptys[0]?.kill.mockImplementation(() => new Promise<void>(() => undefined));
     await handlers["terminal.close"]({ id: terminalId(1) }, mine);
-    expect(await handlers["sessions.resumable"]({ workspace: main }, mine)).toEqual({
-      resumable: false,
-    });
     await expect(
       handlers["terminal.start"]({ id: terminalId(2), ...size, resume: true }, mine),
     ).rejects.toMatchObject({ code: "refused" });
     expect(ptys).toHaveLength(1);
+  });
+
+  it("offers the resume once a closed session's process is gone", async () => {
+    const { handlers } = create({ listener: fakeListener(), last: fakeLast(recorded) });
+    const { mine } = owners();
+    await handlers["terminal.start"]({ id: terminalId(1), ...size, resume: true }, mine);
+    let killed: () => void = () => undefined;
+    ptys[0]?.kill.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          killed = resolve;
+        }),
+    );
+    await handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    const answer = handlers["sessions.resumable"]({ workspace: main }, mine);
+    await delay(50);
+    ptys[0]?.exit(0, 1);
+    killed();
+    expect(await answer).toEqual({ resumable: true });
   });
 
   it("refuses to resume where nothing is recorded", async () => {

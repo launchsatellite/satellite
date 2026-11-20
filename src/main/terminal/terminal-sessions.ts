@@ -360,7 +360,12 @@ export function createTerminalSessions({
           return { resumable: false };
         }
         const recorded = await last.get(workspace);
-        return { resumable: recorded !== undefined && !holds(recorded) };
+        if (recorded === undefined) return { resumable: false };
+        const holding = [...alive()].filter((session) => session.sessionId === recorded);
+        if (holding.length > 0 && holding.every((session) => session.ended)) {
+          await settled(holding);
+        }
+        return { resumable: !holds(recorded) && (await last.get(workspace)) === recorded };
       },
       "terminal.start": start,
       "terminal.write": ({ id, data }, owner) =>
