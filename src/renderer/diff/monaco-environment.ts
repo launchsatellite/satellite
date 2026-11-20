@@ -4,13 +4,17 @@ import EditorWorker from "monaco-editor/editor/editor.worker?worker";
 const lowAlpha = "33";
 const sixDigitHex = /^#[0-9a-f]{6}$/;
 
+function readColour(paint: CanvasRenderingContext2D, sentinel: string, value: string): string {
+  paint.fillStyle = sentinel;
+  paint.fillStyle = value;
+  return paint.fillStyle;
+}
+
 function hexToken(styles: CSSStyleDeclaration, paint: CanvasRenderingContext2D, name: string) {
   const value = styles.getPropertyValue(`--${name}`).trim();
-  if (value === "") throw new Error(`The theme token --${name} is missing`);
-  paint.fillStyle = "#000000";
-  paint.fillStyle = value;
-  const hex = paint.fillStyle;
-  if (!sixDigitHex.test(hex)) throw new Error(`The theme token --${name} is not an opaque colour`);
+  const hex = readColour(paint, "#000000", value);
+  const valid = hex === readColour(paint, "#ffffff", value) && sixDigitHex.test(hex);
+  if (!valid) throw new Error(`The theme token --${name} is not an opaque colour`);
   return hex;
 }
 
