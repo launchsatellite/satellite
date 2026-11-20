@@ -15,17 +15,22 @@ const responseSchemas: { [C in BridgeChannel]: { response: z.ZodType<BridgeRespo
   bridgeRequests;
 const eventSchemas: { [E in BridgeEventName]: z.ZodType<BridgeEventPayload<E>> } = bridgeEvents;
 
+function failed(message: string): BridgeResult<never> {
+  return { ok: false, error: { code: "failed", message } };
+}
+
 export async function invoke<C extends BridgeChannel>(
   channel: C,
   request: BridgeRequest<C>,
 ): Promise<BridgeResult<BridgeResponse<C>>> {
-  const answer = await window.satellite.invoke(channel, request);
+  let answer: unknown;
+  try {
+    answer = await window.satellite.invoke(channel, request);
+  } catch {
+    return failed("Satellite could not reach its background process. Try again.");
+  }
   const parsed = bridgeResultSchema(responseSchemas[channel].response).safeParse(answer);
-  if (parsed.success) return parsed.data;
-  return {
-    ok: false,
-    error: { code: "failed", message: "Satellite got an answer it could not read." },
-  };
+  return parsed.success ? parsed.data : failed("Satellite got an answer it could not read.");
 }
 
 export function subscribe<E extends BridgeEventName>(
