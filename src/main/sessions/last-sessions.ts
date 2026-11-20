@@ -7,6 +7,7 @@ export interface LastSessions {
   get(ref: WorkspaceRef): Promise<string | undefined>;
   set(ref: WorkspaceRef, sessionId: string): Promise<void>;
   forget(ref: WorkspaceRef, sessionId: string): Promise<void>;
+  keepOnly(recorded: readonly WorkspaceRef[]): Promise<void>;
   flush(): Promise<void>;
 }
 type Entry = z.output<typeof entrySchema>;
@@ -92,6 +93,13 @@ export function createLastSessions(home: string): LastSessions {
         const kept = last.filter(
           (entry) => pairOf(entry) !== pair || entry.sessionId !== sessionId,
         );
+        return kept.length === last.length ? undefined : kept;
+      });
+    },
+    async keepOnly(recorded) {
+      const pairs = new Set(recorded.map(pairOf));
+      await save((last) => {
+        const kept = last.filter((entry) => pairs.has(pairOf(entry)));
         return kept.length === last.length ? undefined : kept;
       });
     },

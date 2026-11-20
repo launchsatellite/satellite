@@ -116,6 +116,14 @@ function assemble(home: string): Parts {
     chooseFolder,
     window: mainWindow,
     stopSessions: (folder) => terminals.sessionsInside.stopInside(folder),
+    recorded: (list) => {
+      void last.keepOnly(
+        list.flatMap((project) => [
+          { projectId: project.id, workspace: "main" },
+          ...project.workspaces.map(({ id }) => ({ projectId: project.id, workspace: id })),
+        ]),
+      );
+    },
   });
   const terminals = createTerminalSessions({
     home,

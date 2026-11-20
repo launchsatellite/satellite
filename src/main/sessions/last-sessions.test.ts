@@ -40,6 +40,18 @@ describe("createLastSessions", () => {
     expect(await reloaded.get(other)).toBe(second);
   });
 
+  it("forgets every workspace no longer on record, and keeps it forgotten on disk", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "satellite-last-")));
+    const last = createLastSessions(home);
+    await last.set(main, first);
+    await last.set(other, second);
+    await last.keepOnly([main]);
+    await last.flush();
+    const reloaded = createLastSessions(home);
+    expect(await reloaded.get(main)).toBe(first);
+    expect(await reloaded.get(other)).toBeUndefined();
+  });
+
   it("ignores a session id that is not a UUID", async () => {
     const home = await realpath(await mkdtemp(join(tmpdir(), "satellite-last-")));
     const last = createLastSessions(home);

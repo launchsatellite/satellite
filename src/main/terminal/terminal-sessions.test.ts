@@ -56,6 +56,7 @@ function fakeLast(sessionId?: string) {
     get: vi.fn<LastSessions["get"]>(() => Promise.resolve(sessionId)),
     set: vi.fn<LastSessions["set"]>(() => Promise.resolve()),
     forget: vi.fn<LastSessions["forget"]>(() => Promise.resolve()),
+    keepOnly: vi.fn<LastSessions["keepOnly"]>(() => Promise.resolve()),
     flush: vi.fn<LastSessions["flush"]>(() => Promise.resolve()),
   } satisfies LastSessions;
 }

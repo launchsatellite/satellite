@@ -174,6 +174,7 @@ function projectsIn(
     chooseFolder: () => Promise.resolve(undefined),
     window: () => undefined,
     stopSessions,
+    recorded: () => undefined,
   });
 }
 
@@ -255,6 +256,7 @@ describe("createProjects", () => {
       chooseFolder: () => Promise.resolve(undefined),
       window: () => undefined,
       stopSessions: () => Promise.resolve(),
+      recorded: () => undefined,
     });
     for (let refresh = 0; refresh < 3; refresh += 1) {
       const answer = handlers["projects.list"]({}, owner);
@@ -304,6 +306,7 @@ describe("createProjects", () => {
       chooseFolder: () => Promise.resolve(base),
       window: () => undefined,
       stopSessions: () => Promise.resolve(),
+      recorded: () => undefined,
     });
     const first = handlers["projects.drop"]({ path: hung.path }, owner);
     const second = handlers["projects.choose"]({}, owner);

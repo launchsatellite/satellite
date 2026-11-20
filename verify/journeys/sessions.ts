@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { readdir, rename, stat } from "node:fs/promises";
+import { readFile, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
+import { z } from "zod";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
@@ -499,11 +500,37 @@ async function endings(session: AppSession, resumedPid: number, sendFrom: number
   await session.screenshot("sessions-endings");
 }
 
+const sessionsFile = z.object({ last: z.array(z.object({ workspace: z.string() })) });
+const projectsFile = z.object({
+  projects: z.array(
+    z.object({ workspaces: z.array(z.object({ id: z.string(), path: z.string() })) }),
+  ),
+});
+
+async function recordedWorkspaces(home: string): Promise<string[]> {
+  const raw = await readFile(join(home, "sessions.json"), "utf8");
+  return sessionsFile.parse(JSON.parse(raw)).last.map(({ workspace }) => workspace);
+}
+
+async function betaId(home: string): Promise<string> {
+  const file = projectsFile.parse(JSON.parse(await readFile(join(home, "projects.json"), "utf8")));
+  const beta = file.projects
+    .flatMap(({ workspaces }) => workspaces)
+    .find(({ path }) => path.endsWith("beta"));
+  assert.ok(beta !== undefined, "projects.json holds no beta workspace");
+  return beta.id;
+}
+
 async function workspaceLeaves(session: AppSession): Promise<void> {
   const { page } = session;
   await select(session, "beta");
   await page.getByTestId("new-session").click();
   const pid = await nextPid(session, (await claudePids(session)).length + 1);
+  const beta = await betaId(session.home);
+  assert.ok(
+    (await recordedWorkspaces(session.home)).includes(beta),
+    "sessions.json held no record for beta before it left",
+  );
   const folder = join(session.home, "worktrees", "repo", "beta");
   await rename(folder, join(session.home, "beta-moved-away"));
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -512,6 +539,11 @@ async function workspaceLeaves(session: AppSession): Promise<void> {
     () => processGone(pid),
     goneTimeoutMs,
     `beta's stand-in (pid ${String(pid)}) still ran after its folder moved away`,
+  );
+  await waitUntil(
+    async () => !(await recordedWorkspaces(session.home)).includes(beta),
+    goneTimeoutMs,
+    "sessions.json still held beta's record after beta left",
   );
 }
 

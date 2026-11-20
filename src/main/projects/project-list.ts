@@ -29,6 +29,7 @@ interface ProjectsOptions {
   chooseFolder: (window: BrowserWindow | undefined) => Promise<string | undefined>;
   window: () => BrowserWindow | undefined;
   stopSessions: (folder: string) => Promise<void>;
+  recorded: (projects: readonly StoredProject[]) => void;
 }
 interface ProjectAnswer {
   view: ProjectView;
@@ -136,6 +137,7 @@ export function createProjects({
   chooseFolder,
   window,
   stopSessions,
+  recorded,
 }: ProjectsOptions): Projects {
   const file = createProjectsFile(home);
   let projects: StoredProject[] | undefined;
@@ -192,7 +194,10 @@ export function createProjects({
   };
   const current = async () => {
     const loaded = await file.load();
-    projects ??= [...loaded.projects];
+    if (projects === undefined) {
+      projects = [...loaded.projects];
+      if (loaded.writable) recorded(projects);
+    }
     return projects;
   };
   const replace = (
@@ -212,6 +217,7 @@ export function createProjects({
         console.error("Satellite could not write projects.json", error);
         throw new BridgeFailure("failed", failure);
       }
+      recorded(projects);
     });
     changing = run.catch(() => undefined);
     return run;
