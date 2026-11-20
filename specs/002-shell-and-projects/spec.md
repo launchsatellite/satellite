@@ -1,6 +1,6 @@
 # 002 Shell and projects
 
-Status **Approved** · Depends on **001**
+Status **In progress** · Depends on **001**
 
 ## Why
 
