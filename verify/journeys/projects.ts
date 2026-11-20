@@ -6,6 +6,7 @@ import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { interfaceLimits } from "../../src/shared/bridge-contract.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
 import { promptTimeoutMs, waitUntil } from "./conditions.ts";
 
@@ -17,7 +18,9 @@ interface Entry {
 
 const execute = promisify(execFile);
 const waitMs = 15_000;
-const widenedLeft = 280;
+const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
+const narrowPresses = 4;
+const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
 
@@ -75,7 +78,7 @@ async function toastReads(session: AppSession, expected: string, when: string): 
 
 async function addWithShortcut(session: AppSession, name: string): Promise<void> {
   await session.answerFolderDialog(session.folder(name));
-  await session.page.keyboard.press("ControlOrMeta+O");
+  await session.page.keyboard.press(`${commandModifier}+O`);
 }
 
 async function workspaceReads(session: AppSession, name: string, branch: string): Promise<void> {
@@ -112,6 +115,24 @@ async function projectsWidth(session: AppSession, expected: number, when: string
     waitMs,
     () => `${when} the projects column was ${String(width)} px wide instead of ${String(expected)}`,
   );
+}
+
+async function narrowWithKeyboard(session: AppSession): Promise<number> {
+  const divider = session.page.getByTestId("divider-left");
+  await divider.focus();
+  await waitUntil(
+    () =>
+      session.page.evaluate(
+        () => document.activeElement?.getAttribute("data-testid") === "divider-left",
+      ),
+    waitMs,
+    "divider-left did not take focus",
+  );
+  const start = Number(await divider.getAttribute("aria-valuenow"));
+  for (let press = 0; press < narrowPresses; press += 1) {
+    await session.page.keyboard.press("ArrowLeft");
+  }
+  return Math.max(interfaceLimits.left.min, start - narrowPresses * keyStep);
 }
 
 async function moveAside(from: string, to: string, what: string): Promise<void> {
@@ -199,11 +220,10 @@ async function run(session: AppSession): Promise<void> {
   await addWithShortcut(session, "alpha");
   await toastReads(session, "alpha is already in Satellite.", "after adding alpha twice");
 
-  await session.page.getByTestId("divider-left").focus();
-  for (let step = 0; step < 4; step += 1) await session.page.keyboard.press("ArrowRight");
-  await projectsWidth(session, widenedLeft, "after widening it with the keyboard");
+  const narrowed = await narrowWithKeyboard(session);
+  await projectsWidth(session, narrowed, "after narrowing it with the keyboard");
 
-  await session.page.keyboard.press("ControlOrMeta+P");
+  await session.page.keyboard.press(`${commandModifier}+P`);
   await session.page.getByTestId("palette-input").fill("alp");
   await session.page.keyboard.press("Enter");
   await isSelected(session, "alpha", "after choosing it in the switcher");
@@ -220,9 +240,9 @@ async function run(session: AppSession): Promise<void> {
   await workspaceReads(session, "alpha", "main");
   await workspaceReads(session, "beta", "feature");
   await isSelected(session, "alpha", "after the restart");
-  await projectsWidth(session, widenedLeft, "after the restart");
+  await projectsWidth(session, narrowed, "after the restart");
 
-  await session.page.keyboard.press("ControlOrMeta+K");
+  await session.page.keyboard.press(`${commandModifier}+K`);
   await session.page.getByTestId("palette-input").fill("remove");
   await visible(session, "command-project-remove", "in the command menu for remove");
   await session.page.keyboard.press("Enter");

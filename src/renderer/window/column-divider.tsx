@@ -58,11 +58,18 @@ export function ColumnDivider({
     setDragging(false);
     if (current.value !== current.startValue) onCommit(current.value);
   };
+  const keyTarget = (key: string) => {
+    if (key === "Home") return min;
+    if (key === "End") return max;
+    if (key === "ArrowRight") return value + keyStep * direction;
+    if (key === "ArrowLeft") return value - keyStep * direction;
+    return undefined;
+  };
   const press = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const target = keyTarget(event.key);
+    if (target === undefined) return;
     event.preventDefault();
-    const step = event.key === "ArrowRight" ? keyStep : -keyStep;
-    const next = clamp(value + step * direction);
+    const next = clamp(target);
     if (next !== value) onCommit(next);
   };
 

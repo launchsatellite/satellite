@@ -17,7 +17,7 @@ import { SampleDiff } from "../proving/sample-diff.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
-import { fitColumns } from "./columns.ts";
+import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 
@@ -98,6 +98,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     update((current) => ({ ...current, selected: null }), true);
   }, [projects, selectedId, update]);
   const { left, right } = fitColumns(state.columns, width);
+  const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
   const closeCheck = useCallback(() => {
@@ -274,7 +275,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             side="left"
             value={left}
             min={interfaceLimits.left.min}
-            max={interfaceLimits.left.max}
+            max={reachable.left}
             onChange={setColumn("left", false)}
             onCommit={setColumn("left", true)}
             testId="divider-left"
@@ -291,7 +292,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             side="right"
             value={right}
             min={interfaceLimits.right.min}
-            max={interfaceLimits.right.max}
+            max={reachable.right}
             onChange={setColumn("right", false)}
             onCommit={setColumn("right", true)}
             testId="divider-right"
