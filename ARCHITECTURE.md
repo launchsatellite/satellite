@@ -40,7 +40,7 @@ The preload exposes two functions on `window.satellite` and nothing else. `invok
 
 | Channel or event | What it does | Limits | Why it is safe |
 | --- | --- | --- | --- |
-| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters | Takes no input. The tools run with fixed arguments and no shell. |
+| `tools.versions` | Answers the `--version` line of `git`, `gh` and `claude`, or `null` when one is missing, fails or takes over 5 seconds, each on its own | Empty request, each answer at most 200 characters. Requests that arrive while a run is going share it, so at most one `--version` per tool runs at a time | Takes no input. The tools run with fixed arguments and no shell, and no number of requests starts more than three processes at once. |
 | `terminal.start` | Starts Claude Code in a terminal with a given id and size | Program must be `claude`, id a UUID, 2 to 500 columns, 1 to 300 rows, 16 terminals | The interface names no executable, path or argument. The background process resolves `claude` itself. |
 | `terminal.write` | Sends keystrokes and pastes to a terminal | 1 to 65536 characters per message | Text only reaches a terminal the same page started. It is exactly typing into Claude Code, so whoever can send it can run anything Claude Code can, its `!` shell included. The integrity of the interface (no remote content, the content security policy, terminal output drawn as text) is what guards command execution. |
 | `terminal.resize` | Resizes a terminal | 2 to 500 columns, 1 to 300 rows | Bounded integers only. |

@@ -3,6 +3,8 @@ import { runTool, type Tool } from "../platform/tools.ts";
 
 const versionTimeoutMs = 5000;
 
+let running: Promise<BridgeResponse<"tools.versions">> | undefined;
+
 async function versionOf(tool: Tool): Promise<string | null> {
   try {
     const run = await runTool(tool, ["--version"], { timeoutMs: versionTimeoutMs });
@@ -15,11 +17,18 @@ async function versionOf(tool: Tool): Promise<string | null> {
   }
 }
 
-export async function toolVersions(): Promise<BridgeResponse<"tools.versions">> {
+async function readVersions(): Promise<BridgeResponse<"tools.versions">> {
   const [git, gh, claude] = await Promise.all([
     versionOf("git"),
     versionOf("gh"),
     versionOf("claude"),
   ]);
   return { git, gh, claude };
+}
+
+export function toolVersions(): Promise<BridgeResponse<"tools.versions">> {
+  running ??= readVersions().finally(() => {
+    running = undefined;
+  });
+  return running;
 }
