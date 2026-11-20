@@ -1,6 +1,7 @@
 #!/bin/sh
 # Command guards, run by Claude Code before every Bash command (.claude/settings.json).
 # Applies guards/commands.txt. A deny blocks the command, an ask hands it to the human.
+# A merge rule blocks unless the maintainer granted merging here by creating guards/merge-granted.
 # Reads the hook's JSON on stdin, or takes the command as $1 (guards/test.sh).
 # Matches patterns, so it catches mistakes, not a determined bypass.
 set -u
@@ -31,6 +32,11 @@ first_reason() {
 
 reason=$(first_reason deny)
 if [ -n "$reason" ]; then
+  echo "Blocked by guards/commands.txt. $reason" >&2
+  exit 2
+fi
+reason=$(first_reason merge)
+if [ -n "$reason" ] && [ ! -e "${SATELLITE_MERGE_GRANT:-$DIR/merge-granted}" ]; then
   echo "Blocked by guards/commands.txt. $reason" >&2
   exit 2
 fi

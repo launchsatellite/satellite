@@ -1,6 +1,6 @@
 # 003 Workspaces
 
-Status **Approved** · Depends on **002**
+Status **Done** · Depends on **002**
 
 ## Why
 
@@ -9,14 +9,15 @@ Two agents in one folder overwrite each other. A workspace gives each piece of w
 ## Scope
 
 - New workspace from a project in one action. The name is generated and can be changed before creating. The branch takes the same name.
-- The branch starts from the latest default branch on the remote, or from an existing branch chosen from a list.
+- The branch starts from the latest default branch on the remote, or as a new branch at an existing branch chosen from a list.
 - The worktree is created under `~/.satellite/worktrees/<project>/<workspace>`, never inside the repo.
 - Ignored files matching the project's `.worktreeinclude` are copied into the new worktree.
-- Each step of creation is visible, and a failure says what happened and leaves nothing half made.
-- The sidebar shows each workspace under its project with its branch, how far it is ahead of and behind its remote, and its count of changed files.
-- Archive a workspace. Satellite first shows what would be lost, meaning uncommitted changes and commits that are not pushed. It then stops the workspace's sessions and processes and removes the worktree. The branch stays.
-- On start Satellite compares its list with what `git` reports. A worktree removed outside the app is dropped from the list, and a branch already checked out elsewhere is explained instead of failing.
-- A project's main workspace cannot be archived.
+- Each step of creation is visible, and a failure says what happened and leaves nothing half made. The repository's own hooks run as they would in a terminal, and Cancel stops a running creation and undoes it.
+- The sidebar shows each workspace under its project with its branch, how far it is ahead of and behind its remote, and its count of changed files. In a repository with a remote, a branch that was never pushed shows its commits that are on no remote.
+- Archive a workspace. Satellite first shows what would be lost, meaning uncommitted changes, commits that are not pushed and anything it cannot rule out. It then stops Satellite's terminals in the workspace and removes the worktree, its ignored files included. The branch stays. A worktree git has locked, one with submodules checked out, one holding a folder from another drive or one Satellite cannot check whole is not archived.
+- On every list Satellite compares its records with what `git` reports. A workspace whose folder was removed outside the app, Satellite's whole worktrees folder included, is dropped from the list with a sentence, and a branch already checked out elsewhere is explained in it instead of failing. A worktree in the project's own worktrees folder with no record shows up as a workspace.
+- A project's main workspace cannot be archived, and a project that still has workspaces cannot be removed until they are archived, unless its folder is gone.
+- A project holds at most 20 workspaces besides its main one. One creation runs per project and four at once.
 
 ## Decisions
 
@@ -24,6 +25,10 @@ Two agents in one folder overwrite each other. A workspace gives each piece of w
 | --- | --- | --- |
 | Creation runs no setup command | Per project setup and cleanup commands | The user's agent and hooks own setup. Satellite stays a thin layer. |
 | Archive keeps the branch | Deleting the branch | Removing a worktree is safe to undo, deleting a branch is not. |
+| Starting from an existing branch makes a new branch at it | Checking out the chosen branch itself | The branch takes the workspace's name, and git refuses a branch checked out in two worktrees. |
+| The repository's hooks run during creation, and the dialog says so | Turning hooks off | Setup belongs to the user's hooks, and creation is `git worktree add` as the user would run it. |
+| Archive deletes ignored files with the folder, and the dialog says so | Keeping them | A worktree folder cannot be kept without its checkout, and dependencies and build output can be rebuilt. |
+| A worktree with submodules checked out is not archived | Forcing its removal | git would delete each submodule's own history with it. |
 
 ## Not in scope
 
@@ -31,10 +36,10 @@ Starting sessions in the workspace belongs to spec 004.
 
 ## Acceptance
 
-- [ ] Creating a workspace makes the worktree and branch from the remote default branch and selects it. Proof, scenario `fresh-repo`.
-- [ ] Files listed by `.worktreeinclude` are present in the new worktree and other ignored files are not. Proof, a unit test on the matcher and the same scenario.
-- [ ] A name that is not a valid branch or that escapes the worktrees folder is refused. Proof, unit tests.
-- [ ] Archive lists uncommitted files and commits that are not pushed before anything is removed. Proof, scenario `unpushed-work`.
-- [ ] After archive the worktree is gone, `git worktree list` is clean and the branch exists. Proof, the same scenario.
-- [ ] A worktree deleted outside the app disappears from the sidebar on the next start. Proof, a journey.
-- [ ] Two workspaces of one project hold different files at the same time. Proof, a journey.
+- [x] Creating a workspace makes the worktree and branch from the remote default branch and selects it. Proof, scenario `fresh-repo` and the `workspaces` journey, which makes first-look from the dialog, sees it selected and announced, and finds `second commit` from the fetched main in its worktree, and `create-steps.test.ts` with real git.
+- [x] Files listed by `.worktreeinclude` are present in the new worktree and other ignored files are not. Proof, `worktree-include.test.ts` on the matcher, `include-copy.test.ts` on the copy, and the `workspaces` journey, which finds `.env` and `config/dev.local.json` in first-look and no `notes.log`, `node_modules` or `scratch.txt`.
+- [x] A name that is not a valid branch or that escapes the worktrees folder is refused. Proof, `workspace-name.test.ts`, `worktree-folders.test.ts` and `registry.test.ts`, and the `boundary` journey, where `workspaces.create` refuses `../../outside` and `-x` and no worktrees folder appears.
+- [x] Archive lists uncommitted files and commits that are not pushed before anything is removed. Proof, scenario `unpushed-work`, `workspace-archive.test.ts`, and the `workspaces` journey, whose archive dialog lists `?? src/only-here.ts` and the commit `keep this commit` before it is confirmed.
+- [x] After archive the worktree is gone, `git worktree list` is clean and the branch exists. Proof, the `workspaces` journey, which finds the folder gone, no worktree line for first-look and `refs/heads/first-look` still at `keep this commit`, and `workspace-archive.test.ts`.
+- [x] A worktree deleted outside the app disappears from the sidebar on the next start. Proof, the `workspaces` journey, which deletes second-look while the app is closed and finds it gone after the restart with its sentence, and `project-list.test.ts`.
+- [x] Two workspaces of one project hold different files at the same time. Proof, the `workspaces` journey, where a file written in first-look is absent from second-look and the repo, and each holds the files of its own start.

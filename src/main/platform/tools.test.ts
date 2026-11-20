@@ -1,9 +1,8 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseToolOverride, runTool } from "./tools.ts";
+import { parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
 
 vi.mock("./user-environment.ts", () => ({
   userEnvironment: () =>
@@ -62,6 +61,50 @@ describe("parseToolOverride", () => {
   });
 });
 
+describe("toolEnvironment", () => {
+  it("gives git an environment that never prompts", () => {
+    const env = toolEnvironment("git", {
+      PATH: "/usr/bin",
+      GIT_ASKPASS: "/usr/bin/askpass",
+      SSH_ASKPASS: "/usr/bin/ssh-askpass",
+      GIT_DIR: "/tmp/x",
+    });
+    expect(env).toMatchObject({
+      PATH: "/usr/bin",
+      GIT_TERMINAL_PROMPT: "0",
+      GCM_INTERACTIVE: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+      LC_ALL: "C",
+    });
+    expect(Object.keys(env)).not.toContain("GIT_ASKPASS");
+    expect(Object.keys(env)).not.toContain("SSH_ASKPASS");
+    expect(Object.keys(env)).not.toContain("GIT_DIR");
+  });
+
+  it("leaves no differently cased copy of a quiet variable", () => {
+    const git = toolEnvironment("git", {
+      git_terminal_prompt: "1",
+      Gcm_Interactive: "true",
+      ssh_askpass_require: "force",
+      lc_all: "de_DE",
+    });
+    expect(git).toEqual({
+      LC_ALL: "C",
+      GIT_TERMINAL_PROMPT: "0",
+      GCM_INTERACTIVE: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+    });
+    const gh = toolEnvironment("gh", { gh_prompt_disabled: "0", no_color: "0", Gh_Telemetry: "1" });
+    expect(Object.keys(gh).sort()).toEqual([
+      "GH_NO_EXTENSION_UPDATE_NOTIFIER",
+      "GH_NO_UPDATE_NOTIFIER",
+      "GH_PROMPT_DISABLED",
+      "GH_TELEMETRY",
+      "NO_COLOR",
+    ]);
+  });
+});
+
 describe("runTool", () => {
   it("reads a tool with a malformed override as missing and logs the variable", async () => {
     vi.stubEnv("SATELLITE_GH", "/opt/tools/bin/gh");
@@ -80,8 +123,9 @@ describe("runTool", () => {
       const running = runTool("gh", [pidFile], { timeoutMs: 1000 });
       await expect(running).rejects.toThrow("gh did not finish in time");
       child = Number(await readFile(pidFile, "utf8"));
-      await delay(200);
-      expect(isAlive(child)).toBe(false);
+      await vi.waitFor(() => {
+        expect(isAlive(child)).toBe(false);
+      }, 10_000);
     } finally {
       if (child > 0 && isAlive(child)) process.kill(child, "SIGKILL");
       await rm(folder, { recursive: true, force: true });

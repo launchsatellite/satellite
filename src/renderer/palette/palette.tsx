@@ -21,6 +21,7 @@ type PaletteMode = "commands" | "switcher";
 export interface SwitcherItem {
   ref: WorkspaceRef;
   label: string;
+  testKey: string;
   project: string;
   parent?: string;
 }
@@ -84,7 +85,7 @@ function switcherOptions(
   return withUniqueTestIds(
     ranked.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
-      testId: `switch-${item.project}-${item.ref.workspace}`,
+      testId: `switch-${item.project}-${item.testKey}`,
       title: item.label,
       detail: item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       pixel: true,

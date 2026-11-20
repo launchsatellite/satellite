@@ -1,0 +1,45 @@
+{
+  "description": "A clone of a local upstream with one workspace, fix-login, holding a commit that isn't pushed, a changed file and a new one.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+        { "write": { "path": ".gitignore", "content": "node_modules/\n" } },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    }
+  ],
+  "repo": [{ "git": ["clone", "../folders/upstream", "."] }],
+  "workspaces": [
+    {
+      "name": "fix-login",
+      "steps": [
+        { "write": { "path": "src/login.ts", "content": "export const redirect = \"/home\";\n" } },
+        { "git": ["add", "src/login.ts"] },
+        { "git": ["commit", "-m", "fix the login redirect"] },
+        { "write": { "path": "README.md", "content": "# Verify repo\n\nLogin notes.\n" } },
+        { "write": { "path": "notes.md", "content": "Ask about the session timeout.\n" } }
+      ]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

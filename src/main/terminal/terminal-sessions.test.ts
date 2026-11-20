@@ -1,3 +1,6 @@
+import { mkdtemp, realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPageOwners } from "../bridge/page-owners.ts";
 import { spawnPty } from "../platform/pty.ts";
@@ -189,5 +192,25 @@ describe("createTerminalSessions", () => {
       sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine),
     ).rejects.toMatchObject({ code: "failed" });
     expect(ptys).toHaveLength(0);
+  });
+
+  it("stops only the terminals running inside a folder", async () => {
+    const sessions = createTerminalSessions();
+    const { mine } = owners();
+    const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-terminals-")));
+    const workspace = await mkdtemp(join(base, "workspace-"));
+    const other = await mkdtemp(join(base, "other-"));
+    const cwd = vi.spyOn(process, "cwd");
+    cwd.mockReturnValue(workspace);
+    await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    cwd.mockReturnValue(other);
+    await sessions.handlers["terminal.start"]({ id: terminalId(2), ...size }, mine);
+    cwd.mockRestore();
+    expect(sessions.sessionsInside.countInside(workspace)).toBe(1);
+    await sessions.sessionsInside.stopInside(workspace);
+    expect(ptys[0]?.kill).toHaveBeenCalledTimes(1);
+    expect(ptys[1]?.kill).not.toHaveBeenCalled();
+    expect(sessions.sessionsInside.countInside(workspace)).toBe(0);
+    expect(sessions.sessionsInside.countInside(other)).toBe(1);
   });
 });

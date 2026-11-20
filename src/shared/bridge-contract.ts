@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isStartRef, workspaceNameLimit, workspaceNameProblem } from "./workspace-name.ts";
 
 export type BridgeChannel = keyof typeof bridgeRequests;
 export type BridgeRequest<C extends BridgeChannel> = z.output<
@@ -11,10 +12,15 @@ export type BridgeEventName = keyof typeof bridgeEvents;
 export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bridgeEvents)[E]>;
 export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
+export type WorkspaceKey = z.output<typeof workspaceKey>;
 export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
 export type WorkspaceView = z.output<typeof workspaceView>;
 export type ProjectView = z.output<typeof projectView>;
+export type StartView = z.output<typeof startView>;
+export type StartChoice = z.output<typeof startChoice>;
+export type CreationStep = z.output<typeof creationStep>;
+export type LossView = z.output<typeof lossView>;
 export type ToolState = z.output<typeof toolState>;
 export type GhState = z.output<typeof ghState>;
 export type ToolCheck = z.output<typeof toolCheck>;
@@ -27,6 +33,7 @@ export const bridgeLimits = {
   terminalWriteChars: 65536,
   terminalOutputChars: 65536,
   terminals: 16,
+  workspacesPerProject: 20,
   messageChars: 1000,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
@@ -39,7 +46,15 @@ export const interfaceLimits = {
 };
 
 export const themeChoice = z.enum(["system", "light", "dark"]);
-export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: z.literal("main") });
+export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
+export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
+export const workspaceName = z
+  .string()
+  .min(1)
+  .max(workspaceNameLimit)
+  .refine((name) => workspaceNameProblem(name) === null);
+export const refName = z.string().min(6).max(300).refine(isStartRef);
+const count = z.int().min(0).max(1_000_000);
 export const interfaceState = z.strictObject({
   selected: workspaceRef.nullable(),
   columns: z.strictObject({
@@ -49,16 +64,44 @@ export const interfaceState = z.strictObject({
   theme: themeChoice,
 });
 export const workspaceView = z.strictObject({
-  key: z.literal("main"),
+  key: workspaceKey,
+  name: workspaceName.nullable(),
   branch: z.string().min(1).max(255).nullable(),
+  ahead: count.nullable(),
+  behind: count.nullable(),
+  changed: count.nullable(),
 });
 export const projectView = z.strictObject({
   id: z.uuid(),
   name: z.string().min(1).max(255),
   parent: z.string().max(255),
   missing: z.enum(["folder", "repository"]).nullable(),
-  workspaces: z.array(workspaceView).max(1),
+  workspaces: z
+    .array(workspaceView)
+    .min(1)
+    .max(bridgeLimits.workspacesPerProject + 1),
 });
+export const startView = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("remote"),
+    remote: z.string().min(1).max(100),
+    branch: z.string().min(1).max(255).nullable(),
+  }),
+  z.strictObject({ kind: z.literal("local"), branch: z.string().min(1).max(255).nullable() }),
+  z.strictObject({ kind: z.literal("empty") }),
+]);
+export const startChoice = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("default") }),
+  z.strictObject({ kind: z.literal("ref"), ref: refName }),
+]);
+export const creationStep = z.enum(["start", "branch", "worktree", "files", "save"]);
+const subjects = z.array(z.string().max(200)).max(5);
+export const lossView = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("unpushed"), count, subjects }),
+  z.strictObject({ kind: z.literal("lost"), count, subjects }),
+  z.strictObject({ kind: z.literal("no-remote") }),
+  z.strictObject({ kind: z.literal("unknown") }),
+]);
 export const ghLogin = /^[A-Za-z0-9-]{1,39}$/;
 export const ghHost =
   /^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*(?::\d{1,5})?$/;
@@ -100,6 +143,8 @@ const terminalId = z.uuid();
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
+const fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
+const startBranch = z.strictObject({ ref: refName, label: z.string().min(1).max(255) });
 
 export const bridgeRequests = {
   "tools.check": { request: empty, response: toolCheck },
@@ -116,6 +161,7 @@ export const bridgeRequests = {
     response: z.strictObject({
       projects: z.array(projectView).max(200),
       notice: z.string().max(300).nullable(),
+      dropped: z.array(z.string().min(1).max(300)).max(20),
     }),
   },
   "projects.choose": {
@@ -131,7 +177,59 @@ export const bridgeRequests = {
   },
   "projects.remove": {
     request: z.strictObject({ projectId: z.uuid() }),
-    response: empty,
+    response: z.strictObject({
+      forgotWorkspaces: z.int().min(0).max(bridgeLimits.workspacesPerProject),
+    }),
+  },
+  "workspaces.prepare": {
+    request: z.strictObject({ projectId: z.uuid() }),
+    response: z.strictObject({
+      name: workspaceName,
+      start: startView,
+      branches: z.array(startBranch).max(200),
+    }),
+  },
+  "workspaces.create": {
+    request: z.strictObject({
+      operationId: z.uuid(),
+      projectId: z.uuid(),
+      name: workspaceName,
+      start: startChoice,
+    }),
+    response: z.strictObject({ workspace: workspaceView }),
+  },
+  "workspaces.cancel": {
+    request: z.strictObject({ operationId: z.uuid(), projectId: z.uuid() }),
+    response: z.strictObject({ canceled: z.boolean() }),
+  },
+  "workspaces.inspect": {
+    request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid() }),
+    response: z.strictObject({
+      branch: z.string().min(1).max(255).nullable(),
+      files: z
+        .array(z.strictObject({ code: z.string().length(2), path: z.string().min(1).max(4096) }))
+        .max(50),
+      moreFiles: count,
+      repositories: count,
+      hidden: count.nullable(),
+      submodules: z.enum(["none", "checked-out", "unknown"]),
+      boundary: z.discriminatedUnion("kind", [
+        z.strictObject({ kind: z.literal("clear") }),
+        z.strictObject({ kind: z.literal("mount"), at: z.string().min(1).max(300) }),
+        z.strictObject({
+          kind: z.literal("unchecked"),
+          why: z.enum(["unreadable", "limits", "late"]),
+        }),
+      ]),
+      commits: lossView,
+      sessions: z.int().min(0).max(bridgeLimits.terminals),
+      locked: z.boolean(),
+      fingerprint,
+    }),
+  },
+  "workspaces.archive": {
+    request: z.strictObject({ projectId: z.uuid(), workspaceId: z.uuid(), fingerprint }),
+    response: z.strictObject({ leftover: z.string().min(1).max(200).nullable() }),
   },
   "terminal.start": {
     request: z.strictObject({ id: terminalId, program: z.literal("claude"), cols, rows }),
@@ -162,6 +260,12 @@ export const bridgeRequests = {
 };
 
 export const bridgeEvents = {
+  "workspaces.step": z.strictObject({
+    operationId: z.uuid(),
+    step: creationStep,
+    state: z.enum(["running", "done", "failed", "undone"]),
+    detail: z.string().min(1).max(300).nullable(),
+  }),
   "terminal.data": z.strictObject({
     id: terminalId,
     data: z.string().min(1).max(bridgeLimits.terminalOutputChars),

@@ -53,6 +53,8 @@ const gitDroppedKeys = new Set([
   "GIT_PREFIX",
   "GIT_SHALLOW_FILE",
   "GIT_COMMON_DIR",
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
 ]);
 const ghUnsafeKeys = new Set(["GH_DEBUG", "DEBUG", "GH_FORCE_TTY", "CLICOLOR_FORCE"]);
 const ghQuiet = {
@@ -62,7 +64,14 @@ const ghQuiet = {
   GH_TELEMETRY: "false",
   NO_COLOR: "1",
 };
-const gitLocale = { LC_ALL: "C" };
+const gitQuiet = {
+  LC_ALL: "C",
+  GIT_TERMINAL_PROMPT: "0",
+  GCM_INTERACTIVE: "false",
+  SSH_ASKPASS_REQUIRE: "never",
+};
+const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
+const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
@@ -78,18 +87,18 @@ function without(env: Record<string, string>, keys: Set<string>): Record<string,
   return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.has(key.toUpperCase())));
 }
 
-function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
-  if (tool === "git") return { ...without(env, gitDroppedKeys), ...gitLocale };
-  if (tool === "gh") return { ...without(env, ghUnsafeKeys), ...ghQuiet };
-  return env;
-}
-
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
     return undefined;
   }
+}
+
+export function toolEnvironment(tool: Tool, env: Record<string, string>): Record<string, string> {
+  if (tool === "git") return { ...without(env, gitReplacedKeys), ...gitQuiet };
+  if (tool === "gh") return { ...without(env, ghReplacedKeys), ...ghQuiet };
+  return env;
 }
 
 export function parseToolOverride(
@@ -137,7 +146,7 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
@@ -171,6 +180,15 @@ export async function runTool(
     const timer = setTimeout(() => {
       stop(new Error(`${tool} did not finish in time`));
     }, options.timeoutMs ?? 30_000);
+    const abort = () => {
+      stop(new Error(`${tool} was stopped`));
+    };
+    if (options.signal?.aborted === true) abort();
+    else options.signal?.addEventListener("abort", abort, { once: true });
+    const settle = () => {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", abort);
+    };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
       output.size += chunk.length;
       if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
@@ -179,12 +197,12 @@ export async function runTool(
     child.stdout.setEncoding("utf8").on("data", collect("stdout"));
     child.stderr.setEncoding("utf8").on("data", collect("stderr"));
     child.once("error", (error: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
+      settle();
       if (error.code === "ENOENT") resolve(undefined);
       else reject(new Error(`${tool} did not start (${String(error.code)})`));
     });
     child.once("close", (code, signal) => {
-      clearTimeout(timer);
+      settle();
       clearTimeout(abandon);
       if (failure !== undefined) reject(failure);
       else if (code !== null)

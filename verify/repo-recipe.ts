@@ -1,12 +1,17 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type { RepoStep } from "./scenario.ts";
 
 const run = promisify(execFile);
 
-export async function writeInside(target: string, path: string, content: string): Promise<void> {
+export async function writeInside(
+  target: string,
+  path: string,
+  content: string,
+  executable = false,
+): Promise<void> {
   const file = resolve(target, path);
   const fromTarget = relative(target, file);
   const climbsOut = fromTarget === ".." || fromTarget.startsWith(`..${sep}`);
@@ -15,6 +20,7 @@ export async function writeInside(target: string, path: string, content: string)
   }
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, content);
+  if (executable) await chmod(file, 0o755);
 }
 
 export function withoutGitVariables(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -31,7 +37,7 @@ export async function buildRepo(
   const env = { ...withoutGitVariables(process.env), ...gitEnv };
   for (const step of steps) {
     if ("write" in step) {
-      await writeInside(target, step.write.path, step.write.content);
+      await writeInside(target, step.write.path, step.write.content, step.write.executable);
       continue;
     }
     try {

@@ -19,7 +19,7 @@ Every spec is checked against these. When two conflict, the earlier one wins.
 3. **Embed real tools, never redraw them.** The agent pane is your own Claude Code in a terminal. Git is `git` and GitHub is `gh`. Every feature those tools ship works the day it ships, and there is no copy to maintain.
 4. **One text box.** The Claude Code prompt is the only place you type instructions. Satellite has no commit box, no reply form and no editor. When something needs words, Satellite prepares the request in the prompt and you press enter.
 5. **Hold no credentials.** Sign-in stays with `gh` and `claude`. Satellite never reads, stores or forwards a token, and it loads no remote web content.
-6. **Leave the repo alone.** Satellite writes nothing into a project. Everything it owns lives in `~/.satellite`.
+6. **Leave the repo alone.** Satellite writes nothing into a project's files. A workspace adds only its branch, its worktree and the remote-tracking branch its fetch updates to git, and everything Satellite owns lives in `~/.satellite`.
 7. **Local first.** Everything runs on your machine, with no account, no server and no telemetry.
 8. **Quiet until you are needed.** Greys carry the interface. Signal orange means an agent cannot go on without you, and nothing else.
 9. **Simple first.** The smallest thing that works, in the product, the code and the process.
@@ -33,7 +33,7 @@ Every spec is checked against these. When two conflict, the earlier one wins.
 | Session | One Claude Code process running in a workspace, shown in the agent pane. |
 | Needs you | Anything you must act on. An agent question or permission request, failed checks, requested changes or conflicts. |
 | Inbox | Every workspace that needs you, across all projects, in one list. |
-| Archive | Remove a workspace's worktree after showing what would be lost. The branch stays. |
+| Archive | Remove a workspace's worktree after showing what would be lost, its uncommitted and ignored files included. The branch and its commits stay, while a detached head has no branch to keep them. |
 
 ## Layout
 

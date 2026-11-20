@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export type IconName =
-  "plus" | "search" | "close" | "refresh" | "branch" | "folder" | "keys" | "check";
+  "plus" | "search" | "close" | "refresh" | "branch" | "folder" | "keys" | "check" | "archive";
 
 const shapes: Record<IconName, ReactNode> = {
   plus: <path d="M8 3v10M3 8h10" />,
@@ -31,6 +31,12 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   check: <path d="m3.5 8.5 3 3 6-7" />,
+  archive: (
+    <>
+      <rect x="2" y="2.75" width="12" height="3.25" rx="1" />
+      <path d="M3 6v6.25c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V6M6.5 8.75h3" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {

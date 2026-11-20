@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { z } from "zod";
 import { resolveInside } from "../src/main/platform/paths.ts";
 
@@ -9,7 +9,13 @@ export type RepoStep = z.infer<typeof repoStepSchema>;
 const kebabCase = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const scenariosRoot = join(import.meta.dirname, "scenarios");
 const repoStepSchema = z.union([
-  z.strictObject({ write: z.strictObject({ path: z.string().min(1), content: z.string() }) }),
+  z.strictObject({
+    write: z.strictObject({
+      path: z.string().min(1),
+      content: z.string(),
+      executable: z.boolean().optional(),
+    }),
+  }),
   z.strictObject({ git: z.array(z.string()).min(1) }),
 ]);
 const ghAnswerSchema = z.strictObject({
@@ -30,6 +36,9 @@ export const scenarioSchema = z.strictObject({
   repo: z.array(repoStepSchema),
   home: z.array(z.strictObject({ path: z.string().min(1), content: z.string() })).optional(),
   folders: z
+    .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
+    .optional(),
+  workspaces: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),
   gh: z.array(ghAnswerSchema),
@@ -54,6 +63,12 @@ export async function loadScenario(
   const parsed = scenarioSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error(`scenario ${name} is invalid\n${z.prettifyError(parsed.error)}`);
+  }
+  const seedsProjects = parsed.data.home?.some(
+    (seeded) => normalize(seeded.path) === "projects.json",
+  );
+  if (parsed.data.workspaces !== undefined && seedsProjects === true) {
+    throw new Error(`scenario ${name} seeds projects.json twice`);
   }
   return { dir, file, scenario: parsed.data };
 }

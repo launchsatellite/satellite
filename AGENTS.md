@@ -2,7 +2,7 @@
 
 Rules for every agent working on Satellite. People follow the same rules ([CONTRIBUTING.md](CONTRIBUTING.md)). This file loads every session, so it stays short and points to skills for detail.
 
-You work autonomously and fast on your own branch, without asking about routine things. A human reviews and merges every change. You never merge, never approve, never push to `main` and never weaken a guard.
+You work autonomously and fast on your own branch, without asking about routine things. A human reviews and merges every change, unless the maintainer granted merging on this machine. You never approve, never push to `main` and never weaken a guard.
 
 ## Read first, only as far as the task needs
 
@@ -65,7 +65,9 @@ npm run build && npm run package                 # installers for this machine i
 - Anything destructive or hard to undo, or outward-facing like publishing a release or posting outside this repo.
 - Anything you don't know. Say what you would pick and why, never guess on the maintainer's behalf.
 
-**Never** merge or approve a pull request, enable auto-merge, push to `main`, force-push, skip or rewire Git hooks, edit a guard file, change repository settings, read `.env` files or `.secrets/`, or credit an AI tool as an author anywhere.
+**Never** approve a pull request, enable auto-merge, merge one without the maintainer's grant, push to `main`, force-push, skip or rewire Git hooks, edit a guard file, change repository settings, read `.env` files or `.secrets/`, or credit an AI tool as an author anywhere.
+
+Merging is the maintainer's. Where the maintainer granted it, the guard lets `gh pr merge` through, and you squash-merge your own pull request once CI is fully green and the independent review is addressed. You never merge anyone else's.
 
 Approval covers the scoped work it was given for. Silence never authorizes a gated action. Routine, reversible choices are yours, stated in the pull request.
 
@@ -77,7 +79,7 @@ Approval covers the scoped work it was given for. Silence never authorizes a gat
 4. Prove it in the real app, then simplify your own diff until every hunk serves the task.
 5. Fix every doc and spec the change made wrong, in the same change.
 6. `./scripts/check` green, then an independent review from a fresh context.
-7. Push, open the pull request from the template, report the link **and stop**. Follow up on CI and comments until a human merges it.
+7. Push, open the pull request from the template, report the link **and stop**. Follow up on CI and comments until a human merges it, or merge it yourself once it is green where merging is granted.
 
 ## Proof
 

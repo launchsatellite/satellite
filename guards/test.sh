@@ -4,9 +4,9 @@ set -u
 DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 failed=0
 
-# expect <deny|ask|allow> <command>
+# expect <deny|ask|allow> <command> [merge grant file]
 expect() {
-  out=$("$DIR/command.sh" "$2" 2>/dev/null)
+  out=$(SATELLITE_MERGE_GRANT=${3:-$DIR/never-granted} "$DIR/command.sh" "$2" 2>/dev/null)
   code=$?
   if [ "$code" -eq 2 ]; then got=deny; elif [ -n "$out" ]; then got=ask; else got=allow; fi
   [ "$got" = "$1" ] || { echo "  expected $1, got $got for $2"; failed=1; }
@@ -22,6 +22,9 @@ expect deny 'git commit --no-verify -m x'
 expect deny 'git commit -an -m x'
 expect deny 'git config core.hooksPath /dev/null'
 expect deny 'gh pr merge 3 --squash'
+expect allow 'gh pr merge 3 --squash' "$DIR/commands.txt"
+expect deny 'gh pr review 3 --approve' "$DIR/commands.txt"
+expect deny 'touch guards/merge-granted'
 expect deny 'gh pr review 3 --approve'
 expect deny 'gh auth token'
 expect deny 'echo x > guards/content.txt'

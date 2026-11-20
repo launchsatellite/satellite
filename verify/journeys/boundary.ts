@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import { z } from "zod";
@@ -18,6 +21,7 @@ const stillHere = "still here";
 const settleMs = 1_000;
 const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
+const madeUpFingerprint = "0".repeat(64);
 const refusedAnswer = z.object({ ok: z.literal(false), error: z.object({ code: z.string() }) });
 const escapingPaths = [
   "app://satellite/%2e%2e/%2e%2e/package.json",
@@ -35,8 +39,8 @@ function openPages(page: Page): number {
   );
 }
 
-async function bridgeCode(page: Page, channel: string, payload: unknown): Promise<string> {
-  const answer = await page.evaluate(
+async function bridgeAnswer(page: Page, channel: string, payload: unknown): Promise<unknown> {
+  return page.evaluate(
     async ([name, data]) => {
       const api: unknown = Reflect.get(window, "satellite");
       const invoke: unknown =
@@ -47,6 +51,10 @@ async function bridgeCode(page: Page, channel: string, payload: unknown): Promis
     },
     [channel, payload],
   );
+}
+
+async function bridgeCode(page: Page, channel: string, payload: unknown): Promise<string> {
+  const answer = await bridgeAnswer(page, channel, payload);
   const parsed = refusedAnswer.safeParse(answer);
   return parsed.success ? parsed.data.error.code : `answered ${JSON.stringify(answer)}`;
 }
@@ -117,6 +125,103 @@ async function checkRelativeDrop(page: Page): Promise<void> {
     after,
     before,
     `a relative drop changed the projects from ${String(before)} to ${String(after)}`,
+  );
+}
+
+async function okValue<T>(page: Page, channel: string, payload: unknown, schema: z.ZodType<T>) {
+  const answer = await bridgeAnswer(page, channel, payload);
+  const parsed = z.object({ ok: z.literal(true), value: schema }).safeParse(answer);
+  assert.ok(parsed.success, `${channel} answered ${JSON.stringify(answer)}`);
+  return parsed.data.value;
+}
+
+async function refusedWith(page: Page, channel: string, payload: unknown, expected: string) {
+  const code = await bridgeCode(page, channel, payload);
+  assert.equal(
+    code,
+    expected,
+    `${channel} with ${JSON.stringify(payload)} gave ${code} instead of ${expected}`,
+  );
+}
+
+async function exists(path: string): Promise<boolean> {
+  return stat(path).then(
+    () => true,
+    () => false,
+  );
+}
+
+async function checkWorkspaceRequests(session: AppSession): Promise<string> {
+  const { page } = session;
+  const { project } = await okValue(
+    page,
+    "projects.drop",
+    { path: session.repo },
+    z.object({ project: z.object({ id: z.string() }) }),
+  );
+  const projectId = project.id;
+  const madeUp = randomUUID();
+  const start = { kind: "default" };
+  for (const name of ["../../outside", "-x"]) {
+    const request = { operationId: randomUUID(), projectId, name, start };
+    await refusedWith(page, "workspaces.create", request, "invalid-request");
+  }
+  const archiveMain = { projectId, workspaceId: "main", fingerprint: madeUpFingerprint };
+  await refusedWith(page, "workspaces.archive", archiveMain, "invalid-request");
+  const otherProject = { projectId: madeUp, workspaceId: madeUp };
+  await refusedWith(
+    page,
+    "workspaces.cancel",
+    { operationId: madeUp, projectId: madeUp },
+    "not-found",
+  );
+  await refusedWith(page, "workspaces.inspect", otherProject, "not-found");
+  await refusedWith(
+    page,
+    "workspaces.archive",
+    { ...otherProject, fingerprint: madeUpFingerprint },
+    "not-found",
+  );
+  await refusedWith(page, "workspaces.inspect", { projectId, workspaceId: madeUp }, "not-found");
+  const canceled = await okValue(
+    page,
+    "workspaces.cancel",
+    { operationId: madeUp, projectId },
+    z.object({ canceled: z.boolean() }),
+  );
+  assert.equal(canceled.canceled, false, "workspaces.cancel stopped a made-up operation");
+  const worktrees = join(session.home, "worktrees");
+  assert.ok(!(await exists(worktrees)), "a refused workspace request made the worktrees folder");
+  return projectId;
+}
+
+async function checkFingerprint(session: AppSession, projectId: string): Promise<void> {
+  const { page } = session;
+  const { workspace } = await okValue(
+    page,
+    "workspaces.create",
+    { operationId: randomUUID(), projectId, name: "kept-look", start: { kind: "default" } },
+    z.object({ workspace: z.object({ key: z.string() }) }),
+  );
+  const target = { projectId, workspaceId: workspace.key };
+  const folder = join(session.home, "worktrees", "repo", "kept-look");
+  await refusedWith(
+    page,
+    "workspaces.archive",
+    { ...target, fingerprint: madeUpFingerprint },
+    "refused",
+  );
+  const { fingerprint } = await okValue(
+    page,
+    "workspaces.inspect",
+    target,
+    z.object({ fingerprint: z.string() }),
+  );
+  await writeFile(join(folder, "written-after.txt"), "written after the inspection\n");
+  await refusedWith(page, "workspaces.archive", { ...target, fingerprint }, "refused");
+  assert.ok(
+    await exists(join(folder, "written-after.txt")),
+    "an archive with a stale fingerprint deleted the workspace's files",
   );
 }
 
@@ -252,6 +357,7 @@ async function run(session: AppSession): Promise<void> {
   await checkBridge(page);
   await checkPathForFile(page);
   await checkRelativeDrop(page);
+  await checkFingerprint(session, await checkWorkspaceRequests(session));
   await session.screenshot("boundary");
   const pid = await startClaude(session, 1);
   await checkLeaving(page, appUrl, reached);

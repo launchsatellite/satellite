@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { parse } from "node:path";
 import { bridgeLimits } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
+import { isInsidePath } from "../platform/paths.ts";
 import { spawnPty, type PtyProcess } from "../platform/pty.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
 import { childEnvironment, resolveTool } from "../platform/tools.ts";
@@ -12,9 +13,15 @@ type TerminalHandlers = Pick<
   "terminal.start" | "terminal.write" | "terminal.resize" | "terminal.close" | "terminal.ack"
 >;
 
+export interface WorkspaceSessions {
+  countInside(folder: string): number;
+  stopInside(folder: string): Promise<void>;
+}
 interface Session {
   readonly owner: BridgeOwner;
+  cwd?: string;
   pty?: PtyProcess;
+  killing?: Promise<void>;
   output?: OutputFlow;
   ended: boolean;
 }
@@ -41,6 +48,7 @@ function answered(act: () => void): Promise<Record<string, never>> {
 
 export function createTerminalSessions(): {
   handlers: TerminalHandlers;
+  sessionsInside: WorkspaceSessions;
   closeAll(): Promise<void>;
 } {
   const sessions = new Map<string, Session>();
@@ -54,9 +62,15 @@ export function createTerminalSessions(): {
     session.output?.stop();
     const killing = session.pty?.kill();
     if (killing === undefined) return;
+    session.killing = killing;
     ending.add(killing);
     void killing.finally(() => ending.delete(killing));
   };
+
+  const inside = (folder: string) =>
+    [...sessions].filter(
+      ([, session]) => session.cwd !== undefined && isInsidePath(folder, session.cwd),
+    );
 
   const held = (id: string, owner: BridgeOwner): Session => {
     const session = sessions.get(id);
@@ -106,6 +120,7 @@ export function createTerminalSessions(): {
         pty.resume();
       },
     });
+    session.cwd = cwd;
     session.pty = pty;
     session.output = output;
     pty.onData((data) => {
@@ -159,6 +174,18 @@ export function createTerminalSessions(): {
         answered(() => {
           held(id, owner).output?.ack(chars);
         }),
+    },
+    sessionsInside: {
+      countInside: (folder) => inside(folder).length,
+      async stopInside(folder) {
+        const stopping = inside(folder);
+        for (const [id, session] of stopping) end(id, session);
+        await Promise.all(
+          stopping.flatMap(([, session]) =>
+            session.killing === undefined ? [] : [session.killing],
+          ),
+        );
+      },
     },
     async closeAll() {
       closed = true;

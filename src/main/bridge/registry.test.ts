@@ -21,7 +21,7 @@ function spies() {
     ),
     "interface.save": vi.fn<BridgeHandler<"interface.save">>(() => Promise.resolve({})),
     "projects.list": vi.fn<BridgeHandler<"projects.list">>(() =>
-      Promise.resolve({ projects: [], notice: null }),
+      Promise.resolve({ projects: [], notice: null, dropped: [] }),
     ),
     "projects.choose": vi.fn<BridgeHandler<"projects.choose">>(() =>
       Promise.resolve({ outcome: "canceled" }),
@@ -33,11 +33,55 @@ function spies() {
           name: "alpha",
           parent: "folders",
           missing: null,
-          workspaces: [{ key: "main", branch: "main" }],
+          workspaces: [
+            { key: "main", name: null, branch: "main", ahead: 0, behind: 0, changed: 0 },
+          ],
         },
       }),
     ),
-    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() => Promise.resolve({})),
+    "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() =>
+      Promise.resolve({ forgotWorkspaces: 0 }),
+    ),
+    "workspaces.prepare": vi.fn<BridgeHandler<"workspaces.prepare">>(() =>
+      Promise.resolve({
+        name: "swift-comet",
+        start: { kind: "local", branch: "main" },
+        branches: [],
+      }),
+    ),
+    "workspaces.create": vi.fn<BridgeHandler<"workspaces.create">>(() =>
+      Promise.resolve({
+        workspace: {
+          key: terminalId,
+          name: "swift-comet",
+          branch: "swift-comet",
+          ahead: null,
+          behind: null,
+          changed: null,
+        },
+      }),
+    ),
+    "workspaces.cancel": vi.fn<BridgeHandler<"workspaces.cancel">>(() =>
+      Promise.resolve({ canceled: true }),
+    ),
+    "workspaces.inspect": vi.fn<BridgeHandler<"workspaces.inspect">>(() =>
+      Promise.resolve({
+        branch: "swift-comet",
+        files: [],
+        moreFiles: 0,
+        repositories: 0,
+        hidden: 0,
+        submodules: "none",
+        boundary: { kind: "clear" },
+        commits: { kind: "no-remote" },
+        sessions: 0,
+        locked: false,
+        fingerprint: "a".repeat(64),
+      }),
+    ),
+    "workspaces.archive": vi.fn<BridgeHandler<"workspaces.archive">>(() =>
+      Promise.resolve({ leftover: null }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() => Promise.resolve({})),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),
@@ -134,6 +178,88 @@ describe("createBridgeRouter", () => {
     noHandlerRan(handlers);
   });
 
+  it("refuses workspace names that are not branches or that leave the folder", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = {
+      operationId: terminalId,
+      projectId: terminalId,
+      name: "fix-login",
+      start: { kind: "default" },
+    };
+    const payloads = [
+      ...["../x", "a/b", "-x", "Fix", "con", "a".repeat(49), ""].map((name) => ({
+        ...valid,
+        name,
+      })),
+      { ...valid, start: { kind: "ref", ref: "refs/heads/a..b" } },
+      { ...valid, start: { kind: "ref", ref: "HEAD" } },
+      { ...valid, start: { kind: "ref", ref: "--upload-pack=x" } },
+      { ...valid, operationId: "not-a-uuid" },
+      { ...valid, extra: true },
+      { ...valid, start: { kind: "default", ref: "refs/heads/main" } },
+    ];
+    for (const payload of payloads) {
+      const result = await route("workspaces.create", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const payload of [{ projectId: "../x" }, { projectId: terminalId, path: "/tmp" }]) {
+      const result = await route("workspaces.prepare", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    const accepted = await route(
+      "workspaces.create",
+      { ...valid, start: { kind: "ref", ref: "refs/remotes/origin/release" } },
+      owner,
+    );
+    expect(accepted).toMatchObject({ ok: true });
+  });
+
+  it("refuses to archive the main workspace or without a fingerprint", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = { projectId: terminalId, workspaceId: terminalId, fingerprint: "0".repeat(64) };
+    const payloads = [
+      { ...valid, workspaceId: "main" },
+      { ...valid, fingerprint: "0".repeat(63) },
+      { ...valid, fingerprint: "A".repeat(64) },
+      { projectId: terminalId, workspaceId: terminalId },
+      { ...valid, path: "/Users/<name>/repo" },
+      { ...valid, projectId: "../x" },
+    ];
+    for (const payload of payloads) {
+      const result = await route("workspaces.archive", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    for (const payload of [
+      { projectId: terminalId, workspaceId: "main" },
+      { projectId: terminalId, workspaceId: terminalId, fingerprint: "0".repeat(64) },
+    ]) {
+      const result = await route("workspaces.inspect", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("workspaces.archive", valid, owner)).toMatchObject({ ok: true });
+  });
+
+  it("refuses a cancel that names anything but two ids", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const valid = { operationId: terminalId, projectId: terminalId };
+    for (const payload of [
+      { operationId: terminalId },
+      { ...valid, operationId: "main" },
+      { ...valid, projectId: "../x" },
+      { ...valid, workspaceId: terminalId },
+    ]) {
+      const result = await route("workspaces.cancel", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("workspaces.cancel", valid, owner)).toMatchObject({ ok: true });
+  });
+
   it("refuses a dropped path that is empty or too long", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);
@@ -179,6 +305,21 @@ describe("createBridgeRouter", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);
+  });
+
+  it("refuses a selection with a workspace that is neither main nor a uuid", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    for (const workspace of ["main", terminalId]) {
+      const state = { ...defaultInterfaceState, selected: { projectId: terminalId, workspace } };
+      expect(await route("interface.save", { state }, owner)).toEqual({ ok: true, value: {} });
+    }
+    for (const workspace of ["Main", "fix-login", "", "../x", `${terminalId}x`, 1]) {
+      const state = { ...defaultInterfaceState, selected: { projectId: terminalId, workspace } };
+      const result = await route("interface.save", { state }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    expect(handlers["interface.save"]).toHaveBeenCalledTimes(2);
   });
 
   it("passes a valid request to its handler and returns its value", async () => {

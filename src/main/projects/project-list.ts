@@ -5,55 +5,71 @@ import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
-import { createProjectsFile, projectLimit, type StoredProject } from "./projects-file.ts";
+import {
+  blankWorkspace,
+  droppedSentences,
+  readWorkspaces,
+  type Adoption,
+  type Drop,
+} from "../workspaces/workspace-reads.ts";
+import {
+  createProjectsFile,
+  projectLimit,
+  workspaceLimit,
+  type StoredProject,
+  type StoredWorkspace,
+} from "./projects-file.ts";
 import { answerWithin, checkRepository, folderReadMs } from "./repository-check.ts";
-import { mainWorkspace } from "./workspaces.ts";
+import { createSlots, type Slot } from "./slots.ts";
 
 type Missing = NonNullable<ProjectView["missing"]>;
-type Slot = <T>(work: () => Promise<T>) => Promise<T>;
 
 interface ProjectsOptions {
   home: string;
   chooseFolder: (window: BrowserWindow | undefined) => Promise<string | undefined>;
   window: () => BrowserWindow | undefined;
 }
+interface ProjectAnswer {
+  view: ProjectView;
+  drops: Drop[];
+  adoptions: Adoption[];
+}
+interface ProjectRead {
+  checked: Promise<Missing | null>;
+  answer: Promise<ProjectAnswer>;
+}
+export interface ProjectStore {
+  project(projectId: string): Promise<StoredProject>;
+  available(project: StoredProject): Promise<boolean>;
+  addWorkspace(projectId: string, workspace: StoredWorkspace): Promise<void>;
+  writable(): Promise<boolean>;
+  removeWorkspace(projectId: string, workspaceId: string): Promise<void>;
+  busy: Set<string>;
+  creating: Set<string>;
+}
 export interface Projects {
   handlers: Pick<
     BridgeHandlers,
     "projects.list" | "projects.choose" | "projects.drop" | "projects.remove"
   >;
+  store: ProjectStore;
   flush(): Promise<void>;
 }
 
-const branchReads = 8;
+const projectReads = 8;
+const statusSlots = 8;
 const folderReadSlots = 2;
+const workspaceReadMs = 15_000;
 const saveBoundMs = 10_000;
 const nameLimit = 255;
+const droppedLimit = 20;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
+const workspaceSaveFailure = "Satellite couldn't save the workspace list. Nothing changed.";
+const notInSatellite = "That project is not in Satellite.";
 const deviceDrop =
   "That's a Windows device path, not a folder. Drop the repository's folder instead.";
 const networkDrop =
   "Network folders can't be dropped on Satellite. Use Add a project to choose this one.";
-
-function projectName(path: string): string {
-  return (basename(path) || path).slice(0, nameLimit);
-}
-
-function createSlots(size: number): Slot {
-  let free = size;
-  const waiting: (() => void)[] = [];
-  return async (work) => {
-    if (free > 0) free -= 1;
-    else await new Promise<void>((resolve) => waiting.push(resolve));
-    try {
-      return await work();
-    } finally {
-      const next = waiting.shift();
-      if (next === undefined) free += 1;
-      else next();
-    }
-  };
-}
 
 async function isFolder(path: string, inSlot: Slot): Promise<boolean> {
   return inSlot(() => stat(path)).then(
@@ -69,25 +85,22 @@ async function exists(path: string, inSlot: Slot): Promise<boolean> {
   );
 }
 
-function unavailable(project: StoredProject, missing: Missing = "folder"): ProjectView {
+async function folderChecks(project: StoredProject, inSlot: Slot): Promise<Missing | null> {
+  if (!(await isFolder(project.path, inSlot))) return "folder";
+  if (!(await exists(join(project.path, ".git"), inSlot))) return "repository";
+  return null;
+}
+
+function unread(project: StoredProject, missing: Missing | null): ProjectView {
   return {
     id: project.id,
     name: projectName(project.path),
     parent: projectName(dirname(project.path)),
     missing,
-    workspaces: [{ key: "main", branch: null }],
-  };
-}
-
-async function readProject(project: StoredProject, inSlot: Slot): Promise<ProjectView> {
-  if (!(await isFolder(project.path, inSlot))) return unavailable(project);
-  if (!(await exists(join(project.path, ".git"), inSlot))) {
-    return unavailable(project, "repository");
-  }
-  return {
-    ...unavailable(project),
-    missing: null,
-    workspaces: [await mainWorkspace(project.path)],
+    workspaces: [
+      blankWorkspace("main", null),
+      ...project.workspaces.map((workspace) => blankWorkspace(workspace.id, workspace.name)),
+    ],
   };
 }
 
@@ -103,6 +116,20 @@ async function inBatches<T, R>(items: readonly T[], size: number, map: (item: T)
   return results;
 }
 
+function stillHas(name: string, count: number): string {
+  return count === 1
+    ? `${name} still has 1 workspace. Archive it first, then remove the project.`
+    : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+}
+
+export function projectName(path: string): string {
+  return (basename(path) || path).slice(0, nameLimit);
+}
+
+export function workspaceLimitSentence(project: string): string {
+  return `${project} has 20 workspaces, as many as Satellite holds. Archive one, then make this one.`;
+}
+
 export function createProjects({ home, chooseFolder, window }: ProjectsOptions): Projects {
   const file = createProjectsFile(home);
   let projects: StoredProject[] | undefined;
@@ -110,48 +137,201 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   let choosing = false;
   let adding = false;
   let changing: Promise<unknown> = Promise.resolve();
-  let listing: { list: StoredProject[]; views: Promise<ProjectView[]> } | undefined;
-  const pendingReads = new Map<string, Promise<ProjectView>>();
+  let listing:
+    | { list: StoredProject[]; answer: Promise<{ projects: ProjectView[]; dropped: string[] }> }
+    | undefined;
+  const pendingReads = new Map<string, ProjectRead>();
   const inHungSlot = createSlots(folderReadSlots);
+  const inStatusSlot = createSlots(statusSlots);
   const timedOut = new Set<string>();
-  const projectView = async (project: StoredProject) => {
-    let read = pendingReads.get(project.id);
-    if (read === undefined) {
-      const inSlot = timedOut.has(project.id) ? inHungSlot : direct;
-      read = readProject(project, inSlot).finally(() => {
-        pendingReads.delete(project.id);
+  const busy = new Set<string>();
+  const creating = new Set<string>();
+  const startRead = (project: StoredProject): ProjectRead => {
+    const checked = folderChecks(project, timedOut.has(project.id) ? inHungSlot : direct);
+    const answer = checked.then(async (missing): Promise<ProjectAnswer> => {
+      if (missing !== null) return { view: unread(project, missing), drops: [], adoptions: [] };
+      const name = projectName(project.path);
+      const read = await readWorkspaces(project, name, busy, inStatusSlot, {
+        home,
+        blocked: () => creating.has(project.id),
       });
-      pendingReads.set(project.id, read);
-    }
-    const answer = await answerWithin(read, folderReadMs);
-    if (answer === "late") {
-      timedOut.add(project.id);
-      return unavailable(project);
-    }
-    timedOut.delete(project.id);
-    return answer;
+      return {
+        view: { ...unread(project, null), workspaces: read.workspaces },
+        drops: read.drops,
+        adoptions: read.adoptions,
+      };
+    });
+    const read = { checked, answer };
+    pendingReads.set(project.id, read);
+    const settle = () => {
+      if (pendingReads.get(project.id) === read) pendingReads.delete(project.id);
+    };
+    answer.then(settle, settle);
+    return read;
+  };
+  const checkedWithin = async (project: StoredProject) => {
+    const read = pendingReads.get(project.id) ?? startRead(project);
+    const checked = await answerWithin(read.checked, folderReadMs);
+    if (checked === "late") timedOut.add(project.id);
+    else timedOut.delete(project.id);
+    return { read, checked };
+  };
+  const projectAnswer = async (project: StoredProject): Promise<ProjectAnswer> => {
+    const { read, checked } = await checkedWithin(project);
+    if (checked === "late") return { view: unread(project, "folder"), drops: [], adoptions: [] };
+    const answer = await answerWithin(read.answer, workspaceReadMs);
+    return answer === "late"
+      ? { view: unread(project, checked), drops: [], adoptions: [] }
+      : answer;
   };
   const current = async () => {
     const loaded = await file.load();
     projects ??= [...loaded.projects];
     return projects;
   };
-  const replace = (change: (list: StoredProject[]) => StoredProject[]) => {
+  const replace = (
+    change: (list: StoredProject[]) => StoredProject[],
+    failure: string = saveFailure,
+  ) => {
     const run = changing.then(async () => {
       const list = await current();
       projects = change(list);
       try {
         if ((await answerWithin(file.save(projects), saveBoundMs)) === "late") {
+          file.save(list).catch(() => undefined);
           throw new Error(`projects.json took longer than ${String(saveBoundMs)} ms to save`);
         }
       } catch (error) {
         projects = list;
         console.error("Satellite could not write projects.json", error);
-        throw new BridgeFailure("failed", saveFailure);
+        throw new BridgeFailure("failed", failure);
       }
     });
     changing = run.catch(() => undefined);
     return run;
+  };
+  const changeWorkspaces = (
+    projectId: string,
+    change: (project: StoredProject) => StoredWorkspace[],
+  ) =>
+    replace(
+      (latest) =>
+        latest.map((project) =>
+          project.id === projectId ? { ...project, workspaces: change(project) } : project,
+        ),
+      workspaceSaveFailure,
+    );
+  const forget = async (drops: readonly Drop[]): Promise<Drop[]> => {
+    if (drops.length === 0 || !(await file.load()).writable) return [];
+    let forgotten: Drop[] = [];
+    try {
+      await replace((latest) => {
+        const stored = new Set(
+          latest.flatMap((project) => project.workspaces.map((workspace) => workspace.id)),
+        );
+        forgotten = drops.filter(
+          (drop) => stored.has(drop.workspaceId) && !busy.has(drop.workspaceId),
+        );
+        const ids = new Set(forgotten.map((drop) => drop.workspaceId));
+        return latest.map((project) => ({
+          ...project,
+          workspaces: project.workspaces.filter((workspace) => !ids.has(workspace.id)),
+        }));
+      });
+    } catch {
+      return [];
+    }
+    return forgotten;
+  };
+  const adopt = async (adoptions: readonly Adoption[]): Promise<Set<string>> => {
+    const kept = new Set<string>();
+    if (adoptions.length === 0 || !(await file.load()).writable) return kept;
+    try {
+      await replace((latest) => {
+        kept.clear();
+        const paths = latest.flatMap((project) => [
+          project.path,
+          ...project.workspaces.map((workspace) => workspace.path),
+        ]);
+        const isNew = (path: string) => {
+          if (paths.some((known) => samePath(known, path))) return false;
+          paths.push(path);
+          return true;
+        };
+        return latest.map((project) => {
+          if (creating.has(project.id)) return project;
+          const added = adoptions
+            .filter(({ projectId, workspace }) => projectId === project.id && isNew(workspace.path))
+            .slice(0, Math.max(0, workspaceLimit - project.workspaces.length))
+            .map(({ workspace }) => workspace);
+          for (const workspace of added) kept.add(workspace.id);
+          return added.length === 0
+            ? project
+            : { ...project, workspaces: [...project.workspaces, ...added] };
+        });
+      });
+    } catch {
+      kept.clear();
+    }
+    return kept;
+  };
+  const listAll = async (list: readonly StoredProject[]) => {
+    const answers = await inBatches(list, projectReads, projectAnswer);
+    const forgotten = await forget(answers.flatMap((answer) => answer.drops));
+    const adoptions = answers.flatMap((answer) => answer.adoptions);
+    const adopted = await adopt(adoptions);
+    const ids = new Set([
+      ...forgotten.map((drop) => drop.workspaceId),
+      ...adoptions.map(({ workspace }) => workspace.id).filter((id) => !adopted.has(id)),
+    ]);
+    return {
+      projects: answers.map(({ view }) => ({
+        ...view,
+        workspaces: view.workspaces.filter((workspace) => !ids.has(workspace.key)),
+      })),
+      dropped: droppedSentences(forgotten).slice(0, droppedLimit),
+    };
+  };
+  const refuseWhileCreating = (project: StoredProject) => {
+    if (!creating.has(project.id)) return;
+    throw new BridgeFailure(
+      "refused",
+      `Satellite is still making a workspace in ${projectName(project.path)}. Try again when it's done.`,
+    );
+  };
+  const store: ProjectStore = {
+    busy,
+    creating,
+    available: async (project) => (await checkedWithin(project)).checked === null,
+    writable: async () => (await file.load()).writable,
+    async project(projectId) {
+      const found = (await current()).find((project) => project.id === projectId);
+      if (found === undefined) throw new BridgeFailure("not-found", notInSatellite);
+      return found;
+    },
+    async addWorkspace(projectId, workspace) {
+      await store.project(projectId);
+      await replace((latest) => {
+        if (latest.some((project) => samePath(project.path, workspace.path))) {
+          throw new BridgeFailure("failed", workspaceSaveFailure);
+        }
+        const withoutStale = latest.map((project) => ({
+          ...project,
+          workspaces: project.workspaces.filter((stored) => !samePath(stored.path, workspace.path)),
+        }));
+        return withoutStale.map((project) => {
+          if (project.id !== projectId) return project;
+          if (project.workspaces.length >= workspaceLimit) {
+            throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
+          }
+          return { ...project, workspaces: [...project.workspaces, workspace] };
+        });
+      }, workspaceSaveFailure);
+    },
+    removeWorkspace: (projectId, workspaceId) =>
+      changeWorkspaces(projectId, (project) =>
+        project.workspaces.filter((workspace) => workspace.id !== workspaceId),
+      ),
   };
   const add = async (folder: string) => {
     const checked = await checkRepository(folder, home);
@@ -166,9 +346,9 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         "Satellite holds up to 200 projects. Remove one, then add this one.",
       );
     }
-    const project = { id: randomUUID(), path: checked.root };
+    const project = { id: randomUUID(), path: checked.root, workspaces: [] };
     await replace((latest) => [...latest, project]);
-    return projectView(project);
+    return (await projectAnswer(project)).view;
   };
   const addOne = async (folder: string) => {
     if (adding) throw new BridgeFailure("refused", "Satellite is still adding the last folder.");
@@ -181,6 +361,7 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
   };
   return {
     flush: () => file.flush(),
+    store,
     handlers: {
       "projects.list": async () => {
         const list = await current();
@@ -188,12 +369,12 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
         const shown = noticeGiven ? null : notice;
         noticeGiven = true;
         if (listing?.list !== list) {
-          const views = inBatches(list, branchReads, projectView).finally(() => {
-            if (listing?.views === views) listing = undefined;
+          const answer = listAll(list).finally(() => {
+            if (listing?.answer === answer) listing = undefined;
           });
-          listing = { list, views };
+          listing = { list, answer };
         }
-        return { projects: await listing.views, notice: shown };
+        return { ...(await listing.answer), notice: shown };
       },
       "projects.choose": async () => {
         if (choosing) throw new BridgeFailure("refused", "The folder dialog is already open.");
@@ -215,11 +396,28 @@ export function createProjects({ home, chooseFolder, window }: ProjectsOptions):
       "projects.remove": async ({ projectId }) => {
         const list = await current();
         const removed = list.find((project) => project.id === projectId);
-        if (removed === undefined) {
-          throw new BridgeFailure("not-found", "That project is not in Satellite.");
+        if (removed === undefined) throw new BridgeFailure("not-found", notInSatellite);
+        refuseWhileCreating(removed);
+        const count = removed.workspaces.length;
+        if (count > 0 && (await checkedWithin(removed)).checked === null) {
+          throw new BridgeFailure("refused", stillHas(projectName(removed.path), count));
         }
-        await replace((latest) => latest.filter((project) => project.id !== projectId));
-        return {};
+        let forgotWorkspaces = 0;
+        await replace((latest) => {
+          const project = latest.find((candidate) => candidate.id === projectId);
+          if (project !== undefined) {
+            refuseWhileCreating(project);
+            if (project.workspaces.length > count) {
+              throw new BridgeFailure(
+                "refused",
+                stillHas(projectName(project.path), project.workspaces.length),
+              );
+            }
+            forgotWorkspaces = project.workspaces.length;
+          }
+          return latest.filter((candidate) => candidate.id !== projectId);
+        });
+        return { forgotWorkspaces };
       },
     },
   };

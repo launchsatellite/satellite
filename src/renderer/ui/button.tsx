@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";
 import { KeyHint } from "./key-hint.tsx";
 
-type ButtonVariant = "primary" | "secondary" | "ghost";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "default" | "small";
 
 export interface ButtonProps {
@@ -27,6 +27,7 @@ const variants: Record<ButtonVariant, { look: string; hover: string }> = {
   },
   secondary: { look: "border-ctl bg-bg text-fg", hover: "hover:bg-hover" },
   ghost: { look: "border-transparent text-fg2", hover: "hover:bg-hover" },
+  danger: { look: "border-ctl bg-bg text-sigfg", hover: "hover:bg-hover" },
 };
 const sizes: Record<ButtonSize, { text: string; square: string }> = {
   default: { text: "h-7 px-3 text-[13px]", square: "h-7 w-7" },

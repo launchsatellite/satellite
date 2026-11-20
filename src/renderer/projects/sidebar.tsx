@@ -1,6 +1,7 @@
-import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
 import type { CommandId } from "../commands/command-registry.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
@@ -12,15 +13,18 @@ interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
+  onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
 }
 interface ProjectRow {
   project: ProjectView;
   testId: string;
+  newWorkspaceTestId: string;
   workspaceTestIds: string[];
   showParent: boolean;
 }
 
+const countCap = 1_000_000;
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -57,6 +61,42 @@ function CommandRow({
   );
 }
 
+function counted(count: number | null): string | undefined {
+  if (count === null || count <= 0) return undefined;
+  return count >= countCap ? `${String(countCap)}+` : String(count);
+}
+
+function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: string | undefined }) {
+  const ahead = counted(workspace.ahead);
+  const behind = counted(workspace.behind);
+  const changed = counted(workspace.changed);
+  const parts = [
+    ahead === undefined ? undefined : `${ahead} ahead`,
+    behind === undefined ? undefined : `${behind} behind`,
+    changed === undefined ? undefined : `${changed} changed files`,
+  ].filter((part) => part !== undefined);
+  if (parts.length === 0) return null;
+  return (
+    <>
+      <span className="sr-only">{parts.join(", ")}</span>
+      <span
+        data-testid={testId === undefined ? undefined : `${testId}-meta`}
+        aria-hidden="true"
+        className="ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase"
+      >
+        {ahead !== undefined && <span>↑{ahead}</span>}
+        {behind !== undefined && <span>↓{behind}</span>}
+        {changed !== undefined && (
+          <span className="flex items-center gap-[3px]">
+            <Icon name="folder" size={12} />
+            {changed}
+          </span>
+        )}
+      </span>
+    </>
+  );
+}
+
 function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
   const repeated = repeatedNames(projects);
   const rows = withUniqueTestIds(
@@ -66,12 +106,13 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
     projects.flatMap((project) =>
       project.workspaces.map((workspace) => ({
         projectId: project.id,
-        testId: `workspace-${project.name}-${workspace.key}`,
+        testId: `workspace-${project.name}-${workspace.name ?? "main"}`,
       })),
     ),
   );
   return rows.map((row) => ({
     ...row,
+    newWorkspaceTestId: `new-workspace-${row.testId.slice("project-".length)}`,
     workspaceTestIds: workspaceIds
       .filter((workspace) => workspace.projectId === row.project.id)
       .map((workspace) => workspace.testId),
@@ -80,14 +121,16 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
 }
 
 function ProjectRows({
-  row: { project, testId, workspaceTestIds, showParent },
+  row: { project, testId, newWorkspaceTestId, workspaceTestIds, showParent },
   selected,
   onSelect,
+  onNewWorkspace,
   focus,
 }: {
   row: ProjectRow;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
+  onNewWorkspace: (projectId: string) => void;
   focus: boolean;
 }) {
   return (
@@ -101,13 +144,27 @@ function ProjectRows({
         {showParent && (
           <span className="min-w-0 truncate font-medium text-dim">{project.parent}</span>
         )}
-        {project.missing !== null && (
+        {project.missing !== null ? (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
+        ) : (
+          <span className="ml-auto flex-none">
+            <Button
+              variant="ghost"
+              size="small"
+              icon="plus"
+              label={`New workspace in ${project.name}`}
+              testId={newWorkspaceTestId}
+              onClick={() => {
+                onNewWorkspace(project.id);
+              }}
+            />
+          </span>
         )}
       </div>
       <ul aria-label={project.name} className="flex flex-col gap-px">
         {project.workspaces.map((workspace, index) => {
-          const current = selected?.projectId === project.id;
+          const current =
+            selected?.projectId === project.id && selected.workspace === workspace.key;
           return (
             <li key={workspace.key}>
               <button
@@ -124,6 +181,7 @@ function ProjectRows({
                 <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
                   {workspaceLabel(project, workspace)}
                 </span>
+                <Readouts workspace={workspace} testId={workspaceTestIds[index]} />
               </button>
             </li>
           );
@@ -133,7 +191,13 @@ function ProjectRows({
   );
 }
 
-export function Sidebar({ projects, selected, onSelect, focusProjectId }: SidebarProps) {
+export function Sidebar({
+  projects,
+  selected,
+  onSelect,
+  onNewWorkspace,
+  focusProjectId,
+}: SidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
       <CommandRow
@@ -172,6 +236,7 @@ export function Sidebar({ projects, selected, onSelect, focusProjectId }: Sideba
               row={row}
               selected={selected}
               onSelect={onSelect}
+              onNewWorkspace={onNewWorkspace}
               focus={row.project.id === focusProjectId}
             />
           ))}

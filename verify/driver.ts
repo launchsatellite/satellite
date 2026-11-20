@@ -1,5 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, open, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { constants, tmpdir } from "node:os";
@@ -35,7 +36,7 @@ export interface AppSession {
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
-  relaunch(): Promise<void>;
+  relaunch(whileClosed?: () => Promise<void>): Promise<void>;
   close(): Promise<CloseResult>;
 }
 export interface WindowTree {
@@ -51,6 +52,7 @@ interface RunningApp {
 interface AppPaths {
   home: string;
   repo: string;
+  gitConfig: string;
   log: string;
   dialog: string;
   missingClaude: string | undefined;
@@ -199,12 +201,14 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, log, dialog, missingClaude }: AppPaths,
+  { home, gitConfig, log, dialog, missingClaude }: AppPaths,
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(withoutGitVariables(process.env)).filter(([key]) => !isStripped(key)),
   );
   if (options.target.kind === "dev") env["ELECTRON_EXEC_PATH"] = process.execPath;
+  env["GIT_CONFIG_GLOBAL"] = gitConfig;
+  env["GIT_CONFIG_NOSYSTEM"] = "1";
   env["SATELLITE_HOME"] = home;
   env["SATELLITE_VERIFY_DRIVER_PID"] = String(process.pid);
   env["SATELLITE_VERIFY_SCENARIO"] = options.scenario;
@@ -300,12 +304,34 @@ async function prepareFolders(
     gitEnv.GIT_CONFIG_GLOBAL,
     "[user]\n\tname = Satellite Verify\n\temail = verify@satellite.invalid\n",
   );
-  await buildRepo(repo, scenario.repo, gitEnv);
   for (const folder of scenario.folders ?? []) {
     const target = join(temp, "folders", folder.name);
     await mkdir(target, { recursive: true });
     await buildRepo(target, folder.steps, gitEnv);
   }
+  await buildRepo(repo, scenario.repo, gitEnv);
+  if (scenario.workspaces !== undefined) await seedWorkspaces(home, repo, scenario, gitEnv);
+}
+
+async function seedWorkspaces(
+  home: string,
+  repo: string,
+  scenario: Scenario,
+  gitEnv: Record<string, string>,
+): Promise<void> {
+  const workspaces = [];
+  for (const { name, steps } of scenario.workspaces ?? []) {
+    const folder = join(home, "worktrees", "repo", name);
+    await buildRepo(
+      repo,
+      [{ git: ["branch", "--no-track", name, "HEAD"] }, { git: ["worktree", "add", folder, name] }],
+      gitEnv,
+    );
+    await buildRepo(folder, steps, gitEnv);
+    workspaces.push({ id: randomUUID(), name, path: await realpath(folder), branch: name });
+  }
+  const project = { id: randomUUID(), path: await realpath(repo), workspaces };
+  await writeFile(join(home, "projects.json"), JSON.stringify({ version: 2, projects: [project] }));
 }
 
 async function forceStop(child: ChildProcess): Promise<void> {
@@ -514,7 +540,8 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const log = join(temp, "stand-ins.jsonl");
   const dialog = join(temp, "folder-dialog.txt");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
-  const paths = { home, repo, log, dialog, missingClaude };
+  const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
+  const paths = { home, repo, gitConfig, log, dialog, missingClaude };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,
@@ -551,11 +578,12 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   }
   let closing: Promise<CloseResult> | undefined;
   let relaunching: Promise<void> | undefined;
-  const relaunchOnce = async (): Promise<void> => {
+  const relaunchOnce = async (whileClosed?: () => Promise<void>): Promise<void> => {
     await stopApp(running);
     running.child = undefined;
     running.browser = undefined;
     running.page = undefined;
+    await whileClosed?.();
     if (closing !== undefined) throw new Error("the app was closed during the restart");
     page = await startApp(options, paths, running, consoleErrors);
   };
@@ -594,9 +622,9 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await page.screenshot({ path, timeout: startTimeoutMs });
       return path;
     },
-    relaunch() {
+    relaunch(whileClosed) {
       if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
-      relaunching = relaunchOnce();
+      relaunching = relaunchOnce(whileClosed);
       return relaunching;
     },
     close() {

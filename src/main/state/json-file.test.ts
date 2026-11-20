@@ -74,8 +74,8 @@ describe("readJsonFile", () => {
     await expectSetAside('{"version":1,"names":[3]}');
   });
 
-  it("sets aside a file over 1 MiB", async () => {
-    await expectSetAside(`{"version":1,"names":["${"a".repeat(1024 * 1024)}"]}`);
+  it("sets aside a file over 32 MiB", async () => {
+    await expectSetAside(`{"version":1,"names":["${"a".repeat(32 * 1024 * 1024)}"]}`);
   });
 
   it("answers the fallback when the path is a folder", async () => {
@@ -145,6 +145,16 @@ describe("createJsonWriter", () => {
     await mkdir(join(dir, "later"));
     await writer.write({ version: 1, names: ["b"] });
     expect(JSON.parse(await readFile(target, "utf8"))).toEqual({ version: 1, names: ["b"] });
+  });
+
+  it("refuses a write larger than a read accepts and keeps the file", async () => {
+    const { file } = await folder();
+    const writer = createJsonWriter(file);
+    await writer.write({ version: 1, names: ["kept"] });
+    await expect(
+      writer.write({ version: 1, names: ["a".repeat(32 * 1024 * 1024)] }),
+    ).rejects.toThrow();
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ version: 1, names: ["kept"] });
   });
 
   it("flushes the write in flight and the one waiting", async () => {

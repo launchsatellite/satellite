@@ -108,6 +108,8 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
 - Status is a square pixel, never a dot.
 - One primary action per view.
+- An action that loses work is a danger button, signal text on the plain ground with a control border, never a signal fill. It replaces the primary action only while something would be lost, as Archive anyway.
+- A dialog opens over the window dimmed behind a scrim, takes the keyboard until it closes and ends in a footer on `side` with its actions on the right. Escape and a click outside close it only while nothing runs.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
 
 ## App

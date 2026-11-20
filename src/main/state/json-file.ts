@@ -4,6 +4,7 @@ import { open, readdir, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, join, parse } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { z } from "zod";
+import { errorCode } from "../platform/file-system.ts";
 
 export type JsonReadOutcome =
   | { kind: "read" }
@@ -20,16 +21,12 @@ interface PendingWrite {
   settled: PromiseWithResolvers<void>;
 }
 
-const maxFileBytes = 1024 * 1024;
+const maxFileBytes = 32 * 1024 * 1024;
 const renameRetries = 5;
 const renameRetryMs = 50;
 const retriedRenameCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
 const keptSetAside = 5;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function errorCode(error: unknown): unknown {
-  return error instanceof Error && "code" in error ? error.code : undefined;
-}
 
 function isTempOf(name: string, base: string): boolean {
   const prefix = `.${base}.`;
@@ -127,11 +124,17 @@ async function readSmallFile(
 }
 
 async function writeAtomically(file: string, value: unknown): Promise<void> {
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  if (Buffer.byteLength(text) > maxFileBytes) {
+    throw new Error(
+      `${basename(file)} would be larger than the ${String(maxFileBytes)} bytes Satellite reads back`,
+    );
+  }
   const temp = join(dirname(file), `.${basename(file)}.${randomUUID()}.tmp`);
   try {
     const handle = await open(temp, "wx", 0o600);
     try {
-      await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`);
+      await handle.writeFile(text);
       await handle.sync();
     } finally {
       await handle.close();
