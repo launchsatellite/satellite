@@ -29,23 +29,21 @@ export function LinkDialog({ address, onClose, notify }: LinkDialogProps) {
       closable
       footer={
         <>
-          <span className="order-last">
-            <Button
-              onClick={() => {
-                void openLink(address, notify).then((opened) => {
-                  if (opened) onClose();
-                });
-              }}
-              testId="link-open"
-            >
-              Open in browser
-            </Button>
-          </span>
           <span className="mr-auto">
-            <Button variant="ghost" onClick={onClose} testId="link-cancel">
+            <Button variant="ghost" onClick={onClose} testId="link-cancel" autoFocus>
               Cancel
             </Button>
           </span>
+          <Button
+            onClick={() => {
+              void openLink(address, notify).then((opened) => {
+                if (opened) onClose();
+              });
+            }}
+            testId="link-open"
+          >
+            Open in browser
+          </Button>
         </>
       }
     >
