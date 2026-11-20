@@ -108,7 +108,7 @@ export function Dialog({
         className="absolute top-[12vh] left-1/2 flex max-h-[calc(100%-24vh)] w-[min(480px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-[12px] border border-line bg-raised shadow-raised outline-none"
       >
         <div className="px-[18px] pt-4 pb-[6px]">
-          <h2 id={titleId} className="text-[16px] font-semibold break-words">
+          <h2 id={titleId} className="text-[17px] font-semibold break-words">
             {title}
           </h2>
         </div>

@@ -39,7 +39,7 @@ interface ShownToast {
 }
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
-const toastQueueLimit = 3;
+const toastQueueLimit = 32;
 
 function forgotSentence(name: string, workspaces: number): string {
   if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
@@ -86,7 +86,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         if (replaced === undefined) return [shown, ...queue].slice(0, toastQueueLimit);
         return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
       }
-      return queue.length >= toastQueueLimit ? queue : [...queue, shown];
+      const [head, , ...rest] = queue;
+      return queue.length < toastQueueLimit || head === undefined
+        ? [...queue, shown]
+        : [head, ...rest, shown];
     });
   }, []);
   const dismissToast = useCallback(() => {
@@ -210,12 +213,21 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
+  const focusCreated = useRef(false);
+  useEffect(() => {
+    if (creatingIn !== null || !focusCreated.current) return;
+    focusCreated.current = false;
+    document
+      .querySelector<HTMLElement>("[aria-label='Sidebar'] nav button[aria-current='true']")
+      ?.focus();
+  }, [creatingIn]);
   const created = (workspace: WorkspaceView) => {
     if (dialogProject === undefined) return;
     upsertWorkspace(dialogProject.id, workspace);
     select({ projectId: dialogProject.id, workspace: workspace.key });
     if (workspace.name !== null)
       notify(`${workspace.name} is ready in ${dialogProject.name}.`, "info");
+    focusCreated.current = true;
     setCreatingIn(null);
   };
   const closeArchive = useCallback(() => {
