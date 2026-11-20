@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { dialog, type BrowserWindow, type OpenDialogOptions } from "electron";
+import { drivenByVerify } from "../window/verification.ts";
 
 const options: OpenDialogOptions = {
   properties: ["openDirectory"],
@@ -15,7 +16,9 @@ async function verifyAnswer(file: string): Promise<string | undefined> {
 
 export async function chooseFolder(window: BrowserWindow | undefined): Promise<string | undefined> {
   const answerFile = process.env["SATELLITE_VERIFY_FOLDER_DIALOG"];
-  if (answerFile !== undefined && isAbsolute(answerFile)) return verifyAnswer(answerFile);
+  if (answerFile !== undefined && isAbsolute(answerFile) && drivenByVerify()) {
+    return verifyAnswer(answerFile);
+  }
   const result =
     window === undefined
       ? await dialog.showOpenDialog(options)
