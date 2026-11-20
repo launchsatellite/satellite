@@ -75,19 +75,20 @@ describe("system notices", () => {
     onPlatform(realPlatform);
   });
 
-  it("records instead of showing or counting while the driver is live", async () => {
+  it("records a clear count at start, then instead of showing or counting while the driver is live", async () => {
     const file = join(await mkdtemp(join(tmpdir(), "satellite-notices-")), "notices.jsonl");
     vi.stubEnv("SATELLITE_VERIFY_NOTICES", file);
     const notices = await freshModule();
     expect(notices.noticesRecorded()).toBe(true);
+    notices.prepareSystemNotices();
     notices.setAppBadge(1);
     notices.showNotice(text, vi.fn())?.close();
     notices.setAppBadge(0);
-    notices.prepareSystemNotices();
     await vi.waitFor(async () => {
-      expect(await lines(file)).toHaveLength(4);
+      expect(await lines(file)).toHaveLength(5);
     });
     expect(await lines(file)).toEqual([
+      { kind: "badge", count: 0 },
       { kind: "badge", count: 1 },
       { kind: "notice", ...text },
       { kind: "close" },

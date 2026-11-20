@@ -78,7 +78,7 @@ export function noticesRecorded(): boolean {
 
 export function prepareSystemNotices(): void {
   if (process.platform === "win32") app.setAppUserModelId(appUserModelId);
-  if (process.platform === "linux" && !noticesRecorded()) setAppBadge(0);
+  if (process.platform === "linux" || noticesRecorded()) setAppBadge(0);
 }
 
 export function showNotice(text: NoticeText, onClick: () => void): ShownNotice | undefined {
