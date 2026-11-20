@@ -48,6 +48,17 @@ describe("promptText bounds", () => {
   it("reads only a bounded start of a huge input", () => {
     expect(promptText(`${"\u{7}".repeat(20_000)}c`)).toBe("");
   });
+
+  it("keeps the joiners Persian and Indic words are written with", () => {
+    const persian = "\u{645}\u{6cc}\u{200c}\u{634}\u{648}\u{62f}";
+    const hindi = "\u{915}\u{94d}\u{200d}\u{937}";
+    expect(promptText(persian)).toBe(persian);
+    expect(promptText(hindi)).toBe(hindi);
+    expect(holdsHiddenText(`${persian}.png`)).toBe(false);
+    expect(promptText("a\u{200c}b\u{200d}c")).toBe("abc");
+    expect(promptText("\u{200c}\u{634}")).toBe("\u{634}");
+    expect(promptText("\u{634}\u{61c}\u{200c}\u{634}")).toBe("\u{634}\u{634}");
+  });
 });
 
 describe("holdsHiddenText", () => {
