@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
+import { claudeEnvironment, parseToolOverride, runTool, toolEnvironment } from "./tools.ts";
 
 vi.mock("./user-environment.ts", () => ({
   userEnvironment: () =>
@@ -102,6 +102,53 @@ describe("toolEnvironment", () => {
       "GH_TELEMETRY",
       "NO_COLOR",
     ]);
+  });
+});
+
+describe("claudeEnvironment", () => {
+  it("gives Claude Code the user's environment without the nesting marker", () => {
+    expect(
+      claudeEnvironment({
+        PATH: "/usr/bin",
+        CLAUDECODE: "1",
+        ANTHROPIC_BASE_URL: "https://llm.example.com",
+      }),
+    ).toEqual({ PATH: "/usr/bin", ANTHROPIC_BASE_URL: "https://llm.example.com" });
+  });
+
+  it("keeps loopback away from a proxy", () => {
+    expect(claudeEnvironment({ HTTPS_PROXY: "http://proxy.example.com:8080" })).toEqual({
+      HTTPS_PROXY: "http://proxy.example.com:8080",
+      NO_PROXY: "127.0.0.1",
+      no_proxy: "127.0.0.1",
+    });
+    expect(
+      claudeEnvironment({
+        http_proxy: "http://proxy.example.com:8080",
+        NO_PROXY: "example.com",
+        no_proxy: "",
+      }),
+    ).toEqual({
+      http_proxy: "http://proxy.example.com:8080",
+      NO_PROXY: "example.com,127.0.0.1",
+      no_proxy: "127.0.0.1",
+    });
+    expect(
+      claudeEnvironment({
+        ALL_PROXY: "socks5://proxy.example.com:1080",
+        NO_PROXY: "localhost 127.0.0.1 example.com",
+        no_proxy: "example.com,127.0.0.1",
+      }),
+    ).toEqual({
+      ALL_PROXY: "socks5://proxy.example.com:1080",
+      NO_PROXY: "localhost 127.0.0.1 example.com",
+      no_proxy: "example.com,127.0.0.1",
+    });
+    expect(claudeEnvironment({ HTTPS_PROXY: "", NO_PROXY: "example.com" })).toEqual({
+      HTTPS_PROXY: "",
+      NO_PROXY: "example.com",
+    });
+    expect(claudeEnvironment({ PATH: "/usr/bin" })).toEqual({ PATH: "/usr/bin" });
   });
 });
 

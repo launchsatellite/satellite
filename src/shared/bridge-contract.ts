@@ -12,6 +12,7 @@ export type BridgeEventName = keyof typeof bridgeEvents;
 export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bridgeEvents)[E]>;
 export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
+export type SessionStatus = z.output<typeof sessionStatus>;
 export type WorkspaceKey = z.output<typeof workspaceKey>;
 export type WorkspaceRef = z.output<typeof workspaceRef>;
 export type InterfaceState = z.output<typeof interfaceState>;
@@ -46,6 +47,7 @@ export const interfaceLimits = {
 };
 
 export const themeChoice = z.enum(["system", "light", "dark"]);
+export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
 export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
 export const workspaceName = z

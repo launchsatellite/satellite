@@ -72,6 +72,16 @@ const gitQuiet = {
 };
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
+const proxyKeys = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+];
+const noProxyKeys = ["NO_PROXY", "no_proxy"];
+const loopback = "127.0.0.1";
 const outputLimit = 16 * 1024 * 1024;
 const settleGraceMs = treeKillBoundMs + 1000;
 const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
@@ -87,6 +97,11 @@ function without(env: Record<string, string>, keys: Set<string>): Record<string,
   return Object.fromEntries(Object.entries(env).filter(([key]) => !keys.has(key.toUpperCase())));
 }
 
+function withLoopback(list: string | undefined): string {
+  if (list === undefined || list === "") return loopback;
+  return list.split(/[\s,]+/).includes(loopback) ? list : `${list},${loopback}`;
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -99,6 +114,13 @@ export function toolEnvironment(tool: Tool, env: Record<string, string>): Record
   if (tool === "git") return { ...without(env, gitReplacedKeys), ...gitQuiet };
   if (tool === "gh") return { ...without(env, ghReplacedKeys), ...ghQuiet };
   return env;
+}
+
+export function claudeEnvironment(env: Record<string, string>): Record<string, string> {
+  const kept = Object.fromEntries(Object.entries(env).filter(([key]) => key !== "CLAUDECODE"));
+  if (!proxyKeys.some((key) => (env[key] ?? "") !== "")) return kept;
+  for (const key of noProxyKeys) kept[key] = withLoopback(env[key]);
+  return kept;
 }
 
 export function parseToolOverride(
