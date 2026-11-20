@@ -4,7 +4,11 @@ import { BrowserWindow, app, session } from "electron";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { treeKillBoundMs } from "./platform/process-tree.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
-import { createInterfaceFile, interfaceHandlers } from "./state/interface-file.ts";
+import {
+  createInterfaceFile,
+  interfaceHandlers,
+  type InterfaceFile,
+} from "./state/interface-file.ts";
 import { createTerminalSessions } from "./terminal/terminal-sessions.ts";
 import { toolVersions } from "./tools/tool-versions.ts";
 import {
@@ -34,9 +38,8 @@ function focusMainWindow(): void {
   window.focus();
 }
 
-async function start(home: string): Promise<void> {
+async function start(interfaceFile: InterfaceFile): Promise<void> {
   await app.whenReady();
-  const interfaceFile = createInterfaceFile(home);
   applyThemeChoice((await interfaceFile.load()).state.theme);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
@@ -72,10 +75,11 @@ function prepareHome(): string | undefined {
 }
 
 const home = prepareHome();
-if (home !== undefined && app.requestSingleInstanceLock()) {
+const interfaceFile = home === undefined ? undefined : createInterfaceFile(home);
+if (interfaceFile !== undefined && app.requestSingleInstanceLock()) {
   registerAppScheme();
   app.on("second-instance", focusMainWindow);
-  start(home).catch(failStart);
+  start(interfaceFile).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
 }
@@ -84,7 +88,8 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   event.preventDefault();
-  void Promise.race([terminals.closeAll(), delay(quitBoundMs)]).finally(() => {
+  const settled = Promise.all([terminals.closeAll(), interfaceFile?.flush()]);
+  void Promise.race([settled, delay(quitBoundMs)]).finally(() => {
     app.quit();
   });
 });

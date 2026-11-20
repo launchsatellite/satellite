@@ -1,9 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { open, readFile, readdir, rename, unlink } from "node:fs/promises";
+import type { Stats } from "node:fs";
+import { open, readdir, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, join, parse } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { z } from "zod";
 
+export type JsonReadOutcome =
+  | { kind: "read" }
+  | { kind: "missing" }
+  | { kind: "set-aside"; name: string }
+  | { kind: "not-moved" }
+  | { kind: "not-read" };
+export interface JsonWriter {
+  write(value: unknown): Promise<void>;
+  flush(): Promise<void>;
+}
+interface PendingWrite {
+  value: unknown;
+  settled: PromiseWithResolvers<void>;
+}
+
+const maxFileBytes = 1024 * 1024;
 const renameRetries = 5;
 const renameRetryMs = 50;
 const retriedRenameCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
@@ -29,25 +46,6 @@ async function removeLeftovers(file: string): Promise<void> {
   }
 }
 
-async function setAside(file: string): Promise<string | undefined> {
-  const { dir, name } = parse(file);
-  const aside = `${name}.unreadable-${String(Date.now())}.json`;
-  try {
-    await rename(file, join(dir, aside));
-    return aside;
-  } catch {
-    return undefined;
-  }
-}
-
-function parseJson(text: string): { ok: true; json: unknown } | { ok: false } {
-  try {
-    return { ok: true, json: JSON.parse(text) };
-  } catch {
-    return { ok: false };
-  }
-}
-
 async function renameWithRetry(from: string, to: string): Promise<void> {
   for (let retry = 0; ; retry += 1) {
     try {
@@ -59,6 +57,49 @@ async function renameWithRetry(from: string, to: string): Promise<void> {
       if (!retried || retry >= renameRetries) throw error;
       await delay(renameRetryMs);
     }
+  }
+}
+
+async function setAside(file: string): Promise<JsonReadOutcome> {
+  const { dir, name } = parse(file);
+  const aside = `${name}.unreadable-${String(Date.now())}.json`;
+  try {
+    await renameWithRetry(file, join(dir, aside));
+    return { kind: "set-aside", name: aside };
+  } catch {
+    return { kind: "not-moved" };
+  }
+}
+
+function parseJson(text: string): { ok: true; json: unknown } | { ok: false } {
+  try {
+    return { ok: true, json: JSON.parse(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function isSmallRegularFile(info: Stats): boolean {
+  return info.isFile() && info.size <= maxFileBytes;
+}
+
+async function readSmallFile(
+  file: string,
+): Promise<{ kind: "missing" } | { kind: "unfit" } | { kind: "text"; text: string }> {
+  let info: Stats;
+  try {
+    info = await stat(file);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return { kind: "missing" };
+    throw error;
+  }
+  if (!isSmallRegularFile(info)) return { kind: "unfit" };
+  const handle = await open(file, "r");
+  try {
+    if (!isSmallRegularFile(await handle.stat())) return { kind: "unfit" };
+    return { kind: "text", text: await handle.readFile("utf8") };
+  } finally {
+    await handle.close();
   }
 }
 
@@ -83,26 +124,54 @@ export async function readJsonFile<T>(
   file: string,
   schema: z.ZodType<T>,
   fallback: T,
-): Promise<{ value: T; setAside: string | undefined }> {
+): Promise<{ value: T; outcome: JsonReadOutcome }> {
   await removeLeftovers(file);
   let text: string;
   try {
-    text = await readFile(file, "utf8");
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return { value: fallback, setAside: undefined };
-    return { value: fallback, setAside: await setAside(file) };
+    const read = await readSmallFile(file);
+    if (read.kind === "missing") return { value: fallback, outcome: { kind: "missing" } };
+    if (read.kind === "unfit") return { value: fallback, outcome: await setAside(file) };
+    text = read.text;
+  } catch {
+    return { value: fallback, outcome: { kind: "not-read" } };
   }
   const parsedJson = parseJson(text);
   const parsed = parsedJson.ok ? schema.safeParse(parsedJson.json) : undefined;
-  if (parsed?.success === true) return { value: parsed.data, setAside: undefined };
-  return { value: fallback, setAside: await setAside(file) };
+  if (parsed?.success === true) return { value: parsed.data, outcome: { kind: "read" } };
+  return { value: fallback, outcome: await setAside(file) };
 }
 
-export function createJsonWriter(file: string): (value: unknown) => Promise<void> {
-  let queue: Promise<void> = Promise.resolve();
-  return (value) => {
-    const write = queue.then(() => writeAtomically(file, value));
-    queue = write.catch(() => undefined);
-    return write;
+export function createJsonWriter(file: string): JsonWriter {
+  let pending: PendingWrite | undefined;
+  let writing: Promise<void> | undefined;
+  const pump = (): void => {
+    const next = pending;
+    pending = undefined;
+    if (next === undefined) {
+      writing = undefined;
+      return;
+    }
+    writing = writeAtomically(file, next.value)
+      .then(
+        () => {
+          next.settled.resolve();
+        },
+        (error: unknown) => {
+          next.settled.reject(error);
+        },
+      )
+      .then(pump);
+  };
+  return {
+    write(value) {
+      pending ??= { value, settled: Promise.withResolvers() };
+      pending.value = value;
+      const settled = pending.settled.promise;
+      if (writing === undefined) pump();
+      return settled;
+    },
+    async flush() {
+      while (writing !== undefined) await writing;
+    },
   };
 }

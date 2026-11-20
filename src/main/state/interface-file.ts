@@ -7,47 +7,64 @@ import {
   type ThemeChoice,
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
-import { createJsonWriter, readJsonFile } from "./json-file.ts";
+import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "./json-file.ts";
 
 export interface InterfaceFile {
   load(): Promise<{ state: InterfaceState; notice: string | null }>;
   save(state: InterfaceState): Promise<void>;
+  flush(): Promise<void>;
+}
+interface LoadedInterface {
+  state: InterfaceState;
+  notice: string | null;
+  writable: boolean;
 }
 
 const fileSchema = interfaceState.extend({ version: z.literal(1) });
-const setAsideNotice =
-  "Satellite couldn't read its saved layout, so it set that file aside and started fresh.";
+const notices: Record<JsonReadOutcome["kind"], string | null> = {
+  read: null,
+  missing: null,
+  "set-aside":
+    "Satellite couldn't read its saved layout, so it set that file aside and started fresh.",
+  "not-moved":
+    "Satellite couldn't read its saved layout or move it aside, so it started fresh and won't save layout changes for now.",
+  "not-read":
+    "Satellite couldn't open its saved layout, so it started fresh, left the file as it is and won't save layout changes for now.",
+};
 const saveFailure =
   "Satellite couldn't save the layout. It keeps working and saves again on the next change.";
 
-async function readInterfaceFile(
-  file: string,
-): Promise<{ state: InterfaceState; notice: string | null }> {
-  const { value, setAside } = await readJsonFile(file, fileSchema, {
+async function readInterfaceFile(file: string): Promise<LoadedInterface> {
+  const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
     version: 1,
   });
   return {
     state: { selected: value.selected, columns: value.columns, theme: value.theme },
-    notice: setAside === undefined ? null : setAsideNotice,
+    notice: notices[outcome.kind],
+    writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
   };
 }
 
 export function createInterfaceFile(home: string): InterfaceFile {
   const file = join(home, "interface.json");
-  const write = createJsonWriter(file);
-  let cached: Promise<{ state: InterfaceState; notice: string | null }> | undefined;
+  const writer = createJsonWriter(file);
+  let cached: Promise<LoadedInterface> | undefined;
   const load = () => {
     cached ??= readInterfaceFile(file);
     return cached;
   };
   return {
-    load,
-    async save(state) {
-      const { notice } = await load();
-      cached = Promise.resolve({ state, notice });
-      await write({ version: 1, ...state });
+    async load() {
+      const { state, notice } = await load();
+      return { state, notice };
     },
+    async save(state) {
+      const loaded = await load();
+      cached = Promise.resolve({ ...loaded, state });
+      if (loaded.writable) await writer.write({ version: 1, ...state });
+    },
+    flush: () => writer.flush(),
   };
 }
 
