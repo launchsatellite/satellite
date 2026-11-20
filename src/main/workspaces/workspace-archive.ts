@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, rm } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { BridgeResponse, LossView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { samePath } from "../platform/paths.ts";
@@ -8,29 +8,39 @@ import type { StoredProject, StoredWorkspace } from "../projects/projects-file.t
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { hasRemote, parseCount } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
+import { findLinks, linkWalkLimits, removeLink } from "./folder-links.ts";
 import { gitReadMs, runGit, worktreeRemoveMs } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
 
 export type InspectView = BridgeResponse<"workspaces.inspect">;
 export type ArchiveResult = BridgeResponse<"workspaces.archive">;
+type Submodules = InspectView["submodules"];
 interface Identity {
   dev: bigint;
   ino: bigint;
 }
 interface Inspection {
-  view: Omit<InspectView, "sessions">;
+  view: Omit<InspectView, "sessions" | "fingerprint">;
+  core: string;
   identity: Identity;
+}
+interface IndexRead {
+  hidden: number;
+  gitlinks: string[];
 }
 
 const shownFiles = 50;
 const pathLimit = 4096;
 const subjectLimit = 200;
 const shownSubjects = 5;
+const gitlinkChecks = 1000;
+const countCap = 1_000_000;
 const notOnAnyRef = ["--not", "--branches", "--remotes", "--tags", "--"];
 const notOnRemote = ["--not", "--remotes", "--"];
 const uncleanAnswer = "contains modified or untracked files, use --force to delete it";
 const submoduleAnswer = "working trees containing submodules cannot be moved or removed";
+const indexLine = /^(\S) (\d{6}) [0-9a-f]+ \d\t(.+)$/s;
 const oldGitSentence =
   "Satellite archives a workspace only with git 2.36 or newer, which lists worktrees safely. Update git, then try again.";
 
@@ -39,6 +49,10 @@ function unreadable(name: string): BridgeFailure {
     "failed",
     `Satellite couldn't read ${name}, so it won't archive it. Try again.`,
   );
+}
+
+function hashOf(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 async function identityOf(path: string): Promise<Identity | undefined> {
@@ -102,6 +116,50 @@ async function lossOf(root: string, folder: string, listed: ListedWorktree): Pro
   return { kind, count, subjects: count === 0 ? [] : await subjectsIn(folder, rest) };
 }
 
+export function parseIndex(stdout: string): IndexRead | undefined {
+  let hidden = 0;
+  const gitlinks: string[] = [];
+  for (const line of stdout.split("\0")) {
+    if (line === "") continue;
+    const match = indexLine.exec(line);
+    const [, tag, mode, path] = match ?? [];
+    if (tag === undefined || mode === undefined || path === undefined) return undefined;
+    if (tag === "S" || tag !== tag.toUpperCase()) hidden += 1;
+    if (mode === "160000") gitlinks.push(path);
+  }
+  return { hidden: Math.min(hidden, countCap), gitlinks };
+}
+
+async function readIndex(folder: string): Promise<IndexRead | undefined> {
+  const run = await runGit(folder, ["ls-files", "-z", "-v", "-s"], gitReadMs);
+  return run?.exitCode === 0 ? parseIndex(run.stdout) : undefined;
+}
+
+async function hasModulesFolder(folder: string): Promise<boolean | undefined> {
+  const run = await runGit(folder, ["rev-parse", "--git-path", "modules"], gitReadMs);
+  const answer = run?.exitCode === 0 ? run.stdout.replace(/\r?\n$/, "") : "";
+  if (answer === "" || answer.includes("\n")) return undefined;
+  const modules = isAbsolute(answer) ? answer : resolve(folder, answer);
+  return lstat(modules).then(
+    (entry) => entry.isDirectory(),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ENOENT" ? false : undefined,
+  );
+}
+
+async function submodulesIn(folder: string, index: IndexRead | undefined): Promise<Submodules> {
+  const modules = await hasModulesFolder(folder);
+  if (modules === true) return "checked-out";
+  if (modules === undefined || index === undefined) return "unknown";
+  if (index.gitlinks.length > gitlinkChecks) return "unknown";
+  for (const path of index.gitlinks) {
+    const parts = path.split("/");
+    if (parts.some((part) => part === "" || part === "." || part === "..")) return "unknown";
+    if (await exists(join(folder, ...parts, ".git"))) return "checked-out";
+  }
+  return "none";
+}
+
 async function readInspection(
   home: string,
   project: StoredProject,
@@ -120,39 +178,68 @@ async function readInspection(
   if (listed === undefined || listed.bare || listed.prunable) throw failure;
   const status = await readStatus(record.path);
   if (status === undefined) throw failure;
+  const index = await readIndex(record.path);
+  const submodules = await submodulesIn(record.path, index);
   const commits = await lossOf(project.path, record.path, listed);
   const branch = listed.detached ? null : listed.branch;
-  const fingerprint = createHash("sha256")
-    .update(
-      JSON.stringify([
-        String(identity.dev),
-        String(identity.ino),
-        listed.head,
-        branch,
-        listed.locked,
-        status.raw,
-        commits,
-      ]),
-    )
-    .digest("hex");
-  return {
-    identity,
-    view: {
-      branch: branch === null ? null : branch.slice(0, 255),
-      files: status.entries
-        .slice(0, shownFiles)
-        .map(({ code, path }) => ({ code, path: path.slice(0, pathLimit) })),
-      moreFiles: Math.min(Math.max(0, status.entries.length - shownFiles), 1_000_000),
-      commits,
-      locked: listed.locked,
-      fingerprint,
-    },
+  const view = {
+    branch: branch === null ? null : branch.slice(0, 255),
+    files: status.entries
+      .slice(0, shownFiles)
+      .map(({ code, path }) => ({ code, path: path.slice(0, pathLimit) })),
+    moreFiles: Math.min(Math.max(0, status.entries.length - shownFiles), countCap),
+    repositories: Math.min(
+      status.entries.filter(({ code, path }) => code === "??" && path.endsWith("/")).length,
+      countCap,
+    ),
+    hidden: index?.hidden ?? null,
+    submodules,
+    commits,
+    locked: listed.locked,
   };
+  const core = hashOf([String(identity.dev), String(identity.ino), listed.head, status.raw, view]);
+  return { identity, core, view };
 }
 
-async function removeWorktree(root: string, path: string, name: string): Promise<void> {
+function fingerprintOf(core: string, sessions: number): string {
+  return hashOf([core, sessions]);
+}
+
+async function removeLinks(path: string, name: string): Promise<number> {
+  const found = await findLinks(path, {
+    entries: linkWalkLimits.entries,
+    depth: linkWalkLimits.depth,
+    deadline: Date.now() + linkWalkLimits.ms,
+  });
+  if (!found.complete && process.platform === "win32") {
+    throw new BridgeFailure(
+      "refused",
+      `Satellite couldn't check all of ${name} for links to other folders, so it won't let git delete it. Nothing was removed.`,
+    );
+  }
+  let removed = 0;
+  for (const link of found.links) {
+    if (!(await removeLink(link))) {
+      throw new BridgeFailure(
+        "failed",
+        `Satellite couldn't remove a link inside ${name}, so it won't let git delete the folder. Links it removed before are gone, and what they pointed to is untouched.`,
+      );
+    }
+    removed += 1;
+  }
+  return removed;
+}
+
+async function removeWorktree(
+  root: string,
+  path: string,
+  name: string,
+  linksRemoved: number,
+): Promise<void> {
+  let forced = false;
   let run = await runGit(root, ["worktree", "remove", "--end-of-options", path], worktreeRemoveMs);
   if (run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer)) {
+    forced = true;
     run = await runGit(
       root,
       ["worktree", "remove", "--force", "--end-of-options", path],
@@ -176,7 +263,9 @@ async function removeWorktree(root: string, path: string, name: string): Promise
   if (listed === true) {
     throw new BridgeFailure(
       "failed",
-      `git couldn't remove the worktree, so ${name} stays as it was.`,
+      forced || linksRemoved > 0
+        ? `git couldn't finish removing the worktree, so some of ${name}'s files or links may be gone. The branch stays.`
+        : `git couldn't remove the worktree, so ${name} stays as it was.`,
     );
   }
   if (listed === undefined) {
@@ -197,8 +286,8 @@ export async function inspectWorkspace(
   record: StoredWorkspace,
   sessions: number,
 ): Promise<InspectView> {
-  const { view } = await readInspection(home, project, record);
-  return { ...view, sessions };
+  const { view, core } = await readInspection(home, project, record);
+  return { ...view, sessions, fingerprint: fingerprintOf(core, sessions) };
 }
 
 export async function archiveWorkspace(
@@ -214,17 +303,26 @@ export async function archiveWorkspace(
     `Something changed in ${name} since you looked. Here is the latest.`,
   );
   const seen = await readInspection(home, project, record);
-  if (seen.view.fingerprint !== fingerprint) throw changed;
+  if (fingerprintOf(seen.core, sessions.countInside(path)) !== fingerprint) throw changed;
   if (seen.view.locked) {
     throw new BridgeFailure(
       "refused",
       `${name} is locked in git, so Satellite won't archive it. Run git worktree unlock on it first.`,
     );
   }
+  if (seen.view.submodules !== "none") {
+    throw new BridgeFailure(
+      "refused",
+      seen.view.submodules === "checked-out"
+        ? `${name} has submodules checked out, and git would delete their own history with it, so Satellite won't archive it.`
+        : `Satellite couldn't check whether ${name} has submodules checked out, so it won't archive it.`,
+    );
+  }
   await sessions.stopInside(path);
   const latest = await readInspection(home, project, record);
-  if (latest.view.fingerprint !== fingerprint) throw changed;
-  await removeWorktree(project.path, path, name);
+  if (latest.core !== seen.core) throw changed;
+  const linksRemoved = await removeLinks(path, name);
+  await removeWorktree(project.path, path, name, linksRemoved);
   if (
     sameIdentity(await identityOf(path), latest.identity) &&
     (await isConfined(home, project, record))

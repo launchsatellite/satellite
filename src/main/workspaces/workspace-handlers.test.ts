@@ -320,4 +320,37 @@ describe("workspaceHandlers", () => {
     },
     30_000,
   );
+
+  it("says git removed the worktree when the list can't be saved afterwards", async () => {
+    const project = await repository("mine");
+    const parent = join(base, "home", "worktrees", "mine");
+    await mkdir(parent, { recursive: true });
+    const path = join(parent, "saved-late");
+    await run("git", ["-C", project.path, "worktree", "add", "-q", "-b", "saved-late", path], {
+      env: gitEnvironment(),
+    });
+    const record = { id: randomUUID(), name: "saved-late", path, branch: "saved-late" };
+    project.workspaces.push(record);
+    const store = {
+      ...fakeStore([project]),
+      removeWorkspace: () => Promise.reject(new BridgeFailure("failed", "The disk said no.")),
+    };
+    const { handlers } = workspaceHandlers({
+      home: join(base, "home"),
+      store,
+      sessions: noSessions,
+    });
+    const { owner } = recordingOwner();
+    const ask = { projectId: project.id, workspaceId: record.id };
+    const { fingerprint } = await handlers["workspaces.inspect"](ask, owner);
+    await expect(
+      handlers["workspaces.archive"]({ ...ask, fingerprint }, owner),
+    ).rejects.toMatchObject({
+      code: "failed",
+      message:
+        "git removed saved-late, but Satellite couldn't update its list. The next list drops it.",
+    });
+    await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(store.busy.has(record.id)).toBe(false);
+  });
 });

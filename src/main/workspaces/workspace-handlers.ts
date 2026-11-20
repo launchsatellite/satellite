@@ -1,4 +1,4 @@
-import type { StartChoice } from "../../shared/bridge-contract.ts";
+import type { BridgeResponse, StartChoice } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import {
   projectName,
@@ -44,6 +44,7 @@ export interface Workspaces {
 }
 
 const creationsAtOnce = 4;
+const inspectionsAtOnce = 4;
 const creationStopMs = 20_000;
 
 const detailLimit = 300;
@@ -79,6 +80,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
   };
   const running = new Set<Promise<unknown>>();
   const creations = new Map<string, Creation>();
+  const inspections = new Map<string, Promise<BridgeResponse<"workspaces.inspect">>>();
   const track = <T>(work: Promise<T>, settled: () => void): Promise<T> => {
     running.add(work);
     const settle = () => {
@@ -200,9 +202,24 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
         creation.stop.abort(canceledSentence);
         return { canceled: true };
       },
-      "workspaces.inspect": async ({ projectId, workspaceId }) => {
-        const { project, record } = await recordOf(store, projectId, workspaceId);
-        return inspectWorkspace(home, project, record, sessions.countInside(record.path));
+      "workspaces.inspect": ({ projectId, workspaceId }) => {
+        const key = `${projectId}/${workspaceId}`;
+        const pending = inspections.get(key);
+        if (pending !== undefined) return pending;
+        if (inspections.size >= inspectionsAtOnce) {
+          return Promise.reject(
+            new BridgeFailure("refused", "Satellite is checking other workspaces. Try again."),
+          );
+        }
+        const inspection = recordOf(store, projectId, workspaceId).then(({ project, record }) =>
+          inspectWorkspace(home, project, record, sessions.countInside(record.path)),
+        );
+        inspections.set(key, inspection);
+        const settle = () => {
+          inspections.delete(key);
+        };
+        inspection.then(settle, settle);
+        return inspection;
       },
       "workspaces.archive": ({ projectId, workspaceId, fingerprint }) => {
         if (quitting.signal.aborted) {

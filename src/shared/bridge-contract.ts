@@ -210,6 +210,9 @@ export const bridgeRequests = {
         .array(z.strictObject({ code: z.string().length(2), path: z.string().min(1).max(4096) }))
         .max(50),
       moreFiles: count,
+      repositories: count,
+      hidden: count.nullable(),
+      submodules: z.enum(["none", "checked-out", "unknown"]),
       commits: lossView,
       sessions: z.int().min(0).max(bridgeLimits.terminals),
       locked: z.boolean(),

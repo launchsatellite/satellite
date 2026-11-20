@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { runGit } from "./git-command.ts";
-import { archiveWorkspace, inspectWorkspace } from "./workspace-archive.ts";
+import { archiveWorkspace, inspectWorkspace, parseIndex } from "./workspace-archive.ts";
 import { listWorktrees } from "./worktree-list.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -164,6 +164,23 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("parseIndex", () => {
+  it("counts files git skips and finds submodules, and refuses a line it can't read", () => {
+    const oid = "8688a8ca6cf509b12d9b25114e11207f53ac3fd1";
+    const lines = [
+      `H 100644 ${oid} 0\tREADME.md`,
+      `h 100644 ${oid} 0\tassumed.md`,
+      `S 100644 ${oid} 0\tsparse/a.md`,
+      `s 100644 ${oid} 0\tboth.md`,
+      `H 160000 ${oid} 0\tlib`,
+      `H 100644 ${oid} 0\tname\nwith newline`,
+    ];
+    expect(parseIndex(`${lines.join("\0")}\0`)).toEqual({ hidden: 3, gitlinks: ["lib"] });
+    expect(parseIndex("")).toEqual({ hidden: 0, gitlinks: [] });
+    expect(parseIndex("H README.md\0")).toBeUndefined();
+  });
+});
+
 describe("inspectWorkspace", () => {
   it("lists uncommitted files and commits that are not pushed", async () => {
     const project = await repository("repo", true);
@@ -202,6 +219,35 @@ describe("inspectWorkspace", () => {
     expect((await inspectWorkspace(home, project, record, 0)).commits).toEqual({
       kind: "no-remote",
     });
+  });
+
+  it("shows what status leaves out, nested repositories and files git skips", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "hidden");
+    await git(record.path, ["update-index", "--assume-unchanged", "README.md"]);
+    await writeFile(join(record.path, "README.md"), "Changed where status can't see it.\n");
+    await run("git", ["init", "-q", join(record.path, "vendor")], { env: gitEnvironment() });
+    await commit(join(record.path, "vendor"), "lib.ts", "its own history\n");
+    const view = await inspectWorkspace(home, project, record, 0);
+    expect(view).toMatchObject({
+      files: [{ code: "??", path: "vendor/" }],
+      repositories: 1,
+      hidden: 1,
+      submodules: "none",
+    });
+  });
+
+  it("answers a fingerprint that changes when a terminal starts there", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "busy");
+    const before = await inspectWorkspace(home, project, record, 0);
+    const after = await inspectWorkspace(home, project, record, 1);
+    expect(after.fingerprint).not.toBe(before.fingerprint);
+    const sessions = { ...sessionsStub(), countInside: () => 1 };
+    await expect(
+      archiveWorkspace(home, project, record, before.fingerprint, sessions),
+    ).rejects.toMatchObject({ code: "refused" });
+    expect(sessions.stopped).toEqual([]);
   });
 
   it("refuses worktrees read without NUL separators", async () => {
@@ -296,7 +342,8 @@ describe("archiveWorkspace", () => {
     await git(record.path, ["submodule", "update", "-q", "--init"]);
     await commit(join(record.path, "lib"), "local.txt", "only in the submodule\n");
     await writeFile(join(record.path, "notes.md"), "unclean too\n");
-    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const { fingerprint, submodules } = await inspectWorkspace(home, project, record, 0);
+    expect(submodules).toBe("checked-out");
     await expect(
       archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
     ).rejects.toMatchObject({
@@ -304,7 +351,7 @@ describe("archiveWorkspace", () => {
       message:
         "with-lib has submodules checked out, and git would delete their own history with it, so Satellite won't archive it.",
     });
-    expect(removeCalls().some((args) => args.includes("--force"))).toBe(false);
+    expect(removeCalls()).toEqual([]);
     expect(await listed(project)).toContain(asGitPrints(record.path));
     expect(await exists(join(record.path, "lib", "local.txt"))).toBe(true);
   });
@@ -347,7 +394,23 @@ describe("archiveWorkspace", () => {
     }
   });
 
-  it.runIf(onUnix)("deletes what git left without following a link out of it", async () => {
+  it("removes links to other folders before git runs, and never what they point to", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "linked");
+    const outside = join(base, "outside");
+    await mkdir(join(outside, "src"), { recursive: true });
+    await writeFile(join(outside, "src", "keep.md"), "Mine.\n");
+    await mkdir(join(record.path, "node_modules"));
+    await symlink(outside, join(record.path, "node_modules", "shared-lib"), "junction");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
+      leftover: null,
+    });
+    expect(await exists(record.path)).toBe(false);
+    expect(await readFile(join(outside, "src", "keep.md"), "utf8")).toBe("Mine.\n");
+  });
+
+  it.runIf(onUnix)("refuses before git runs when a link inside can't be removed", async () => {
     const project = await repository("repo", true);
     const record = await workspace(project, "stuck");
     const outside = join(base, "outside");
@@ -355,15 +418,89 @@ describe("archiveWorkspace", () => {
     await writeFile(join(outside, "keep.md"), "Mine.\n");
     const held = join(record.path, "held");
     await mkdir(held);
-    await writeFile(join(held, "file.txt"), "in use\n");
     await symlink(outside, join(held, "link"));
     await chmod(held, 0o500);
-    beforeRemove.hook = () => chmod(held, 0o700);
-    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
-    expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
-      leftover: null,
+    try {
+      const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+      await expect(
+        archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+      ).rejects.toMatchObject({
+        code: "failed",
+        message:
+          "Satellite couldn't remove a link inside stuck, so it won't let git delete the folder. Links it removed before are gone, and what they pointed to is untouched.",
+      });
+      expect(removeCalls()).toEqual([]);
+      expect(await listed(project)).toContain(asGitPrints(record.path));
+      expect(await readdir(outside)).toEqual(["keep.md"]);
+    } finally {
+      await chmod(held, 0o700);
+    }
+  });
+
+  it("says what git left when its removal fails, times out or can't be checked", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "fragile");
+    await writeFile(join(record.path, "notes.md"), "unclean\n");
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    const answers: ({ exitCode: number; stdout: string; stderr: string } | undefined)[] = [];
+    vi.mocked(runGit).mockImplementation((folder, args, ms, signal) => {
+      if (args[0] === "worktree" && args[1] === "remove") {
+        return Promise.resolve(answers.shift());
+      }
+      return actual.runGit(folder, args, ms, signal);
     });
-    expect(await exists(record.path)).toBe(false);
-    expect(await readdir(outside)).toEqual(["keep.md"]);
+    const unclean = {
+      exitCode: 128,
+      stdout: "",
+      stderr: `fatal: '${record.path}' contains modified or untracked files, use --force to delete it\n`,
+    };
+    const archive = async () => {
+      const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+      return archiveWorkspace(home, project, record, fingerprint, sessionsStub());
+    };
+    try {
+      answers.push({ exitCode: 128, stdout: "", stderr: "fatal: no\n" });
+      await expect(archive()).rejects.toThrow(
+        "git couldn't remove the worktree, so fragile stays as it was.",
+      );
+      answers.push(unclean, { exitCode: 255, stdout: "", stderr: "error: failed\n" });
+      await expect(archive()).rejects.toThrow(
+        "git couldn't finish removing the worktree, so some of fragile's files or links may be gone. The branch stays.",
+      );
+      answers.push(undefined);
+      await expect(archive()).rejects.toThrow(
+        "git didn't finish removing fragile within 2 minutes, so some of its files may be gone already. The branch stays.",
+      );
+      answers.push({ exitCode: 0, stdout: "", stderr: "" });
+      const realList = vi.mocked(listWorktrees).getMockImplementation();
+      let lists = 0;
+      vi.mocked(listWorktrees).mockImplementation(async (root) => {
+        lists += 1;
+        return lists > 3 || realList === undefined ? undefined : realList(root);
+      });
+      await expect(archive()).rejects.toThrow(
+        "Satellite couldn't tell whether git removed fragile. The branch stays, and the next list shows what is left.",
+      );
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+      const listActual =
+        await vi.importActual<typeof import("./worktree-list.ts")>("./worktree-list.ts");
+      vi.mocked(listWorktrees).mockImplementation(listActual.listWorktrees);
+    }
+    expect(await listed(project)).toContain(asGitPrints(record.path));
+  });
+
+  it("refuses a record that sits in another project's worktrees folder", async () => {
+    const project = await repository("repo", true);
+    const parent = join(home, "worktrees", "other");
+    await mkdir(parent, { recursive: true });
+    const path = join(await realpath(parent), "stray");
+    await git(project.path, ["worktree", "add", "-q", "-b", "stray", path]);
+    const record = { id: randomUUID(), name: "stray", path, branch: "stray" };
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "failed",
+      message: "Satellite couldn't read stray, so it won't archive it. Try again.",
+    });
+    expect(vi.mocked(runGit)).not.toHaveBeenCalled();
   });
 });
