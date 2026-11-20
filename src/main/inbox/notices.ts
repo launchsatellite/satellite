@@ -39,6 +39,7 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   let shownAt: number | undefined;
   let shown: { notice: ShownNotice; keys: string[] } | undefined;
   let failureLogged = false;
+  let runs = 0;
   const quiet = () => !enabled || inFront();
   const clearTimer = () => {
     clearTimeout(timer);
@@ -54,8 +55,10 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     console.error("Satellite could not show a notification", error);
   };
   const present = async (entries: readonly Needing[]) => {
+    runs += 1;
+    const run = runs;
     const subjects = await Promise.all(entries.map(({ workspace }) => subject(workspace)));
-    if (quiet()) return;
+    if (run !== runs || quiet()) return;
     const named = entries.flatMap((entry, index): Named[] => {
       const found = subjects[index];
       return found === undefined || !needing.has(placeKey(entry.workspace))

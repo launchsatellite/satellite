@@ -25,13 +25,16 @@ const nameOf = (workspace: WorkspaceRef) =>
   workspace.workspace === "main" ? "main" : workspace.workspace.slice(-12).replace(/^0+/, "");
 
 function setup() {
-  const state = { front: false, gone: new Set<string>() };
+  const state = { front: false, gone: new Set<string>(), slow: new Map<string, number>() };
   const shown: Shown[] = [];
   const badges: number[] = [];
   const opened: Needing[] = [];
   const subject = vi.fn(async (workspace: WorkspaceRef): Promise<NoticeSubject | undefined> => {
-    await Promise.resolve();
     const name = nameOf(workspace);
+    const slow = state.slow.get(name);
+    await (slow === undefined
+      ? Promise.resolve()
+      : new Promise((resolve) => setTimeout(resolve, slow)));
     if (state.gone.has(name)) return undefined;
     return { project: "repo", workspace: name === "main" ? null : `w${name}` };
   });
@@ -277,5 +280,30 @@ describe("createNotices", () => {
     expect(error).toHaveBeenCalledTimes(1);
     expect(error.mock.calls[0]?.[0]).toBe("Satellite could not show a notification");
     error.mockRestore();
+  });
+
+  it("keeps the gap while a name lookup is slow", async () => {
+    const { state, shown, notices } = setup();
+    state.slow.set("1", 100);
+    notices.update([need("1")]);
+    await settle(50);
+    notices.update([need("1"), need("2")]);
+    await settle(100);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you"]);
+    await settle(noticeGapMs - 151);
+    expect(shown).toHaveLength(1);
+    await settle(1);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w2 needs you"]);
+  });
+
+  it("never lets a slow lookup close or replace a newer notification", async () => {
+    const { state, shown, notices } = setup();
+    state.slow.set("1", noticeGapMs * 2);
+    notices.update([need("1")]);
+    await settle(1);
+    notices.update([need("1"), need("2")]);
+    await settle(noticeGapMs * 3);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
+    expect(shown[0]?.close).not.toHaveBeenCalled();
   });
 });
