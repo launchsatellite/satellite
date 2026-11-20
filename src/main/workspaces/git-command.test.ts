@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { gitReadMs, runGit } from "./git-command.ts";
+import { gitArgs, gitReadMs, runGit } from "./git-command.ts";
 
 const git = vi.hoisted(() => ({
   folders: new Array<string>(),
@@ -34,5 +34,18 @@ describe("runGit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await runGit(stuck, ["status"], gitReadMs);
     expect(git.folders).toEqual([stuck, "/Users/<name>/code/other", stuck]);
+  });
+});
+
+describe("gitArgs", () => {
+  it("refuses a folder that would run git somewhere else", () => {
+    for (const folder of ["", ".", "repo", "../repo"]) {
+      expect(() => gitArgs(folder, ["status"])).toThrow();
+    }
+    expect(gitArgs("/Users/<name>/repo", ["status"]).slice(0, 3)).toEqual([
+      "--no-optional-locks",
+      "-C",
+      "/Users/<name>/repo",
+    ]);
   });
 });

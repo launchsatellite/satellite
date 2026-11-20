@@ -1,4 +1,5 @@
 import { BridgeFailure } from "../bridge/registry.ts";
+import { isFullyQualified } from "../platform/paths.ts";
 import { AbandonedRun, runTool, type ToolRun } from "../platform/tools.ts";
 import { gitReadTimeoutMs } from "../projects/repository-check.ts";
 
@@ -25,6 +26,7 @@ const safeConfig = [
 const foldersWithStuckGit = new Set<string>();
 
 export function gitArgs(folder: string, args: readonly string[]): string[] {
+  if (!isFullyQualified(folder)) throw new Error("git runs only in an absolute folder");
   return ["--no-optional-locks", "-C", folder, ...safeConfig, ...args];
 }
 
