@@ -22,6 +22,20 @@ describe("parseWorktreeInclude", () => {
     expect(escaped.matches("keep", false)).toBe(false);
   });
 
+  it("reads lines the way git does", () => {
+    expect(matcher("﻿local.json\n").matches("local.json", false)).toBe(true);
+    expect(matcher("local.json\r").matches("local.json", false)).toBe(true);
+    expect(matcher("foo\\\\  \n").matches("foo\\", false)).toBe(true);
+    expect(parseWorktreeInclude("dangling\\\n")).toEqual([]);
+  });
+
+  it("drops patterns too long or too deep to match quickly", () => {
+    const segments = (count: number): string => Array.from({ length: count }, () => "a").join("/");
+    expect(parseWorktreeInclude(`${"a".repeat(4097)}\n`)).toEqual([]);
+    expect(parseWorktreeInclude(`${segments(65)}\n`)).toEqual([]);
+    expect(parseWorktreeInclude(`${segments(64)}\n`)).toHaveLength(1);
+  });
+
   it("keeps at most 1000 patterns", () => {
     const text = Array.from({ length: 1500 }, (_, index) => `file-${String(index)}`).join("\n");
     expect(parseWorktreeInclude(text)).toHaveLength(1000);
@@ -82,7 +96,7 @@ describe("createIncludeMatcher", () => {
     expect(matcher("[^a-c].txt\n").matches("b.txt", false)).toBe(false);
     expect(matcher("[a-c].txt\n").matches("b.txt", false)).toBe(true);
     expect(matcher("[]x].txt\n").matches("].txt", false)).toBe(true);
-    expect(matcher("[ab.txt\n").matches("[ab.txt", false)).toBe(true);
+    expect(matcher("[ab.txt\n").matches("[ab.txt", false)).toBe(false);
     expect(matcher("file?.txt\n").matches("file1.txt", false)).toBe(true);
     expect(matcher("file?.txt\n").matches("file.txt", false)).toBe(false);
     expect(matcher("\\*.txt\n").matches("a.txt", false)).toBe(false);
@@ -96,6 +110,22 @@ describe("createIncludeMatcher", () => {
     expect(stars.matches("a".repeat(200), false)).toBe(false);
     expect(stars.matches(Array.from({ length: 60 }, () => "q").join("/"), false)).toBe(false);
     expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it("matches a deep path against a full hostile file in one pass", () => {
+    const run = Array.from({ length: 12 }, () => "a").join("/");
+    const hostile = Array.from(
+      { length: 1000 },
+      (_, index) => `n/**/${run}/z${String(index)}`,
+    ).join("\n");
+    expect(hostile.length).toBeLessThan(65536);
+    const include = matcher(hostile);
+    const deep = `n/${Array.from({ length: 60 }, () => "a").join("/")}`;
+    const started = performance.now();
+    for (let entry = 0; entry < 10; entry += 1) {
+      expect(include.matches(`${deep}/f${String(entry)}`, false)).toBe(false);
+    }
+    expect(performance.now() - started).toBeLessThan(1500);
   });
 
   it("reaches into an ignored folder only as the docs say", () => {

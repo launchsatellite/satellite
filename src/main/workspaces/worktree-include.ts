@@ -16,7 +16,7 @@ type Token =
   | { kind: "literal"; character: string }
   | { kind: "class"; negated: boolean; ranges: [string, string][] };
 
-type CompiledSegment = Token[] | "globstar";
+type CompiledSegment = Token[] | "globstar" | "never";
 
 interface CompiledPattern {
   negated: boolean;
@@ -25,16 +25,25 @@ interface CompiledPattern {
 }
 
 const patternLimit = 1000;
+const patternLength = 4096;
+const segmentLimit = 64;
+
+function backslashesBefore(text: string, end: number): number {
+  let count = 0;
+  while (text[end - 1 - count] === "\\") count += 1;
+  return count;
+}
 
 function trimTrailingSpaces(line: string): string {
   let end = line.length;
-  while (end > 0 && line[end - 1] === " " && line[end - 2] !== "\\") end -= 1;
+  while (end > 0 && line[end - 1] === " " && backslashesBefore(line, end - 1) % 2 === 0) end -= 1;
   return line.slice(0, end);
 }
 
 function parseLine(line: string): IncludePattern | undefined {
-  if (line.startsWith("#")) return undefined;
+  if (line.startsWith("#") || line.length > patternLength) return undefined;
   let pattern = trimTrailingSpaces(line);
+  if (backslashesBefore(pattern, pattern.length) % 2 === 1) return undefined;
   let negated = false;
   if (pattern.startsWith("\\#") || pattern.startsWith("\\!")) pattern = pattern.slice(1);
   else if (pattern.startsWith("!")) {
@@ -47,6 +56,7 @@ function parseLine(line: string): IncludePattern | undefined {
   if (pattern.startsWith("/")) pattern = pattern.slice(1);
   if (pattern === "") return undefined;
   const segments = pattern.split("/");
+  if (segments.length > segmentLimit) return undefined;
   return { negated, directoryOnly, anchored, segments: anchored ? segments : ["**", ...segments] };
 }
 
@@ -96,10 +106,14 @@ function compileSegment(segment: string): CompiledSegment {
     } else if (character === "?") {
       tokens.push({ kind: "one" });
       index += 1;
+    } else if (character === "[") {
+      const parsed = parseClass(characters, index);
+      if (parsed === undefined) return "never";
+      tokens.push(parsed.token);
+      index = parsed.next;
     } else {
-      const parsed = character === "[" ? parseClass(characters, index) : undefined;
-      tokens.push(parsed?.token ?? { kind: "literal", character });
-      index = parsed?.next ?? index + 1;
+      tokens.push({ kind: "literal", character });
+      index += 1;
     }
   }
   return tokens;
@@ -113,9 +127,9 @@ function matchesOne(token: Token, character: string): boolean {
   return inside !== token.negated;
 }
 
-function matchesSegment(segment: CompiledSegment, name: string): boolean {
+function matchesSegment(segment: CompiledSegment, characters: readonly string[]): boolean {
   if (segment === "globstar") return true;
-  const characters = Array.from(name);
+  if (segment === "never") return false;
   let tokenIndex = 0;
   let nameIndex = 0;
   let starToken = -1;
@@ -141,41 +155,54 @@ function matchesSegment(segment: CompiledSegment, name: string): boolean {
   return tokenIndex === segment.length;
 }
 
-function matchesSegments(pattern: readonly CompiledSegment[], path: readonly string[]): boolean {
-  let reached = path.map((_, index) => index === 0).concat(path.length === 0);
-  pattern.forEach((segment, patternIndex) => {
-    const first = reached.indexOf(true);
+function matchedPrefixes(
+  pattern: readonly CompiledSegment[],
+  path: readonly (readonly string[])[],
+): Uint8Array {
+  let reached = new Uint8Array(path.length + 1);
+  let next = new Uint8Array(path.length + 1);
+  reached[0] = 1;
+  for (const [patternIndex, segment] of pattern.entries()) {
+    next.fill(0);
     if (segment === "globstar") {
-      const atLeastOne = patternIndex === pattern.length - 1;
-      reached = reached.map(
-        (_, index) => first >= 0 && (atLeastOne ? index > first : index >= first),
-      );
+      const first = reached.indexOf(1);
+      if (first >= 0) next.fill(1, patternIndex === pattern.length - 1 ? first + 1 : first);
     } else {
-      reached = reached.map(
-        (_, index) =>
-          index > 0 &&
-          reached[index - 1] === true &&
-          matchesSegment(segment, path[index - 1] ?? ""),
-      );
+      for (let index = 1; index <= path.length; index += 1) {
+        if (reached[index - 1] === 1 && matchesSegment(segment, path[index - 1] ?? [])) {
+          next[index] = 1;
+        }
+      }
     }
-  });
-  return reached[path.length] === true;
+    [reached, next] = [next, reached];
+    if (!reached.includes(1)) break;
+  }
+  return reached;
 }
 
-function decides(
+function decidesAnyLevel(
   patterns: readonly CompiledPattern[],
-  path: readonly string[],
+  path: readonly (readonly string[])[],
   isDirectory: boolean,
 ): boolean {
-  for (let index = patterns.length - 1; index >= 0; index -= 1) {
+  const decided = new Array<boolean | undefined>(path.length + 1);
+  let open = path.length;
+  for (let index = patterns.length - 1; index >= 0 && open > 0; index -= 1) {
     const pattern = patterns[index];
-    if (pattern === undefined || (pattern.directoryOnly && !isDirectory)) continue;
-    if (matchesSegments(pattern.segments, path)) return !pattern.negated;
+    if (pattern === undefined) continue;
+    const reached = matchedPrefixes(pattern.segments, path);
+    const deepest = pattern.directoryOnly && !isDirectory ? path.length - 1 : path.length;
+    for (let length = 1; length <= deepest; length += 1) {
+      if (decided[length] === undefined && reached[length] === 1) {
+        decided[length] = !pattern.negated;
+        open -= 1;
+      }
+    }
   }
-  return false;
+  return decided.includes(true);
 }
 
-function reachesInside(pattern: CompiledPattern, folder: readonly string[]): boolean {
+function reachesInside(pattern: CompiledPattern, folder: readonly (readonly string[])[]): boolean {
   const [head, next] = pattern.segments;
   if (head === "globstar") {
     return next !== undefined && folder.some((name) => matchesSegment(next, name));
@@ -188,9 +215,14 @@ function reachesInside(pattern: CompiledPattern, folder: readonly string[]): boo
   return pattern.segments.length > folder.length;
 }
 
+function characterSegments(path: string): string[][] {
+  return path.split("/").map((name) => Array.from(name));
+}
+
 export function parseWorktreeInclude(text: string): IncludePattern[] {
   const patterns: IncludePattern[] = [];
-  for (const line of text.split(/\r?\n/)) {
+  const withoutMark = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  for (const line of withoutMark.split("\n").map((raw) => raw.replace(/\r$/, ""))) {
     const pattern = parseLine(line);
     if (pattern !== undefined) patterns.push(pattern);
     if (patterns.length === patternLimit) break;
@@ -206,14 +238,10 @@ export function createIncludeMatcher(patterns: readonly IncludePattern[]): Inclu
   }));
   return {
     matches(path, isDirectory) {
-      const segments = path.split("/");
-      for (let length = 1; length < segments.length; length += 1) {
-        if (decides(compiled, segments.slice(0, length), true)) return true;
-      }
-      return decides(compiled, segments, isDirectory);
+      return decidesAnyLevel(compiled, characterSegments(path), isDirectory);
     },
     reaches(directory) {
-      const folder = directory.split("/");
+      const folder = characterSegments(directory);
       return compiled.some((pattern) => !pattern.negated && reachesInside(pattern, folder));
     },
   };
