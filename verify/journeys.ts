@@ -60,7 +60,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     },
     home: session.home,
     repo: session.repo,
-    claudeConfig: session.claudeConfig,
+    userHome: session.userHome,
     gitEnv: session.gitEnv,
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),

@@ -44,7 +44,7 @@ export const scenarioSchema = z.strictObject({
   description: z.string(),
   repo: z.array(repoStepSchema),
   home: z.array(seededFileSchema).optional(),
-  claudeConfig: z.array(seededFileSchema).optional(),
+  userHome: z.array(seededFileSchema).optional(),
   folders: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),

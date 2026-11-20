@@ -1,5 +1,5 @@
 {
-  "description": "A repo whose committed .claude folder holds shared and local Claude Code settings, one workspace alpha, a Claude Code config folder with the user's own settings, hooks and state, a stand-in gh, and a stand-in Claude Code that takes one prompt and finishes, with Satellite set to the light theme.",
+  "description": "A repo whose committed .claude folder holds shared and local Claude Code settings, one workspace alpha, a temporary user home holding the user's own Claude Code settings, hooks and state, a stand-in gh, and a stand-in Claude Code that takes one prompt and finishes, with Satellite set to the light theme.",
   "repo": [
     { "write": { "path": "README.md", "content": "# Verify repo\n" } },
     {
@@ -15,7 +15,7 @@
       }
     },
     { "git": ["init", "-b", "main"] },
-    { "git": ["add", "--force", "."] },
+    { "git": ["add", "."] },
     { "git": ["commit", "-m", "first commit"] }
   ],
   "home": [
@@ -25,9 +25,9 @@
     }
   ],
   "workspaces": [{ "name": "alpha", "steps": [] }],
-  "claudeConfig": [
+  "userHome": [
     {
-      "path": "settings.json",
+      "path": ".claude/settings.json",
       "content": "{\"theme\":\"dark\",\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"exit 0\"}]}]}}"
     },
     { "path": ".claude.json", "content": "{\"projects\":{}}" }

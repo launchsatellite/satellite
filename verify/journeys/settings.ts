@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
 import type { AppSession } from "../driver.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
+import { loadScenario } from "../scenario.ts";
 import type { Journey } from "../journeys.ts";
 import {
   claudePids,
@@ -22,19 +23,42 @@ interface Snapshot {
   hashes: Record<string, string>;
   status: Record<string, string>;
 }
+interface Seeded {
+  path: string;
+  content: string;
+}
 
 const run = promisify(execFile);
 const ownerOnly = 0o600;
-const settingsShape = z.record(z.string(), z.unknown());
+const scenarioName = "settings-files";
+const settingsFileShape = z.strictObject({
+  hooks: z.record(
+    z.string(),
+    z.array(
+      z.strictObject({
+        hooks: z.array(
+          z.strictObject({
+            type: z.literal("http"),
+            url: z.string(),
+            headers: z.strictObject({ Authorization: z.string() }),
+            timeout: z.number(),
+          }),
+        ),
+      }),
+    ),
+  ),
+});
+
+function hashOf(content: string | Buffer): string {
+  return createHash("sha256").update(content).digest("hex");
+}
 
 async function hashesUnder(folder: string, into: Record<string, string>): Promise<void> {
   const entries = await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const path = join(entry.parentPath, entry.name);
-    into[path] = createHash("sha256")
-      .update(await readFile(path))
-      .digest("hex");
+    into[path] = hashOf(await readFile(path));
   }
 }
 
@@ -50,12 +74,15 @@ async function gitStatus(session: AppSession, folder: string): Promise<string> {
 async function snapshot(session: AppSession, alpha: string): Promise<Snapshot> {
   const hashes: Record<string, string> = {};
   for (const folder of [
-    session.claudeConfig,
+    join(session.userHome, ".claude"),
     join(session.repo, ".claude"),
     join(alpha, ".claude"),
   ]) {
     await hashesUnder(folder, hashes);
   }
+  const state = join(session.userHome, ".claude.json");
+  const stateBytes = await readFile(state).catch(() => undefined);
+  if (stateBytes !== undefined) hashes[state] = hashOf(stateBytes);
   return {
     hashes,
     status: {
@@ -79,6 +106,23 @@ async function promptToDone(session: AppSession, row: string, count: number): Pr
   return pid;
 }
 
+async function seededHashes(session: AppSession, alpha: string): Promise<Record<string, string>> {
+  const { scenario } = await loadScenario(scenarioName);
+  const committed = scenario.repo.flatMap((step) =>
+    "write" in step && step.write.path.startsWith(".claude/") ? [step.write] : [],
+  );
+  const seeded: [string, Seeded[]][] = [
+    [session.userHome, scenario.userHome ?? []],
+    [session.repo, committed],
+    [alpha, committed],
+  ];
+  const hashes: Record<string, string> = {};
+  for (const [folder, files] of seeded) {
+    for (const file of files) hashes[join(folder, file.path)] = hashOf(file.content);
+  }
+  return hashes;
+}
+
 async function checkSettingsFile(session: AppSession, pid: number): Promise<void> {
   const file = await settingsFileOf(session, pid);
   const sessions = join(session.home, "sessions");
@@ -87,18 +131,25 @@ async function checkSettingsFile(session: AppSession, pid: number): Promise<void
     const mode = (await stat(file)).mode & 0o777;
     assert.equal(mode, ownerOnly, `the settings file has mode ${mode.toString(8)}, not 600`);
   }
-  const keys = Object.keys(settingsShape.parse(JSON.parse(await readFile(file, "utf8"))));
-  assert.deepEqual(keys, ["hooks"], `the settings file holds ${JSON.stringify(keys)}`);
+  const text = await readFile(file, "utf8");
+  const parsed = settingsFileShape.safeParse(JSON.parse(text));
+  assert.ok(parsed.success, `the settings file holds more than Satellite's hooks, ${text}`);
+  const launchId = basename(file, ".json");
+  const own = new RegExp(`^http://127\\.0\\.0\\.1:\\d+/hook/${launchId}/([A-Za-z]+)$`);
+  for (const [event, groups] of Object.entries(parsed.data.hooks)) {
+    for (const hook of groups.flatMap((group) => group.hooks)) {
+      assert.equal(own.exec(hook.url)?.[1], event, `the ${event} hook posts to ${hook.url}`);
+    }
+  }
 }
 
 async function journey(session: AppSession): Promise<void> {
   const { page } = session;
   const alpha = join(session.home, "worktrees", "repo", "alpha");
+  const seeded = await seededHashes(session, alpha);
   const before = await snapshot(session, alpha);
-  assert.ok(
-    Object.keys(before.hashes).length >= 6,
-    `only ${Object.keys(before.hashes).join(", ")} were found to compare`,
-  );
+  assert.deepEqual(before.hashes, seeded, "the settings files differed from the seeded ones");
+  assert.deepEqual(before.status, { repo: "", alpha: "" }, "git status was not clean at launch");
   const mainPid = await promptToDone(session, "workspace-repo-main", 1);
   const alphaPid = await promptToDone(session, "workspace-repo-alpha", 2);
   await checkSettingsFile(session, mainPid);
@@ -120,13 +171,13 @@ async function journey(session: AppSession): Promise<void> {
     left = await settingsLeft(session.home);
   });
   assert.ok(after !== undefined, "nothing was compared while the app was closed");
-  assert.deepEqual(after.hashes, before.hashes, "a Claude Code settings file changed");
+  assert.deepEqual(after.hashes, seeded, "a Claude Code settings file changed");
   assert.deepEqual(after.status, before.status, "git status changed in the repo or alpha");
   assert.deepEqual(left, [], `settings files outlived their sessions, ${left.join(", ")}`);
 }
 
 export const settingsJourney: Journey = {
   name: "settings",
-  scenario: "settings-files",
+  scenario: scenarioName,
   run: journey,
 };
