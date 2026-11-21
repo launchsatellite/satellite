@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
-import { gitReadMs, readGit, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, readGit, runGit, whenGitExits } from "../workspaces/git-command.ts";
 import { isObjectName, noLazyFetch } from "./file-sides.ts";
 
 export type ConflictCheck =
@@ -119,6 +119,7 @@ async function trialMerge(
   if (objects === undefined) return undefined;
   signal?.throwIfAborted();
   const scratch = await makeScratchRepository(home, head.length === 64);
+  let stuck = false;
   try {
     const run = await readGit(
       scratch,
@@ -127,6 +128,7 @@ async function trialMerge(
       signal,
       { gitVariables: { ...noLazyFetch, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects } },
     );
+    stuck = run === "stuck";
     if (run === "time" || run === "stuck") return slow;
     if (typeof run === "string") {
       signal?.throwIfAborted();
@@ -140,6 +142,11 @@ async function trialMerge(
     return run.exitCode === 1 ? parseConflicts(run.stdout) : undefined;
   } finally {
     await rm(scratch, { recursive: true, force: true }).catch(() => undefined);
+    if (stuck) {
+      void whenGitExits(scratch).then(() =>
+        rm(scratch, { recursive: true, force: true }).catch(() => undefined),
+      );
+    }
   }
 }
 

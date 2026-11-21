@@ -40,11 +40,15 @@ const safeConfig = [
   "-c",
   "submodule.recurse=false",
 ];
-const foldersWithStuckGit = new Set<string>();
+const foldersWithStuckGit = new Map<string, Promise<void>>();
 
 export function gitArgs(folder: string, args: readonly string[]): string[] {
   if (!isFullyQualified(folder)) throw new Error("git runs only in an absolute folder");
   return ["--no-optional-locks", "-C", folder, ...safeConfig, ...args];
+}
+
+export function whenGitExits(folder: string): Promise<void> {
+  return foldersWithStuckGit.get(folder) ?? Promise.resolve();
 }
 
 export async function readGit(
@@ -60,11 +64,10 @@ export async function readGit(
     run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, ...extra });
   } catch (error) {
     if (error instanceof AbandonedRun) {
-      foldersWithStuckGit.add(folder);
       const release = () => {
         foldersWithStuckGit.delete(folder);
       };
-      error.exited.then(release, release);
+      foldersWithStuckGit.set(folder, error.exited.then(release, release));
       return "stuck";
     }
     return error instanceof ToolStopped ? error.reason : "failed";
