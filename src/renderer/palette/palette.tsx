@@ -15,8 +15,12 @@ import { KeyHint } from "../ui/key-hint.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { rankMatches } from "../../shared/fuzzy-match.ts";
+import { visibleText } from "../../shared/visible-text.ts";
+import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
+import { findSentence, typeAFileNameSentence } from "../files/file-words.ts";
+import type { FileSearch } from "../files/use-file-search.ts";
 
-type PaletteMode = "commands" | "switcher";
+type PaletteMode = "commands" | "switcher" | "files";
 
 export interface SwitcherItem {
   ref: WorkspaceRef;
@@ -31,6 +35,9 @@ interface PaletteProps {
   onClose: () => void;
   switcher: readonly SwitcherItem[];
   onOpenWorkspace: (ref: WorkspaceRef) => void;
+  files: FileSearch;
+  onOpenFile: (path: string) => void;
+  onQuery: (query: string) => void;
 }
 interface PaletteOption {
   key: string;
@@ -39,6 +46,7 @@ interface PaletteOption {
   hint?: string;
   detail?: string;
   pixel?: boolean;
+  path?: string;
   run: () => void;
 }
 
@@ -55,6 +63,12 @@ const copy = {
     label: "Go to a workspace",
     placeholder: "Type part of a workspace or project name",
     group: "Workspaces",
+    action: "Open",
+  },
+  files: {
+    label: "Open a file by name",
+    placeholder: "Type part of a file name",
+    group: "Files",
     action: "Open",
   },
 };
@@ -96,6 +110,50 @@ function switcherOptions(
   );
 }
 
+function fileOptions(
+  paths: readonly string[],
+  onOpenFile: (path: string) => void,
+): PaletteOption[] {
+  return paths.map((path, index) => {
+    const at = path.lastIndexOf("/");
+    return {
+      key: path,
+      testId: `file-result-${String(index)}`,
+      title: visibleText(path.slice(at + 1)),
+      detail: at === -1 ? undefined : visibleText(path.slice(0, at)),
+      path,
+      run: () => {
+        onOpenFile(path);
+      },
+    };
+  });
+}
+
+function emptyNote(
+  mode: PaletteMode,
+  query: string,
+  files: FileSearch,
+): { testId: string; text: string } | undefined {
+  if (mode !== "files") return { testId: "palette-empty", text: "Nothing matches that." };
+  if (query === "" || files.state === "idle") {
+    return { testId: "palette-note", text: typeAFileNameSentence };
+  }
+  if (files.query !== query || files.state === "searching") return undefined;
+  if (files.state === "found") return { testId: "palette-empty", text: "Nothing matches that." };
+  return { testId: "palette-note", text: findSentence(files.state) };
+}
+
+function OptionIcon({ icons, path }: { icons: LoadedIcons | undefined; path: string }) {
+  return (
+    <FileIcon
+      icons={icons}
+      name={path.slice(path.lastIndexOf("/") + 1)}
+      folder={false}
+      open={false}
+    />
+  );
+}
+
 function FooterHint({ keys, action }: { keys: string; action: string }) {
   return (
     <span className="inline-flex items-center gap-[5px]">
@@ -105,8 +163,17 @@ function FooterHint({ keys, action }: { keys: string; action: string }) {
   );
 }
 
-export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PaletteProps) {
+export function Palette({
+  mode,
+  onClose,
+  switcher,
+  onOpenWorkspace,
+  files,
+  onOpenFile,
+  onQuery,
+}: PaletteProps) {
   const { commands } = useCommands();
+  const icons = useIcons();
   const listId = useId();
   const groupLabelId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -118,6 +185,11 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
   if (shownMode !== mode) {
     setShownMode(mode);
     setQuery("");
+    setActive(0);
+  }
+  const [shownPaths, setShownPaths] = useState(files.paths);
+  if (shownPaths !== files.paths) {
+    setShownPaths(files.paths);
     setActive(0);
   }
 
@@ -142,13 +214,12 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
     input.current?.focus();
   }, [mode]);
 
-  const options = useMemo(
-    () =>
-      mode === "commands"
-        ? commandOptions(query, commands)
-        : switcherOptions(query, switcher, onOpenWorkspace),
-    [mode, query, commands, switcher, onOpenWorkspace],
-  );
+  const options = useMemo(() => {
+    if (mode === "commands") return commandOptions(query, commands);
+    if (mode === "files") return fileOptions(files.paths, onOpenFile);
+    return switcherOptions(query, switcher, onOpenWorkspace);
+  }, [mode, query, commands, switcher, onOpenWorkspace, files.paths, onOpenFile]);
+  const stale = mode === "files" && (files.query !== query || files.state === "searching");
   const optionId = (index: number) => `${listId}-${String(index)}`;
   const activeOption = options[active];
 
@@ -169,7 +240,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
       setActive((active + step + options.length) % options.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (activeOption !== undefined) runOption(activeOption);
+      if (activeOption !== undefined && !stale) runOption(activeOption);
     } else if (event.key === "Escape") {
       event.preventDefault();
       close();
@@ -178,6 +249,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
     }
   };
   const text = copy[mode];
+  const note = emptyNote(mode, query, files);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -211,6 +283,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
             onChange={(event) => {
               setQuery(event.target.value);
               setActive(0);
+              if (mode === "files") onQuery(event.target.value);
             }}
             onKeyDown={press}
             className="min-w-0 flex-1 bg-transparent text-[14px] text-fg outline-none placeholder:text-dim"
@@ -234,6 +307,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
                   role="option"
                   aria-selected={index === active}
                   data-testid={option.testId}
+                  data-path={option.path}
                   className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
                   onMouseMove={() => {
                     if (index !== active) setActive(index);
@@ -243,6 +317,7 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
                   }}
                 >
                   {option.pixel === true && <StatusPixel state="idle" size={6} />}
+                  {option.path !== undefined && <OptionIcon icons={icons} path={option.path} />}
                   <span
                     className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
                   >
@@ -263,9 +338,9 @@ export function Palette({ mode, onClose, switcher, onOpenWorkspace }: PalettePro
             </div>
           </div>
           <div role="status">
-            {options.length === 0 && (
-              <p data-testid="palette-empty" className="px-[9px] py-2 text-[13px] text-dim">
-                Nothing matches that.
+            {options.length === 0 && note !== undefined && (
+              <p data-testid={note.testId} className="px-[9px] py-2 text-[13px] text-dim">
+                {note.text}
               </p>
             )}
           </div>

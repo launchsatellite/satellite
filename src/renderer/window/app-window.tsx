@@ -20,6 +20,8 @@ import { createCommandRegistry, type Command } from "../commands/command-registr
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
+import { useFileSearch } from "../files/use-file-search.ts";
+import { useFileTabs } from "../files/use-file-tabs.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
@@ -40,7 +42,7 @@ import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 
-type PaletteMode = "commands" | "switcher";
+type PaletteMode = "commands" | "switcher" | "files";
 type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
 interface AppWindowProps {
@@ -297,6 +299,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           project.id === projectId && project.workspaces.some((listed) => listed.key === workspace),
       ),
     [projects],
+  );
+  const fileSearch = useFileSearch(changesHere, palette === "files");
+  const fileTabs = useFileTabs(state, update, changesHere, listedWorkspace);
+  const openFileTab = fileTabs.open;
+  const openFound = useCallback(
+    (path: string) => {
+      openFileTab(path);
+      setCentreView("files");
+    },
+    [openFileTab],
   );
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
@@ -580,7 +592,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             shortcut: { key: "f" },
             available: shownHere,
             run: () => {
-              setCentreView("files");
+              setPalette((open) => (open === "files" ? null : "files"));
             },
           },
           {
@@ -725,9 +737,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             <FilesView
               key={`${changesHere.projectId}/${changesHere.workspace}`}
               workspace={changesHere}
-              state={state}
-              update={update}
-              listed={listedWorkspace}
+              tabs={fileTabs}
               list={changes.list}
               finished={finishedHere}
               onCentre={setCentreView}
@@ -832,6 +842,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             }}
             switcher={switcher}
             onOpenWorkspace={select}
+            files={fileSearch.search}
+            onOpenFile={openFound}
+            onQuery={fileSearch.ask}
           />
         )}
         {dialogProject !== undefined && (

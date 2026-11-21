@@ -1,39 +1,23 @@
 import { useEffect, useMemo } from "react";
-import type {
-  ChangedFile,
-  ChangesList,
-  InterfaceState,
-  WorkspaceRef,
-} from "../../shared/bridge-contract.ts";
+import type { ChangedFile, ChangesList, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
 import { FilePane } from "./file-pane.tsx";
 import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
-import { useFileTabs } from "./use-file-tabs.ts";
+import type { useFileTabs } from "./use-file-tabs.ts";
 import { useFiles } from "./use-files.ts";
 import { useFolders } from "./use-folders.ts";
 
 interface FilesViewProps {
   workspace: WorkspaceRef;
-  state: InterfaceState;
-  update: (change: (current: InterfaceState) => InterfaceState, persist: boolean) => void;
-  listed: (ref: WorkspaceRef) => boolean;
+  tabs: ReturnType<typeof useFileTabs>;
   list: ChangesList | undefined;
   finished: string;
   onCentre: (view: CentreView) => void;
 }
 
-export function FilesView({
-  workspace,
-  state,
-  update,
-  listed,
-  list,
-  finished,
-  onCentre,
-}: FilesViewProps) {
-  const tabs = useFileTabs(state, update, workspace, listed);
+export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesViewProps) {
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
   const { open, setOpen, closeAll } = useFolders(workspace);
   const { listings, file, error } = useFiles(workspace, open, activePath, finished);

@@ -18,6 +18,7 @@ interface Row {
   iconDrawn: boolean;
 }
 
+const findShortcut = process.platform === "darwin" ? "Meta+F" : "Control+Shift+F";
 const waitMs = 15_000;
 const followMs = 45_000;
 const settleMs = 6000;
@@ -313,6 +314,58 @@ async function remembersTabs(session: AppSession): Promise<void> {
   );
 }
 
+async function resultPaths(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-testid^="file-result-"]')].map(
+      (result) => result.dataset["path"] ?? "",
+    ),
+  );
+}
+
+async function findsByName(session: AppSession): Promise<void> {
+  const { page } = session;
+  while ((await page.getByTestId("file-tab-0-close").count()) > 0) {
+    await page.getByTestId("file-tab-0-close").click({ force: true });
+  }
+  await page.getByTestId("file-empty").waitFor({ timeout: waitMs });
+  await page.getByTestId("centre-tab-changes").click();
+  await page.getByTestId("changes").waitFor({ timeout: waitMs });
+  await page.keyboard.press(findShortcut);
+  await page.getByTestId("palette").waitFor({ timeout: waitMs });
+  assert.equal(
+    await page.getByTestId("palette-input").getAttribute("aria-label"),
+    "Open a file by name",
+    "the shortcut did not open the finder",
+  );
+  await page.keyboard.type("needle", { delay: 30 });
+  await page.getByTestId("file-result-0").waitFor({ timeout: waitMs });
+  const listed = await resultPaths(page);
+  assert.equal(listed[0], deepFile, `the first result was ${JSON.stringify(listed[0])}`);
+  await session.screenshot("find");
+  await page.keyboard.press("Enter");
+  await page.getByTestId("files").waitFor({ timeout: waitMs });
+  await editorShows(session, "needle", "after opening it by name");
+  assert.equal((await tabPaths(page)).titles.length, 1, "opening by name made no single tab");
+  assert.equal(
+    (await rowOf(session, "src", "after opening by name")).open,
+    "false",
+    "opening by name opened a folder in the tree",
+  );
+  for (const name of ["debug.log", "out.js"]) {
+    await page.keyboard.press(findShortcut);
+    await page.getByTestId("palette-input").waitFor({ timeout: waitMs });
+    await page.keyboard.type(name, { delay: 30 });
+    await waitUntil(
+      async () => (await page.getByTestId("palette-empty").count()) > 0,
+      waitMs,
+      `${name} was offered, or the finder never said nothing matched`,
+    );
+    assert.deepEqual(await resultPaths(page), [], `${name} was offered`);
+    await page.keyboard.press("Escape");
+    await page.getByTestId("palette").waitFor({ state: "detached", timeout: waitMs });
+  }
+}
+
 export const filesJourney: Journey = {
   name: "files",
   scenario: "mixed-changes",
@@ -331,6 +384,7 @@ export const filesJourney: Journey = {
     await followsTheDisk(session, folder);
     await managesTabs(session);
     await remembersTabs(session);
+    await findsByName(session);
     await session.screenshot("files");
     assert.deepEqual(session.consoleErrors, [], "the window logged errors");
   },

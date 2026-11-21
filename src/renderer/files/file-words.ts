@@ -18,6 +18,15 @@ export const viewerFailedSentence =
   "Satellite couldn't load the file viewer, so there is nothing to show.";
 export const linkNoteSentence = "This is a link, so the file shows where it points.";
 
+export const typeAFileNameSentence = "Type part of a file name.";
+export const noFileLinesSentence = "Select some lines in the file first.";
+
+const findSentences = {
+  "too-many": "This workspace has too many files to search by name. Open files from the tree.",
+  hung: "Searching took too long. Try again in a moment.",
+  failed: "Satellite couldn't list the files here. Try again in a moment.",
+};
+
 const fileSentences: Record<SentenceKind, string> = {
   binary: "This is a binary file, so there is nothing to read here.",
   large:
@@ -55,6 +64,10 @@ export function fileSentence(read: FileRead): string | undefined {
     default:
       return fileSentences[read.kind];
   }
+}
+
+export function findSentence(state: keyof typeof findSentences): string {
+  return findSentences[state];
 }
 
 export function folderSentence(state: FolderProblem): string {
