@@ -282,6 +282,16 @@ function parseStep(raw: string): Step {
       const end = boundedInt(last ?? "", name, start, 1_000_000);
       return step(({ session }) => session.selectDiffLines(side, start, end));
     }
+    case "file-lines": {
+      const match = /^(\d+)-(\d+)$/.exec(needsValue());
+      const [, first, last] = match ?? [];
+      if (first === undefined || last === undefined) {
+        throw new Error("step file-lines needs <start>-<end>, as in file-lines=2-3");
+      }
+      const start = boundedInt(first, name, 1, 1_000_000);
+      const end = boundedInt(last, name, start, 1_000_000);
+      return step(({ session }) => session.selectFileLines(start, end));
+    }
     case "log":
       return step(({ session }) => session.standInEvents());
     case "notices":

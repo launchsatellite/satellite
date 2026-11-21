@@ -47,6 +47,7 @@ Steps run in order. The first failure stops the run, and its entry carries `erro
 | `wait-state=<testid>:<state>` | waits up to 60 seconds until the element's `data-state` equals the state, split at the first `:`, and fails naming the state it last read. Session tabs carry the session status (`idle`, `working`, `needs-you`, `done`, `stopped`), and each workspace row's `-status` pixel carries the pixel state, where a stopped session reads `idle` | |
 | `send=<text>` | sends the text to Claude Code as the app's own Send to Claude Code does, through the same window event, so the pane cleans it and types it into the shown session without submitting | |
 | `diff-lines=<side>:<start>-<end>` | selects those lines on `original` or `modified` in the shown diff by clicking the line number of `start` and then, with Shift held, that of `end` | |
+| `file-lines=<start>-<end>` | selects those lines in the open file of the Files tab by clicking the line number of `start` and then, with Shift held, that of `end` | |
 | `shot=<name>` | saves a screenshot, the name in kebab-case | its path |
 | `log` | reads what the stand-ins recorded | the events |
 | `notices` | reads what the app would have shown the system, each notification, close and app icon count. Every launch first records a count of 0, so a run can tell the recorder answers before anything could notify. The recorder appends a moment after the change, so a CLI proof may wait a second first | `{ kind: "notice", title, body }`, `{ kind: "close" }` and `{ kind: "badge", count }` in order |

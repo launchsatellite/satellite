@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type RefObject } from "react";
 import type { FileRead } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
+import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { EditorBoundary } from "../changes/file-diff.tsx";
 import {
   fileSentence,
@@ -14,6 +15,7 @@ import type { FileShown } from "./use-files.ts";
 interface FilePaneProps {
   file: FileShown | undefined;
   path: string | undefined;
+  handle: RefObject<DiffHandle | null>;
 }
 
 type KeptRead = Extract<FileRead, { kind: "text" | "link" }>;
@@ -42,7 +44,15 @@ function Opening() {
   );
 }
 
-function Viewer({ read, path }: { read: KeptRead; path: string }) {
+function Viewer({
+  read,
+  path,
+  handle,
+}: {
+  read: KeptRead;
+  path: string;
+  handle: RefObject<DiffHandle | null>;
+}) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {read.kind === "link" && (
@@ -56,7 +66,13 @@ function Viewer({ read, path }: { read: KeptRead; path: string }) {
       <div className="min-h-0 flex-1">
         <EditorBoundary sentence={viewerFailedSentence} testId="file-sentence">
           <Suspense fallback={<Opening />}>
-            <SideView text={read.text} side={null} path={path} label={visibleText(path)} />
+            <SideView
+              text={read.text}
+              side={null}
+              path={path}
+              label={visibleText(path)}
+              handle={handle}
+            />
           </Suspense>
         </EditorBoundary>
       </div>
@@ -64,13 +80,23 @@ function Viewer({ read, path }: { read: KeptRead; path: string }) {
   );
 }
 
-function Drawn({ read, path }: { read: FileShown["read"]; path: string }) {
-  if (read.kind === "text" || read.kind === "link") return <Viewer read={read} path={path} />;
+function Drawn({
+  read,
+  path,
+  handle,
+}: {
+  read: FileShown["read"];
+  path: string;
+  handle: RefObject<DiffHandle | null>;
+}) {
+  if (read.kind === "text" || read.kind === "link") {
+    return <Viewer read={read} path={path} handle={handle} />;
+  }
   const sentence = fileSentence(read);
   return sentence === undefined ? null : <Sentence testId="file-sentence" text={sentence} />;
 }
 
-export function FilePane({ file, path }: FilePaneProps) {
+export function FilePane({ file, path, handle }: FilePaneProps) {
   if (path === undefined) {
     return (
       <div data-testid="file-pane" className="h-full min-h-0">
@@ -80,7 +106,7 @@ export function FilePane({ file, path }: FilePaneProps) {
   }
   return (
     <div data-testid="file-pane" className="h-full min-h-0">
-      {file === undefined ? <Opening /> : <Drawn read={file.read} path={path} />}
+      {file === undefined ? <Opening /> : <Drawn read={file.read} path={path} handle={handle} />}
     </div>
   );
 }

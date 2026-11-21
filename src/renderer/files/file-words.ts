@@ -20,6 +20,7 @@ export const linkNoteSentence = "This is a link, so the file shows where it poin
 
 export const typeAFileNameSentence = "Type part of a file name.";
 export const noFileLinesSentence = "Select some lines in the file first.";
+export const notTextSentence = "This file isn't shown as text, so there are no lines to send.";
 
 const findSentences = {
   "too-many": "This workspace has too many files to search by name. Open files from the tree.",

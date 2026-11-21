@@ -38,6 +38,7 @@ export interface AppSession {
   dropFolder(path: string): Promise<void>;
   dropFiles(testId: string, paths: string[]): Promise<void>;
   selectDiffLines(side: "original" | "modified", start: number, end: number): Promise<void>;
+  selectFileLines(start: number, end: number): Promise<void>;
   openedLinks(): Promise<string[]>;
   notices(): Promise<RecordedNotice[]>;
   standInEvents(): Promise<StandInEvent[]>;
@@ -673,6 +674,17 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await number(start).click();
       await number(end).click({ modifiers: ["Shift"] });
       await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
+    },
+    async selectFileLines(start, end) {
+      const number = (line: number) =>
+        page
+          .locator('[data-testid="file-text"] .line-numbers')
+          .filter({ hasText: new RegExp(`^${String(line)}$`) });
+      await number(start).click();
+      await number(end).click({ modifiers: ["Shift"] });
+      await page.waitForFunction(() =>
+        document.activeElement?.closest("[data-testid='file-text']"),
+      );
     },
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");

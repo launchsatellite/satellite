@@ -20,6 +20,9 @@ import { createCommandRegistry, type Command } from "../commands/command-registr
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
+import { fileLinesRequest } from "../files/file-lines.ts";
+import { notTextSentence } from "../files/file-words.ts";
+import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
@@ -274,6 +277,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [diffNarrow, setDiffNarrow] = useState(true);
   const [shownText, setShownText] = useState<ShownText | null>(null);
   const { handle: diffHandle, read: diffSelection } = useDiffSelection();
+  const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
   const changesShown = shownHere && centreView === "changes";
@@ -631,9 +635,22 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             id: "changes.send-lines",
             title: "Send the selected lines to Claude Code",
             shortcut: { key: "l" },
-            whenFocusIn: "[data-testid='diff']",
-            available: changesShown && shownText !== null,
+            whenFocusIn: "[data-testid='diff'], [data-testid='file-text']",
+            available:
+              (changesShown && shownText !== null) ||
+              (filesShown && fileShown !== null && fileShown.kind !== "link"),
             run: () => {
+              if (filesShown) {
+                if (fileShown === null) return;
+                if (fileShown.kind !== "text") {
+                  notify(notTextSentence, "error");
+                  return;
+                }
+                const request = fileLinesRequest(fileShown.path, diffSelection());
+                if (request.ok) sendToClaudeCode(request.text);
+                else notify(request.sentence, "error");
+                return;
+              }
               const selection = diffSelection();
               if (shownText === null || selection === null) {
                 notify(noLinesSentence, "error");
@@ -704,6 +721,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     conflicting,
     conflictBase,
     shownText,
+    fileShown,
     diffSelection,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
@@ -741,6 +759,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               list={changes.list}
               finished={finishedHere}
               onCentre={setCentreView}
+              handle={diffHandle}
+              onShown={setFileShown}
             />
           ) : (
             <ChangesView

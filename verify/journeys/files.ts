@@ -5,7 +5,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import { waitUntil } from "./conditions.ts";
+import {
+  promptTimeoutMs,
+  standInInput,
+  startClaude,
+  stateIs,
+  toastReads,
+  waitUntil,
+} from "./conditions.ts";
 
 interface Row {
   path: string;
@@ -18,7 +25,14 @@ interface Row {
   iconDrawn: boolean;
 }
 
+const linesShortcut = process.platform === "darwin" ? "Meta+L" : "Control+Shift+L";
+const bracketed = (text: string) => `\u001b[200~${text}\u001b[201~`;
+const noLinesSentence = "Select some lines in the file first.";
+const notTextSentence = "This file isn't shown as text, so there are no lines to send.";
+const hiddenNameSentence =
+  "This file's name holds hidden characters, so Satellite can't point Claude Code at it. Ask in your own words.";
 const findShortcut = process.platform === "darwin" ? "Meta+F" : "Control+Shift+F";
+const quickMs = 2000;
 const waitMs = 15_000;
 const followMs = 45_000;
 const settleMs = 6000;
@@ -467,6 +481,81 @@ async function findsByName(session: AppSession): Promise<void> {
   }
 }
 
+async function openByName(session: AppSession, query: string, path: string): Promise<void> {
+  const { page } = session;
+  await page.keyboard.press(findShortcut);
+  await page.getByTestId("palette-input").waitFor({ timeout: waitMs });
+  await page.keyboard.type(query, { delay: 30 });
+  await waitUntil(
+    async () => (await resultPaths(page))[0] === path,
+    waitMs,
+    `the first result for ${query} was not ${path}`,
+  );
+  await page.keyboard.press("Enter");
+  await page.getByTestId("palette").waitFor({ state: "detached", timeout: waitMs });
+}
+
+async function typedAfter(session: AppSession, from: number, expected: string): Promise<void> {
+  let typed = "";
+  await waitUntil(
+    async () => {
+      typed = await standInInput(session, from);
+      return typed.length >= expected.length;
+    },
+    promptTimeoutMs,
+    () => `the prompt received ${JSON.stringify(typed)}`,
+  );
+  assert.equal(typed, expected, `the prompt received ${JSON.stringify(typed)}`);
+  assert.ok(!typed.includes("\r"), "the reference was submitted");
+}
+
+async function sendsLines(session: AppSession): Promise<void> {
+  const { page } = session;
+  await startClaude(session, 1);
+  await page.keyboard.type("look at the files");
+  await page.keyboard.press("Enter");
+  await stateIs(session, "session-tab-1", "done", "before the lines were sent");
+  await openByName(session, "src/app", "src/app.ts");
+  await editorShows(session, "greet", "after opening src/app.ts");
+  let from = (await session.standInEvents()).length;
+  await page.locator('[data-testid="file-text"] .view-lines').first().click();
+  await page.keyboard.press(linesShortcut);
+  await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
+  assert.equal(await standInInput(session, from), "", "lines nobody selected reached the prompt");
+  await session.selectFileLines(2, 3);
+  await page.keyboard.press(linesShortcut);
+  await typedAfter(session, from, bracketed("Lines 2 to 3 of src/app.ts in this workspace. "));
+
+  from = (await session.standInEvents()).length;
+  await focusRow(page, "README.md");
+  assert.ok(await treeHoldsFocus(page), "the row did not take focus");
+  await page.keyboard.press(linesShortcut);
+  await delay(quickMs);
+  assert.equal(
+    await standInInput(session, from),
+    "",
+    "the shortcut sent lines with focus in the tree",
+  );
+  await page.getByTestId("file-send-lines").click();
+  await typedAfter(session, from, bracketed("Lines 2 to 3 of src/app.ts in this workspace. "));
+
+  await rowLocator(page, "logo.bin").click();
+  await page.getByTestId("file-sentence").waitFor({ timeout: waitMs });
+  from = (await session.standInEvents()).length;
+  await page.getByTestId("file-send-lines").click();
+  await toastReads(session, notTextSentence, "after sending lines of a binary file");
+  assert.equal(await standInInput(session, from), "", "lines of a binary file reached the prompt");
+
+  const hostile = (await rows(page)).find((row) => row.path.includes("report"));
+  assert.ok(hostile !== undefined, "the hostile name was not listed");
+  await rowLocator(page, hostile.path).click();
+  await editorShows(session, "", "after opening the hostile name");
+  await session.selectFileLines(1, 1);
+  await page.keyboard.press(linesShortcut);
+  await toastReads(session, hiddenNameSentence, "after sending lines of a hidden name");
+  assert.equal(await standInInput(session, from), "", "a hidden name reached the prompt");
+}
+
 export const filesJourney: Journey = {
   name: "files",
   scenario: "mixed-changes",
@@ -488,6 +577,7 @@ export const filesJourney: Journey = {
     await managesTabs(session);
     await remembersTabs(session);
     await findsByName(session);
+    await sendsLines(session);
     await session.screenshot("files");
     assert.deepEqual(session.consoleErrors, [], "the window logged errors");
   },

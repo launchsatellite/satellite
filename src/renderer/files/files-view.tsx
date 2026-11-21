@@ -1,7 +1,13 @@
-import { useEffect, useMemo } from "react";
-import type { ChangedFile, ChangesList, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import { useEffect, useMemo, type RefObject } from "react";
+import type {
+  ChangedFile,
+  ChangesList,
+  FileRead,
+  WorkspaceRef,
+} from "../../shared/bridge-contract.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
+import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { FilePane } from "./file-pane.tsx";
 import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
@@ -15,9 +21,24 @@ interface FilesViewProps {
   list: ChangesList | undefined;
   finished: string;
   onCentre: (view: CentreView) => void;
+  handle: RefObject<DiffHandle | null>;
+  onShown: (shown: ShownFile | null) => void;
 }
 
-export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesViewProps) {
+export interface ShownFile {
+  path: string;
+  kind: FileRead["kind"];
+}
+
+export function FilesView({
+  workspace,
+  tabs,
+  list,
+  finished,
+  onCentre,
+  handle,
+  onShown,
+}: FilesViewProps) {
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
   const { open, setOpen, closeAll } = useFolders(workspace);
   const { listings, file, error } = useFiles(workspace, open, activePath, finished);
@@ -25,6 +46,18 @@ export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesVi
     const gone = open.filter((path) => path !== "" && listings.get(path)?.state === "missing");
     if (gone.length > 0) closeAll(gone);
   }, [open, listings, closeAll]);
+  const shownPath = file?.path;
+  const shownKind = file?.read.kind;
+  useEffect(() => {
+    onShown(
+      shownPath === undefined || shownKind === undefined
+        ? null
+        : { path: shownPath, kind: shownKind },
+    );
+    return () => {
+      onShown(null);
+    };
+  }, [shownPath, shownKind, onShown]);
   const changes = list?.changes;
   const changed = useMemo(() => {
     const files = changes?.kind === "files" ? changes.files : [];
@@ -35,6 +68,14 @@ export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesVi
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
         <CentreTabs value="files" onChange={onCentre} />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
+          <CommandButton
+            command="changes.send-lines"
+            variant="ghost"
+            size="small"
+            testId="file-send-lines"
+          >
+            Send lines
+          </CommandButton>
           <CommandButton
             command="files.open"
             variant="secondary"
@@ -88,7 +129,7 @@ export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesVi
               aria-labelledby={tabs.active === null ? undefined : fileTabId(tabs.active)}
               className="min-h-0 flex-1"
             >
-              <FilePane file={file} path={activePath} />
+              <FilePane file={file} path={activePath} handle={handle} />
             </div>
           </div>
         </div>
