@@ -24,6 +24,14 @@ describe("parseLsof", () => {
 });
 
 describe("parseSs", () => {
+  it("never lets a process name put its port on another id", () => {
+    const line = (name: string) =>
+      `LISTEN 0 511 127.0.0.1:3000 0.0.0.0:* users:(("${name}",pid=9000,fd=3),("node",pid=2201,fd=4))`;
+    for (const name of [`a",pid=42,fd=1)`, `",pid=424,fd=1)`, ",pid=4,fd=1)"]) {
+      expect(parseSs(line(name)).map((found) => found.pid)).toEqual([9000, 2201]);
+    }
+  });
+
   it("reads ss lines, with a zone, a star, brackets and two owners", () => {
     const ports = parseSs(ssLinux);
     expect(of(ports, 2201)).toEqual(["127.0.0.1 3000", ":: 5173", "fe80::1 9000"]);

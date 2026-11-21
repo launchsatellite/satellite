@@ -17,7 +17,8 @@ const portPids = 500;
 const outputLimit = 16 * 1024 * 1024;
 const lsofPath = "/usr/sbin/lsof";
 const ssPaths = ["/usr/bin/ss", "/usr/sbin/ss", "/sbin/ss", "/bin/ss"];
-const ssOwner = /,pid=(\d+),fd=\d+\)/g;
+const ssUsers = "users:(";
+const ssOwner = /\(".{0,15}",pid=(\d+),fd=\d+\)/y;
 const windowsPortsScript =
   "$ErrorActionPreference='Stop';ConvertTo-Json -Compress -InputObject @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection -Filter 'State = 2' -Property LocalAddress,LocalPort,OwningProcess|ForEach-Object{[pscustomobject]@{a=$_.LocalAddress;p=[int]$_.LocalPort;o=[int64]$_.OwningProcess}})";
 
@@ -94,9 +95,14 @@ export function parseSs(text: string): ListeningPort[] {
     const address = splitAddress(tokens[3] ?? "");
     if (address === null) continue;
     const host = address.host === "*" ? "::" : address.host;
-    for (const owner of line.matchAll(ssOwner)) {
+    const users = line.indexOf(ssUsers);
+    if (users < 0) continue;
+    ssOwner.lastIndex = users + ssUsers.length;
+    for (let owner = ssOwner.exec(line); owner !== null; owner = ssOwner.exec(line)) {
       const found = listener(Number(owner[1]), host, address.port);
       if (found !== null) ports.push(found);
+      if (line.charAt(ssOwner.lastIndex) !== ",") break;
+      ssOwner.lastIndex += 1;
     }
   }
   return ports;
