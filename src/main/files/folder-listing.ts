@@ -54,8 +54,8 @@ async function scan(folder: string): Promise<{ names: string[]; dropped: number 
 }
 
 function checkedPath(folder: string, name: string): string {
-  if (folder !== "") return `${folder}/${name}`;
-  return name.startsWith(":") ? `./${name}` : name;
+  const path = folder === "" ? name : `${folder}/${name}`;
+  return path.startsWith(":") ? `./${path}` : path;
 }
 
 async function classified(folder: string, names: string[]): Promise<FileEntry[]> {

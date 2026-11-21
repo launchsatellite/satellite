@@ -182,6 +182,21 @@ describe("listFolder", () => {
     },
   );
 
+  it.skipIf(process.platform === "win32")(
+    "reads a folder that starts with a colon literally, so its entries are checked on their own",
+    async () => {
+      const root = await makeRepository();
+      await put(root, {
+        ".gitignore": "*.log\nigndir/c\n",
+        ":(icase)X/a.log": "x",
+        ":(icase)X/b.txt": "x",
+        ":(top)igndir/c": "x",
+      });
+      expect(shown(await listFolder(root, ":(icase)X"))).toEqual(["~file:a.log", "file:b.txt"]);
+      expect(shown(await listFolder(root, ":(top)igndir"))).toEqual(["file:c"]);
+    },
+  );
+
   it("answers missing for a folder that is gone and for a file", async () => {
     const root = await makeRepository();
     await put(root, { "a.txt": "x" });
