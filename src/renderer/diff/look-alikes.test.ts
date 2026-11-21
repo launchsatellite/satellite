@@ -54,3 +54,16 @@ describe("confusableColumns", () => {
     expect(marked(`// ${"\u{436}".repeat(1000)}`)).toEqual([]);
   });
 });
+
+describe("the editor's look-alike table", () => {
+  it("still holds the pairs people rely on", () => {
+    const table = AmbiguousCharacters.getInstance(new Set());
+    const known = [
+      0x430, 0x435, 0x43e, 0x440, 0x441, 0x445, 0x443, 0x456, 0x3bf, 0x37e, 0x3b1, 0xff41, 0x131,
+      0x1c0, 0x2160, 0x1d7ce, 0x966, 0x4cf,
+    ];
+    expect(known.filter((point) => !table.isAmbiguous(point))).toEqual([]);
+    const plain = [0x61, 0x62, 0x63, 0x6f, 0x30, 0x31, 0x6c, 0x49, 0x20, 0x41];
+    expect(plain.filter((point) => table.isAmbiguous(point))).toEqual([]);
+  });
+});
