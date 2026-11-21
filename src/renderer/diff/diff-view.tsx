@@ -3,7 +3,8 @@ import "monaco-editor/features/codicon/register";
 import "monaco-editor/features/diffEditor/register";
 import "monaco-editor/features/unicodeHighlighter/register";
 import "monaco-editor/languages/definitions/register.all";
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { visibleLines } from "../../shared/visible-text.ts";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 
@@ -29,11 +30,40 @@ interface DiffViewProps {
 type DiffSide = DiffSelection["side"];
 
 const noBracketColours = { enabled: false, independentColorPoolPerBracketType: false };
+const drawnColumns = 10_000;
+const boxedLimit = 1000;
+const longLineSentence =
+  "A changed line here runs past 10,000 characters, so the diff shows only its start.";
 
 function plainModel(text: string, language: string): editor.ITextModel {
-  const model = editor.createModel(text, language);
+  const model = editor.createModel(visibleLines(text), language);
   model.updateOptions({ bracketColorizationOptions: noBracketColours });
   return model;
+}
+
+function fewNonAscii(text: string): boolean {
+  let found = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) > 0x7e) found += 1;
+    if (found >= boxedLimit) return false;
+  }
+  return true;
+}
+
+function changeRunsLong(created: editor.IStandaloneDiffEditor): boolean {
+  const model = created.getModel();
+  if (model === null) return false;
+  const long = (side: editor.ITextModel, start: number, end: number) => {
+    for (let line = start; line <= end && line >= 1; line += 1) {
+      if (side.getLineMaxColumn(line) > drawnColumns) return true;
+    }
+    return false;
+  };
+  return (created.getLineChanges() ?? []).some(
+    (change) =>
+      long(model.original, change.originalStartLineNumber, change.originalEndLineNumber) ||
+      long(model.modified, change.modifiedStartLineNumber, change.modifiedEndLineNumber),
+  );
 }
 
 function selectedLines(created: editor.IStandaloneDiffEditor, side: DiffSide) {
@@ -52,6 +82,8 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
   const diffEditor = useRef<editor.IStandaloneDiffEditor>(null);
   const shownPath = useRef<string>(null);
   const focusedSide = useRef<DiffSide>("modified");
+  const pendingView = useRef<editor.IDiffEditorViewState>(null);
+  const [cutShort, setCutShort] = useState(false);
 
   useImperativeHandle(
     handle,
@@ -97,12 +129,14 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
       diffAlgorithm: "advanced",
       ignoreTrimWhitespace: false,
       renderControlCharacters: true,
+      stopRenderingLineAfter: drawnColumns,
       unicodeHighlight: {
-        invisibleCharacters: true,
-        ambiguousCharacters: true,
+        invisibleCharacters: false,
+        ambiguousCharacters: false,
         nonBasicASCII: false,
         includeComments: true,
         includeStrings: true,
+        allowedLocales: {},
       },
       tabFocusMode: true,
       dropIntoEditor: { enabled: false },
@@ -116,6 +150,12 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     });
     created.getModifiedEditor().onDidFocusEditorText(() => {
       focusedSide.current = "modified";
+    });
+    created.onDidUpdateDiff(() => {
+      const viewState = pendingView.current;
+      pendingView.current = null;
+      if (viewState !== null) created.restoreViewState(viewState);
+      setCutShort(changeRunsLong(created));
     });
 
     const darkScheme = matchMedia("(prefers-color-scheme: dark)");
@@ -144,17 +184,32 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     const created = diffEditor.current;
     if (created === null) return;
     const previous = created.getModel();
-    const viewState = shownPath.current === path ? created.saveViewState() : null;
+    pendingView.current = shownPath.current === path ? created.saveViewState() : null;
     const language = diffLanguage(path);
+    const boxed = fewNonAscii(original) && fewNonAscii(modified);
+    for (const side of [created.getOriginalEditor(), created.getModifiedEditor()]) {
+      side.updateOptions({ unicodeHighlight: { ambiguousCharacters: boxed } });
+    }
     created.setModel({
       original: plainModel(original, language),
       modified: plainModel(modified, language),
     });
-    if (viewState !== null) created.restoreViewState(viewState);
     shownPath.current = path;
     previous?.original.dispose();
     previous?.modified.dispose();
   }, [original, modified, path]);
 
-  return <div ref={host} data-testid="diff" className="h-full min-h-0" />;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {cutShort && (
+        <p
+          data-testid="diff-cut-short"
+          className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
+        >
+          {longLineSentence}
+        </p>
+      )}
+      <div ref={host} data-testid="diff" className="min-h-0 flex-1" />
+    </div>
+  );
 }

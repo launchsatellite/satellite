@@ -13,7 +13,12 @@ interface SegmentedProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-const steps: Record<string, number | undefined> = { ArrowRight: 1, ArrowLeft: -1 };
+const steps: Record<string, number | undefined> = {
+  ArrowRight: 1,
+  ArrowDown: 1,
+  ArrowLeft: -1,
+  ArrowUp: -1,
+};
 
 export function Segmented<T extends string>({
   label,
