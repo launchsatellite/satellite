@@ -44,35 +44,38 @@ export function CentreTabs({
     });
   };
   return (
-    <div
-      role="tablist"
-      aria-label="Workspace views"
-      data-testid="centre-tabs"
-      onKeyDown={move}
-      className="flex h-10 min-w-0 items-center gap-0.5"
-    >
-      {views.map((view) => {
-        const selected = view === value;
-        return (
-          <button
-            key={view}
-            type="button"
-            role="tab"
-            id={centreTabId(view)}
-            aria-selected={selected}
-            aria-controls={centrePanelId(view)}
-            tabIndex={selected ? 0 : -1}
-            data-testid={centreTabId(view)}
-            data-number={view === "pull-request" ? (pullRequest ?? undefined) : undefined}
-            onClick={() => {
-              onChange(view);
-            }}
-            className={`flex h-[26px] flex-none items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
-          >
-            {labelOf(view, pullRequest)}
-          </button>
-        );
-      })}
+    <div className="flex h-10 min-w-0 items-center">
+      <div
+        role="tablist"
+        aria-label="Workspace views"
+        data-testid="centre-tabs"
+        data-guide="views"
+        onKeyDown={move}
+        className="flex items-center gap-0.5"
+      >
+        {views.map((view) => {
+          const selected = view === value;
+          return (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              id={centreTabId(view)}
+              aria-selected={selected}
+              aria-controls={centrePanelId(view)}
+              tabIndex={selected ? 0 : -1}
+              data-testid={centreTabId(view)}
+              data-number={view === "pull-request" ? (pullRequest ?? undefined) : undefined}
+              onClick={() => {
+                onChange(view);
+              }}
+              className={`flex h-[26px] flex-none items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+            >
+              {labelOf(view, pullRequest)}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
