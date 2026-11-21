@@ -28,6 +28,7 @@ import { useFileTabs } from "../files/use-file-tabs.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
+import { ChecksList } from "../pull-request/checks-list.tsx";
 import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
 import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
 import { linkSentence } from "../pull-request/pull-request-words.ts";
@@ -838,7 +839,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               onLink={askPullRequestLink}
             >
               {shownPullRequest !== null && (
-                <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
+                <>
+                  {pullRequestSection === "overview" && (
+                    <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
+                  )}
+                  <div hidden={pullRequestSection !== "checks"}>
+                    <ChecksList
+                      key={`${changesHere.projectId}/${changesHere.workspace}`}
+                      workspace={changesHere}
+                      found={shownPullRequest}
+                      onLink={askPullRequestLink}
+                    />
+                  </div>
+                </>
               )}
             </PullRequestView>
           ) : centreView === "files" ? (

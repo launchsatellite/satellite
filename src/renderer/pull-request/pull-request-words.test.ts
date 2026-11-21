@@ -7,6 +7,8 @@ import {
   readoutLabel,
   readoutPixel,
   readoutRest,
+  resultPixel,
+  resultWord,
   stateWord,
   troubleSentence,
 } from "./pull-request-words.ts";
@@ -131,5 +133,21 @@ describe("pull request words", () => {
     expect(pixel({ state: "merged" })).toBe("done");
     expect(pixel({ state: "closed" })).toBe("idle");
     expect(pixel({ counts: { failed: 0, pending: 0, passed: 0, total: 0 } })).toBe("idle");
+  });
+
+  it("names every check result", () => {
+    const results = ["failed", "pending", "passed", "skipped", "cancelled", "unknown"] as const;
+    expect(results.map(resultWord)).toEqual([
+      "Failed",
+      "Running",
+      "Passed",
+      "Skipped",
+      "Cancelled",
+      "Unknown",
+    ]);
+    expect(resultPixel("failed")).toBe("needs-you");
+    expect(resultPixel("pending")).toBe("working");
+    expect(resultPixel("passed")).toBe("ready");
+    expect(resultPixel("unknown")).toBe("idle");
   });
 });

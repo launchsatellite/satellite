@@ -1,11 +1,13 @@
 import type {
   PullRequestAnswer,
+  PullRequestCheck,
   PullRequestFound,
   PullRequestTrouble,
 } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 
+type CheckResult = PullRequestCheck["result"];
 type Counts = PullRequestFound["counts"];
 type Absence = Extract<PullRequestAnswer, { kind: "absent" }>["reason"];
 
@@ -15,6 +17,20 @@ export const loadingSentence = "Reading the pull request.";
 export const emptyBodySentence = "No description.";
 export const bodyCutSentence = "The rest is on GitHub.";
 export const untitled = "Untitled";
+export const noChecksSentence = "No checks ran on this pull request.";
+export const runningChecksSentence = "Checks that are still running show their result here.";
+export const unnamedCheck = "Unnamed check";
+export const readingLogSentence = "Reading the failing lines.";
+export const emptyLogSentence = "No failing lines came back. Open the check on GitHub.";
+export const noLogSentence =
+  "This kind of check has no log to read here. Open its details on GitHub.";
+export const logCutSentence = "The rest is on GitHub.";
+export const hiddenCommentSentence = "This comment is hidden on GitHub.";
+export const noConversationSentence = "Nobody has reviewed or commented yet.";
+export const conversationTroubleSentence =
+  "The conversation could not be read. The overview above is current.";
+export const someone = "Someone";
+export const sendLabel = "Send to Claude Code";
 
 const troubles: Record<PullRequestTrouble, string> = {
   "signed-out": "The GitHub CLI is signed out. Run gh auth login in a terminal and come back.",
@@ -30,6 +46,22 @@ const troubles: Record<PullRequestTrouble, string> = {
 const absences: Record<Absence, string> = {
   none: "No pull request for this branch yet.",
   "not-pushed": "This branch is not on GitHub yet. Push it and its pull request shows up here.",
+};
+const results: Record<CheckResult, string> = {
+  failed: "Failed",
+  pending: "Running",
+  passed: "Passed",
+  skipped: "Skipped",
+  cancelled: "Cancelled",
+  unknown: "Unknown",
+};
+const resultPixels: Record<CheckResult, PixelState> = {
+  failed: "needs-you",
+  pending: "working",
+  passed: "ready",
+  skipped: "idle",
+  cancelled: "idle",
+  unknown: "idle",
 };
 const states: Record<PullRequestFound["state"], string> = {
   open: "Open",
@@ -122,4 +154,20 @@ export function checksState(counts: Counts): "failed" | "pending" | "passed" | "
 
 export function tabLabel(number: number | null): string {
   return number === null ? "Pull request" : `Pull request #${String(number)}`;
+}
+
+export function resultWord(result: CheckResult): string {
+  return results[result];
+}
+
+export function resultPixel(result: CheckResult): PixelState {
+  return resultPixels[result];
+}
+
+export function moreSentence(count: number): string {
+  return `${String(count)} more on GitHub.`;
+}
+
+export function openLabel(host: string, address: string, otherLabel: string): string {
+  return URL.parse(address)?.host === host ? "Open on GitHub" : otherLabel;
 }

@@ -16,6 +16,8 @@ export interface ButtonProps {
   disabled?: boolean;
   label?: string;
   autoFocus?: boolean;
+  expanded?: boolean;
+  controls?: string;
 }
 
 const base =
@@ -45,6 +47,8 @@ export function Button({
   disabled = false,
   label,
   autoFocus,
+  expanded,
+  controls,
 }: ButtonProps) {
   const iconOnly = label !== undefined && children === undefined;
   const { look, hover } = variants[variant];
@@ -54,6 +58,8 @@ export function Button({
       type="button"
       data-testid={testId}
       autoFocus={autoFocus}
+      aria-expanded={expanded}
+      aria-controls={controls}
       aria-disabled={disabled || undefined}
       aria-label={iconOnly ? label : undefined}
       onClick={disabled ? undefined : onClick}

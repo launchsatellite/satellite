@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { PullRequestFound } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
@@ -18,7 +18,7 @@ import {
   untitled,
 } from "./pull-request-words.ts";
 
-export type PullRequestSection = "overview";
+export type PullRequestSection = "overview" | "checks";
 
 interface PullRequestViewProps {
   entry: PullRequestEntry | undefined;
@@ -32,6 +32,7 @@ interface PullRequestViewProps {
 
 const sections: readonly { value: PullRequestSection; label: string }[] = [
   { value: "overview", label: "Overview" },
+  { value: "checks", label: "Checks" },
 ];
 const sectionPanelId = "pull-request-section-panel";
 
@@ -66,31 +67,58 @@ function Sentence({
   );
 }
 
-function Sections({ onChange }: { onChange: (section: PullRequestSection) => void }) {
+function Sections({
+  value,
+  onChange,
+}: {
+  value: PullRequestSection;
+  onChange: (section: PullRequestSection) => void;
+}) {
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = sections.findIndex((section) => section.value === value);
+    const targets: Record<string, number | undefined> = {
+      ArrowRight: (at + 1) % sections.length,
+      ArrowLeft: (at - 1 + sections.length) % sections.length,
+      Home: 0,
+      End: sections.length - 1,
+    };
+    const target = sections[targets[event.key] ?? -1];
+    if (target === undefined) return;
+    event.preventDefault();
+    onChange(target.value);
+    requestAnimationFrame(() => {
+      document.getElementById(sectionTabId(target.value))?.focus();
+    });
+  };
   return (
     <div
       role="tablist"
       aria-label="Pull request sections"
       data-testid="pull-request-sections"
+      onKeyDown={move}
       className="flex h-9 flex-none items-center gap-0.5 border-b border-line px-3"
     >
-      {sections.map((section) => (
-        <button
-          key={section.value}
-          type="button"
-          role="tab"
-          id={sectionTabId(section.value)}
-          aria-selected
-          aria-controls={sectionPanelId}
-          data-testid={sectionTabId(section.value)}
-          onClick={() => {
-            onChange(section.value);
-          }}
-          className="flex h-[26px] items-center rounded-[6px] bg-sel px-[9px] text-[12px] font-medium whitespace-nowrap text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          {section.label}
-        </button>
-      ))}
+      {sections.map((section) => {
+        const selected = section.value === value;
+        return (
+          <button
+            key={section.value}
+            type="button"
+            role="tab"
+            id={sectionTabId(section.value)}
+            aria-selected={selected}
+            aria-controls={sectionPanelId}
+            tabIndex={selected ? 0 : -1}
+            data-testid={sectionTabId(section.value)}
+            onClick={() => {
+              onChange(section.value);
+            }}
+            className={`flex h-[26px] items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+          >
+            {section.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -153,7 +181,7 @@ export function PullRequestView({
       return (
         <>
           <Header found={found} />
-          <Sections onChange={onSection} />
+          <Sections value={section} onChange={onSection} />
           <div
             role="tabpanel"
             id={sectionPanelId}
