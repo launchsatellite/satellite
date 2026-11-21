@@ -157,10 +157,23 @@ describe("lineReference", () => {
 });
 
 describe("file mentions", () => {
-  const mentionLike = /(?:^|[\s"'`])@/u;
+  const mentionLike = /(?<![\p{L}\p{N}/])@/u;
 
   it("refuses a path that starts with @ or holds @ after a space or a quote, and keeps a scoped folder", () => {
-    for (const path of ["@~/.ssh/id_rsa", "@/etc/passwd", "a b @~/x", 'a"@x', "a'@x", "a`@x"]) {
+    for (const path of [
+      "@~/.ssh/id_rsa",
+      "@/etc/passwd",
+      "a b @~/x",
+      'a"@x',
+      "a'@x",
+      "a`@x",
+      "a(@x/y.ts",
+      "[@x",
+      ",@x",
+      "k=@x",
+      "a\u201c@x",
+      "a:@x",
+    ]) {
       const found = lineReference({
         path,
         side: "modified",
@@ -185,10 +198,38 @@ describe("file mentions", () => {
       expect(cleanBase(name)).toBe("the base branch");
     }
     expect(cleanBase("origin/@scope")).toBe("origin/@scope");
+    for (const path of ["icon@2x.png", "user@host/a.txt"]) {
+      expect(
+        lineReference({ path, side: "modified", view: "branch", base, start: 1, end: 2 }).ok,
+        path,
+      ).toBe(true);
+    }
   });
 
   it("never types a mention for any name built from the characters that can make one", () => {
-    const alphabet = ["@", "/", " ", '"', "'", "`", "~", "a", ".", "\\", "\t"];
+    const alphabet = [
+      "@",
+      "/",
+      " ",
+      '"',
+      "'",
+      "`",
+      "~",
+      "a",
+      "1",
+      ".",
+      "\\",
+      "\t",
+      "(",
+      "[",
+      "{",
+      "<",
+      ",",
+      "=",
+      ":",
+      ";",
+      "\u201c",
+    ];
     let seed = 7;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;

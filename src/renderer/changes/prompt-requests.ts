@@ -22,7 +22,7 @@ const mentionSentence =
 const longSentence = "This file's path is too long to send. Ask in your own words.";
 
 const plainName = /^[^\s"'`]+$/;
-const mention = /(?:^|[\s"'`])@/u;
+const mention = /(?<![\p{L}\p{N}/])@/u;
 const fallbackName = "the base branch";
 
 export function cleanBase(base: string | null): string {
