@@ -73,6 +73,10 @@ function showSystemNotice(
   };
 }
 
+export function recordedLines(): Promise<void> {
+  return recording;
+}
+
 export function noticesRecorded(): boolean {
   return recordFile() !== undefined;
 }

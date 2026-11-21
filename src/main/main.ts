@@ -8,6 +8,7 @@ import { chooseFolder } from "./platform/folder-dialog.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
 import {
   prepareSystemNotices,
+  recordedLines,
   setAppBadge,
   showNotice,
   windowCountsInFront,
@@ -54,6 +55,7 @@ interface Parts {
   listening: Promise<HookListener | undefined>;
   notices: Notices;
   projects: Projects;
+  recorder: { flush(): Promise<void> };
   terminals: TerminalSessions;
   workspaces: Workspaces;
 }
@@ -165,6 +167,7 @@ function assemble(home: string): Parts {
     listening,
     notices,
     projects,
+    recorder: { flush: recordedLines },
     terminals,
     workspaces: workspaceHandlers({
       home,

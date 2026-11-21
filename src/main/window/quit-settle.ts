@@ -7,6 +7,7 @@ export interface QuitParts {
   interfaceFile: { flush(): Promise<void> };
   workspaces: { stopAll(): Promise<void> };
   projects: { flush(): Promise<void> };
+  recorder: { flush(): Promise<void> };
 }
 
 export async function settleForQuit(parts: QuitParts | undefined, boundMs: number): Promise<void> {
@@ -15,7 +16,11 @@ export async function settleForQuit(parts: QuitParts | undefined, boundMs: numbe
   const bounded = (work: Promise<unknown>) => Promise.race([work, delay(boundMs)]);
   await Promise.all([
     bounded(
-      Promise.all([parts.terminals.closeAll(), parts.last.flush(), parts.interfaceFile.flush()]),
+      Promise.all([
+        parts.terminals.closeAll().then(() => parts.recorder.flush()),
+        parts.last.flush(),
+        parts.interfaceFile.flush(),
+      ]),
     ),
     parts.workspaces.stopAll().then(() => bounded(parts.projects.flush())),
   ]);
