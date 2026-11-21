@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { closeSync, constants, openSync } from "node:fs";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -293,13 +294,17 @@ describe("a git that hangs", () => {
       execFileSync("mkfifo", [pipe]);
       await git(root, "config", "core.excludesFile", pipe);
       const started = Date.now();
-      expect(shown(await listFolder(root, ""))).toEqual([
-        "file:.gitignore",
-        "file:a.txt",
-        "file:b.log",
-      ]);
-      expect(Date.now() - started).toBeLessThan(5000);
-      expect(await readNames(root, undefined, undefined, 300)).toEqual({ kind: "hung" });
+      try {
+        expect(shown(await listFolder(root, ""))).toEqual([
+          "file:.gitignore",
+          "file:a.txt",
+          "file:b.log",
+        ]);
+        expect(Date.now() - started).toBeLessThan(5000);
+        expect(await readNames(root, undefined, undefined, 300)).toEqual({ kind: "hung" });
+      } finally {
+        closeSync(openSync(pipe, constants.O_RDWR));
+      }
     },
   );
 });

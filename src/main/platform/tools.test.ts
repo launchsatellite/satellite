@@ -27,17 +27,17 @@ vi.mock("./user-environment.ts", () => ({
 
 const leavesAChild = `
 const { spawn } = require("node:child_process");
-const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" });
+const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)"], { stdio: "inherit" });
 require("node:fs").writeFileSync(process.argv[1], String(child.pid));
-setInterval(() => {}, 1000);
+setTimeout(() => {}, 60_000);
 `;
 
 const leavesAnOrphan = `
 const { spawn } = require("node:child_process");
-const keep = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
+const keep = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
 const orphan = \`const o = require("node:child_process").spawn(process.execPath, ["-e", \${JSON.stringify(keep)}], { detached: true, stdio: ["ignore", "inherit", "inherit"] }); require("node:fs").writeFileSync(process.argv[1], String(o.pid)); process.exit(0);\`;
 spawn(process.execPath, ["-e", orphan, process.argv[1]], { stdio: "inherit" });
-setInterval(() => {}, 1000);
+setTimeout(() => {}, 60_000);
 `;
 
 function isAlive(pid: number): boolean {
@@ -327,6 +327,7 @@ describe("runTool", () => {
         expect(isAlive(child)).toBe(false);
       }, 10_000);
     } finally {
+      if (child === 0) child = Number(await readFile(pidFile, "utf8").catch(() => "0"));
       if (child > 0 && isAlive(child)) process.kill(child, "SIGKILL");
       await rm(folder, { recursive: true, force: true });
     }
