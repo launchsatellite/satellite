@@ -145,15 +145,18 @@ describe("parseDiff shapes", () => {
       raw("100644 100755", one, one, "M", "run.sh"),
       raw("000000 120000", zero, two, "A", "ln"),
       raw("100644 100644", one, three, "M", "edit.txt"),
+      raw("100644 100755", one, one, "R100", "was.sh", "now.sh"),
       stat("0", "0", "run.sh"),
       stat("1", "0", "ln"),
       stat("1", "1", "edit.txt"),
+      stat("0", "0", "was.sh", "now.sh"),
     );
     const found = parseDiff(stdout)?.records.map((record) => [record.path, record.shape]);
     expect(found).toEqual([
       ["run.sh", "mode"],
       ["ln", "link"],
       ["edit.txt", undefined],
+      ["now.sh", "mode"],
     ]);
   });
 });

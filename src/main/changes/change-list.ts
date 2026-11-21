@@ -159,7 +159,7 @@ function listedChange(raw: RawRecord, stat: StatRecord): ListedChange | null {
     !submodule &&
     !link &&
     !binary &&
-    letter === "M" &&
+    (letter === "M" || letter === "R") &&
     raw.sourceMode !== raw.targetMode &&
     stat.added === "0" &&
     stat.removed === "0";
