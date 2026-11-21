@@ -321,6 +321,47 @@ const full = () => ({
   reviewThreads: { totalCount: 1, nodes: [thread()] },
 });
 
+describe("check addresses", () => {
+  it("an odd details address is normalised and never drops the answer", () => {
+    for (const url of [
+      "HTTPS://CI.Example.com/lint",
+      " https://ci.example.com/lint",
+      "https:/ci.example.com/lint",
+      "https://ci.example.com/a\u202Eb",
+    ]) {
+      const found = parseView(
+        JSON.stringify(
+          view({ checks: [{ name: "lint", status: "COMPLETED", conclusion: "SUCCESS", url }] }),
+        ),
+        null,
+      )?.found;
+      expect(pullRequestAnswer.safeParse({ ...found, detail: null }).success, url).toBe(true);
+      expect(found?.checks[0]?.url, url).toMatch(/^https:\/\/ci\.example\.com\//);
+    }
+    const credentials = parseView(
+      JSON.stringify(
+        view({
+          checks: [
+            {
+              name: "lint",
+              status: "COMPLETED",
+              conclusion: "SUCCESS",
+              url: "https://user:secret@ci.example.com/lint",
+            },
+          ],
+        }),
+      ),
+      null,
+    )?.found;
+    expect(credentials?.checks[0]?.url).toBeNull();
+  });
+
+  it("refuses a number that is not the one in the address", () => {
+    expect(parseView(JSON.stringify(view({ number: 13 })), null)).toBeNull();
+    expect(parseView(JSON.stringify(view({ number: 12_345_678_901 })), null)).toBeNull();
+  });
+});
+
 describe("parseConversation", () => {
   const candidates = (nodes: unknown[]) =>
     JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
@@ -559,6 +600,23 @@ describe("parseThreads", () => {
     expect(detail?.moreThreads).toBe(50);
     expect(detail?.threads[0]?.comments).toHaveLength(20);
     expect(detail?.threads[0]?.moreComments).toBe(10);
+  });
+
+  it("keeps the normalised address and drops one with user info or another host", () => {
+    const at = (url: string) =>
+      parseThreads(
+        threadsAnswer({ ...full(), comments: { totalCount: 1, nodes: [comment({ url })] } }),
+        place,
+      )?.comments[0]?.url;
+    expect(at("HTTPS://GitHub.com/example-org/verify-repo/pull/12#issuecomment-1")).toBe(
+      "https://github.com/example-org/verify-repo/pull/12#issuecomment-1",
+    );
+    expect(at("https://github.com/example-org/verify-repo/pull/12#a\u202Eb")).toBe(
+      "https://github.com/example-org/verify-repo/pull/12#a%E2%80%AEb",
+    );
+    expect(at("https://user@github.com/example-org/verify-repo/pull/12")).toBeNull();
+    expect(at("https://evil.example.invalid/example-org/verify-repo/pull/12")).toBeNull();
+    expect(at("https://github.com.evil.example.invalid/x")).toBeNull();
   });
 
   it("drops an address that is not https", () => {

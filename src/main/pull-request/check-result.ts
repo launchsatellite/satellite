@@ -4,6 +4,7 @@ import {
   type CheckResult,
   type PullRequestCheck,
 } from "../../shared/bridge-contract.ts";
+import { checkedAddress } from "./checked-address.ts";
 import { cutText } from "./cut-text.ts";
 import type { PullRequestPlace } from "./gh-arguments.ts";
 
@@ -69,12 +70,6 @@ function name(text: string | null | undefined): string {
   return cutText(text ?? "", pullRequestLimits.nameChars).text;
 }
 
-function addressOf(text: string | null | undefined): URL | null {
-  if (text === undefined || text === null || text.length > pullRequestLimits.urlChars) return null;
-  const parsed = URL.parse(text);
-  return parsed?.protocol === "https:" ? parsed : null;
-}
-
 function jobOf(address: URL | null, place: PullRequestPlace): { run: string; job: string } | null {
   if (address?.host !== place.host) return null;
   const prefix = `/${place.owner}/${place.repo}`;
@@ -85,7 +80,7 @@ function jobOf(address: URL | null, place: PullRequestPlace): { run: string; job
 
 function keep(raw: z.output<typeof rawCheck>, place: PullRequestPlace): Kept {
   const isStatus = raw.context !== undefined && raw.context !== null && raw.context !== "";
-  const address = addressOf(raw.url);
+  const address = checkedAddress(raw.url);
   const ids = jobOf(address, place);
   const label = name(
     raw.name !== undefined && raw.name !== null && raw.name !== "" ? raw.name : raw.context,
@@ -100,7 +95,7 @@ function keep(raw: z.output<typeof rawCheck>, place: PullRequestPlace): Kept {
       name: label,
       workflow,
       result,
-      url: address === null ? null : (raw.url ?? null),
+      url: address === null ? null : address.href,
       run: ids?.run ?? null,
       job: ids?.job ?? null,
     },

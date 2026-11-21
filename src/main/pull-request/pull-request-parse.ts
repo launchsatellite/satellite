@@ -7,6 +7,7 @@ import {
 import { visibleText } from "../../shared/visible-text.ts";
 import { isBranchName } from "../../shared/workspace-name.ts";
 import { isChangePath } from "../changes/file-sides.ts";
+import { checkedAddress } from "./checked-address.ts";
 import { checksOf, countsOf } from "./check-result.ts";
 import { cutText } from "./cut-text.ts";
 import { placeOf, type PullRequestPlace } from "./gh-arguments.ts";
@@ -159,9 +160,8 @@ function momentOf(text: string | null | undefined): string | null {
   return text !== undefined && text !== null && text.length <= 40 ? text : null;
 }
 
-function addressOf(text: string | null | undefined): string | null {
-  if (text === undefined || text === null || text.length > pullRequestLimits.urlChars) return null;
-  return URL.parse(text)?.protocol === "https:" ? text : null;
+function addressOf(text: string | null | undefined, host: string): string | null {
+  return checkedAddress(text, host)?.href ?? null;
 }
 
 function loginOf(node: z.output<typeof commentNode>): string | null {
@@ -171,7 +171,11 @@ function loginOf(node: z.output<typeof commentNode>): string | null {
     : cutText(login, pullRequestLimits.nameChars).text;
 }
 
-function commentOf(node: z.output<typeof commentNode>, at: string | null | undefined): Comment {
+function commentOf(
+  node: z.output<typeof commentNode>,
+  at: string | null | undefined,
+  host: string,
+): Comment {
   const hidden = node.isMinimized === true;
   const body = hidden
     ? { text: "", cut: false }
@@ -182,7 +186,7 @@ function commentOf(node: z.output<typeof commentNode>, at: string | null | undef
     body: body.text,
     bodyCut: body.cut,
     hidden,
-    url: addressOf(node.url),
+    url: addressOf(node.url, host),
   };
 }
 
@@ -205,6 +209,7 @@ function withinBudget(comment: Comment, budget: Budget): Comment | null {
 function reviewsOf(
   list: z.output<typeof connection> | null | undefined,
   budget: Budget,
+  host: string,
 ): { reviews: Review[]; more: number } {
   const nodes = each(list?.nodes, commentNode);
   const real = nodes.flatMap((node): { node: typeof node; state: Review["state"] }[] => {
@@ -215,7 +220,7 @@ function reviewsOf(
   });
   const newest = lastOf(real, pullRequestLimits.reviews);
   const reviews = newest.flatMap(({ node, state }): Review[] => {
-    const comment = withinBudget(commentOf(node, node.submittedAt), budget);
+    const comment = withinBudget(commentOf(node, node.submittedAt, host), budget);
     return comment === null ? [] : [{ ...comment, state }];
   });
   const unseen = restOf(list?.totalCount, nodes.length);
@@ -237,7 +242,7 @@ function threadOf(
   const discussion = `https://${place.host}/${place.owner}/${place.repo}/pull/${String(place.number)}#discussion_r`;
   const first = nodes[0]?.url;
   const comments = nodes.flatMap((comment) => {
-    const kept = withinBudget(commentOf(comment, comment.createdAt), budget);
+    const kept = withinBudget(commentOf(comment, comment.createdAt, place.host), budget);
     return kept === null ? [] : [kept];
   });
   return {
@@ -290,7 +295,7 @@ export function parseView(
   if (number === undefined || number === null || !Number.isInteger(number) || number < 1)
     return null;
   const place = placeOf(view.url ?? "");
-  if (place === null) return null;
+  if (place === null || place.number !== number) return null;
   const headOid =
     view.headRefOid !== undefined && view.headRefOid !== null && oidPattern.test(view.headRefOid)
       ? view.headRefOid
@@ -375,10 +380,10 @@ function detailOf(
     pullRequestLimits.threads,
   );
   const threads = threadNodes.map((thread) => threadOf(thread, place, budget));
-  const reviews = reviewsOf(pullRequest.reviews, budget);
+  const reviews = reviewsOf(pullRequest.reviews, budget, place.host);
   const nodes = lastOf(each(pullRequest.comments?.nodes, commentNode), pullRequestLimits.comments);
   const comments = nodes.flatMap((node) => {
-    const kept = withinBudget(commentOf(node, node.createdAt), budget);
+    const kept = withinBudget(commentOf(node, node.createdAt, place.host), budget);
     return kept === null ? [] : [kept];
   });
   return {
