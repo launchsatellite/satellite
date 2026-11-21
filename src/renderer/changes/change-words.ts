@@ -78,6 +78,8 @@ export function sideSentence(sides: SideSentenceKind): string {
       return "This clone never downloaded the earlier version of this file, so there is no diff to show.";
     case "unreadable":
       return "This file's name isn't valid text, so Satellite can't read it.";
+    case "not-utf8":
+      return "This file isn't UTF-8 text, so there is no diff to show.";
     case "submodule":
       return submoduleSentence(sides.from, sides.to);
   }

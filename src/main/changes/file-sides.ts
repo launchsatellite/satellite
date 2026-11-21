@@ -21,6 +21,7 @@ export type SideRead =
   | { kind: "gone" }
   | { kind: "not-local" }
   | { kind: "unreadable" }
+  | { kind: "not-utf8" }
   | { kind: "refused" };
 type FolderKind = "plain" | "missing" | "other";
 
@@ -41,6 +42,8 @@ const changing: SideRead = { kind: "changing" };
 const hung: SideRead = { kind: "hung" };
 const notLocal: SideRead = { kind: "not-local" };
 const unreadable: SideRead = { kind: "unreadable" };
+const notUtf8: SideRead = { kind: "not-utf8" };
+const utf8 = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
 const lineFeed = 10;
 const carriageReturn = 13;
 const rootsWithStuckReads = new Set<string>();
@@ -73,7 +76,12 @@ function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
 
 function decodedText(bytes: Uint8Array): SideRead {
   if (looksBinary(bytes)) return binary;
-  const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
+  let text: string;
+  try {
+    text = utf8.decode(bytes);
+  } catch {
+    return notUtf8;
+  }
   return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };
 }
 

@@ -200,20 +200,22 @@ describe("readWorktreeSide", () => {
     expect((await readWorktreeSide(root, "late.txt")).kind).toBe("text");
   });
 
-  it("keeps line endings, a byte order mark and invalid bytes visible", async () => {
+  it("keeps line endings and a byte order mark, and never decodes bytes that are not UTF-8", async () => {
     const { root } = await worktree();
     await writeFile(
       join(root, "mixed.txt"),
-      Buffer.concat([
-        Buffer.from([0xef, 0xbb, 0xbf]),
-        Buffer.from("a\r\nb\n"),
-        Buffer.from([0xff]),
-      ]),
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("a\r\nb\n")]),
     );
+    await writeFile(join(root, "latin-e.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+    await writeFile(join(root, "latin-f.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe8, 0x0a]));
+    await writeFile(join(root, "cut.txt"), Buffer.from([0x61, 0xe2, 0x82]));
     expect(await readWorktreeSide(root, "mixed.txt")).toEqual({
       kind: "text",
-      text: "\ufeffa\r\nb\n\ufffd",
+      text: "\ufeffa\r\nb\n",
     });
+    for (const name of ["latin-e.txt", "latin-f.txt", "cut.txt"]) {
+      expect(await readWorktreeSide(root, name)).toEqual({ kind: "not-utf8" });
+    }
   });
 
   it("answers gone for a missing file or worktree and binary for a folder", async () => {
@@ -402,6 +404,7 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
     await writeFile(join(repo, "file.txt"), "one\r\ntwo\n");
     await writeFile(join(repo, "data.bin"), Buffer.from([1, 0, 2]));
     await writeFile(join(repo, "lines.txt"), "a\n".repeat(20_001));
+    await writeFile(join(repo, "latin.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
     await git(["add", "."]);
     await git(["commit", "-q", "-m", "one"]);
     const oid = async (spec: string) => (await git(["rev-parse", spec])).stdout.trim();
@@ -410,6 +413,7 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
       text: "one\r\ntwo\n",
     });
     expect(await readBlobSide(repo, await oid("HEAD:data.bin"))).toEqual({ kind: "binary" });
+    expect(await readBlobSide(repo, await oid("HEAD:latin.txt"))).toEqual({ kind: "not-utf8" });
     expect(await readBlobSide(repo, await oid("HEAD:lines.txt"))).toEqual({ kind: "large" });
     expect(await readBlobSide(repo, await oid("HEAD"))).toEqual({ kind: "gone" });
     expect(await readBlobSide(repo, "1".repeat(40))).toEqual({ kind: "not-local" });

@@ -329,6 +329,7 @@ export const bridgeRequests = {
       z.strictObject({ kind: z.literal("hung") }),
       z.strictObject({ kind: z.literal("not-local") }),
       z.strictObject({ kind: z.literal("unreadable") }),
+      z.strictObject({ kind: z.literal("not-utf8") }),
     ]),
   },
   "links.open": {
