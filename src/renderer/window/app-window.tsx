@@ -60,6 +60,8 @@ interface ShownToast {
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
 const toastQueueLimit = 32;
+const terminalLinkSentence =
+  "The text Claude Code showed points to this address. Check it before you open it.";
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 
@@ -136,7 +138,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     workspace: WorkspaceView;
   } | null>(null);
   const [added, setAdded] = useState<string>();
-  const [asking, setAsking] = useState<string | null>(null);
+  const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
+  const askTerminalLink = useCallback((address: string) => {
+    setAsking({ address, description: terminalLinkSentence });
+  }, []);
   const closeLink = useCallback(() => {
     setAsking(null);
   }, []);
@@ -857,7 +862,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           <SessionsPane
             sessions={sessions}
             selected={sessionHere ?? null}
-            onAskLink={setAsking}
+            onAskLink={askTerminalLink}
             notify={notify}
           />
         </section>
@@ -893,7 +898,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         )}
         {asking !== null && (
-          <LinkDialog key={asking} address={asking} onClose={closeLink} notify={notify} />
+          <LinkDialog
+            key={asking.address}
+            address={asking.address}
+            description={asking.description}
+            onClose={closeLink}
+            notify={notify}
+          />
         )}
         {toast !== undefined && (
           <Toast
