@@ -156,6 +156,15 @@ async function oneAtATime<T>(signal: AbortSignal | undefined, work: () => Promis
   return running;
 }
 
+export function knownConflict(
+  folder: string,
+  head: string,
+  base: string,
+): ConflictCheck | null | undefined {
+  if (unsupported) return oldGit;
+  return results.get(`${folder}\0${head}\0${base}`);
+}
+
 export async function conflictCheck(
   home: string,
   folder: string,

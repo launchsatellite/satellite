@@ -14,7 +14,7 @@ import { sessionFolder } from "../sessions/session-folder.ts";
 import { countUnpushed, hasRemote, readTracking } from "../workspaces/branch-tracking.ts";
 import { currentBranch, headOid, mergeBase, resolveBase } from "./change-base.ts";
 import { readChangeList, type ChangeRecord } from "./change-list.ts";
-import { conflictCheck, type ConflictCheck } from "./conflict-check.ts";
+import { conflictCheck, knownConflict, type ConflictCheck } from "./conflict-check.ts";
 import { readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
 import { createReadQueue } from "./read-queue.ts";
 
@@ -206,6 +206,8 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     return answer;
   };
 
+  const trials = new Set<string>();
+
   const tracked = async <T>(
     controller: AbortController,
     folder: string,
@@ -223,6 +225,20 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     } finally {
       active.delete(read);
     }
+  };
+
+  const startTrial = (trial: Trial): void => {
+    const id = `${trial.folder}\0${trial.head}\0${trial.base}`;
+    if (trials.has(id)) return;
+    trials.add(id);
+    const controller = new AbortController();
+    tracked(controller, trial.folder, () =>
+      conflictCheck(home, trial.folder, trial.head, trial.base, controller.signal),
+    )
+      .catch(() => undefined)
+      .finally(() => {
+        trials.delete(id);
+      });
   };
 
   const readList = async (
@@ -310,12 +326,11 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
           else remember(page, key, cached);
           return { listed, trial };
         })
-          .then(async ({ listed, trial }) => {
+          .then(({ listed, trial }) => {
             if (trial === undefined) return listed;
-            const found = await tracked(controller, trial.folder, () =>
-              conflictCheck(home, trial.folder, trial.head, trial.base, controller.signal),
-            );
-            return { ...listed, conflict: conflictOf(found) };
+            const known = knownConflict(trial.folder, trial.head, trial.base);
+            if (known === undefined) startTrial(trial);
+            return { ...listed, conflict: conflictOf(known ?? null) };
           })
           .finally(() => {
             if (page.lists.get(key)?.controller === controller) page.lists.delete(key);
