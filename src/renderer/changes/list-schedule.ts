@@ -9,11 +9,11 @@ export interface ScheduleHooks {
   after(ms: number, run: () => void): () => void;
 }
 export interface Schedule {
-  start(): void;
-  stop(): void;
-  refresh(): void;
-  calm(): void;
-  hide(): void;
+  start: () => void;
+  stop: () => void;
+  refresh: () => void;
+  calm: () => void;
+  hide: () => void;
 }
 
 export const changesPollMs = 2000;
@@ -64,15 +64,15 @@ export function createSchedule(hooks: ScheduleHooks): Schedule {
   };
   return {
     start: ask,
-    stop() {
+    stop: () => {
       stopped = true;
       clear();
     },
-    refresh() {
+    refresh: () => {
       steps = -1;
       ask();
     },
-    calm() {
+    calm: () => {
       steps = -1;
       if (cancel === undefined) return;
       clear();

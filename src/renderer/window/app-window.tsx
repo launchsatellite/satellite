@@ -11,7 +11,9 @@ import {
 import { subscribe } from "../bridge/bridge-client.ts";
 import { ChangesView } from "../changes/changes-view.tsx";
 import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
+import { conflictRequest } from "../changes/prompt-requests.ts";
 import { useChanges } from "../changes/use-changes.ts";
+import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
@@ -276,6 +278,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .map((tab) => tab.key)
     .join(" ");
   const changes = useChanges(changesHere, changesView, finishedHere, shownText?.path);
+  const conflicting = changes.list?.conflict?.kind === "files";
+  const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
   const neighbour = (step: number) =>
     tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
@@ -559,6 +563,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "changes.update-from-base",
+            title: "Ask Claude Code to update from the base branch",
+            available: changesShown && conflicting,
+            run: () => {
+              sendToClaudeCode(conflictRequest(conflictBase));
+            },
+          },
+          {
             id: "changes.side-by-side",
             title: "Show the diff side by side",
             available: layoutShown && diffInline,
@@ -604,6 +616,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     changesView,
     layoutShown,
     diffInline,
+    conflicting,
+    conflictBase,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);

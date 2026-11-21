@@ -5,6 +5,7 @@ import type {
   ChangesView,
   FileSides,
 } from "../../shared/bridge-contract.ts";
+import { conflictGitVersion } from "../../shared/conflict-git.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 
 type UnavailableReason = Extract<ChangesList["changes"], { kind: "unavailable" }>["reason"];
@@ -108,6 +109,16 @@ export function unavailableSentence(reason: UnavailableReason, base: string | nu
     case "failed":
       return "Satellite couldn't read the changes here. It tries again in a moment.";
   }
+}
+
+export function conflictNote(kind: "old-git" | "slow", base: string | null): string {
+  return kind === "old-git"
+    ? `Satellite needs git ${conflictGitVersion} or newer to check for conflicts with ${baseName(base)}.`
+    : `Checking for conflicts with ${baseName(base)} took too long, so Satellite did not.`;
+}
+
+export function conflictCount(files: number): string {
+  return files === 1 ? "1 file conflicts" : `${String(files)} files conflict`;
 }
 
 export function moreSentence(more: number): string {

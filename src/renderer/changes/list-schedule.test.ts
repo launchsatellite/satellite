@@ -36,12 +36,9 @@ describe("change list poll", () => {
 });
 
 function harness() {
-  const state = {
-    clock: 0,
-    visible: true,
-    reads: [] as { at: number; settle: (answer: ScheduleAnswer) => void }[],
-    timers: [] as { at: number; run: () => void; live: boolean }[],
-  };
+  const reads: { at: number; settle: (answer: ScheduleAnswer) => void }[] = [];
+  const timers: { at: number; run: () => void; live: boolean }[] = [];
+  const state = { clock: 0, visible: true, reads, timers };
   const schedule = createSchedule({
     visible: () => state.visible,
     now: () => state.clock,

@@ -65,6 +65,7 @@ interface AppPaths {
   links: string;
   notices: string;
   missingClaude: string | undefined;
+  gitStandIn: boolean;
 }
 interface AppCommand {
   file: string;
@@ -93,6 +94,7 @@ const strippedVariables = new Set([
   "ELECTRON_RUN_AS_NODE",
   "NODE_OPTIONS",
   "SATELLITE_CLAUDE",
+  "SATELLITE_GIT",
   "CLAUDECODE",
 ]);
 const strippedPrefixes = ["CLAUDE_CODE_"];
@@ -203,7 +205,7 @@ function command(target: AppTarget, repo: string): AppCommand {
   };
 }
 
-function standIn(tool: "claude" | "gh"): string {
+function standIn(tool: "claude" | "gh" | "git"): string {
   return JSON.stringify([process.execPath, join(import.meta.dirname, "stand-ins", `${tool}.ts`)]);
 }
 
@@ -216,7 +218,7 @@ function isStripped(key: string): boolean {
 
 function appEnvironment(
   options: LaunchOptions,
-  { home, userHome, gitConfig, log, dialog, links, notices, missingClaude }: AppPaths,
+  { home, userHome, gitConfig, log, dialog, links, notices, missingClaude, gitStandIn }: AppPaths,
 ): Record<string, string | undefined> {
   const keepsUserHome = options.realClaude === true;
   const env: Record<string, string | undefined> = Object.fromEntries(
@@ -235,6 +237,7 @@ function appEnvironment(
   env["SATELLITE_VERIFY_LINKS"] = links;
   env["SATELLITE_VERIFY_NOTICES"] = notices;
   env["SATELLITE_GH"] = standIn("gh");
+  if (gitStandIn) env["SATELLITE_GIT"] = standIn("git");
   if (!keepsUserHome) {
     env["HOME"] = userHome;
     if (process.platform === "win32") env["USERPROFILE"] = userHome;
@@ -573,7 +576,19 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
   const notices = join(temp, "notices.jsonl");
   const missingClaude = "missing" in scenario.claude ? join(temp, "missing-claude") : undefined;
   const gitConfig = recipeGitEnv(temp).GIT_CONFIG_GLOBAL;
-  const paths = { home, repo, userHome, gitConfig, log, dialog, links, notices, missingClaude };
+  const gitStandIn = scenario.gitStandIn === true;
+  const paths = {
+    home,
+    repo,
+    userHome,
+    gitConfig,
+    log,
+    dialog,
+    links,
+    notices,
+    missingClaude,
+    gitStandIn,
+  };
   const shots = join(
     outputDir,
     `${options.scenario}-${new Date().toISOString().replace(/[:.]/g, "-")}`,

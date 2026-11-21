@@ -37,6 +37,7 @@ export class ToolStopped extends Error {
 }
 
 export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
+  git: "SATELLITE_GIT",
   gh: "SATELLITE_GH",
   claude: "SATELLITE_CLAUDE",
 };
@@ -83,7 +84,7 @@ const gitQuiet = {
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
 };
-const gitVariables = ["GIT_NO_LAZY_FETCH"] as const;
+const gitVariables = ["GIT_NO_LAZY_FETCH", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] as const;
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];

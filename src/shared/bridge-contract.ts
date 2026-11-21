@@ -60,6 +60,7 @@ export const changesLimits = {
   pathChars: 4096,
   linkChars: 4096,
   stampChars: 200,
+  conflictNames: 5,
 };
 
 export const interfaceLimits = {
@@ -289,7 +290,17 @@ export const bridgeRequests = {
       base: z.string().min(1).max(255).nullable(),
       ahead: count.nullable(),
       behind: count.nullable(),
-      conflict: z.strictObject({ files: z.int().min(1).max(1_000_000) }).nullable(),
+      conflict: z
+        .discriminatedUnion("kind", [
+          z.strictObject({
+            kind: z.literal("files"),
+            files: z.int().min(1).max(1_000_000),
+            names: z.array(changePath).max(changesLimits.conflictNames),
+          }),
+          z.strictObject({ kind: z.literal("old-git") }),
+          z.strictObject({ kind: z.literal("slow") }),
+        ])
+        .nullable(),
       changes: z.discriminatedUnion("kind", [
         z.strictObject({
           kind: z.literal("files"),

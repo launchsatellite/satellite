@@ -8,6 +8,7 @@ import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { Segmented } from "../ui/segmented.tsx";
 import { CentreTabs, centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
+import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
 import { FileDiff, sideOnly, type ShownText } from "./file-diff.tsx";
 import { changesPlace } from "./use-changes.ts";
@@ -178,6 +179,7 @@ export function ChangesView({
           )}
         </div>
       </div>
+      {list !== undefined && <ConflictBanner base={list.base} conflict={list.conflict} />}
       <div
         ref={panel}
         role="tabpanel"

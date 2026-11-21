@@ -14,12 +14,14 @@ import { sessionFolder } from "../sessions/session-folder.ts";
 import { countUnpushed, hasRemote, readTracking } from "../workspaces/branch-tracking.ts";
 import { currentBranch, headOid, mergeBase, resolveBase } from "./change-base.ts";
 import { readChangeList, type ChangeRecord } from "./change-list.ts";
+import { conflictCheck, type ConflictCheck } from "./conflict-check.ts";
 import { readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
 import { createReadQueue } from "./read-queue.ts";
 
 export interface Changes {
   handlers: Pick<BridgeHandlers, "changes.list" | "changes.file">;
   stopInside(folder: string): Promise<void>;
+  stopAll(): Promise<void>;
 }
 interface ActiveRead {
   controller: AbortController;
@@ -35,6 +37,11 @@ interface CachedList {
   records: Map<string, ChangeRecord>;
   chars: number;
 }
+interface Trial {
+  folder: string;
+  head: string;
+  base: string;
+}
 interface PageReads {
   lists: Map<string, ListRead>;
   file: AbortController | undefined;
@@ -42,6 +49,11 @@ interface PageReads {
 }
 type Unavailable = Extract<ChangesList["changes"], { kind: "unavailable" }>["reason"];
 type Header = Omit<ChangesList, "changes">;
+
+function conflictOf(found: ConflictCheck | null): ChangesList["conflict"] {
+  if (found === null || found.kind === "none") return null;
+  return found;
+}
 
 export const changesReadSlots = 4;
 export const changesStopWaitMs = 5000;
@@ -194,12 +206,31 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     return answer;
   };
 
+  const tracked = async <T>(
+    controller: AbortController,
+    folder: string,
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    const read: ActiveRead = { controller, folder, done: Promise.resolve() };
+    active.add(read);
+    const running = work();
+    read.done = running.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      return await running;
+    } finally {
+      active.delete(read);
+    }
+  };
+
   const readList = async (
     ref: WorkspaceRef,
     view: ChangesView,
     signal: AbortSignal,
     read: ActiveRead,
-  ): Promise<{ answer: ChangesList; cached?: CachedList }> => {
+  ): Promise<{ answer: ChangesList; cached?: CachedList; trial?: Trial }> => {
     const folder = await sessionFolder(home, store, ref, changesSentences);
     read.folder = folder;
     signal.throwIfAborted();
@@ -225,19 +256,26 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     if (head === undefined) return unavailable("failed");
     if (head === null) return unavailable("no-commits");
     let compareWith = head;
-    if (view === "branch") {
-      if (lookup.kind === "failed") return unavailable("failed");
-      if (base === null) return unavailable("no-base");
+    let trial: Trial | undefined;
+    if (view === "branch" && lookup.kind === "failed") return unavailable("failed");
+    if (view === "branch" && base === null) return unavailable("no-base");
+    if (base !== null) {
       signal.throwIfAborted();
       const fork = await mergeBase(folder, head, base.oid, signal);
-      if (fork === null) return unavailable("unrelated");
-      if (fork === undefined) return unavailable("failed");
-      compareWith = fork;
+      if (view === "branch") {
+        if (fork === null) return unavailable("unrelated");
+        if (fork === undefined) return unavailable("failed");
+        compareWith = fork;
+      }
+      if (typeof fork === "string" && fork !== base.oid) {
+        trial = { folder, head, base: base.oid };
+      }
     }
     signal.throwIfAborted();
     const list = await readChangeList(folder, compareWith, signal);
     if (list.kind === "unavailable") return unavailable(list.reason);
     return {
+      trial,
       answer: {
         ...header,
         changes: {
@@ -262,19 +300,26 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
         page.lists.clear();
         const controller = new AbortController();
         const answer = owned(controller, undefined, async (read) => {
-          const { answer: listed, cached } = await readList(
-            workspace,
-            view,
-            controller.signal,
-            read,
-          );
+          const {
+            answer: listed,
+            cached,
+            trial,
+          } = await readList(workspace, view, controller.signal, read);
           controller.signal.throwIfAborted();
           if (cached === undefined) page.cache.delete(key);
           else remember(page, key, cached);
-          return listed;
-        }).finally(() => {
-          if (page.lists.get(key)?.controller === controller) page.lists.delete(key);
-        });
+          return { listed, trial };
+        })
+          .then(async ({ listed, trial }) => {
+            if (trial === undefined) return listed;
+            const found = await tracked(controller, trial.folder, () =>
+              conflictCheck(home, trial.folder, trial.head, trial.base, controller.signal),
+            );
+            return { ...listed, conflict: conflictOf(found) };
+          })
+          .finally(() => {
+            if (page.lists.get(key)?.controller === controller) page.lists.delete(key);
+          });
         page.lists.set(key, { controller, answer });
         return answer;
       },
@@ -297,6 +342,19 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
           if (page.file === controller) page.file = undefined;
         }
       },
+    },
+    async stopAll() {
+      const stopping = [...active];
+      for (const read of stopping) read.controller.abort(movedOn());
+      let timer: NodeJS.Timeout | undefined;
+      const bound = new Promise<void>((settle) => {
+        timer = setTimeout(settle, changesStopWaitMs);
+      });
+      try {
+        await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
+      } finally {
+        clearTimeout(timer);
+      }
     },
     async stopInside(folder) {
       const stopping = [...active].filter(

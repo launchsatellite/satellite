@@ -152,7 +152,8 @@ async function watchMutations(page: Page): Promise<void> {
       for (const record of records) {
         const target =
           record.target instanceof Element ? record.target : record.target.parentElement;
-        if (target === null || target.closest(".scrollbar") !== null) continue;
+        if (target === null) continue;
+        if (target.closest(".scrollbar") !== null) continue;
         seen.push(`${record.type} in ${(target.getAttribute("class") ?? "").slice(0, 60)}`);
       }
     });

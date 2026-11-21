@@ -63,8 +63,7 @@ interface Shared {
   worktreeLeft: boolean;
 }
 export type DefaultStart =
-  | { remote: null }
-  | { remote: string; branch: string | null; unread?: true };
+  { remote: null } | { remote: string; branch: string | null; unread?: true };
 
 const includeFilesMs = 120_000;
 
@@ -166,7 +165,7 @@ async function cachedDefault(
   );
   if (run === undefined || (run.exitCode !== 0 && run.exitCode !== 1)) return undefined;
   const prefix = `refs/remotes/${remote}/`;
-  const ref = run?.exitCode === 0 ? run.stdout.trim() : "";
+  const ref = run.exitCode === 0 ? run.stdout.trim() : "";
   const branch = ref.startsWith(prefix) ? ref.slice(prefix.length) : "";
   return isBranchName(branch) ? branch : null;
 }
