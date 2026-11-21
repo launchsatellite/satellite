@@ -2,7 +2,7 @@ import { isBranchName } from "../../shared/workspace-name.ts";
 import { samePath } from "../platform/paths.ts";
 import { defaultStart } from "../workspaces/create-steps.ts";
 import { gitReadMs, runGit } from "../workspaces/git-command.ts";
-import { oidPattern } from "./file-sides.ts";
+import { noLazyFetch, oidPattern } from "./file-sides.ts";
 
 export interface ChangeBase {
   ref: string;
@@ -23,7 +23,9 @@ function oneLine(stdout: string): string {
 }
 
 async function commitOid(folder: string, spec: string, signal?: AbortSignal) {
-  const run = await runGit(folder, ["rev-parse", "--verify", "--quiet", spec], gitReadMs, signal);
+  const run = await runGit(folder, ["rev-parse", "--verify", "--quiet", spec], gitReadMs, signal, {
+    gitVariables: noLazyFetch,
+  });
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;
   const oid = oneLine(run.stdout);
@@ -59,7 +61,9 @@ export async function currentBranch(
   folder: string,
   signal?: AbortSignal,
 ): Promise<string | null | undefined> {
-  const run = await runGit(folder, ["branch", "--show-current"], gitReadMs, signal);
+  const run = await runGit(folder, ["branch", "--show-current"], gitReadMs, signal, {
+    gitVariables: noLazyFetch,
+  });
   if (run?.exitCode !== 0) return undefined;
   const branch = oneLine(run.stdout);
   return isBranchName(branch) ? branch : null;
@@ -85,7 +89,9 @@ export async function mergeBase(
   signal?: AbortSignal,
 ): Promise<string | null | undefined> {
   if (!oidPattern.test(head) || !oidPattern.test(base)) return undefined;
-  const run = await runGit(folder, ["merge-base", head, base], gitReadMs, signal);
+  const run = await runGit(folder, ["merge-base", head, base], gitReadMs, signal, {
+    gitVariables: noLazyFetch,
+  });
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;
   const oid = oneLine(run.stdout);

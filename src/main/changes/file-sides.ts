@@ -23,6 +23,7 @@ export type SideRead =
   | { kind: "refused" };
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
 
 const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const drivePrefix = /^[A-Za-z]:/;
@@ -141,7 +142,7 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
 
 async function gitOutput(folder: string, args: string[], signal?: AbortSignal, bytes = false) {
   const run = await runGit(folder, args, gitReadMs, signal, {
-    gitVariables: { GIT_NO_LAZY_FETCH: "1" },
+    gitVariables: noLazyFetch,
     bytes,
   });
   return run?.exitCode === 0 ? run.stdout : undefined;
@@ -162,11 +163,13 @@ function namesPromisor(entry: string): boolean {
 }
 
 async function missingBlob(folder: string, signal?: AbortSignal): Promise<SideRead> {
+  return (await isPartialClone(folder, signal)) ? notLocal : gone;
+}
+
+export async function isPartialClone(folder: string, signal?: AbortSignal): Promise<boolean> {
   const args = ["config", "-z", "--get-regexp", promisorKeys];
   const entries = (await gitOutput(folder, args, signal)) ?? "";
-  return entries.split("\0").some((entry) => entry !== "" && namesPromisor(entry))
-    ? notLocal
-    : gone;
+  return entries.split("\0").some((entry) => entry !== "" && namesPromisor(entry));
 }
 
 export function isChangePath(path: string, platform: NodeJS.Platform = process.platform): boolean {

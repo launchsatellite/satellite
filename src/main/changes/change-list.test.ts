@@ -18,6 +18,8 @@ vi.mock("../platform/user-environment.ts", () => ({
 }));
 
 const run = promisify(execFile);
+const gitVersion = /(\d+)\.(\d+)/.exec((await run("git", ["--version"])).stdout);
+const hasNoLazyFetch = Number(gitVersion?.[1]) * 1000 + Number(gitVersion?.[2]) >= 2045;
 const zero = "0".repeat(40);
 const one = "3e757656cf36eca53338e520d134963a44f793f8";
 const two = "de980441c3ab03a8c07dda1ad27b8a11f39deb1e";
@@ -71,7 +73,13 @@ async function repository() {
   await run("git", ["init", "-q", "-b", "main", repo], { env });
   const git = async (...args: string[]) =>
     (await run("git", ["-C", repo, ...args], { env })).stdout.trim();
-  return { repo, git };
+  return { repo, git, env };
+}
+
+async function listed(folder: string, compareWith: string) {
+  const read = await readChangeList(folder, compareWith, new AbortController().signal);
+  if (read.kind !== "files") throw new Error(`the list answered ${read.reason}`);
+  return read;
 }
 
 describe("parseDiff", () => {
@@ -272,13 +280,9 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await git("commit", "-q", "-m", "one");
     await run("git", ["init", "-q", join(repo, "nested")]);
     await writeFile(join(repo, "nested", "inside.txt"), "inside\n");
-    const list = await readChangeList(
-      repo,
-      await git("rev-parse", "HEAD"),
-      new AbortController().signal,
-    );
-    expect(list?.records).toHaveLength(1);
-    expect(list?.records[0]).toMatchObject({
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records).toHaveLength(1);
+    expect(list.records[0]).toMatchObject({
       path: "nested",
       letter: "A",
       tracked: false,
@@ -286,7 +290,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       added: null,
       removed: null,
     });
-    expect(list?.records[0]?.stamp).toMatch(/^new:\d+:\d+$/);
+    expect(list.records[0]?.stamp).toMatch(/^new:\d+:\d+$/);
   });
 
   it("counts untracked lines only within its budget", async () => {
@@ -295,14 +299,13 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await git("add", ".");
     await git("commit", "-q", "-m", "one");
     const head = await git("rev-parse", "HEAD");
-    const signal = new AbortController().signal;
     await mkdir(join(repo, "many"));
     for (let index = 0; index < 201; index += 1) {
       await writeFile(join(repo, "many", `f${String(index).padStart(3, "0")}.txt`), "line\n");
     }
-    const many = await readChangeList(repo, head, signal);
-    expect(many?.records.slice(0, 200).every((record) => record.added === 1)).toBe(true);
-    expect(many?.records[200]).toMatchObject({ path: "many/f200.txt", added: null, removed: null });
+    const many = await listed(repo, head);
+    expect(many.records.slice(0, 200).every((record) => record.added === 1)).toBe(true);
+    expect(many.records[200]).toMatchObject({ path: "many/f200.txt", added: null, removed: null });
 
     const big = await repository();
     await writeFile(join(big.repo, "tracked.txt"), "one\n");
@@ -312,15 +315,15 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       await writeFile(join(big.repo, `big-${String(index)}.txt`), `${"x".repeat(1_048_575)}\n`);
     }
     await writeFile(join(big.repo, "data.bin"), Buffer.from([1, 0, 2]));
-    const bigList = await readChangeList(big.repo, await big.git("rev-parse", "HEAD"), signal);
-    expect(bigList?.records.map((record) => [record.path, record.kind, record.added])).toEqual([
+    const bigList = await listed(big.repo, await big.git("rev-parse", "HEAD"));
+    expect(bigList.records.map((record) => [record.path, record.kind, record.added])).toEqual([
       ...Array.from({ length: 8 }, (_, index) => [`big-${String(index)}.txt`, "text", 1]),
       ["big-8.txt", "text", null],
       ["data.bin", "text", null],
     ]);
     await writeFile(join(big.repo, "big-0.txt"), Buffer.from([1, 0, 2]));
-    const binaryList = await readChangeList(big.repo, await big.git("rev-parse", "HEAD"), signal);
-    expect(binaryList?.records[0]).toMatchObject({
+    const binaryList = await listed(big.repo, await big.git("rev-parse", "HEAD"));
+    expect(binaryList.records[0]).toMatchObject({
       path: "big-0.txt",
       kind: "binary",
       added: null,
@@ -342,9 +345,9 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await writeFile(join(repo, "untracked file.txt"), "new\n");
     await writeFile(join(repo, ".gitignore"), "ignored.txt\n");
     await writeFile(join(repo, "ignored.txt"), "ignored\n");
-    const list = await readChangeList(repo, fork, new AbortController().signal);
+    const list = await listed(repo, fork);
     expect(
-      list?.records.map((record) => [
+      list.records.map((record) => [
         record.path,
         record.letter,
         record.tracked,
@@ -357,8 +360,40 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       ["edit.txt", "M", true, 2, 1],
       ["untracked file.txt", "A", false, 1, 0],
     ]);
-    expect(list?.more).toBe(0);
-    expect(list?.records[2]?.stamp).toMatch(/^[0-9a-f]{40}:\d+:\d+$/);
-    expect(await readChangeList(repo, "HEAD", new AbortController().signal)).toBeUndefined();
+    expect(list.more).toBe(0);
+    expect(list.records[2]?.stamp).toMatch(/^[0-9a-f]{40}:\d+:\d+$/);
+    expect(await readChangeList(repo, "HEAD", new AbortController().signal)).toEqual({
+      kind: "unavailable",
+      reason: "failed",
+    });
   });
+
+  it.skipIf(!hasNoLazyFetch)(
+    "answers not-local for a list whose objects a partial clone never downloaded, without fetching them",
+    async () => {
+      const upstream = await repository();
+      await upstream.git("config", "uploadpack.allowFilter", "true");
+      await writeFile(join(upstream.repo, "file.txt"), "one\n");
+      await upstream.git("add", ".");
+      await upstream.git("commit", "-q", "-m", "one");
+      const clone = join(upstream.repo, "..", "clone");
+      const url = `file://${upstream.repo.replaceAll("\\", "/")}`;
+      await upstream.git("clone", "-q", "--no-checkout", "--filter=blob:none", url, clone);
+      const head = (
+        await run("git", ["-C", clone, "rev-parse", "HEAD"], { env: upstream.env })
+      ).stdout.trim();
+      const signal = new AbortController().signal;
+      expect(await readChangeList(clone, head, signal)).toEqual({
+        kind: "unavailable",
+        reason: "not-local",
+      });
+      const blob = (
+        await run("git", ["-C", clone, "rev-parse", "HEAD:file.txt"], { env: upstream.env })
+      ).stdout.trim();
+      const local = run("git", ["--no-lazy-fetch", "-C", clone, "cat-file", "-e", blob], {
+        env: upstream.env,
+      });
+      await expect(local).rejects.toThrow();
+    },
+  );
 });

@@ -2,7 +2,14 @@ import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
 import { runGit } from "../workspaces/git-command.ts";
-import { isChangePath, lineCount, oidPattern, readWorktreeSide } from "./file-sides.ts";
+import {
+  isChangePath,
+  isPartialClone,
+  lineCount,
+  noLazyFetch,
+  oidPattern,
+  readWorktreeSide,
+} from "./file-sides.ts";
 
 export interface ChangeRecord {
   path: string;
@@ -17,6 +24,9 @@ export interface ChangeRecord {
   stamp: string;
 }
 export type ListedChange = Omit<ChangeRecord, "stamp">;
+export type ChangeListRead =
+  | { kind: "files"; records: ChangeRecord[]; more: number }
+  | { kind: "unavailable"; reason: "not-local" | "failed" };
 export interface ParsedList {
   records: ListedChange[];
   more: number;
@@ -64,6 +74,8 @@ const diffArgs = [
 ];
 const untrackedArgs = ["ls-files", "--others", "--exclude-standard", "-z"];
 const letters = new Set<string>(changeLetter.options);
+const failed: ChangeListRead = { kind: "unavailable", reason: "failed" };
+const notLocal: ChangeListRead = { kind: "unavailable", reason: "not-local" };
 
 function isLetter(letter: string): letter is ChangeLetter {
   return letters.has(letter);
@@ -170,8 +182,7 @@ function untrackedChange(field: string): ListedChange {
 }
 
 async function gitOutput(folder: string, args: string[], signal: AbortSignal) {
-  const run = await runGit(folder, args, changesReadMs, signal);
-  return run?.exitCode === 0 ? run.stdout : undefined;
+  return runGit(folder, args, changesReadMs, signal, { gitVariables: noLazyFetch });
 }
 
 async function countLines(folder: string, untracked: ListedChange[]): Promise<void> {
@@ -249,21 +260,25 @@ export async function readChangeList(
   folder: string,
   compareWith: string,
   signal: AbortSignal,
-): Promise<{ records: ChangeRecord[]; more: number } | undefined> {
-  if (!oidPattern.test(compareWith)) return undefined;
+): Promise<ChangeListRead> {
+  if (!oidPattern.test(compareWith)) return failed;
   const [diff, others] = await Promise.all([
     gitOutput(folder, [...diffArgs, compareWith, "--"], signal),
     gitOutput(folder, untrackedArgs, signal),
   ]);
-  const parsed = diff === undefined ? undefined : parseDiff(diff);
-  const fields = others === undefined ? undefined : parseUntracked(others);
-  if (parsed === undefined || fields === undefined) return undefined;
+  if (diff !== undefined && diff.exitCode !== 0 && !signal.aborted) {
+    return (await isPartialClone(folder, signal)) ? notLocal : failed;
+  }
+  const parsed = diff?.exitCode === 0 ? parseDiff(diff.stdout) : undefined;
+  const fields = others?.exitCode === 0 ? parseUntracked(others.stdout) : undefined;
+  if (parsed === undefined || fields === undefined) return failed;
   const untracked = fields.map(untrackedChange).sort(byPath);
   await countLines(folder, untracked);
-  if (signal.aborted) return undefined;
+  if (signal.aborted) return failed;
   const merged = [...parsed.records, ...untracked].sort(byPath);
   const kept = merged.slice(0, changesLimits.files);
   return {
+    kind: "files",
     records: await stamped(folder, kept),
     more: merged.length - kept.length + parsed.more,
   };
