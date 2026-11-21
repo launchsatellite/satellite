@@ -227,7 +227,7 @@ export function isChangePath(path: string, platform: NodeJS.Platform = process.p
   return path.split("/").every((segment) => isChangeSegment(segment, platform));
 }
 
-export function looksBinary(bytes: Uint8Array): boolean {
+function looksBinary(bytes: Uint8Array): boolean {
   return bytes.subarray(0, changesLimits.binaryProbe).includes(0);
 }
 

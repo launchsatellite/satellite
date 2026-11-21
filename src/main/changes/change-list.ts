@@ -45,7 +45,7 @@ interface StatRecord {
   path: string;
 }
 
-export const changesReadMs = 15_000;
+const changesReadMs = 15_000;
 
 const rawHeader =
   /^:([0-7]{6}) ([0-7]{6}) ([0-9a-f]{40}|[0-9a-f]{64}) ([0-9a-f]{40}|[0-9a-f]{64}) ([A-Z])\d{0,3}$/;

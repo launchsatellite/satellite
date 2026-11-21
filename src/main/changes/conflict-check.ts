@@ -12,7 +12,7 @@ export type ConflictCheck =
   | { kind: "old-git" }
   | { kind: "slow" };
 
-export const conflictReadMs = 15_000;
+const conflictReadMs = 15_000;
 
 const quarantineFolder = "quarantine";
 const noConfigFile = "no-config";

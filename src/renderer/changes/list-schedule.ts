@@ -16,9 +16,9 @@ export interface Schedule {
   hide: () => void;
 }
 
-export const changesPollMs = 2000;
-export const changesPollMaxMs = 30_000;
-export const changesPollFactor = 4;
+const changesPollMs = 2000;
+const changesPollMaxMs = 30_000;
+const changesPollFactor = 4;
 
 export function pollDelay(elapsedMs: number, steps: number): number {
   const backoff = changesPollMs * 2 ** steps;

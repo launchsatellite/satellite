@@ -55,7 +55,7 @@ function conflictOf(found: ConflictCheck | null): ChangesList["conflict"] {
   return found;
 }
 
-export const changesReadSlots = 4;
+const changesReadSlots = 4;
 export const changesStopWaitMs = 5000;
 
 const changesQueued = 16;
