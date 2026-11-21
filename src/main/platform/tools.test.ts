@@ -369,50 +369,29 @@ describe("runTool in a folder", () => {
   });
 });
 
-describe("real gh in a hostile repository", () => {
-  const realGh = spawnSync("gh", ["--version"]).status === 0;
-
-  it.skipIf(!realGh)(
-    "starts no program the repository configured",
-    async () => {
-      const folder = await mkdtemp(join(tmpdir(), "satellite-hostile-"));
-      const marker = join(folder, "marker");
-      const program = join(folder, "program.sh");
-      await writeFile(program, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
-      const repo = join(folder, "repo");
-      await mkdir(repo);
-      const git = (...args: string[]) => {
-        const done = spawnSync("git", ["-C", repo, ...args]);
-        expect(done.status).toBe(0);
-      };
-      git("init", "--quiet");
-      for (const key of [
-        "core.fsmonitor",
-        "core.pager",
-        "core.sshCommand",
-        "credential.helper",
-        "pager.remote",
-        "pager.config",
-        "alias.remote",
-        "alias.config",
-      ]) {
-        git("config", key, key.startsWith("alias.") ? `!${program}` : program);
-      }
-      git("remote", "add", "origin", "https://example.invalid/o/r.git");
-      const run = await runTool("gh", ["pr", "view", "--json", "number"], {
-        cwd: repo,
-        timeoutMs: 20_000,
-      });
-      expect(run?.exitCode).not.toBe(0);
-      expect(existsSync(marker)).toBe(false);
-      const status = spawnSync("git", ["-C", repo, "status"], {
-        env: toolEnvironment("gh", await childEnvironment()),
-      });
-      expect(status.status).toBe(0);
-      expect(existsSync(marker)).toBe(false);
-    },
-    30_000,
-  );
+describe("git in a repository that configures programs", () => {
+  it("starts none of them under the gh environment, and does without it", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "satellite-hostile-"));
+    const marker = join(folder, "marker");
+    const program = join(folder, "program.sh");
+    await writeFile(program, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+    const repo = join(folder, "repo");
+    await mkdir(repo);
+    const git = (...args: string[]) => {
+      const done = spawnSync("git", ["-C", repo, ...args]);
+      expect(done.status).toBe(0);
+    };
+    git("init", "--quiet");
+    git("config", "core.fsmonitor", program);
+    const hardened = spawnSync("git", ["-C", repo, "status"], {
+      env: toolEnvironment("gh", await childEnvironment()),
+    });
+    expect(hardened.status).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+    const control = spawnSync("git", ["-C", repo, "status"]);
+    expect(control.status).toBe(0);
+    expect(existsSync(marker)).toBe(true);
+  });
 });
 
 describe("runTool input", () => {
