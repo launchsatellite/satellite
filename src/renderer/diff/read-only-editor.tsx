@@ -1,6 +1,7 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import { revealLines, type RevealedRange } from "../../shared/visible-text.ts";
 import { AmbiguousCharacters } from "monaco-editor/base/common/strings";
+import { drawnColumns } from "./read-only-options.ts";
 import { lineRange } from "./line-range.ts";
 import { confusableColumns, lookAlikeColumns, type ColumnRange } from "./look-alikes.ts";
 
@@ -23,33 +24,6 @@ const longFileLineSentence =
   "A line here runs past 10,000 characters, so the file shows only its start.";
 const confusables = AmbiguousCharacters.getInstance(new Set());
 const revealedMarks = 10_000;
-
-export const drawnColumns = 10_000;
-
-export const readOnlyOptions = {
-  readOnly: true,
-  domReadOnly: true,
-  renderLineHighlight: "none",
-  automaticLayout: true,
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  overviewRulerLanes: 0,
-  overviewRulerBorder: false,
-  scrollbar: { useShadows: false },
-  fontFamily: '"Geist Mono Variable", monospace',
-  fontSize: 13,
-  stopRenderingLineAfter: drawnColumns,
-  unicodeHighlight: {
-    invisibleCharacters: false,
-    ambiguousCharacters: false,
-    nonBasicASCII: false,
-  },
-  tabFocusMode: true,
-  dropIntoEditor: { enabled: false },
-  dragAndDrop: false,
-  contextmenu: false,
-  links: false,
-} satisfies editor.IEditorOptions;
 
 export function plainModel(text: string, language: string) {
   const { text: shown, revealed } = revealLines(text);

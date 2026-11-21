@@ -7,15 +7,14 @@ import type { RevealedRange } from "../../shared/visible-text.ts";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
-  drawnColumns,
   CutShort,
   lineMarks,
   plainModel,
-  readOnlyOptions,
   selectedLines,
   type DiffHandle,
   type DiffSide,
 } from "./read-only-editor.tsx";
+import { drawnColumns, readOnlyOptions } from "./read-only-options.ts";
 
 interface DiffViewProps {
   original: string;

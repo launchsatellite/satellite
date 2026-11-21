@@ -6,16 +6,15 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
-  drawnColumns,
   CutShort,
   lineMarks,
   plainModel,
-  readOnlyOptions,
   gitLineCount,
   selectedLines,
   type DiffHandle,
   type DiffSide,
 } from "./read-only-editor.tsx";
+import { drawnColumns, readOnlyOptions } from "./read-only-options.ts";
 
 interface SideViewProps {
   text: string;
