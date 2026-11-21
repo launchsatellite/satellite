@@ -6,7 +6,7 @@ export interface GuideFacts {
   workspaces: number;
   sessions: number;
 }
-export interface GuideStepDetail {
+interface GuideStepDetail {
   anchor: "workspace" | "session" | "views" | "inbox";
   side: GuideSide;
   title: string;
