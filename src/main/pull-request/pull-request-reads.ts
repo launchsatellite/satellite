@@ -326,9 +326,12 @@ export function createPullRequests({
       conversation = asked;
       const number = parsed.found.number;
       if (!asked.candidates.some((candidate) => candidate.number === number && candidate.writer)) {
+        const writers = asked.candidates.filter((candidate) => candidate.writer);
         const better =
-          asked.candidates.find((candidate) => candidate.writer && candidate.open) ??
-          asked.candidates.find((candidate) => candidate.writer);
+          writers.find((candidate) => candidate.here && candidate.open) ??
+          writers.find((candidate) => candidate.here) ??
+          writers.find((candidate) => candidate.open) ??
+          writers[0];
         if (better === undefined) return nothing({ kind: "absent", reason: "none" });
         const again = await readNumber(better.number, viewed.head, folder, signal);
         if (again === null) return nothing(unavailable("failed"));

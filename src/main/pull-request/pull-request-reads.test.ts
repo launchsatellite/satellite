@@ -459,6 +459,20 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     ]);
   });
 
+  it("prefers a pull request whose head is in this repository to a same-named fork's", async () => {
+    const { answer, read } = await setup();
+    await answer("view", { stdout: viewJson([], "main", false, "trunk", 41) });
+    await answer("view-12", { stdout: viewJson() });
+    await answer("threads", {
+      stdout: threadsJson([
+        { number: 41, state: "OPEN", authorAssociation: "NONE", isCrossRepository: false },
+        { number: 42, state: "OPEN", authorAssociation: "OWNER", isCrossRepository: true },
+        { number: 12, state: "OPEN", authorAssociation: "OWNER", isCrossRepository: false },
+      ]),
+    });
+    expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+  });
+
   it("prefers an open pull request of a writer to a merged one, and shows a merged one when none is open", async () => {
     const { answer, read } = await setup();
     await answer("view", { stdout: viewJson([], "main", false, "trunk", 41) });

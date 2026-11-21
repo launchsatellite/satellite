@@ -370,8 +370,8 @@ describe("parseConversation", () => {
     const answer = parseConversation(
       candidates([
         { number: 41, state: "OPEN", authorAssociation: "NONE" },
-        { number: 40, state: "OPEN", authorAssociation: "OWNER" },
-        { number: 39, state: "MERGED", authorAssociation: "COLLABORATOR" },
+        { number: 40, state: "OPEN", authorAssociation: "OWNER", isCrossRepository: false },
+        { number: 39, state: "MERGED", authorAssociation: "COLLABORATOR", isCrossRepository: true },
         { number: 38, state: "CLOSED", authorAssociation: "CONTRIBUTOR" },
         { number: 37, state: "OPEN", authorAssociation: "MEMBER" },
         { number: 36, state: "OPEN" },
@@ -382,12 +382,12 @@ describe("parseConversation", () => {
     );
     expect(answer?.detail).toBeNull();
     expect(answer?.candidates).toEqual([
-      { number: 41, open: true, writer: false },
-      { number: 40, open: true, writer: true },
-      { number: 39, open: false, writer: true },
-      { number: 38, open: false, writer: false },
-      { number: 37, open: true, writer: true },
-      { number: 36, open: true, writer: false },
+      { number: 41, open: true, writer: false, here: false },
+      { number: 40, open: true, writer: true, here: true },
+      { number: 39, open: false, writer: true, here: false },
+      { number: 38, open: false, writer: false, here: false },
+      { number: 37, open: true, writer: true, here: false },
+      { number: 36, open: true, writer: false, here: false },
     ]);
   });
 

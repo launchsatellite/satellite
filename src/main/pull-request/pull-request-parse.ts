@@ -79,6 +79,7 @@ const candidateNode = z.object({
   number: looseCount,
   state: looseText,
   authorAssociation: looseText,
+  isCrossRepository: looseFlag,
 });
 const threadsShape = z.object({
   data: looseNode(
@@ -352,6 +353,7 @@ export interface Candidate {
   number: number;
   open: boolean;
   writer: boolean;
+  here: boolean;
 }
 
 export interface Conversation {
@@ -367,6 +369,7 @@ function candidatesOf(list: readonly unknown[] | null | undefined): Candidate[] 
             number: node.number,
             open: node.state === "OPEN",
             writer: hasWriteAccess(node.authorAssociation),
+            here: node.isCrossRepository === false,
           },
         ]
       : [],
