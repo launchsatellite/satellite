@@ -51,7 +51,7 @@ function Message({
 export function ConflictBanner({ base, conflict }: ConflictBannerProps) {
   if (base === null) return null;
   return (
-    <div role="status" className="h-9 flex-none">
+    <div role="status" className="flex-none">
       {conflict !== null && (
         <div
           data-testid="changes-banner"

@@ -120,6 +120,9 @@ async function sendsTheRequest(session: AppSession): Promise<void> {
 
 async function goesWhenResolved(session: AppSession): Promise<void> {
   const shownTop = await contentTop(session);
+  const bannerHeight = await session.page
+    .getByTestId("changes-banner")
+    .evaluate((banner) => banner.getBoundingClientRect().height);
   await git(session, ["revert", "--no-edit", "HEAD"]);
   await waitUntil(
     async () => {
@@ -129,7 +132,8 @@ async function goesWhenResolved(session: AppSession): Promise<void> {
     waitMs,
     "the banner stayed after the conflict was resolved",
   );
-  assert.equal(await contentTop(session), shownTop, "the content moved when the banner went away");
+  const freedTop = await contentTop(session);
+  assert.equal(freedTop, shownTop - bannerHeight, "the empty strip kept its space");
   await leavesNothing(session, "after the conflict was resolved");
 }
 
