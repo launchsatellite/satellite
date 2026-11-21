@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
-import { parseDiff, parseUntracked, readChangeList } from "./change-list.ts";
+import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -272,7 +272,56 @@ describe("parseUntracked", () => {
   });
 });
 
+describe("parseUnmerged", () => {
+  it("names each file in a merge once and refuses output that is cut off", () => {
+    const stages = [
+      `100644 ${one} 1\tboth\tname.txt`,
+      `100644 ${two} 2\tboth\tname.txt`,
+      `100644 ${three} 3\tboth\tname.txt`,
+      `100644 ${two} 2\tnew\nline.txt`,
+    ];
+    expect(parseUnmerged(output(stages))).toEqual(["both\tname.txt", "new\nline.txt"]);
+    expect(parseUnmerged("")).toEqual([]);
+    for (const cut of [
+      `100644 ${one} 1\tcut.txt`,
+      output([`100644 ${one} 4\tstage.txt`]),
+      output([`100644 ${one.slice(0, 7)} 1\tshort.txt`]),
+      output([`100644 ${one} 1\t`]),
+      output([`100644 ${one} 1 path.txt`]),
+    ]) {
+      expect(parseUnmerged(cut)).toBeUndefined();
+    }
+  });
+});
+
 describe("readChangeList", { timeout: 60_000 }, () => {
+  it("lists a file in the middle of a merge as U, whichever view asks", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "clash.txt"), "base\n");
+    await writeFile(join(repo, "calm.txt"), "calm\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "base");
+    const fork = await git("rev-parse", "HEAD");
+    await git("switch", "-q", "-c", "other");
+    await writeFile(join(repo, "clash.txt"), "theirs\n");
+    await writeFile(join(repo, "added both.txt"), "theirs\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "other");
+    await git("switch", "-q", "main");
+    await writeFile(join(repo, "clash.txt"), "ours\n");
+    await writeFile(join(repo, "added both.txt"), "ours\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "main");
+    await expect(git("merge", "-q", "other")).rejects.toThrow();
+    for (const compareWith of [await git("rev-parse", "HEAD"), fork]) {
+      const list = await listed(repo, compareWith);
+      expect(list.records.map((record) => [record.path, record.letter, record.added])).toEqual([
+        ["added both.txt", "U", null],
+        ["clash.txt", "U", null],
+      ]);
+    }
+  });
+
   it("lists a nested repository as a folder of its own", async () => {
     const { repo, git } = await repository();
     await writeFile(join(repo, "tracked.txt"), "one\n");

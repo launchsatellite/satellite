@@ -52,6 +52,7 @@ export const changesReadMs = 15_000;
 const rawHeader =
   /^:([0-7]{6}) ([0-7]{6}) ([0-9a-f]{40}|[0-9a-f]{64}) ([0-9a-f]{40}|[0-9a-f]{64}) ([A-Z])\d{0,3}$/;
 const statPrefix = /^(\d+|-)\t(\d+|-)\t/;
+const unmergedPrefix = /^[0-7]{6} (?:[0-9a-f]{40}|[0-9a-f]{64}) [1-3]\t/;
 const digits = /^\d+$/;
 const allZeros = /^0+$/;
 const countCap = 1_000_000;
@@ -73,6 +74,7 @@ const diffArgs = [
   "--ignore-submodules=dirty",
 ];
 const untrackedArgs = ["ls-files", "--others", "--exclude-standard", "-z"];
+const unmergedArgs = ["ls-files", "--unmerged", "-z"];
 const letters = new Set<string>(changeLetter.options);
 const failed: ChangeListRead = { kind: "unavailable", reason: "failed" };
 const notLocal: ChangeListRead = { kind: "unavailable", reason: "not-local" };
@@ -181,6 +183,20 @@ function untrackedChange(field: string): ListedChange {
   };
 }
 
+function inMerge(change: ListedChange): ListedChange {
+  return { ...change, letter: "U", added: null, removed: null };
+}
+
+function withUnmerged(changes: ListedChange[], unmerged: readonly string[]): ListedChange[] {
+  const paths = new Set(unmerged);
+  const listed = new Set(changes.map((change) => change.path));
+  const unlisted = [...paths].filter((path) => !listed.has(path));
+  return [
+    ...changes.map((change) => (paths.has(change.path) ? inMerge(change) : change)),
+    ...unlisted.map((path) => inMerge({ ...untrackedChange(path), tracked: true })),
+  ];
+}
+
 async function gitOutput(folder: string, args: string[], signal: AbortSignal) {
   return runGit(folder, args, changesReadMs, signal, { gitVariables: noLazyFetch });
 }
@@ -256,26 +272,41 @@ export function parseUntracked(stdout: string): string[] | undefined {
   return nulFields(stdout)?.filter((field) => field !== "" && field !== "/");
 }
 
+export function parseUnmerged(stdout: string): string[] | undefined {
+  const fields = nulFields(stdout);
+  if (fields === undefined) return undefined;
+  const paths = new Set<string>();
+  for (const field of fields) {
+    const prefix = unmergedPrefix.exec(field);
+    const path = prefix === null ? "" : field.slice(prefix[0].length);
+    if (path === "") return undefined;
+    paths.add(path);
+  }
+  return [...paths];
+}
+
 export async function readChangeList(
   folder: string,
   compareWith: string,
   signal: AbortSignal,
 ): Promise<ChangeListRead> {
   if (!oidPattern.test(compareWith)) return failed;
-  const [diff, others] = await Promise.all([
+  const [diff, others, conflicted] = await Promise.all([
     gitOutput(folder, [...diffArgs, compareWith, "--"], signal),
     gitOutput(folder, untrackedArgs, signal),
+    gitOutput(folder, unmergedArgs, signal),
   ]);
   if (diff !== undefined && diff.exitCode !== 0 && !signal.aborted) {
     return (await isPartialClone(folder, signal)) ? notLocal : failed;
   }
   const parsed = diff?.exitCode === 0 ? parseDiff(diff.stdout) : undefined;
   const fields = others?.exitCode === 0 ? parseUntracked(others.stdout) : undefined;
-  if (parsed === undefined || fields === undefined) return failed;
+  const unmerged = conflicted?.exitCode === 0 ? parseUnmerged(conflicted.stdout) : undefined;
+  if (parsed === undefined || fields === undefined || unmerged === undefined) return failed;
   const untracked = fields.map(untrackedChange).sort(byPath);
   await countLines(folder, untracked);
   if (signal.aborted) return failed;
-  const merged = [...parsed.records, ...untracked].sort(byPath);
+  const merged = [...withUnmerged(parsed.records, unmerged), ...untracked].sort(byPath);
   const kept = merged.slice(0, changesLimits.files);
   return {
     kind: "files",
