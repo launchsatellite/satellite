@@ -2,13 +2,13 @@ export interface ScheduleAnswer {
   files: boolean;
   key: string;
 }
-export interface ScheduleHooks {
+interface ScheduleHooks {
   read(): Promise<ScheduleAnswer>;
   visible(): boolean;
   now(): number;
   after(ms: number, run: () => void): () => void;
 }
-export interface Schedule {
+interface Schedule {
   start: () => void;
   stop: () => void;
   refresh: () => void;

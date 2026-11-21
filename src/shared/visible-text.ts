@@ -1,4 +1,4 @@
-export interface VisiblePart {
+interface VisiblePart {
   text: string;
   revealed: boolean;
 }

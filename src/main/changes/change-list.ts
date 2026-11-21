@@ -16,11 +16,11 @@ export interface ChangeRecord {
   shape?: "link" | "mode";
   stamp: string;
 }
-export type ListedChange = Omit<ChangeRecord, "stamp"> & { statDirty?: true };
-export type ChangeListRead =
+type ListedChange = Omit<ChangeRecord, "stamp"> & { statDirty?: true };
+type ChangeListRead =
   | { kind: "files"; records: ChangeRecord[]; more: number; longPaths: number }
   | { kind: "unavailable"; reason: "not-local" | "too-many" | "hung" | "failed" };
-export interface ParsedList {
+interface ParsedList {
   records: ListedChange[];
   more: number;
 }

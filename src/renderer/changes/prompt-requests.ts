@@ -2,7 +2,7 @@ import type { ChangesView } from "../../shared/bridge-contract.ts";
 import { holdsRevealedText } from "../../shared/prompt-text.ts";
 import { quotedPath } from "../terminal/dropped-paths.ts";
 
-export type LineReference = { ok: true; text: string } | { ok: false; sentence: string };
+type LineReference = { ok: true; text: string } | { ok: false; sentence: string };
 
 interface LineReferenceInput {
   path: string;

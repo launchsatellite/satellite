@@ -1,11 +1,11 @@
-export interface LineSelection {
+interface LineSelection {
   startLine: number;
   endLine: number;
   endColumn: number;
   empty: boolean;
 }
 
-export interface LineRange {
+interface LineRange {
   start: number;
   end: number;
 }

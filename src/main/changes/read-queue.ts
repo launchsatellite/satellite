@@ -1,6 +1,6 @@
 import { BridgeFailure } from "../bridge/registry.ts";
 
-export type ReadQueue = <T>(signal: AbortSignal, work: () => Promise<T>) => Promise<T>;
+type ReadQueue = <T>(signal: AbortSignal, work: () => Promise<T>) => Promise<T>;
 
 const queueFull = "Satellite is reading a lot of changes at once. It tries again in a moment.";
 

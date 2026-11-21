@@ -5,12 +5,12 @@ import { defaultStart } from "../workspaces/create-steps.ts";
 import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
 import { isObjectName } from "./file-sides.ts";
 
-export interface ChangeBase {
+interface ChangeBase {
   ref: string;
   name: string;
   oid: string;
 }
-export type BaseLookup =
+type BaseLookup =
   | { kind: "base"; base: ChangeBase }
   | { kind: "none"; why: "main-workspace" | "main-detached" | "gone" }
   | { kind: "failed" };
