@@ -16,7 +16,7 @@ describe("checkedLink", () => {
       "https://exa mple.com",
       "https://example.com/\nx",
       "https://example.com/\u001b]8;;x",
-      "https://example.com/‮gnp.exe",
+      "https://example.com/\u{202e}gnp.exe",
       "mailto:a@example.com",
       `https://${"a".repeat(250)}.com/`,
     ]) {
