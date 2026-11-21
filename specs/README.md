@@ -46,4 +46,4 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 | 006 | [Changes](006-changes/spec.md) | Done |
 | 007 | [Files](007-files/spec.md) | Done |
 | 008 | [Pull request](008-pull-request/spec.md) | Done |
-| 009 | [Running processes](009-running-processes/spec.md) | In progress |
+| 009 | [Running processes](009-running-processes/spec.md) | Done |
