@@ -409,6 +409,22 @@ const terminalId = z.uuid();
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
+const processId = z.int().min(2).max(4_294_967_295);
+const processStart = z.int().min(1).max(8_640_000_000_000_000);
+const loopbackAddress = z.string().regex(/^http:\/\/(?:127\.0\.0\.1|\[::1\]):[1-9][0-9]{0,4}\/$/);
+export const processRow = z.strictObject({
+  workspace: workspaceRef,
+  session: terminalId,
+  pid: processId,
+  started: processStart,
+  command: z.string().max(processesLimits.commandChars),
+  cut: z.boolean(),
+  ports: z
+    .array(z.strictObject({ port: z.int().min(1).max(65535), url: loopbackAddress.nullable() }))
+    .max(processesLimits.ports),
+});
+export type ProcessRow = z.output<typeof processRow>;
+export type ProcessesList = BridgeResponse<"processes.list">;
 const fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
 const startBranch = z.strictObject({ ref: refName, label: z.string().min(1).max(255) });
 
@@ -650,6 +666,18 @@ export const bridgeRequests = {
       z.strictObject({ kind: z.literal("too-large") }),
       z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
     ]),
+  },
+  "processes.list": {
+    request: empty,
+    response: z.strictObject({
+      at: processStart,
+      rows: z.array(processRow).max(processesLimits.rows),
+      more: count,
+    }),
+  },
+  "processes.stop": {
+    request: z.strictObject({ pid: processId, started: processStart }),
+    response: empty,
   },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),

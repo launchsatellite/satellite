@@ -16,6 +16,7 @@ import { childEnvironment, claudeEnvironment, resolveTool } from "../platform/to
 import { claudeArgs, hookSettings, type ClaudeStart } from "../sessions/claude-launch.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
+import type { RunningRoot } from "../processes/processes-handlers.ts";
 import { nextState, type SessionEvent, type SessionState } from "../sessions/session-status.ts";
 import {
   removeSettingsFile,
@@ -43,6 +44,7 @@ export interface TerminalSessions {
   handlers: TerminalHandlers;
   sessionsInside: WorkspaceSessions;
   hookEvent(launchId: string, event: SessionEvent, sessionId: string | null): void;
+  roots(): RunningRoot[];
   closeAll(): Promise<void>;
 }
 interface TerminalOptions {
@@ -65,6 +67,7 @@ interface Session {
   settingsFile?: string;
   released?: Promise<void>;
   pty?: PtyProcess;
+  spawnedAt?: number;
   killing?: Promise<void>;
   output?: OutputFlow;
   state: SessionState;
@@ -321,6 +324,7 @@ export function createTerminalSessions({
       console.error("Claude Code could not start", error);
       throw new BridgeFailure("failed", spawnFailed);
     }
+    session.spawnedAt = Date.now();
     const output = createOutputFlow({
       emit(data) {
         session.owner.emit("terminal.data", { id: session.id, data });
@@ -440,6 +444,13 @@ export function createTerminalSessions({
       session.state = nextState(session.state, event);
       tellNeeding();
       showStatus(session);
+    },
+    roots() {
+      return [...running].flatMap(({ ended, owner, id, workspace, pty, spawnedAt }) =>
+        ended || pty === undefined || spawnedAt === undefined
+          ? []
+          : [{ owner, root: { session: id, workspace, pid: pty.pid, spawnedAt } }],
+      );
     },
     async closeAll() {
       closed = true;
