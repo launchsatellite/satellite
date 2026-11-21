@@ -29,6 +29,7 @@ export interface ActiveRead {
   done: Promise<unknown>;
 }
 interface ListRead {
+  view: ChangesView;
   controller: AbortController;
   answer: Promise<ChangesList>;
 }
@@ -329,8 +330,11 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
         const key = keyOf(workspace, view, named);
         const running = page.lists.get(key);
         if (running !== undefined) return running.answer;
-        for (const read of page.lists.values()) read.controller.abort(movedOn());
-        page.lists.clear();
+        for (const [other, read] of page.lists) {
+          if (read.view !== view) continue;
+          read.controller.abort(movedOn());
+          page.lists.delete(other);
+        }
         const controller = new AbortController();
         const answer = owned(controller, undefined, async (read) => {
           const {
@@ -352,7 +356,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
           .finally(() => {
             if (page.lists.get(key)?.controller === controller) page.lists.delete(key);
           });
-        page.lists.set(key, { controller, answer });
+        page.lists.set(key, { view, controller, answer });
         return answer;
       },
       "changes.file": async ({ workspace, view, path, base }, owner) => {

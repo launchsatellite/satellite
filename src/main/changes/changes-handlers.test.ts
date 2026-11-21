@@ -189,17 +189,19 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     expect(await newer).toMatchObject({ kind: "text" });
   });
 
-  it("stops a page's older list when it asks for another view", async () => {
+  it("stops a page's older list only when it asks for the same view again", async () => {
     const { changes } = await repository();
     const list = changes.handlers["changes.list"];
     const page = ownerOf(1);
-    const first = list({ workspace, view: "uncommitted" }, page);
-    const second = list({ workspace, view: "branch" }, page);
+    const first = list({ workspace, view: "branch", base: "one" }, page);
+    const beside = list({ workspace, view: "uncommitted" }, page);
+    const second = list({ workspace, view: "branch", base: "two" }, page);
     await expect(first).rejects.toMatchObject({
       code: "refused",
       message: "Satellite moved on to a newer read.",
     });
-    expect(await second).toMatchObject({ changes: { kind: "unavailable", reason: "no-base" } });
+    expect(await beside).toMatchObject({ changes: { kind: "files" } });
+    expect(await second).toMatchObject({ changes: { kind: "unavailable" } });
     const same = [
       list({ workspace, view: "uncommitted" }, page),
       list({ workspace, view: "uncommitted" }, page),
