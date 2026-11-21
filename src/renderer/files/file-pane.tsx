@@ -96,7 +96,7 @@ function Drawn({
   if (read.kind === "image") {
     return (
       <ImageView
-        key={path}
+        key={`${path}\u0000${read.stamp}`}
         type={read.type}
         data={read.data}
         name={path.slice(path.lastIndexOf("/") + 1)}

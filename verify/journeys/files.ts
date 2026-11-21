@@ -667,7 +667,7 @@ async function showsSentences(session: AppSession): Promise<void> {
 
   await writeFile(join(folder, "bomb.png"), pngSignature(10_000, 10_000));
   await openRoot(session, "bomb.png");
-  await sentenceReads(session, "file-sentence", "too large");
+  await sentenceReads(session, "file-sentence", "50 megapixels");
 
   await writeFile(
     join(folder, "huge.png"),
@@ -679,6 +679,16 @@ async function showsSentences(session: AppSession): Promise<void> {
   await writeFile(join(folder, "broken.png"), pngSignature(8, 8));
   await openRoot(session, "broken.png");
   await sentenceReads(session, "file-sentence", "couldn't draw this image");
+  await writeFile(join(folder, "broken.png"), drawnPng(8, 8));
+  await waitUntil(
+    async () =>
+      (await page
+        .getByTestId("file-image")
+        .evaluate((element) => element instanceof HTMLImageElement && element.naturalWidth)
+        .catch(() => 0)) === 8,
+    waitMs,
+    "an image that failed to draw did not draw once its file was complete",
+  );
 
   await writeFile(
     join(folder, "shape.svg"),

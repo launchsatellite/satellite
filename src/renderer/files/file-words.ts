@@ -33,7 +33,7 @@ const findSentences = {
 const fileSentences: Record<SentenceKind, string> = {
   binary: "This is a binary file, so there is nothing to read here.",
   large:
-    "This file is too large to show here. Text opens up to 1 MB and 20,000 lines, images up to 5 MB.",
+    "This file is too large to show here. Text opens up to 1 MB and 20,000 lines, images up to 5 MB and 50 megapixels.",
   "not-utf8": "This file isn't UTF-8 text, so Satellite doesn't show it.",
   gone: "This file isn't there anymore.",
   changing: "This file changed while Satellite read it. It shows again on the next refresh.",

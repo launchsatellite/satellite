@@ -308,6 +308,8 @@ export function Palette({
                   aria-selected={index === active}
                   data-testid={option.testId}
                   data-path={option.path}
+                  title={option.path === undefined ? undefined : visibleText(option.path)}
+                  aria-label={option.path === undefined ? undefined : visibleText(option.path)}
                   className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
                   onMouseMove={() => {
                     if (index !== active) setActive(index);
@@ -324,8 +326,16 @@ export function Palette({
                     {option.title}
                   </span>
                   {option.detail !== undefined && (
-                    <span className="ml-auto max-w-[45%] flex-none truncate text-[12px] text-dim">
-                      {option.detail}
+                    <span
+                      className={`ml-auto max-w-[45%] truncate text-[12px] text-dim ${option.path === undefined ? "flex-none" : "min-w-0 text-left [direction:rtl]"}`}
+                    >
+                      {option.path === undefined ? (
+                        option.detail
+                      ) : (
+                        <span dir="ltr" className="[unicode-bidi:isolate]">
+                          {option.detail}
+                        </span>
+                      )}
                     </span>
                   )}
                   {option.hint !== undefined && (
