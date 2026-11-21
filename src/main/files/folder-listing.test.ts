@@ -72,6 +72,39 @@ describe("listFolders", () => {
   });
 });
 
+describe("listFolders when the one check fails", () => {
+  it("checks each folder alone, so a submodule only leaves its own entries plain", async () => {
+    const inner = await makeRepository();
+    await put(inner, { "s.txt": "x", "s.log": "x" });
+    await git(inner, "add", ".");
+    await git(inner, "commit", "-qm", "s");
+    const root = await makeRepository();
+    await put(root, { ".gitignore": "*.log\n", "x.log": "x", "x.txt": "x" });
+    await git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", inner, "subm");
+    const listings = await listFolders(root, ["", "subm"]);
+    expect(listings.map(shown)[0]).toContain("~file:x.log");
+    expect(listings.map(shown)[1]).toEqual(["file:s.log", "file:s.txt"]);
+  });
+
+  it("does not ask for the next chunk once a check hangs", async () => {
+    const root = await makeRepository();
+    const names = Array.from({ length: 3000 }, (_, at) => `f${String(at)}.txt`);
+    await put(
+      root,
+      Object.fromEntries(
+        names.flatMap((name) => [
+          [name, "x"],
+          [`b/${name}`, "x"],
+        ]),
+      ),
+    );
+    vi.mocked(checkIgnored).mockClear();
+    vi.mocked(checkIgnored).mockResolvedValueOnce({ kind: "hung" });
+    await listFolders(root, ["", "b"]);
+    expect(vi.mocked(checkIgnored)).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("listFolder", () => {
   it("lists folders first, shows ignored entries and dot files flagged, and leaves out .git", async () => {
     const root = await makeRepository();

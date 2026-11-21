@@ -139,11 +139,11 @@ function isListing(result: FolderListing | Prepared): result is FolderListing {
   return "state" in result;
 }
 
-async function ignoredAmong(
+async function ignoredRuns(
   root: string,
   paths: readonly string[],
   signal?: AbortSignal,
-): Promise<Set<string>> {
+): Promise<{ ignored: Set<string>; stopped: "failed" | "hung" | undefined }> {
   const ignored = new Set<string>();
   for (let at = 0; at < paths.length; at += ignoreChunk) {
     signal?.throwIfAborted();
@@ -153,7 +153,24 @@ async function ignoredAmong(
       signal,
       ignoreCheckMs,
     );
-    if (check.kind === "checked") for (const path of check.ignored) ignored.add(path);
+    if (check.kind !== "checked") return { ignored, stopped: check.kind };
+    for (const path of check.ignored) ignored.add(path);
+  }
+  return { ignored, stopped: undefined };
+}
+
+async function ignoredAmong(
+  root: string,
+  groups: readonly (readonly string[])[],
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const all = await ignoredRuns(root, groups.flat(), signal);
+  if (all.stopped !== "failed") return all.ignored;
+  const ignored = new Set<string>();
+  for (const group of groups) {
+    const one = await ignoredRuns(root, group, signal);
+    for (const path of one.ignored) ignored.add(path);
+    if (one.stopped === "hung") break;
   }
   return ignored;
 }
@@ -172,7 +189,7 @@ export async function listFolders(
   }
   const ignored = await ignoredAmong(
     root,
-    prepared.flatMap((result) => (isListing(result) ? [] : result.paths)),
+    prepared.flatMap((result) => (isListing(result) ? [] : [result.paths])),
     signal,
   );
   const listings: FolderListing[] = [];
