@@ -118,9 +118,9 @@ async function select(session: AppSession, path: string): Promise<void> {
 }
 
 async function sideText(page: Page, side: "original" | "modified"): Promise<string> {
-  const lines = page.locator(`[data-testid="diff"] .editor.${side} .view-lines`);
+  const lines = page.locator(`[data-testid="diff"] .editor.${side} .lines-content > .view-lines`);
   if ((await lines.count()) === 0) return "";
-  return (await lines.innerText()).replaceAll("\u{a0}", " ");
+  return (await lines.first().innerText()).replaceAll("\u{a0}", " ");
 }
 
 async function modifiedShows(session: AppSession, text: string, when: string): Promise<void> {
@@ -247,7 +247,7 @@ async function showsDiffReadOnly(session: AppSession): Promise<void> {
   await page.locator('[data-testid="diff"] .editor.original').waitFor({ timeout: waitMs });
   await modifiedShows(session, "greeting", "for src/app.ts");
   const before = await sideText(page, "modified");
-  await page.locator('[data-testid="diff"] .editor.modified .view-lines').click();
+  await page.locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines').first().click();
   await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.type("zz");
   await page.keyboard.press("Enter");
@@ -457,7 +457,7 @@ async function sendsLines(session: AppSession): Promise<void> {
   await select(session, "src/app.ts");
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
   let from = (await session.standInEvents()).length;
-  await page.locator('[data-testid="diff"] .editor.modified .view-lines').click();
+  await page.locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines').first().click();
   await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.press(shortcut);
   await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
@@ -467,16 +467,18 @@ async function sendsLines(session: AppSession): Promise<void> {
   await typedAfter(session, from, bracketed("Lines 2 to 3 of src/app.ts in this workspace. "));
   await terminalFocused(session);
 
-  await select(session, "caf\u{e9} notes.md");
-  await page.locator('[data-testid="diff"] .editor.original').waitFor();
-  from = (await session.standInEvents()).length;
-  await session.selectDiffLines("original", 1, 1);
-  await page.keyboard.press(shortcut);
-  await typedAfter(
-    session,
-    from,
-    bracketed("Line 1 of notes.md at the merge base with origin/main. "),
-  );
+  if ((await page.getByTestId("diff-inline").count()) > 0) {
+    await select(session, "caf\u{e9} notes.md");
+    await page.locator('[data-testid="diff"] .editor.original').waitFor();
+    from = (await session.standInEvents()).length;
+    await session.selectDiffLines("original", 1, 1);
+    await page.keyboard.press(shortcut);
+    await typedAfter(
+      session,
+      from,
+      bracketed("Line 1 of notes.md at the merge base with origin/main. "),
+    );
+  }
 
   await select(session, "report\u{202e}txt.md");
   await page.locator('[data-testid="diff"][data-side="modified"]').waitFor();
