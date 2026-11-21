@@ -10,6 +10,7 @@ import {
   readoutPixel,
   readoutRest,
 } from "../pull-request/pull-request-words.ts";
+import { countLabel } from "../processes/process-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
 
 interface WorkspaceHeaderProps {
@@ -19,6 +20,8 @@ interface WorkspaceHeaderProps {
   ahead: number | null;
   behind: number | null;
   pullRequest: PullRequestFound | null;
+  processes: number;
+  onShowProcesses: () => void;
   onShowPullRequest: () => void;
 }
 
@@ -29,6 +32,8 @@ export function WorkspaceHeader({
   ahead,
   behind,
   pullRequest,
+  processes,
+  onShowProcesses,
   onShowPullRequest,
 }: WorkspaceHeaderProps) {
   const tracking = trackingWords(ahead, behind);
@@ -77,6 +82,20 @@ export function WorkspaceHeader({
         </span>
       )}
       <span className="ml-auto flex min-w-0 flex-none items-center gap-1">
+        {project.missing === null && processes > 0 && (
+          <button
+            type="button"
+            data-testid="header-processes"
+            data-count={processes}
+            aria-label={countLabel(processes)}
+            title={countLabel(processes)}
+            onClick={onShowProcesses}
+            className="flex h-6 min-w-0 flex-none items-center gap-[5px] rounded-[6px] px-[7px] font-pixel text-[12px] text-dim uppercase hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Icon name="running" size={13} />
+            <span aria-hidden="true">{processes}</span>
+          </button>
+        )}
         {project.missing === null && pullRequest !== null && (
           <button
             type="button"

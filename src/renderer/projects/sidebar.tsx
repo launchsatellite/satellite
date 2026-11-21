@@ -17,6 +17,7 @@ import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
+import { countLabel } from "../processes/process-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
@@ -27,6 +28,7 @@ interface SidebarProps {
   focusProjectId: string | undefined;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
   pullRequestFor: (ref: WorkspaceRef) => PullRequestFound | null;
+  processesFor: (ref: WorkspaceRef) => number;
   inbox: ReactNode;
 }
 interface ProjectRow {
@@ -82,10 +84,12 @@ function counted(count: number | null): string | undefined {
 function Readouts({
   workspace,
   pullRequest,
+  processes,
   testId,
 }: {
   workspace: WorkspaceView;
   pullRequest: PullRequestFound | null;
+  processes: number;
   testId: string | undefined;
 }) {
   const ahead = counted(workspace.ahead);
@@ -96,6 +100,7 @@ function Readouts({
     behind === undefined ? undefined : `${behind} behind`,
     changed === undefined ? undefined : `${changed} changed files`,
     pullRequest === null ? undefined : readoutLabel(pullRequest),
+    processes > 0 ? countLabel(processes) : undefined,
   ].filter((part) => part !== undefined);
   if (parts.length === 0) return null;
   return (
@@ -123,6 +128,16 @@ function Readouts({
             className="flex items-center gap-[5px]"
           >
             <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
+          </span>
+        )}
+        {processes > 0 && (
+          <span
+            data-testid={testId === undefined ? undefined : `${testId}-processes`}
+            title={countLabel(processes)}
+            className="flex items-center gap-[3px]"
+          >
+            <Icon name="running" size={12} />
+            {processes}
           </span>
         )}
       </span>
@@ -161,6 +176,7 @@ function ProjectRows({
   focus,
   pixelFor,
   pullRequestFor,
+  processesFor,
 }: {
   row: ProjectRow;
   selected: WorkspaceRef | null;
@@ -169,6 +185,7 @@ function ProjectRows({
   focus: boolean;
   pixelFor: SidebarProps["pixelFor"];
   pullRequestFor: SidebarProps["pullRequestFor"];
+  processesFor: SidebarProps["processesFor"];
 }) {
   return (
     <>
@@ -230,6 +247,7 @@ function ProjectRows({
                 <Readouts
                   workspace={workspace}
                   pullRequest={pullRequestFor({ projectId: project.id, workspace: workspace.key })}
+                  processes={processesFor({ projectId: project.id, workspace: workspace.key })}
                   testId={testId}
                 />
               </button>
@@ -249,6 +267,7 @@ export function Sidebar({
   focusProjectId,
   pixelFor,
   pullRequestFor,
+  processesFor,
   inbox,
 }: SidebarProps) {
   return (
@@ -294,6 +313,7 @@ export function Sidebar({
               focus={row.project.id === focusProjectId}
               pixelFor={pixelFor}
               pullRequestFor={pullRequestFor}
+              processesFor={processesFor}
             />
           ))}
         </nav>

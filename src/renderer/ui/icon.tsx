@@ -11,6 +11,7 @@ export type IconName =
   | "check"
   | "archive"
   | "bell"
+  | "running"
   | "chevron-right"
   | "chevron-down";
 
@@ -49,6 +50,7 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   bell: <path d="M4 11V7a4 4 0 0 1 8 0v4l1.25 1.5H2.75zM6.5 14.25h3" />,
+  running: <path d="M5.5 3.5v9l7-4.5z" />,
   "chevron-right": <path d="m6 3.5 4.5 4.5L6 12.5" />,
   "chevron-down": <path d="M3.5 6 8 10.5 12.5 6" />,
 };

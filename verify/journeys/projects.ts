@@ -20,7 +20,7 @@ const execute = promisify(execFile);
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const narrowPresses = 4;
-const menuCommands = 14;
+const menuCommands = 15;
 const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);

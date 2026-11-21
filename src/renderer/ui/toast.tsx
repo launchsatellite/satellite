@@ -39,7 +39,7 @@ export function Toast({ message, tone, onDismiss }: ToastProps) {
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
       }}
-      className="fixed bottom-4 left-1/2 z-40 flex max-w-[min(420px,calc(100%-32px))] -translate-x-1/2 items-center gap-[10px] rounded-[10px] border border-line bg-raised py-[10px] pr-[10px] pl-3 text-[13px] font-medium text-fg shadow-raised"
+      className="fixed bottom-4 left-1/2 z-[60] flex max-w-[min(420px,calc(100%-32px))] -translate-x-1/2 items-center gap-[10px] rounded-[10px] border border-line bg-raised py-[10px] pr-[10px] pl-3 text-[13px] font-medium text-fg shadow-raised"
     >
       {tone === "error" && <span className="size-2 flex-none rounded-[2px] bg-signal" />}
       <span className="min-w-0">{message}</span>
