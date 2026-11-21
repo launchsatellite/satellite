@@ -129,28 +129,15 @@ async function checkResize(session: AppSession): Promise<void> {
   );
 }
 
-async function checkDiff(page: Page): Promise<void> {
-  const editor = page.getByTestId("diff").locator(".monaco-diff-editor");
-  for (const side of ["original", "modified"]) {
-    await editor
-      .locator(`.editor.${side}`)
-      .waitFor({ timeout: promptTimeoutMs })
-      .catch(() => {
-        throw new Error(`the diff showed no ${side} side`);
-      });
-  }
-}
-
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   await checkWindow(page);
   await session.answerFolderDialog(session.repo);
   await page.getByTestId("add-first-project").click();
-  await page.getByTestId("diff").waitFor({ timeout: promptTimeoutMs });
+  await page.getByTestId("changes").waitFor({ timeout: promptTimeoutMs });
   const firstPid = await startClaude(session, 1);
   await checkInput(session);
   await checkResize(session);
-  await checkDiff(page);
   await session.screenshot("launch");
 
   assert.ok(!processGone(firstPid), "the first stand-in was gone before the reload");

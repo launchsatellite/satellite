@@ -599,16 +599,14 @@ describe("createTerminalSessions", () => {
     try {
       ptys[0]?.kill.mockImplementation(() => delay(treeKillBoundMs));
       const quit = { closed: false };
-      void sessions.closeAll().then(() => {
+      const closing = sessions.closeAll().then(() => {
         quit.closed = true;
       });
       const endChainMs = treeKillBoundMs + exitGraceMs;
       await vi.advanceTimersByTimeAsync(endChainMs - 1);
       expect(quit.closed).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
-      for (let turn = 0; turn < 1000 && !quit.closed; turn += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
+      await closing;
       expect(quit.closed).toBe(true);
       expect(endChainMs).toBeLessThan(quitBoundMs);
     } finally {

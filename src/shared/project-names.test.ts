@@ -11,7 +11,7 @@ describe("shownParent", () => {
   it("shows the parent of two projects that read the same once cleaned", () => {
     for (const pair of [
       ["app", "app!"],
-      ["app", "app​"],
+      ["app", "app\u{200b}"],
       ["café", "café"],
       ["app", "app"],
     ]) {

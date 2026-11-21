@@ -8,6 +8,8 @@ import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
+export type GitVariable = (typeof gitVariables)[number];
+export type StopReason = "time" | "stopped" | "output";
 export interface ResolvedCommand {
   readonly file: string;
   readonly args: readonly string[];
@@ -26,7 +28,16 @@ export class AbandonedRun extends Error {
   }
 }
 
+export class ToolStopped extends Error {
+  readonly reason: StopReason;
+  constructor(message: string, reason: StopReason) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
 export const toolOverrideVariables: Readonly<Partial<Record<Tool, string>>> = {
+  git: "SATELLITE_GIT",
   gh: "SATELLITE_GH",
   claude: "SATELLITE_CLAUDE",
 };
@@ -73,6 +84,12 @@ const gitQuiet = {
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
 };
+const gitVariables = [
+  "GIT_NO_LAZY_FETCH",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_SYSTEM",
+] as const;
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
@@ -220,11 +237,20 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+  options: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
+    bytes?: boolean;
+  } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
   const env = toolEnvironment(tool, await childEnvironment());
+  for (const name of tool === "git" ? gitVariables : []) {
+    const value = options.gitVariables?.[name];
+    if (value !== undefined) env[name] = value;
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(command.file, [...command.args, ...args], {
       env,
@@ -239,9 +265,9 @@ export async function runTool(
       }),
     );
     const output = { stdout: "", stderr: "", size: 0 };
-    let failure: Error | undefined;
+    let failure: ToolStopped | undefined;
     let abandon: NodeJS.Timeout | undefined;
-    const stop = (reason: Error) => {
+    const stop = (reason: ToolStopped) => {
       if (failure !== undefined) return;
       failure = reason;
       stopChild(child, exited);
@@ -252,10 +278,10 @@ export async function runTool(
       }, settleGraceMs);
     };
     const timer = setTimeout(() => {
-      stop(new Error(`${tool} did not finish in time`));
+      stop(new ToolStopped(`${tool} did not finish in time`, "time"));
     }, options.timeoutMs ?? 30_000);
     const abort = () => {
-      stop(new Error(`${tool} was stopped`));
+      stop(new ToolStopped(`${tool} was stopped`, "stopped"));
     };
     if (options.signal?.aborted === true) abort();
     else options.signal?.addEventListener("abort", abort, { once: true });
@@ -265,10 +291,13 @@ export async function runTool(
     };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
       output.size += chunk.length;
-      if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
-      else output[stream] += chunk;
+      if (output.size > outputLimit) {
+        stop(new ToolStopped(`${tool} printed more than Satellite reads`, "output"));
+      } else output[stream] += chunk;
     };
-    child.stdout.setEncoding("utf8").on("data", collect("stdout"));
+    child.stdout
+      .setEncoding(options.bytes === true ? "latin1" : "utf8")
+      .on("data", collect("stdout"));
     child.stderr.setEncoding("utf8").on("data", collect("stderr"));
     child.once("error", (error: NodeJS.ErrnoException) => {
       settle();

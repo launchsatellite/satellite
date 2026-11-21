@@ -28,6 +28,7 @@ The background process has full access to the machine. The interface has none an
 
 - Call `git`, `gh` and `claude` with argument arrays, never by joining strings into a shell command.
 - Paths and names from users and repos are validated and never escape the folder they belong to.
+- A name from a repo or a user that the interface draws, a file, a branch or a base, goes through `VisibleName` or `visibleText`, so a direction mark or a zero-width character can never disguise it. Text a repo's file holds goes only into Monaco's models, never into markup.
 - Satellite writes nothing into a user's working files and stores no tokens. Its own state and the workspaces' worktrees live in `~/.satellite`. The only repository writes are the branch, the worktree record and the fetch that making a workspace needs and the worktree removal of archive, all inside `.git` and listed in `ARCHITECTURE.md`.
 
 ## Code

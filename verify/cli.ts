@@ -270,6 +270,18 @@ function parseStep(raw: string): Step {
         session.dropFolder(target === "repo" ? session.repo : session.folder(target)),
       );
     }
+    case "diff-lines": {
+      const match = /^(original|modified):(\d+)-(\d+)$/.exec(needsValue());
+      const [, side, first, last] = match ?? [];
+      if (side !== "original" && side !== "modified") {
+        throw new Error(
+          "step diff-lines needs <side>:<start>-<end>, as in diff-lines=modified:2-3",
+        );
+      }
+      const start = boundedInt(first ?? "", name, 1, 1_000_000);
+      const end = boundedInt(last ?? "", name, start, 1_000_000);
+      return step(({ session }) => session.selectDiffLines(side, start, end));
+    }
     case "log":
       return step(({ session }) => session.standInEvents());
     case "notices":

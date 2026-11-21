@@ -22,6 +22,7 @@ import {
   gitReadMs,
   ignoredListMs,
   lsRemoteMs,
+  noLazyFetch,
   runGit,
   worktreeAddMs,
 } from "./git-command.ts";
@@ -62,7 +63,8 @@ interface Shared {
   folder: MadeFolder | null;
   worktreeLeft: boolean;
 }
-type DefaultStart = { remote: null } | { remote: string; branch: string | null };
+export type DefaultStart =
+  { remote: null } | { remote: string; branch: string | null; unread?: true };
 
 const includeFilesMs = 120_000;
 
@@ -151,24 +153,38 @@ function pickRemote(stdout: string): string | null {
   return chosen !== undefined && chosen !== null && remotePattern.test(chosen) ? chosen : null;
 }
 
-async function cachedDefault(root: string, remote: string): Promise<string | null> {
+async function cachedDefault(
+  root: string,
+  remote: string,
+  signal?: AbortSignal,
+): Promise<string | null | undefined> {
   const run = await runGit(
     root,
     ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`],
     gitReadMs,
+    signal,
+    { gitVariables: noLazyFetch },
   );
+  if (run === undefined || (run.exitCode !== 0 && run.exitCode !== 1)) return undefined;
   const prefix = `refs/remotes/${remote}/`;
-  const ref = run?.exitCode === 0 ? run.stdout.trim() : "";
+  const ref = run.exitCode === 0 ? run.stdout.trim() : "";
   const branch = ref.startsWith(prefix) ? ref.slice(prefix.length) : "";
   return isBranchName(branch) ? branch : null;
 }
 
-async function defaultStart(root: string): Promise<DefaultStart | undefined> {
-  const run = await runGit(root, ["remote"], gitReadMs);
+export async function defaultStart(
+  root: string,
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs, undefined, {
+    gitVariables: noLazyFetch,
+  }),
+  signal?: AbortSignal,
+): Promise<DefaultStart | undefined> {
+  const run = await listed;
   if (run?.exitCode !== 0) return undefined;
   const remote = pickRemote(run.stdout);
   if (remote === null) return { remote };
-  return { remote, branch: await cachedDefault(root, remote) };
+  const branch = await cachedDefault(root, remote, signal);
+  return branch === undefined ? { remote, branch: null, unread: true } : { remote, branch };
 }
 
 async function remoteDefault(root: string, remote: string, signal: AbortSignal) {

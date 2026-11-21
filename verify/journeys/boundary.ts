@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -34,6 +34,7 @@ const settleMs = 1_000;
 const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
 const madeUpFingerprint = "0".repeat(64);
+const listedName = "listed by changes.txt";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const hookSettings = z.object({
@@ -198,6 +199,124 @@ async function checkWorkspaceRequests(session: AppSession): Promise<string> {
   const worktrees = join(session.home, "worktrees");
   assert.ok(!(await exists(worktrees)), "a refused workspace request made the worktrees folder");
   return projectId;
+}
+
+async function checkChangesRequests(page: Page, projectId: string, repo: string): Promise<void> {
+  const workspace = { projectId, workspace: "main" };
+  const view = "uncommitted";
+  for (const payload of [
+    { workspace, view, args: ["--output=/tmp/written"] },
+    { workspace, view: "staged" },
+    { workspace, view: ["branch"] },
+    { workspace: { projectId, workspace: "../main" }, view },
+  ]) {
+    await refusedWith(page, "changes.list", payload, "invalid-request");
+  }
+  for (const elsewhere of [
+    { projectId: randomUUID(), workspace: "main" },
+    { projectId, workspace: randomUUID() },
+  ]) {
+    await refusedWith(page, "changes.list", { workspace: elsewhere, view }, "not-found");
+  }
+  const { changes } = await okValue(
+    page,
+    "changes.list",
+    { workspace, view },
+    z.object({ changes: z.object({ kind: z.literal("files"), files: z.array(z.unknown()) }) }),
+  );
+  assert.deepEqual(changes.files, [], "changes.list listed files in a clean main workspace");
+  await writeFile(join(repo, listedName), "listed\n");
+  const listed = await okValue(
+    page,
+    "changes.list",
+    { workspace, view },
+    z.object({
+      changes: z.object({
+        kind: z.literal("files"),
+        files: z.array(z.object({ path: z.string() })),
+      }),
+    }),
+  );
+  assert.deepEqual(
+    listed.changes.files.map((file) => file.path),
+    [listedName],
+    "changes.list missed a new untracked file",
+  );
+  for (const path of [
+    "../../../etc/hosts",
+    ".git/config",
+    "README.md",
+    "/etc/hosts",
+    "C:\\Windows\\win.ini",
+    "./README.md",
+    ".GIT/HEAD",
+  ]) {
+    await refusedWith(page, "changes.file", { workspace, view, path }, "not-found");
+  }
+  const shown = await okValue(
+    page,
+    "changes.file",
+    { workspace, view, path: listedName },
+    z.object({ kind: z.literal("text"), modified: z.string() }),
+  );
+  assert.equal(shown.modified, "listed\n", "changes.file did not answer a listed file");
+  const elsewhere = { projectId: randomUUID(), workspace: "main" };
+  await refusedWith(
+    page,
+    "changes.file",
+    { workspace: elsewhere, view, path: "README.md" },
+    "not-found",
+  );
+  for (const path of ["", "a".repeat(4097), 1, ["README.md"], null]) {
+    await refusedWith(page, "changes.file", { workspace, view, path }, "invalid-request");
+  }
+  await refusedWith(
+    page,
+    "changes.file",
+    { workspace, view, path: "README.md", oid: "0".repeat(40) },
+    "invalid-request",
+  );
+  await unlink(join(repo, listedName));
+  await checkChangesFlood(page, workspace);
+}
+
+async function checkChangesFlood(page: Page, workspace: unknown): Promise<void> {
+  const codes = await page.evaluate(
+    async ({ target, requests }) => {
+      const api: unknown = Reflect.get(window, "satellite");
+      const invoke: unknown =
+        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+      if (typeof invoke !== "function") return ["window.satellite.invoke is missing"];
+      const ask = async (channel: string, payload: unknown) => {
+        const answer: unknown = await Reflect.apply(invoke, api, [channel, payload]);
+        const error: unknown =
+          typeof answer === "object" && answer !== null ? Reflect.get(answer, "error") : undefined;
+        const code: unknown =
+          typeof error === "object" && error !== null ? Reflect.get(error, "code") : "ok";
+        return typeof code === "string" ? code : "unreadable";
+      };
+      return Promise.all(
+        Array.from({ length: requests }, (_, index) =>
+          index % 3 === 2
+            ? ask("changes.file", { workspace: target, view: "branch", path: "README.md" })
+            : ask("changes.list", {
+                workspace: target,
+                view: index % 3 === 0 ? "branch" : "uncommitted",
+              }),
+        ),
+      );
+    },
+    { target: workspace, requests: 300 },
+  );
+  const unexpected = codes.filter((code) => !["ok", "refused", "not-found"].includes(code));
+  assert.deepEqual(unexpected, [], `a flood of changes requests answered ${unexpected.join(", ")}`);
+  const { changes } = await okValue(
+    page,
+    "changes.list",
+    { workspace, view: "uncommitted" },
+    z.object({ changes: z.object({ kind: z.literal("files") }) }),
+  );
+  assert.equal(changes.kind, "files", "changes.list no longer answered after a flood");
 }
 
 async function checkFingerprint(session: AppSession, projectId: string): Promise<void> {
@@ -463,6 +582,7 @@ async function run(session: AppSession): Promise<void> {
   await checkPathForFile(page);
   await checkRelativeDrop(page);
   const projectId = await checkWorkspaceRequests(session);
+  await checkChangesRequests(page, projectId, session.repo);
   await checkFingerprint(session, projectId);
   await resumableRefused(page, projectId);
   await startsRefused(session, projectId);

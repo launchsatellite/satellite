@@ -1,9 +1,23 @@
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified } from "../platform/paths.ts";
-import { AbandonedRun, runTool, type ToolRun } from "../platform/tools.ts";
+import {
+  AbandonedRun,
+  runTool,
+  ToolStopped,
+  type GitVariable,
+  type StopReason,
+  type ToolRun,
+} from "../platform/tools.ts";
 import { gitReadTimeoutMs } from "../projects/repository-check.ts";
 
+export type GitStop = StopReason | "stuck" | "failed";
+interface GitExtra {
+  gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
+  bytes?: boolean;
+}
+
 export const gitReadMs = gitReadTimeoutMs;
+export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
 export const lsRemoteMs = 10_000;
 export const fetchMs = 15_000;
 export const branchMs = 5000;
@@ -27,32 +41,37 @@ const safeConfig = [
   "-c",
   "submodule.recurse=false",
 ];
-const foldersWithStuckGit = new Set<string>();
+const foldersWithStuckGit = new Map<string, Promise<void>>();
 
 export function gitArgs(folder: string, args: readonly string[]): string[] {
   if (!isFullyQualified(folder)) throw new Error("git runs only in an absolute folder");
   return ["--no-optional-locks", "-C", folder, ...safeConfig, ...args];
 }
 
-export async function runGit(
+export function whenGitExits(folder: string): Promise<void> {
+  return foldersWithStuckGit.get(folder) ?? Promise.resolve();
+}
+
+export async function readGit(
   folder: string,
   args: readonly string[],
   timeoutMs: number,
   signal?: AbortSignal,
-): Promise<ToolRun | undefined> {
-  if (foldersWithStuckGit.has(folder)) return undefined;
+  extra: GitExtra = {},
+): Promise<ToolRun | GitStop> {
+  if (foldersWithStuckGit.has(folder)) return "stuck";
   let run: ToolRun | undefined;
   try {
-    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal });
+    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, ...extra });
   } catch (error) {
     if (error instanceof AbandonedRun) {
-      foldersWithStuckGit.add(folder);
       const release = () => {
         foldersWithStuckGit.delete(folder);
       };
-      error.exited.then(release, release);
+      foldersWithStuckGit.set(folder, error.exited.then(release, release));
+      return "stuck";
     }
-    return undefined;
+    return error instanceof ToolStopped ? error.reason : "failed";
   }
   if (run === undefined) {
     throw new BridgeFailure(
@@ -61,4 +80,15 @@ export async function runGit(
     );
   }
   return run;
+}
+
+export async function runGit(
+  folder: string,
+  args: readonly string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+  extra: GitExtra = {},
+): Promise<ToolRun | undefined> {
+  const run = await readGit(folder, args, timeoutMs, signal, extra);
+  return typeof run === "string" ? undefined : run;
 }

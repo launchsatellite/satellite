@@ -266,6 +266,7 @@ describe("runTool", () => {
     try {
       const running = runTool("gh", [pidFile], { timeoutMs: 1000 });
       await expect(running).rejects.toThrow("gh did not finish in time");
+      await expect(running).rejects.toMatchObject({ reason: "time" });
       child = Number(await readFile(pidFile, "utf8"));
       await vi.waitFor(() => {
         expect(isAlive(child)).toBe(false);

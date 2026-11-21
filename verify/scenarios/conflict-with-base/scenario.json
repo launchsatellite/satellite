@@ -1,0 +1,123 @@
+{
+  "description": "The base moved and one file conflicts with workspace alpha, and the repository's own merge driver must never run. A stand-in git answers a version file in the Satellite home when one exists, a stand-in gh, a stand-in Claude Code that takes prompts, and Satellite set to the light theme.",
+  "gitStandIn": true,
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        {
+          "write": {
+            "path": "README.md",
+            "content": "# Verify repo\n"
+          }
+        },
+        {
+          "write": {
+            "path": "shared.txt",
+            "content": "one\ntwo\nthree\n"
+          }
+        },
+        {
+          "write": {
+            "path": ".gitattributes",
+            "content": "shared.txt merge=evil\n"
+          }
+        },
+        {
+          "git": ["init", "-b", "main"]
+        },
+        {
+          "git": ["add", "."]
+        },
+        {
+          "git": ["commit", "-m", "first commit"]
+        },
+        {
+          "write": {
+            "path": "shared.txt",
+            "content": "one\nTWO on main\nthree\n"
+          }
+        },
+        {
+          "git": ["commit", "-am", "main moves"]
+        }
+      ]
+    }
+  ],
+  "repo": [
+    {
+      "git": ["clone", "../folders/upstream", "."]
+    },
+    {
+      "git": ["switch", "-C", "main", "HEAD~1"]
+    },
+    {
+      "git": ["config", "merge.evil.driver", "touch \"$HOME/merge-driver-ran\""]
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": [
+        {
+          "write": {
+            "path": "shared.txt",
+            "content": "one\ntwo on alpha\nthree\n"
+          }
+        },
+        {
+          "git": ["commit", "-am", "alpha edits shared"]
+        }
+      ]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    },
+    {
+      "path": "quarantine/leftover/object",
+      "content": "x"
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "\u001b[?2004h"
+      },
+      {
+        "print": "> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "hook": "Stop"
+      },
+      {
+        "print": "\r\nReady.\r\n> "
+      },
+      {
+        "await": "\r"
+      }
+    ]
+  }
+}

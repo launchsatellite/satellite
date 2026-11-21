@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   interfaceLimits,
+  type ChangesView as ChangesShown,
   type InterfaceState,
   type ProjectView,
   type ThemeChoice,
@@ -8,6 +9,12 @@ import {
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
+import { ChangesView } from "../changes/changes-view.tsx";
+import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
+import { conflictRequest, lineReference, noLinesSentence } from "../changes/prompt-requests.ts";
+import { useChanges } from "../changes/use-changes.ts";
+import { useDiffSelection } from "../changes/use-diff-selection.ts";
+import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
@@ -18,7 +25,6 @@ import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
-import { SampleDiff } from "../proving/sample-diff.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
@@ -258,8 +264,24 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const folderHere = selectedProject?.missing === null;
+  const [changesView, setChangesView] = useState<ChangesShown>("branch");
+  const [diffInline, setDiffInline] = useState(false);
+  const [diffNarrow, setDiffNarrow] = useState(true);
+  const [shownText, setShownText] = useState<ShownText | null>(null);
+  const { handle: diffHandle, read: diffSelection } = useDiffSelection();
+  const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
+  const changesShown = changesHere !== null;
+  const layoutShown =
+    changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
+  const finishedHere = tabsHere
+    .filter((tab) => tab.status === "done")
+    .map((tab) => tab.key)
+    .join(" ");
+  const changes = useChanges(changesHere, changesView, finishedHere, shownText?.path);
+  const conflicting = changes.list?.conflict?.kind === "files";
+  const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
   const neighbour = (step: number) =>
     tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
@@ -518,6 +540,71 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: !state.notifications,
             run: notifications(true),
           },
+          {
+            id: "changes.branch",
+            title: "Show the branch's changes",
+            available: changesShown && changesView === "uncommitted",
+            run: () => {
+              setChangesView("branch");
+            },
+          },
+          {
+            id: "changes.uncommitted",
+            title: "Show uncommitted changes",
+            available: changesShown && changesView === "branch",
+            run: () => {
+              setChangesView("uncommitted");
+            },
+          },
+          {
+            id: "changes.inline",
+            title: "Show the diff inline",
+            available: layoutShown && !diffInline,
+            run: () => {
+              setDiffInline(true);
+            },
+          },
+          {
+            id: "changes.update-from-base",
+            title: "Ask Claude Code to update from the base branch",
+            available: changesShown && conflicting,
+            run: () => {
+              sendToClaudeCode(conflictRequest(conflictBase));
+            },
+          },
+          {
+            id: "changes.send-lines",
+            title: "Send the selected lines to Claude Code",
+            shortcut: { key: "l" },
+            whenFocusIn: "[data-testid='diff']",
+            available: changesShown && shownText !== null,
+            run: () => {
+              const selection = diffSelection();
+              if (shownText === null || selection === null) {
+                notify(noLinesSentence, "error");
+                return;
+              }
+              const side = sideOnly(shownText.letter) ?? selection.side;
+              const reference = lineReference({
+                path: side === "original" ? (shownText.from ?? shownText.path) : shownText.path,
+                side,
+                view: shownText.view,
+                base: shownText.base,
+                start: selection.start,
+                end: selection.end,
+              });
+              if (reference.ok) sendToClaudeCode(reference.text);
+              else notify(reference.sentence, "error");
+            },
+          },
+          {
+            id: "changes.side-by-side",
+            title: "Show the diff side by side",
+            available: layoutShown && diffInline,
+            run: () => {
+              setDiffInline(false);
+            },
+          },
         ],
         notify,
         modal,
@@ -552,6 +639,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     newestTab,
     newestTerminal,
     openFromInbox,
+    changesShown,
+    changesView,
+    layoutShown,
+    diffInline,
+    conflicting,
+    conflictBase,
+    shownText,
+    diffSelection,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -565,7 +660,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     }
     return (
       <>
-        <WorkspaceHeader project={selectedProject} workspace={selectedWorkspace} />
+        <WorkspaceHeader
+          project={selectedProject}
+          workspace={selectedWorkspace}
+          base={changes.header?.base ?? null}
+          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
+          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
+        />
         {selectedProject.missing !== null ? (
           <FolderMissing
             name={selectedProject.name}
@@ -573,9 +674,20 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             missing={selectedProject.missing}
           />
         ) : (
-          <div className="min-h-0 flex-1">
-            <SampleDiff />
-          </div>
+          changesHere !== null && (
+            <ChangesView
+              workspace={changesHere}
+              view={changesView}
+              onView={setChangesView}
+              inline={diffInline}
+              onInline={setDiffInline}
+              list={changes.list}
+              error={changes.error}
+              diffHandle={diffHandle}
+              onShown={setShownText}
+              onNarrow={setDiffNarrow}
+            />
+          )
         )}
       </>
     );

@@ -1,6 +1,6 @@
 # 006 Changes
 
-Status **Approved** · Depends on **003**
+Status **Done** · Depends on **003**
 
 ## Why
 
@@ -26,14 +26,14 @@ Reviewing what an agent did is the user's main job. Changes shows the work of a 
 
 ## Not in scope
 
-Review threads on diff lines belong to spec 008.
+Review threads on diff lines belong to spec 008. Conflicts show only as the banner in Changes, and the inbox does not list them.
 
 ## Acceptance
 
-- [ ] An edited, an added, a deleted and a renamed file each appear with the right letter and diff. Proof, scenario `mixed-changes` and unit tests on the status parser.
-- [ ] Branch shows commits and uncommitted work against the base in one list. Proof, the same scenario.
-- [ ] A file changed on disk updates the list without any action. Proof, a journey.
-- [ ] A base branch that conflicts shows the banner and the request lands in the prompt. Proof, scenario `conflict-with-base`.
-- [ ] Selected lines arrive in the prompt as a reference to the file and lines. Proof, the driver.
-- [ ] A file name with spaces, quotes or unicode is listed and opened correctly. Proof, unit tests.
-- [ ] A binary file and a very large file show a sentence and never freeze the window. Proof, a journey.
+- [x] An edited, an added, a deleted and a renamed file each appear with the right letter and diff. Proof, scenario `mixed-changes` and unit tests on the status parser.
+- [x] Branch shows commits and uncommitted work against the base in one list. Proof, the same scenario.
+- [x] A file changed on disk updates the list without any action. Proof, a journey.
+- [x] A base branch that conflicts shows the banner and the request lands in the prompt. Proof, scenario `conflict-with-base`.
+- [x] Selected lines arrive in the prompt as a reference to the file and lines. Proof, the driver.
+- [x] A file name with spaces, quotes or unicode is listed and opened correctly. Proof, unit tests.
+- [x] A binary file and a very large file show a sentence and never freeze the window. Proof, a journey.

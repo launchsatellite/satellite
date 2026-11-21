@@ -28,6 +28,11 @@ export type GhState = z.output<typeof ghState>;
 export type ToolCheck = z.output<typeof toolCheck>;
 export type GhTokenVariable = z.output<typeof ghTokenVariable>;
 export type InstallFix = z.output<typeof installFix>;
+export type ChangeLetter = z.output<typeof changeLetter>;
+export type ChangesView = z.output<typeof changesView>;
+export type ChangedFile = z.output<typeof changedFile>;
+export type ChangesList = BridgeResponse<"changes.list">;
+export type FileSides = BridgeResponse<"changes.file">;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -44,6 +49,20 @@ export const bridgeLimits = {
   rows: { min: 1, max: 300 },
 };
 
+export const changesLimits = {
+  files: 1000,
+  parsed: 5000,
+  sideBytes: 1_048_576,
+  sideLines: 20_000,
+  countedFiles: 200,
+  countedBytes: 8_388_608,
+  binaryProbe: 8000,
+  pathChars: 4096,
+  linkChars: 4096,
+  stampChars: 200,
+  conflictNames: 5,
+};
+
 export const interfaceLimits = {
   left: { min: 200, max: 360, initial: 248 },
   right: { min: 360, max: 640, initial: 440 },
@@ -54,6 +73,7 @@ export const themeChoice = z.enum(["system", "light", "dark"]);
 export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
 export const sessionEnding = z.enum(["ended", "unexpected", "resume-failed"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
+export const changeLetter = z.enum(["A", "M", "D", "R", "C", "T", "U"]);
 export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
 export const workspaceName = z
   .string()
@@ -62,6 +82,20 @@ export const workspaceName = z
   .refine((name) => workspaceNameProblem(name) === null);
 export const refName = z.string().min(6).max(300).refine(isStartRef);
 const count = z.int().min(0).max(1_000_000);
+export const changesView = z.enum(["branch", "uncommitted"]);
+const changePath = z.string().min(1).max(changesLimits.pathChars);
+const shortOid = z.string().regex(/^[0-9a-f]{7}$/);
+const sideText = z.string().max(changesLimits.sideBytes);
+export const changedFile = z.strictObject({
+  path: changePath,
+  from: changePath.nullable(),
+  letter: changeLetter,
+  tracked: z.boolean(),
+  kind: z.enum(["text", "binary", "submodule", "repository"]),
+  added: count.nullable(),
+  removed: count.nullable(),
+  stamp: z.string().min(1).max(changesLimits.stampChars),
+});
 export const interfaceState = z.strictObject({
   selected: workspaceRef.nullable(),
   columns: z.strictObject({
@@ -248,6 +282,69 @@ export const bridgeRequests = {
   "sessions.resumable": {
     request: z.strictObject({ workspace: workspaceRef }),
     response: z.strictObject({ resumable: z.boolean() }),
+  },
+  "changes.list": {
+    request: z.strictObject({ workspace: workspaceRef, view: changesView }),
+    response: z.strictObject({
+      branch: z.string().min(1).max(255).nullable(),
+      base: z.string().min(1).max(255).nullable(),
+      ahead: count.nullable(),
+      behind: count.nullable(),
+      conflict: z
+        .discriminatedUnion("kind", [
+          z.strictObject({
+            kind: z.literal("files"),
+            files: z.int().min(1).max(1_000_000),
+            names: z.array(changePath).max(changesLimits.conflictNames),
+          }),
+          z.strictObject({ kind: z.literal("old-git") }),
+          z.strictObject({ kind: z.literal("slow") }),
+          z.strictObject({ kind: z.literal("unchecked") }),
+        ])
+        .nullable(),
+      changes: z.discriminatedUnion("kind", [
+        z.strictObject({
+          kind: z.literal("files"),
+          files: z.array(changedFile).max(changesLimits.files),
+          more: count,
+          longPaths: count,
+        }),
+        z.strictObject({
+          kind: z.literal("unavailable"),
+          reason: z.enum([
+            "no-commits",
+            "no-base",
+            "unrelated",
+            "not-local",
+            "too-many",
+            "hung",
+            "failed",
+          ]),
+        }),
+      ]),
+    }),
+  },
+  "changes.file": {
+    request: z.strictObject({ workspace: workspaceRef, view: changesView, path: changePath }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({ kind: z.literal("text"), original: sideText, modified: sideText }),
+      z.strictObject({ kind: z.literal("binary") }),
+      z.strictObject({ kind: z.literal("large") }),
+      z.strictObject({
+        kind: z.literal("submodule"),
+        from: shortOid.nullable(),
+        to: shortOid.nullable(),
+      }),
+      z.strictObject({ kind: z.literal("repository") }),
+      z.strictObject({ kind: z.literal("link") }),
+      z.strictObject({ kind: z.literal("mode") }),
+      z.strictObject({ kind: z.literal("unmerged") }),
+      z.strictObject({ kind: z.literal("changing") }),
+      z.strictObject({ kind: z.literal("hung") }),
+      z.strictObject({ kind: z.literal("not-local") }),
+      z.strictObject({ kind: z.literal("unreadable") }),
+      z.strictObject({ kind: z.literal("not-utf8") }),
+    ]),
   },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),

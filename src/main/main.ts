@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
+import { createChanges, type Changes } from "./changes/changes-handlers.ts";
 import { noticeSubject } from "./inbox/notice-subject.ts";
 import { createNotices, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
@@ -50,6 +51,7 @@ function allowedOrigin(entryUrl: string): string {
 }
 
 interface Parts {
+  changes: Changes;
   interfaceFile: InterfaceFile;
   last: LastSessions;
   listening: Promise<HookListener | undefined>;
@@ -61,6 +63,7 @@ interface Parts {
 }
 
 async function start({
+  changes,
   interfaceFile,
   listening,
   notices,
@@ -88,6 +91,7 @@ async function start({
       ...projects.handlers,
       ...workspaces.handlers,
       ...terminals.handlers,
+      ...changes.handlers,
       ...linkHandlers(),
     },
     allowedOrigin(entryUrl),
@@ -132,7 +136,7 @@ function assemble(home: string): Parts {
     home,
     chooseFolder,
     window: mainWindow,
-    stopSessions: (folder) => terminals.sessionsInside.stopInside(folder),
+    stopSessions: (folder) => sessionsInside.stopInside(folder),
     recorded: (list) => {
       void last.keepOnly(
         list.flatMap((project) => [
@@ -161,7 +165,15 @@ function assemble(home: string): Parts {
       notices.update(needing);
     },
   });
+  const changes = createChanges({ home, store: projects.store });
+  const sessionsInside = {
+    countInside: (folder: string) => terminals.sessionsInside.countInside(folder),
+    stopInside: async (folder: string) => {
+      await Promise.all([terminals.sessionsInside.stopInside(folder), changes.stopInside(folder)]);
+    },
+  };
   return {
+    changes,
     interfaceFile: createInterfaceFile(home),
     last,
     listening,
@@ -172,7 +184,7 @@ function assemble(home: string): Parts {
     workspaces: workspaceHandlers({
       home,
       store: projects.store,
-      sessions: terminals.sessionsInside,
+      sessions: sessionsInside,
     }),
   };
 }

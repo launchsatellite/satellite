@@ -9,6 +9,7 @@ export interface FolderIdentity {
 }
 
 const windowsPathLimit = 150;
+const superscriptDevices = /^(?:com|lpt)[\u00b9\u00b2\u00b3]$/;
 
 export const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
 export const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
@@ -39,8 +40,9 @@ export function isSafeFileName(name: string, platform: NodeJS.Platform = process
   if (name === "" || name === "." || name === "..") return false;
   if (name.includes("\\") || name.includes("\0")) return false;
   if (platform !== "win32") return true;
-  const stem = (name.split(".")[0] ?? "").toLowerCase();
-  return !name.includes(":") && !/[. ]$/.test(name) && !reservedWorkspaceNames.has(stem);
+  const stem = (name.split(".")[0] ?? "").replace(/ +$/, "").toLowerCase();
+  if (reservedWorkspaceNames.has(stem) || superscriptDevices.test(stem)) return false;
+  return !name.includes(":") && !/[. ]$/.test(name);
 }
 
 export function isTooLongForCheckouts(

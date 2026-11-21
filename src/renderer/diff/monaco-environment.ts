@@ -24,11 +24,20 @@ export function applyMonacoTheme(): void {
   const paint = document.createElement("canvas").getContext("2d");
   if (paint === null) throw new Error("A canvas is needed to read the theme colours");
   const token = (name: string) => hexToken(styles, paint, name);
+  const rule = (name: string) => token(name).slice(1);
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   editor.defineTheme("satellite", {
     base: dark ? "vs-dark" : "vs",
-    inherit: true,
-    rules: [],
+    inherit: false,
+    rules: [
+      { token: "", foreground: rule("fg") },
+      { token: "comment", foreground: rule("dim"), fontStyle: "italic" },
+      { token: "keyword", foreground: rule("fg"), fontStyle: "bold" },
+      { token: "type", foreground: rule("fg") },
+      { token: "string", foreground: rule("fg2") },
+      { token: "number", foreground: rule("fg2") },
+      { token: "regexp", foreground: rule("fg2") },
+    ],
     colors: {
       "editor.background": token("bg"),
       "editor.foreground": token("fg"),

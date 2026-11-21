@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { holdsHiddenText, promptText } from "./prompt-text.ts";
+import { holdsHiddenText, holdsRevealedText, promptText } from "./prompt-text.ts";
+import { visibleText } from "./visible-text.ts";
 
 describe("promptText", () => {
   it("never leaves a way to submit", () => {
@@ -74,5 +75,24 @@ describe("holdsHiddenText", () => {
       expect(holdsHiddenText(text), JSON.stringify(text)).toBe(true);
     }
     expect(holdsHiddenText("r\u{e9}sum\u{e9} \u{1f469}\u{200d}\u{1f4bb}.png")).toBe(false);
+  });
+
+  it("refuses every character the diff reveals and every one the prompt would change", () => {
+    const refused: number[] = [];
+    for (let point = 0; point <= 0x10ffff; point += 1) {
+      if (point >= 0xd800 && point <= 0xdfff) continue;
+      const text = `a${String.fromCodePoint(point)}b`;
+      const hides = visibleText(text) !== text;
+      if (hides) refused.push(point);
+      if (promptText(text) !== text) expect(hides, `U+${point.toString(16)}`).toBe(true);
+    }
+    for (const point of [0x3164, 0xffa0, 0x115f, 0x2800, 0xfe00, 0x34f, 0xa0, 0x3000, 0xfffc]) {
+      expect(refused).toContain(point);
+      expect(holdsRevealedText(`a${String.fromCodePoint(point)}b`)).toBe(true);
+    }
+  }, 120_000);
+
+  it("refuses a name written like a revealed character", () => {
+    expect(holdsRevealedText("[U+202E]x")).toBe(true);
   });
 });

@@ -22,12 +22,19 @@ export type CommandId =
   | "theme.dark"
   | "notifications.off"
   | "notifications.on"
-  | "inbox.newest";
+  | "inbox.newest"
+  | "changes.branch"
+  | "changes.uncommitted"
+  | "changes.inline"
+  | "changes.side-by-side"
+  | "changes.update-from-base"
+  | "changes.send-lines";
 
 export interface Command {
   id: CommandId;
   title: string;
   shortcut?: Shortcut;
+  whenFocusIn?: string;
   available: boolean;
   run: () => void;
 }

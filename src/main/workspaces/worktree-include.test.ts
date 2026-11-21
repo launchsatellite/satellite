@@ -23,7 +23,7 @@ describe("parseWorktreeInclude", () => {
   });
 
   it("reads lines the way git does", () => {
-    expect(matcher("﻿local.json\n").matches("local.json", false)).toBe(true);
+    expect(matcher("\u{feff}local.json\n").matches("local.json", false)).toBe(true);
     expect(matcher("local.json\r").matches("local.json", false)).toBe(true);
     expect(matcher("foo\\\\  \n").matches("foo\\", false)).toBe(true);
     expect(parseWorktreeInclude("dangling\\\n")).toEqual([]);

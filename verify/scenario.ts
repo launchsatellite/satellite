@@ -51,6 +51,7 @@ export const scenarioSchema = z.strictObject({
   workspaces: z
     .array(z.strictObject({ name: z.string().regex(kebabCase), steps: z.array(repoStepSchema) }))
     .optional(),
+  gitStandIn: z.literal(true).optional(),
   gh: z.array(ghAnswerSchema),
   claude: z.union([
     z.strictObject({

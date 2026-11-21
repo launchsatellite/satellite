@@ -31,7 +31,7 @@ Every spec is checked against these. When two conflict, the earlier one wins.
 | Project | A git repository you added to Satellite. It stays where it already is on disk. |
 | Workspace | One piece of work inside a project, with its own branch and sessions. The main workspace is the project's own folder on its current branch, and every other workspace has its own worktree. Every view shows the selected workspace. |
 | Session | One Claude Code process running in a workspace, shown in the agent pane. |
-| Needs you | Anything you must act on. An agent question or permission request, failed checks, requested changes or conflicts. |
+| Needs you | Anything you must act on, such as an agent question or a permission request. A conflict with the base branch shows as a calm banner in Changes and is not a needs-you reason. |
 | Inbox | Every workspace that needs you, across all projects, in one list. |
 | Archive | Remove a workspace's worktree after showing what would be lost, its uncommitted and ignored files included. The branch and its commits stay, while a detached head has no branch to keep them. |
 
@@ -66,6 +66,14 @@ Selecting a row, or Go to the newest workspace that needs you in the command men
 When a workspace starts needing you while the window is hidden, minimised or behind another app, Satellite shows one system notification. Notifications are only for needing you, never for finished work. More sessions asking in the same workspace add none until it has left the inbox and needs you again. At most one notification shows every 5 seconds, and the workspaces that ask in between arrive together as one that counts every workspace waiting. A notification names one workspace only while no other waits, so it always states everything waiting. A notification holds only Satellite's own words with the workspace and project names, never anything a session said or ran, and a click on it brings the window forward and opens the one workspace it named while that one still needs you, or else the newest one waiting, the way its row does. Turn notifications off or on in the command menu. Turning them off closes the one showing, the switch is remembered, and the inbox and the count keep working while it is off.
 
 The app icon carries the inbox count on macOS and on Linux launchers that support it, never for the AppImage. Windows shows no count. On macOS a notification needs an app the system accepts as signed and your permission, and the count needs that permission too. On Windows a notification needs the Start Menu shortcut the installer makes. A name written right to left displays right to left in a notification.
+
+## Changes
+
+Changes is the default tab of a workspace and shows what it changed as diffs. A switch picks the view. Branch, the one a workspace opens on, compares the working tree with the point where the branch left its base, so commits and uncommitted work sit in one list. Uncommitted compares it with the last commit. The base is the remote's default branch as git already records it, or for a project without a remote the branch of its main folder, and the main workspace of a project without a remote default has none. Files git does not track yet are listed as added in both views.
+
+Each row shows the file's Git letter, its name and how many lines it added and removed, and the diff of the selected file sits beside the list, read only, side by side or inline as you choose, and always inline in a pane too narrow for two sides, with syntax shown in weight and grey, hidden characters in names and lines written out and look-alike letters outlined. The workspace header names the branch, its base and how far it is ahead of and behind its remote. A file that is binary, over 1 MB or 20,000 lines, a repository of its own or not UTF-8 text shows one sentence in place of a diff.
+
+The view refreshes by itself while Satellite is visible, and at once when a session in the workspace finishes a turn, so nothing needs a button. When the base has moved and files conflict with the branch, a calm grey banner names them and offers Send to Claude Code with a request to update from the base and resolve the conflicts. Conflicts do not enter the inbox. The check is a trial merge that touches nothing in the repository and needs git 2.38 or newer, and on an older git the banner says so instead of claiming there is no conflict. Selecting lines in a diff and pressing Send lines, or Cmd+L, or Ctrl+Shift+L on Windows and Linux with focus in the diff, types a reference to those lines into the Claude Code prompt in plain words, such as Lines 12 to 18 of src/app.ts in this workspace, and never presses enter.
 
 ## Decisions
 

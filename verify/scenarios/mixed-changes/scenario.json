@@ -1,0 +1,72 @@
+{
+  "description": "A clone of a local upstream with one workspace, alpha, holding a commit that edits, adds, deletes and renames files and uncommitted work on top, with names that hold spaces, quotes, unicode, a leading dash and a direction override, a stand-in gh, a stand-in Claude Code that reports one prompt, and Satellite set to the light theme.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  return \"Hello \" + name;\n}\n"
+          }
+        },
+        { "write": { "path": "old.txt", "content": "This file goes away.\n" } },
+        { "write": { "path": "notes.md", "content": "# Notes\n\nKeep this.\n" } },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    }
+  ],
+  "repo": [{ "git": ["clone", "../folders/upstream", "."] }],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": [
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  const greeting = \"Hello\";\n  return `${greeting}, ${name}!`;\n}\n"
+          }
+        },
+        { "write": { "path": "docs/new guide.md", "content": "# Guide\n\nStep one.\n" } },
+        { "git": ["rm", "old.txt"] },
+        { "git": ["mv", "notes.md", "café notes.md"] },
+        { "git": ["add", "-A"] },
+        { "git": ["commit", "-m", "work on alpha"] },
+        { "write": { "path": "README.md", "content": "# Verify repo\n\nEdited by the agent.\n" } },
+        { "write": { "path": "it's new.txt", "content": "fresh\n" } },
+        { "write": { "path": "-dash.txt", "content": "leading dash\n" } },
+        { "write": { "path": "report\u202etxt.md", "content": "hidden direction\n" } },
+        { "write": { "path": "logo.bin", "content": "\u0000\u0001PNG" } }
+      ]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      { "print": "\u001b[?2004h" },
+      { "print": "> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" },
+      { "hook": "Stop" },
+      { "print": "\r\nReady.\r\n> " },
+      { "await": "\r" }
+    ]
+  }
+}
