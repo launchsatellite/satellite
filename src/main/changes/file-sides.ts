@@ -10,13 +10,14 @@ import {
   noTerminal,
 } from "../platform/file-system.ts";
 import { realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { gitReadMs, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
   | { kind: "text"; text: string }
   | { kind: "binary" }
   | { kind: "large" }
   | { kind: "changing" }
+  | { kind: "hung" }
   | { kind: "gone" }
   | { kind: "not-local" }
   | { kind: "unreadable" }
@@ -36,6 +37,7 @@ const refused: SideRead = { kind: "refused" };
 const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
+const hung: SideRead = { kind: "hung" };
 const notLocal: SideRead = { kind: "not-local" };
 const unreadable: SideRead = { kind: "unreadable" };
 const lineFeed = 10;
@@ -140,18 +142,29 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   return sameFolder(recheck, folder) ? read : refused;
 }
 
-async function gitOutput(folder: string, args: string[], signal?: AbortSignal, bytes = false) {
-  const run = await runGit(folder, args, gitReadMs, signal, {
-    gitVariables: noLazyFetch,
-    bytes,
-  });
-  return run?.exitCode === 0 ? run.stdout : undefined;
+async function gitOutput(
+  folder: string,
+  args: string[],
+  signal?: AbortSignal,
+  bytes = false,
+): Promise<{ stdout: string } | GitStop | undefined> {
+  const run = await readGit(folder, args, gitReadMs, signal, { gitVariables: noLazyFetch, bytes });
+  if (typeof run === "string") return run;
+  return run.exitCode === 0 ? run : undefined;
+}
+
+function isHung(output: Awaited<ReturnType<typeof gitOutput>>): boolean {
+  return output === "time" || output === "stuck";
+}
+
+function stdoutOf(output: Awaited<ReturnType<typeof gitOutput>>): string | undefined {
+  return typeof output === "object" ? output.stdout : undefined;
 }
 
 async function objectLength(folder: string, signal?: AbortSignal) {
   const known = objectLengths.get(folder);
   if (known !== undefined) return known;
-  const format = await gitOutput(folder, ["rev-parse", "--show-object-format"], signal);
+  const format = stdoutOf(await gitOutput(folder, ["rev-parse", "--show-object-format"], signal));
   const length = format === undefined ? undefined : objectFormatLengths.get(format);
   if (length !== undefined) objectLengths.set(folder, length);
   return length;
@@ -168,7 +181,7 @@ async function missingBlob(folder: string, signal?: AbortSignal): Promise<SideRe
 
 export async function isPartialClone(folder: string, signal?: AbortSignal): Promise<boolean> {
   const args = ["config", "-z", "--get-regexp", promisorKeys];
-  const entries = (await gitOutput(folder, args, signal)) ?? "";
+  const entries = stdoutOf(await gitOutput(folder, args, signal)) ?? "";
   return entries.split("\0").some((entry) => entry !== "" && namesPromisor(entry));
 }
 
@@ -201,7 +214,7 @@ export async function readWorktreeSide(
   bytes: number = changesLimits.sideBytes,
 ): Promise<SideRead> {
   if (!isChangePath(path)) return unreadable;
-  if (rootsWithStuckReads.has(root)) return changing;
+  if (rootsWithStuckReads.has(root)) return hung;
   const work = confinedSide(root, path, bytes).catch((error: unknown) =>
     isMissing(error) ? gone : refused,
   );
@@ -212,7 +225,7 @@ export async function readWorktreeSide(
     rootsWithStuckReads.delete(root);
   };
   void work.then(release, release);
-  return changing;
+  return hung;
 }
 
 export async function readBlobSide(
@@ -222,10 +235,14 @@ export async function readBlobSide(
 ): Promise<SideRead> {
   if (!oidPattern.test(oid) || allZeros.test(oid)) return refused;
   if ((await objectLength(folder, signal)) !== oid.length) return refused;
-  const size = sizeOutput.exec((await gitOutput(folder, ["cat-file", "-s", oid], signal)) ?? "");
+  const sized = await gitOutput(folder, ["cat-file", "-s", oid], signal);
+  if (isHung(sized)) return hung;
+  const size = sizeOutput.exec(stdoutOf(sized) ?? "");
   if (size?.[1] === undefined) return missingBlob(folder, signal);
   if (Number(size[1]) > changesLimits.sideBytes) return large;
-  const content = await gitOutput(folder, ["cat-file", "blob", oid], signal, true);
+  const read = await gitOutput(folder, ["cat-file", "blob", oid], signal, true);
+  if (isHung(read)) return hung;
+  const content = stdoutOf(read);
   if (content === undefined) return missingBlob(folder, signal);
   if (content.length > changesLimits.sideBytes) return large;
   return decodedText(Buffer.from(content, "latin1"));

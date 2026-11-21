@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { gitArgs, gitReadMs, runGit } from "./git-command.ts";
+import { gitArgs, gitReadMs, readGit, runGit } from "./git-command.ts";
 
 const git = vi.hoisted(() => ({
   folders: new Array<string>(),
@@ -37,6 +37,13 @@ describe("runGit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await runGit(stuck, ["status"], gitReadMs);
     expect(git.folders).toEqual([stuck, other, stuck]);
+  });
+
+  it("names a git that never exits as stuck", async () => {
+    const folder = join(tmpdir(), "code", "named");
+    expect(await readGit(folder, ["status"], gitReadMs)).toBe("stuck");
+    expect(await readGit(folder, ["status"], gitReadMs)).toBe("stuck");
+    git.exit();
   });
 });
 

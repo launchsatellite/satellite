@@ -269,9 +269,9 @@ describe("readWorktreeSide on a file system that stalls", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const first = readWorktreeSide(root, "file.txt");
     await vi.advanceTimersByTimeAsync(gitReadMs);
-    expect(await first).toEqual({ kind: "changing" });
+    expect(await first).toEqual({ kind: "hung" });
     const seen = calls;
-    expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "changing" });
+    expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "hung" });
     expect(calls).toBe(seen);
     fileCalls.realpath = undefined;
     vi.useRealTimers();

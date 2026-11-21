@@ -9,6 +9,7 @@ import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
 export type GitVariable = (typeof gitVariables)[number];
+export type StopReason = "time" | "stopped" | "output";
 export interface ResolvedCommand {
   readonly file: string;
   readonly args: readonly string[];
@@ -24,6 +25,14 @@ export class AbandonedRun extends Error {
   constructor(message: string, exited: Promise<void>) {
     super(message);
     this.exited = exited;
+  }
+}
+
+export class ToolStopped extends Error {
+  readonly reason: StopReason;
+  constructor(message: string, reason: StopReason) {
+    super(message);
+    this.reason = reason;
   }
 }
 
@@ -250,9 +259,9 @@ export async function runTool(
       }),
     );
     const output = { stdout: "", stderr: "", size: 0 };
-    let failure: Error | undefined;
+    let failure: ToolStopped | undefined;
     let abandon: NodeJS.Timeout | undefined;
-    const stop = (reason: Error) => {
+    const stop = (reason: ToolStopped) => {
       if (failure !== undefined) return;
       failure = reason;
       stopChild(child, exited);
@@ -263,10 +272,10 @@ export async function runTool(
       }, settleGraceMs);
     };
     const timer = setTimeout(() => {
-      stop(new Error(`${tool} did not finish in time`));
+      stop(new ToolStopped(`${tool} did not finish in time`, "time"));
     }, options.timeoutMs ?? 30_000);
     const abort = () => {
-      stop(new Error(`${tool} was stopped`));
+      stop(new ToolStopped(`${tool} was stopped`, "stopped"));
     };
     if (options.signal?.aborted === true) abort();
     else options.signal?.addEventListener("abort", abort, { once: true });
@@ -276,8 +285,9 @@ export async function runTool(
     };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
       output.size += chunk.length;
-      if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
-      else output[stream] += chunk;
+      if (output.size > outputLimit) {
+        stop(new ToolStopped(`${tool} printed more than Satellite reads`, "output"));
+      } else output[stream] += chunk;
     };
     child.stdout
       .setEncoding(options.bytes === true ? "latin1" : "utf8")
