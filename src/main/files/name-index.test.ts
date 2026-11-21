@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesLimits } from "../../shared/bridge-contract.ts";
-import { rankFiles, readNames } from "./name-index.ts";
+import { rankFiles, readableNames, readNames } from "./name-index.ts";
 import {
   git,
   isolateGit,
@@ -103,5 +103,19 @@ describe("rankFiles", () => {
     const ranking = rankFiles("file", names, controller.signal);
     controller.abort(new Error("moved on"));
     await expect(ranking).rejects.toThrow("moved on");
+  });
+});
+
+describe("readableNames", () => {
+  it("drops a name that sits under a link, which the reader would refuse", async () => {
+    const root = await scratch();
+    const outside = await scratch();
+    await mkdir(join(root, "ok"));
+    await writeFile(join(outside, "a.txt"), "outside\n");
+    await symlink(outside, join(root, "linked"), "junction");
+    expect(await readableNames(root, ["linked/a.txt", "ok/b.txt", "top.txt"])).toEqual([
+      "ok/b.txt",
+      "top.txt",
+    ]);
   });
 });

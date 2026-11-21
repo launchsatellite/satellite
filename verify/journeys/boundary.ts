@@ -463,7 +463,11 @@ async function checkFilesAnswers(page: Page, projectId: string): Promise<void> {
     { workspace, query: "secret" },
     z.object({ kind: z.literal("found"), paths: z.array(z.string()) }),
   );
-  assert.deepEqual(hidden.paths, [], "files.find named a file git ignores");
+  assert.deepEqual(
+    hidden.paths,
+    [],
+    `files.find named ${JSON.stringify(hidden.paths)} for a name git ignores`,
+  );
 }
 
 async function checkNestedRepository(page: Page, projectId: string): Promise<void> {

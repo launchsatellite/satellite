@@ -1,6 +1,7 @@
+import { posix } from "node:path";
 import { filesLimits } from "../../shared/bridge-contract.ts";
 import { fuzzyScore } from "../../shared/fuzzy-match.ts";
-import { isChangePath } from "../changes/file-sides.ts";
+import { confinedFolder, isChangePath } from "../changes/file-sides.ts";
 import { noLazyFetch, readGit } from "../workspaces/git-command.ts";
 
 export type NameIndex =
@@ -83,4 +84,18 @@ export async function rankFiles(
   }
   signal?.throwIfAborted();
   return [...byName, ...byPath].slice(0, filesLimits.findResults).map((entry) => entry.name);
+}
+
+export async function readableNames(root: string, paths: readonly string[]): Promise<string[]> {
+  const parents = new Map<string, Promise<boolean>>();
+  const readable = (parent: string): Promise<boolean> => {
+    const known = parents.get(parent);
+    if (known !== undefined) return known;
+    const asked = confinedFolder(root, parent).then((folder) => typeof folder === "string");
+    parents.set(parent, asked);
+    return asked;
+  };
+  const kept: string[] = [];
+  for (const path of paths) if (await readable(posix.dirname(path))) kept.push(path);
+  return kept;
 }
