@@ -31,8 +31,10 @@ import { Sidebar } from "../projects/sidebar.tsx";
 import { ChecksList } from "../pull-request/checks-list.tsx";
 import { ConversationList } from "../pull-request/conversation-list.tsx";
 import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
+import { PullRequestFiles } from "../pull-request/pull-request-files.tsx";
 import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
-import { linkSentence } from "../pull-request/pull-request-words.ts";
+import { linkSentence, noUnresolvedSentence } from "../pull-request/pull-request-words.ts";
+import { threadOrder } from "../pull-request/thread-order.ts";
 import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
@@ -296,6 +298,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
   const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
+  const [threadTarget, setThreadTarget] = useState<{
+    place: string;
+    index: number;
+    seq: number;
+  } | null>(null);
+  const [jumpFrom, setJumpFrom] = useState<string | null>(null);
+  const [noThreads, setNoThreads] = useState(0);
+  const [conversationFocus, setConversationFocus] = useState(0);
   const changesShown = shownHere && centreView === "changes";
   const filesShown = shownHere && centreView === "files";
   const pullRequestShown = shownHere && centreView === "pull-request";
@@ -307,12 +317,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
-  const changes = useChanges(
-    changesHere,
-    filesShown ? "uncommitted" : changesView,
-    finishedHere,
-    shownText?.path,
-  );
   const listedRefs = useMemo(
     () =>
       (projects ?? [])
@@ -347,6 +351,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => foundOf(pullRequests.of(ref)),
     [pullRequests],
   );
+  const pullRequestFilesShown = pullRequestShown && pullRequestSection === "files";
+  const pullRequestBase = pullRequestFilesShown ? (shownPullRequest?.base ?? undefined) : undefined;
+  const changes = useChanges(
+    changesHere,
+    filesShown ? "uncommitted" : pullRequestFilesShown ? "branch" : changesView,
+    finishedHere,
+    shownText?.path,
+    pullRequestBase,
+  );
   const listedWorkspace = useCallback(
     ({ projectId, workspace }: WorkspaceRef) =>
       (projects ?? []).some(
@@ -366,6 +379,53 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [openFileTab],
   );
   const shownPullRequestUrl = shownPullRequest?.url ?? null;
+  const pullRequestFound = shownPullRequest !== null;
+  const placeHere =
+    changesHere === null ? null : `${changesHere.projectId}/${changesHere.workspace}`;
+  const detailRead = shownPullRequest?.detail?.kind === "read" ? shownPullRequest.detail : null;
+  const jumpDone = shownPullRequest?.detail?.kind === "unavailable" || detailRead !== null;
+  if (jumpFrom !== null && (jumpFrom !== placeHere || !pullRequestShown)) setJumpFrom(null);
+  if (jumpFrom !== null && jumpFrom === placeHere && jumpDone) {
+    setJumpFrom(null);
+    const order = detailRead === null ? [] : threadOrder(detailRead);
+    const now = threadTarget?.place === placeHere ? threadTarget : null;
+    const next = order[((now === null ? -1 : order.indexOf(now.index)) + 1) % order.length];
+    const thread = next === undefined ? undefined : detailRead?.threads[next];
+    if (next === undefined) {
+      setNoThreads((count) => count + 1);
+    } else {
+      setThreadTarget({ place: jumpFrom, index: next, seq: (now?.seq ?? 0) + 1 });
+      if (thread?.path === null) {
+        setPullRequestSection("conversation");
+        setConversationFocus((count) => count + 1);
+      }
+    }
+  }
+  useEffect(() => {
+    if (noThreads === 0) return;
+    const id = setTimeout(() => {
+      notify(noUnresolvedSentence, "info");
+    }, 0);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [noThreads, notify]);
+  useEffect(() => {
+    if (conversationFocus === 0) return;
+    const id = requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-testid="pull-request-conversation"]')?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [conversationFocus]);
+  const selectThread = useCallback(
+    (index: number) => {
+      if (placeHere === null) return;
+      setThreadTarget((kept) => ({ place: placeHere, index, seq: (kept?.seq ?? 0) + 1 }));
+    },
+    [placeHere],
+  );
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -659,6 +719,17 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "pull-request.next-thread",
+            title: "Go to the next unresolved thread",
+            shortcut: { key: "j" },
+            available: shownHere && pullRequestFound,
+            run: () => {
+              setCentreView("pull-request");
+              setPullRequestSection("files");
+              setJumpFrom(placeHere);
+            },
+          },
+          {
             id: "files.open",
             title: "Open a file by name",
             shortcut: { key: "f" },
@@ -797,6 +868,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     fileShown,
     diffSelection,
     shownPullRequestUrl,
+    pullRequestFound,
+    placeHere,
     askPullRequestLink,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
@@ -854,6 +927,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                   </div>
                   {pullRequestSection === "conversation" && (
                     <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
+                  )}
+                  {pullRequestSection === "files" && (
+                    <PullRequestFiles
+                      key={`${changesHere.projectId}/${changesHere.workspace}`}
+                      workspace={changesHere}
+                      found={shownPullRequest}
+                      list={changes.list}
+                      error={changes.error}
+                      handle={diffHandle}
+                      current={threadTarget?.place === placeHere ? threadTarget : null}
+                      onCurrent={selectThread}
+                      onLink={askPullRequestLink}
+                    />
                   )}
                 </>
               )}

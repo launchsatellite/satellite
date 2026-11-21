@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { isStartRef, workspaceNameLimit, workspaceNameProblem } from "./workspace-name.ts";
+import {
+  isBranchName,
+  isStartRef,
+  workspaceNameLimit,
+  workspaceNameProblem,
+} from "./workspace-name.ts";
 
 export type BridgeChannel = keyof typeof bridgeRequests;
 export type BridgeRequest<C extends BridgeChannel> = z.output<
@@ -106,6 +111,7 @@ export const workspaceName = z
 export const refName = z.string().min(6).max(300).refine(isStartRef);
 const count = z.int().min(0).max(1_000_000);
 export const changesView = z.enum(["branch", "uncommitted"]);
+const baseName = z.string().min(1).max(255).refine(isBranchName);
 const changePath = z.string().min(1).max(changesLimits.pathChars);
 const shortOid = z.string().regex(/^[0-9a-f]{7}$/);
 const sideText = z.string().max(changesLimits.sideBytes);
@@ -486,7 +492,11 @@ export const bridgeRequests = {
     response: z.strictObject({ resumable: z.boolean() }),
   },
   "changes.list": {
-    request: z.strictObject({ workspace: workspaceRef, view: changesView }),
+    request: z.strictObject({
+      workspace: workspaceRef,
+      view: changesView,
+      base: baseName.optional(),
+    }),
     response: z.strictObject({
       branch: z.string().min(1).max(255).nullable(),
       base: z.string().min(1).max(255).nullable(),
@@ -527,7 +537,12 @@ export const bridgeRequests = {
     }),
   },
   "changes.file": {
-    request: z.strictObject({ workspace: workspaceRef, view: changesView, path: changePath }),
+    request: z.strictObject({
+      workspace: workspaceRef,
+      view: changesView,
+      path: changePath,
+      base: baseName.optional(),
+    }),
     response: z.discriminatedUnion("kind", [
       z.strictObject({ kind: z.literal("text"), original: sideText, modified: sideText }),
       z.strictObject({ kind: z.literal("binary") }),

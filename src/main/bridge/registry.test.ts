@@ -422,6 +422,24 @@ describe("createBridgeRouter", () => {
     expect(handlers["interface.save"]).toHaveBeenCalledTimes(2);
   });
 
+  it("refuses a changes request whose base is not a plain branch name", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const workspace = { projectId: terminalId, workspace: "main" };
+    const bases = ["-x", "a..b", "refs/heads/x y", "a".repeat(256), 7, ""];
+    for (const base of bases) {
+      const list = await route("changes.list", { workspace, view: "branch", base }, owner);
+      const file = await route(
+        "changes.file",
+        { workspace, view: "branch", path: "a.txt", base },
+        owner,
+      );
+      expect(list).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+      expect(file).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
   it("refuses a changes request that names a view, a path or a field of its own", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);

@@ -33,7 +33,8 @@ export type CommandId =
   | "changes.update-from-base"
   | "changes.send-lines"
   | "pull-request.show"
-  | "pull-request.open";
+  | "pull-request.open"
+  | "pull-request.next-thread";
 
 export interface Command {
   id: CommandId;

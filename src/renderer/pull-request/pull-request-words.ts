@@ -174,6 +174,17 @@ export function resultPixel(result: CheckResult): PixelState {
   return resultPixels[result];
 }
 
+export const notAtHeadSentence =
+  "This workspace is not at the pull request's last commit, so lines may be off.";
+export const threadsHeading = "Threads in this file";
+export const offLineHeading = "Not on a line here";
+export const noFileThreadsSentence = "No threads in this file.";
+export const noUnresolvedSentence = "No unresolved threads.";
+
+export function noBaseSentence(base: string | null): string {
+  return `Satellite does not have ${base === null ? "the base branch" : visibleText(base)} here yet.`;
+}
+
 export function moreSentence(count: number): string {
   return `${String(count)} more on GitHub.`;
 }

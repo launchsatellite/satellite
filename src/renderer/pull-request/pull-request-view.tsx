@@ -18,7 +18,7 @@ import {
   untitled,
 } from "./pull-request-words.ts";
 
-export type PullRequestSection = "overview" | "checks" | "conversation";
+export type PullRequestSection = "overview" | "checks" | "conversation" | "files";
 
 interface PullRequestViewProps {
   entry: PullRequestEntry | undefined;
@@ -34,6 +34,7 @@ const sections: readonly { value: PullRequestSection; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "checks", label: "Checks" },
   { value: "conversation", label: "Conversation" },
+  { value: "files", label: "Files" },
 ];
 const sectionPanelId = "pull-request-section-panel";
 
@@ -188,7 +189,7 @@ export function PullRequestView({
             id={sectionPanelId}
             aria-labelledby={sectionTabId(section)}
             tabIndex={0}
-            className="min-h-0 flex-1 overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            className={`min-h-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${section === "files" ? "overflow-hidden" : "overflow-y-auto"}`}
           >
             {children}
           </div>
