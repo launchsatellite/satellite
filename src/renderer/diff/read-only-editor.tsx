@@ -61,7 +61,7 @@ function markedColumns(line: string): ColumnRange[] {
     ...lookAlikeColumns(line),
     ...confusableColumns(line, (point) => confusables.isAmbiguous(point)),
   ];
-  for (const range of found) marked.set(range.start, range);
+  for (const range of found) if (range.start <= drawnColumns) marked.set(range.start, range);
   return [...marked.values()];
 }
 
