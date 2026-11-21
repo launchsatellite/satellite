@@ -8,6 +8,7 @@ import {
   type AppTarget,
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
+import { changesJourney } from "./journeys/changes.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
@@ -32,6 +33,7 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   workspacesJourney,
+  changesJourney,
   sessionsJourney,
   inboxJourney,
   missingJourney,

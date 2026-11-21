@@ -267,11 +267,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [shownText, setShownText] = useState<ShownText | null>(null);
   const diffHandle = useRef<DiffHandle>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
-  const changes = useChanges(changesHere, changesView);
   const changesShown = changesHere !== null;
   const layoutShown = changesShown && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
+  const finishedHere = tabsHere
+    .filter((tab) => tab.status === "done")
+    .map((tab) => tab.key)
+    .join(" ");
+  const changes = useChanges(changesHere, changesView, finishedHere);
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
   const neighbour = (step: number) =>
     tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
