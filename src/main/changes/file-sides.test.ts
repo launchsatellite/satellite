@@ -54,6 +54,7 @@ describe("isChangePath", () => {
       "sub/.GIT/HEAD",
       "sub/.git",
       "a\0b",
+      "lost\ufffdbyte",
       "a".repeat(4097),
     ]) {
       expect(isChangePath(path, "linux")).toBe(false);
@@ -90,7 +91,7 @@ describe("readWorktreeSide", () => {
     await writeFile(join(base, "outside", "secret.txt"), "secret\n");
     await symlink(join(base, "outside"), join(root, "linked"), "junction");
     expect(await readWorktreeSide(root, "linked/secret.txt")).toEqual({ kind: "refused" });
-    expect(await readWorktreeSide(root, "../outside/secret.txt")).toEqual({ kind: "refused" });
+    expect(await readWorktreeSide(root, "../outside/secret.txt")).toEqual({ kind: "unreadable" });
     expect(await readWorktreeSide(join(root, "linked"), "secret.txt")).toEqual({
       kind: "text",
       text: "secret\n",
@@ -101,9 +102,21 @@ describe("readWorktreeSide", () => {
     const { root } = await worktree();
     await mkdir(join(root, ".git"));
     await writeFile(join(root, ".git", "config"), "[core]\n");
-    expect(await readWorktreeSide(root, ".git/config")).toEqual({ kind: "refused" });
-    expect(await readWorktreeSide(root, ".GIT/config")).toEqual({ kind: "refused" });
+    expect(await readWorktreeSide(root, ".git/config")).toEqual({ kind: "unreadable" });
+    expect(await readWorktreeSide(root, ".GIT/config")).toEqual({ kind: "unreadable" });
   });
+
+  it.skipIf(process.platform === "win32")(
+    "answers unreadable for a name git lists that the reader will not read",
+    async () => {
+      const { root } = await worktree();
+      for (const name of ["back\\slash.txt", "lost\ufffdbyte.txt"]) {
+        await writeFile(join(root, name), "content\n");
+        expect(await readWorktreeSide(root, name)).toEqual({ kind: "unreadable" });
+      }
+      expect(await readWorktreeSide(root, "../outside.txt")).toEqual({ kind: "unreadable" });
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "shows a link as its target and never follows it",

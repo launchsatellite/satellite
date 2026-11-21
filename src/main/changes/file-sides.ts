@@ -19,6 +19,7 @@ export type SideRead =
   | { kind: "changing" }
   | { kind: "gone" }
   | { kind: "not-local" }
+  | { kind: "unreadable" }
   | { kind: "refused" };
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -35,6 +36,7 @@ const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
 const notLocal: SideRead = { kind: "not-local" };
+const unreadable: SideRead = { kind: "unreadable" };
 const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
 const falseValues = new Set(["", "false", "no", "off", "0"]);
 
@@ -143,7 +145,7 @@ async function missingBlob(folder: string, signal?: AbortSignal): Promise<SideRe
 
 export function isChangePath(path: string, platform: NodeJS.Platform = process.platform): boolean {
   if (path.length === 0 || path.length > changesLimits.pathChars) return false;
-  if (path.includes("\0") || drivePrefix.test(path)) return false;
+  if (path.includes("\0") || path.includes("\ufffd") || drivePrefix.test(path)) return false;
   if (posix.isAbsolute(path) || win32.isAbsolute(path)) return false;
   return path.split("/").every((segment) => isChangeSegment(segment, platform));
 }
@@ -163,7 +165,7 @@ export async function readWorktreeSide(
   path: string,
   bytes: number = changesLimits.sideBytes,
 ): Promise<SideRead> {
-  if (!isChangePath(path)) return refused;
+  if (!isChangePath(path)) return unreadable;
   try {
     return await confinedSide(root, path, bytes);
   } catch (error) {
