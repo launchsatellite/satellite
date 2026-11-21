@@ -4,17 +4,42 @@
     {
       "name": "upstream",
       "steps": [
-        { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+        {
+          "write": {
+            "path": "README.md",
+            "content": "# Verify repo\n"
+          }
+        },
         {
           "write": {
             "path": "src/app.ts",
             "content": "export function greet(name: string) {\n  return \"Hello \" + name;\n}\n"
           }
         },
-        { "write": { "path": "old.txt", "content": "This file goes away.\n" } },
-        { "write": { "path": "notes.md", "content": "# Notes\n\nKeep this.\n" } },
-        { "write": { "path": ".gitignore", "content": "*.log\nbuild/\n" } },
-        { "write": { "path": "Cargo.toml", "content": "[package]\nname = \"verify\"\n" } },
+        {
+          "write": {
+            "path": "old.txt",
+            "content": "This file goes away.\n"
+          }
+        },
+        {
+          "write": {
+            "path": "notes.md",
+            "content": "# Notes\n\nKeep this.\n"
+          }
+        },
+        {
+          "write": {
+            "path": ".gitignore",
+            "content": "*.log\nbuild/\n"
+          }
+        },
+        {
+          "write": {
+            "path": "Cargo.toml",
+            "content": "[package]\nname = \"verify\"\n"
+          }
+        },
         {
           "write": {
             "path": "src/deep/er/than/usual/needle-target.ts",
@@ -27,13 +52,23 @@
             "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
           }
         },
-        { "git": ["init", "-b", "main"] },
-        { "git": ["add", "."] },
-        { "git": ["commit", "-m", "first commit"] }
+        {
+          "git": ["init", "-b", "main"]
+        },
+        {
+          "git": ["add", "."]
+        },
+        {
+          "git": ["commit", "-m", "first commit"]
+        }
       ]
     }
   ],
-  "repo": [{ "git": ["clone", "../folders/upstream", "."] }],
+  "repo": [
+    {
+      "git": ["clone", "../folders/upstream", "."]
+    }
+  ],
   "workspaces": [
     {
       "name": "alpha",
@@ -44,9 +79,15 @@
             "content": "export function greet(name: string) {\n  const greeting = \"Hello\";\n  return `${greeting}, ${name}!`;\n}\n"
           }
         },
-        { "git": ["add", "-A"] },
-        { "git": ["commit", "-m", "work on alpha"] },
-        { "git": ["push", "-u", "origin", "HEAD"] }
+        {
+          "git": ["add", "-A"]
+        },
+        {
+          "git": ["commit", "-m", "work on alpha"]
+        },
+        {
+          "git": ["push", "-u", "origin", "HEAD"]
+        }
       ]
     }
   ],
@@ -57,10 +98,13 @@
     }
   ],
   "gh": [
-    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
     {
       "args": ["auth", "status", "--active"],
-      "stdout": "github.com\n  \u2713 Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
     },
     {
       "call": "pull-request",
@@ -148,7 +192,10 @@
             "oid": "2222222222222222222222222222222222222222",
             "headline": "Name the person in the greeting"
           },
-          { "oid": "3333333333333333333333333333333333333333", "headline": "Write the guide" }
+          {
+            "oid": "3333333333333333333333333333333333333333",
+            "headline": "Write the guide"
+          }
         ]
       }
     },
@@ -244,7 +291,10 @@
             "oid": "2222222222222222222222222222222222222222",
             "headline": "Name the person in the greeting"
           },
-          { "oid": "3333333333333333333333333333333333333333", "headline": "Write the guide" }
+          {
+            "oid": "3333333333333333333333333333333333333333",
+            "headline": "Write the guide"
+          }
         ]
       },
       "after": "answered"
@@ -263,7 +313,9 @@
                     "state": "CHANGES_REQUESTED",
                     "submittedAt": "2025-01-02T09:00:00Z",
                     "body": "Two things to **fix** before this lands. See the threads on `src/app.ts`.",
-                    "author": { "login": "grace-example" }
+                    "author": {
+                      "login": "grace-example"
+                    }
                   }
                 ]
               },
@@ -275,7 +327,9 @@
                     "createdAt": "2025-01-01T12:00:00Z",
                     "body": "Thanks for the quick turnaround.",
                     "isMinimized": false,
-                    "author": { "login": "ada-example" }
+                    "author": {
+                      "login": "ada-example"
+                    }
                   }
                 ]
               },
@@ -295,7 +349,9 @@
                           "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3003",
                           "body": "Could this use a template string?",
                           "createdAt": "2025-01-01T13:00:00Z",
-                          "author": { "login": "review-bot" }
+                          "author": {
+                            "login": "review-bot"
+                          }
                         }
                       ]
                     }
@@ -313,7 +369,9 @@
                           "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3001",
                           "body": "What happens when `name` is empty?",
                           "createdAt": "2025-01-02T08:00:00Z",
-                          "author": { "login": "grace-example" }
+                          "author": {
+                            "login": "grace-example"
+                          }
                         }
                       ]
                     }
@@ -331,7 +389,9 @@
                           "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3002",
                           "body": "This line was reworded, is the old greeting still needed?",
                           "createdAt": "2025-01-02T08:30:00Z",
-                          "author": { "login": "grace-example" }
+                          "author": {
+                            "login": "grace-example"
+                          }
                         }
                       ]
                     }
@@ -347,14 +407,51 @@
   "claude": {
     "version": "2.0.0 (Claude Code stand-in)",
     "script": [
-      { "print": "Claude Code stand-in\r\n" },
-      { "print": "\u001b[?2004h" },
-      { "print": "> " },
-      { "await": "\r" },
-      { "hook": "UserPromptSubmit" },
-      { "hook": "Stop" },
-      { "print": "\r\nReady.\r\n> " },
-      { "await": "\r" }
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "\u001b[?2004h"
+      },
+      {
+        "print": "> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "hook": "Stop"
+      },
+      {
+        "print": "\r\nReady.\r\n> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "hook": "Stop"
+      },
+      {
+        "print": "\r\nReady.\r\n> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "hook": "Stop"
+      },
+      {
+        "print": "\r\nReady.\r\n> "
+      }
     ]
   }
 }

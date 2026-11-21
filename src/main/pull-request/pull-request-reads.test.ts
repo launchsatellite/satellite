@@ -275,6 +275,18 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await calls()).toHaveLength(2);
   });
 
+  it("reuses a failed answer for a detail read within ten seconds", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", {
+      exitCode: 4,
+      stderr: "To get started with GitHub CLI, please run:  gh auth login",
+    });
+    expect(await read(first)).toMatchObject({ kind: "unavailable" });
+    advance(5_000);
+    expect(await read(first, true)).toMatchObject({ kind: "unavailable" });
+    expect(await calls()).toHaveLength(1);
+  });
+
   it("joins two reads of one workspace", async () => {
     const { answer, read, calls } = await setup();
     await answer("view", { stdout: viewJson() });

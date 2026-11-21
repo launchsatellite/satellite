@@ -5,6 +5,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
+import { nextNeed } from "../inbox/need-order.ts";
 import { createSchedule, type Pace } from "../ui/refresh-schedule.ts";
 
 export interface PullRequestEntry {
@@ -52,7 +53,7 @@ function settled(
 ): PullRequestEntry {
   const last = answer.kind === "found" ? answer : keeps(answer) ? (previous?.last ?? null) : null;
   const needing = last !== null && last.needs.length > 0;
-  const needsSince = needing ? (previous?.needsSince ?? Date.now()) : null;
+  const needsSince = needing ? (previous?.needsSince ?? nextNeed()) : null;
   const next = { answer, last, needsSince };
   return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next)
     ? previous

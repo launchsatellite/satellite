@@ -72,7 +72,11 @@ export function PullRequestOverview({
             <MarkdownText text={found.body} onLink={onLink} />
           </div>
         )}
-        {found.bodyCut && <p className="text-[12px] text-dim">{bodyCutSentence}</p>}
+        {found.bodyCut && (
+          <p data-testid="pull-request-body-cut" className="text-[12px] text-dim">
+            {bodyCutSentence}
+          </p>
+        )}
       </Section>
       <Section label={`Commits ${String(found.commits.length + found.moreCommits)}`}>
         <ul data-testid="pull-request-commits" className="flex flex-col">

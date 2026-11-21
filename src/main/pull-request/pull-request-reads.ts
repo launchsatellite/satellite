@@ -63,7 +63,13 @@ type Failure = PullRequestTrouble | "none" | "not-pushed";
 const viewMs = 20_000;
 const threadsMs = 20_000;
 const logMs = 30_000;
-const reuseMs = 10_000;
+export const reuseMs = 10_000;
+const settledTroubles = new Set<PullRequestTrouble>([
+  "signed-out",
+  "gh-missing",
+  "gh-old",
+  "other-host",
+]);
 const firstHoldMs = 60_000;
 const longestHoldMs = 1_800_000;
 const transient = new Set<PullRequestTrouble>(["offline", "hung", "failed", "rate-limited"]);
@@ -242,7 +248,10 @@ export function createPullRequests({
   const answerFrom = (held: Remembered, detail: boolean): PullRequestAnswer | undefined => {
     const { answer } = held;
     const enough =
-      !detail || answer.kind === "absent" || (answer.kind === "found" && answer.detail !== null);
+      !detail ||
+      (answer.kind === "unavailable" && settledTroubles.has(answer.reason)) ||
+      answer.kind === "absent" ||
+      (answer.kind === "found" && answer.detail !== null);
     if (now() - held.at < reuseMs && enough) return answer;
     if (!detail && answer.kind === "unavailable" && now() < held.holdUntil) return answer;
     return undefined;

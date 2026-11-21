@@ -34,10 +34,10 @@ function tab(
 }
 
 function rowsOf(tabs: readonly SessionTab[], listed: (ref: WorkspaceRef) => boolean = everywhere) {
-  return inboxRows(inboxReasons(tabs), listed).map((row) => ({
+  return inboxRows(inboxReasons(tabs, []), listed).map((row) => ({
     workspace: row.workspace.workspace,
     since: row.since,
-    sessions: row.reasons.map((reason) => reason.session),
+    sessions: row.reasons.flatMap((reason) => (reason.kind === "session" ? [reason.session] : [])),
   }));
 }
 
@@ -111,12 +111,15 @@ describe("inbox", () => {
   });
 
   it("names a session only when its workspace has another, and finds it by its key", () => {
-    const reasons = inboxReasons([
-      tab(alpha, 1, "needs-you", 1),
-      tab(beta, 1, "needs-you", 2),
-      tab(beta, 2, "working", null),
-    ]);
-    expect(reasons.map(({ tab: key, onlySession }) => ({ key, onlySession }))).toEqual([
+    const reasons = inboxReasons(
+      [tab(alpha, 1, "needs-you", 1), tab(beta, 1, "needs-you", 2), tab(beta, 2, "working", null)],
+      [],
+    );
+    expect(
+      reasons.flatMap((reason) =>
+        reason.kind === "session" ? [{ key: reason.tab, onlySession: reason.onlySession }] : [],
+      ),
+    ).toEqual([
       { key: "alpha-1", onlySession: true },
       { key: "beta-1", onlySession: false },
     ]);
@@ -136,11 +139,14 @@ describe("inbox", () => {
 
   it("opens a clicked notification's workspace only while it still needs you", () => {
     const rows = inboxRows(
-      inboxReasons([
-        tab(beta, 1, "needs-you", 3),
-        tab(alpha, 1, "needs-you", 2),
-        tab(alpha, 2, "needs-you", 1),
-      ]),
+      inboxReasons(
+        [
+          tab(beta, 1, "needs-you", 3),
+          tab(alpha, 1, "needs-you", 2),
+          tab(alpha, 2, "needs-you", 1),
+        ],
+        [],
+      ),
       ({ workspace }) => workspace !== "gamma",
     );
     expect(noticeTarget(rows, alpha)).toEqual({
@@ -157,5 +163,47 @@ describe("inbox", () => {
       noticeTarget(rows, { projectId: "7a2d2b63-9b5f-4b4c-8b6a-4d9f1f9f7c2e", workspace: "alpha" }),
     ).toBeUndefined();
     expect(noticeTarget([], beta)).toBeUndefined();
+  });
+
+  it("a pull request that needs you is a row with its sentence", () => {
+    const sentence = (needs: readonly ("checks" | "review" | "conflicts")[]) =>
+      reasonSentence(
+        inboxRows(inboxReasons([], [{ workspace: alpha, needs, since: 1 }]), everywhere)[0] ?? {
+          workspace: alpha,
+          since: 0,
+          reasons: [],
+        },
+      );
+    expect(sentence(["checks"])).toBe("Checks failed on the pull request.");
+    expect(sentence(["review"])).toBe("A review asks for changes.");
+    expect(sentence(["conflicts"])).toBe("The pull request has conflicts.");
+    expect(sentence(["checks", "conflicts"])).toBe("The pull request needs you.");
+  });
+
+  it("a workspace with a session and a pull request reason is one row led by the older", () => {
+    const rows = inboxRows(
+      inboxReasons(
+        [tab(alpha, 1, "needs-you", 5)],
+        [{ workspace: alpha, needs: ["checks"], since: 2 }],
+      ),
+      everywhere,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reasons.map(({ kind }) => kind)).toEqual(["pull-request", "session"]);
+    expect(rows[0] === undefined ? "" : reasonSentence(rows[0])).toBe(
+      "Checks failed on the pull request.",
+    );
+  });
+
+  it("the target of a pull request row is its tab", () => {
+    const rows = inboxRows(
+      inboxReasons([], [{ workspace: alpha, needs: ["review"], since: 1 }]),
+      everywhere,
+    );
+    expect(noticeTarget(rows, alpha)).toMatchObject({ kind: "pull-request", workspace: alpha });
+  });
+
+  it("a pull request reason leaves when its needs clear", () => {
+    expect(inboxReasons([], [{ workspace: alpha, needs: [], since: 1 }])).toEqual([]);
   });
 });

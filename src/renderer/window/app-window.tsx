@@ -5,6 +5,7 @@ import {
   type InterfaceState,
   type ProjectView,
   type ThemeChoice,
+  type WorkspaceKey,
   type WorkspaceRef,
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
@@ -435,27 +436,46 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null || asking !== null;
+  const pullRequestNeeding = useMemo(
+    () =>
+      listedRefs.flatMap((workspace) => {
+        const entry = pullRequests.of(workspace);
+        const needs = entry?.last?.needs ?? [];
+        return entry?.needsSince === null || entry === undefined || needs.length === 0
+          ? []
+          : [{ workspace, needs, since: entry.needsSince }];
+      }),
+    [listedRefs, pullRequests],
+  );
   const inbox = useMemo(
     () =>
-      inboxRows(inboxReasons(allSessions), ({ projectId, workspace }) =>
+      inboxRows(inboxReasons(allSessions, pullRequestNeeding), ({ projectId, workspace }) =>
         (projects ?? []).some(
           (project) =>
             project.id === projectId &&
             project.workspaces.some((listed) => listed.key === workspace),
         ),
       ),
-    [allSessions, projects],
+    [allSessions, pullRequestNeeding, projects],
   );
   const newest = inbox[0]?.reasons[0];
-  const newestWorkspace = newest?.workspace;
-  const newestTab = newest?.tab;
-  const newestTerminal = newest?.terminalId;
+  const pixelFor = useCallback(
+    (projectId: string, workspace: WorkspaceKey) =>
+      pullRequests.of({ projectId, workspace })?.needsSince == null
+        ? sessions.pixelFor(projectId, workspace)
+        : "needs-you",
+    [pullRequests, sessions],
+  );
   const openFromInbox = useCallback(
-    ({ workspace, tab, terminalId }: InboxTarget) => {
+    (target: InboxTarget) => {
       if (modal) return;
-      select(workspace);
-      activateSession(tab);
-      focusSession(terminalId);
+      select(target.workspace);
+      if (target.kind === "pull-request") {
+        setCentreView("pull-request");
+        return;
+      }
+      activateSession(target.tab);
+      focusSession(target.terminalId);
     },
     [modal, select, activateSession],
   );
@@ -633,20 +653,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "inbox.newest",
             title: "Go to the newest workspace that needs you",
-            available: newestTab !== undefined,
+            available: newest !== undefined,
             run: () => {
-              if (
-                newestWorkspace === undefined ||
-                newestTab === undefined ||
-                newestTerminal === undefined
-              ) {
-                return;
-              }
-              openFromInbox({
-                workspace: newestWorkspace,
-                tab: newestTab,
-                terminalId: newestTerminal,
-              });
+              if (newest !== undefined) openFromInbox(newest);
             },
           },
           {
@@ -851,9 +860,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     forgetProject,
-    newestWorkspace,
-    newestTab,
-    newestTerminal,
+    newest,
     openFromInbox,
     changesShown,
     filesShown,
@@ -999,7 +1006,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onSelect={select}
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
-            pixelFor={sessions.pixelFor}
+            pixelFor={pixelFor}
             pullRequestFor={pullRequestFor}
             inbox={
               projects === undefined ? null : (

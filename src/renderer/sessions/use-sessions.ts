@@ -7,6 +7,7 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
 import { needsSince } from "../inbox/inbox.ts";
+import { nextNeed } from "../inbox/need-order.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { mostUrgent } from "./session-pixel.ts";
@@ -85,7 +86,6 @@ export function useSessions(notify: Notify): Sessions {
   const [state, setState] = useState<State>({ tabs: [], active: new Map() });
   const numbers = useRef(new Map<string, number>());
   const count = useRef(0);
-  const asked = useRef(0);
   useEffect(() => {
     count.current = state.tabs.length;
   }, [state.tabs.length]);
@@ -104,7 +104,7 @@ export function useSessions(notify: Notify): Sessions {
                         ...tab,
                         status,
                         ready,
-                        needsSince: needsSince(tab, status, () => (asked.current += 1)),
+                        needsSince: needsSince(tab, status, nextNeed),
                       }
                     : tab,
                 ),
