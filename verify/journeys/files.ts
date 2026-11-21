@@ -396,6 +396,7 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
 
 async function keepsChangesPlace(session: AppSession): Promise<void> {
   const { page } = session;
+  await page.getByTestId("workspace-repo-alpha").click();
   const options = page.getByTestId("changes-list").getByRole("option");
   await waitUntil(async () => (await options.count()) > 1, waitMs, "the changes list did not show");
   await options.last().click();
