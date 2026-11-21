@@ -8,6 +8,7 @@ import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
+export type GitSwitch = "no-lazy-fetch";
 export interface ResolvedCommand {
   readonly file: string;
   readonly args: readonly string[];
@@ -72,6 +73,9 @@ const gitQuiet = {
   GIT_TERMINAL_PROMPT: "0",
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
+};
+const gitSwitchVariables: Readonly<Record<GitSwitch, Readonly<Record<string, string>>>> = {
+  "no-lazy-fetch": { GIT_NO_LAZY_FETCH: "1" },
 };
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
@@ -220,11 +224,14 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+  options: { timeoutMs?: number; signal?: AbortSignal; switches?: readonly GitSwitch[] } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
   const env = toolEnvironment(tool, await childEnvironment());
+  if (tool === "git") {
+    for (const name of options.switches ?? []) Object.assign(env, gitSwitchVariables[name]);
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(command.file, [...command.args, ...args], {
       env,

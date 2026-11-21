@@ -18,6 +18,8 @@ vi.mock("../platform/user-environment.ts", () => ({
 }));
 
 const run = promisify(execFile);
+const gitVersion = /(\d+)\.(\d+)/.exec((await run("git", ["--version"])).stdout);
+const hasNoLazyFetch = Number(gitVersion?.[1]) * 1000 + Number(gitVersion?.[2]) >= 2045;
 
 async function scratch(): Promise<string> {
   return realpath(await mkdtemp(join(tmpdir(), "satellite-sides-")));
@@ -245,4 +247,28 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
       expect(await readBlobSide(repo, name)).toEqual({ kind: "refused" });
     }
   });
+
+  it.skipIf(!hasNoLazyFetch)(
+    "answers not-local for a blob a partial clone left on its remote, without fetching it",
+    async () => {
+      const base = await scratch();
+      const upstream = join(base, "upstream");
+      const clone = join(base, "clone");
+      const config = join(base, "gitconfig");
+      await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+      const env = gitEnvironment(config);
+      const git = (folder: string, args: string[]) => run("git", ["-C", folder, ...args], { env });
+      await run("git", ["init", "-q", "-b", "main", upstream], { env });
+      await git(upstream, ["config", "uploadpack.allowFilter", "true"]);
+      await writeFile(join(upstream, "file.txt"), "one\n");
+      await git(upstream, ["add", "."]);
+      await git(upstream, ["commit", "-q", "-m", "one"]);
+      const url = `file://${upstream.replaceAll("\\", "/")}`;
+      await run("git", ["clone", "-q", "--no-checkout", "--filter=blob:none", url, clone], { env });
+      const oid = (await git(clone, ["rev-parse", "HEAD:file.txt"])).stdout.trim();
+      expect(await readBlobSide(clone, oid)).toEqual({ kind: "not-local" });
+      const local = run("git", ["--no-lazy-fetch", "-C", clone, "cat-file", "-e", oid], { env });
+      await expect(local).rejects.toThrow();
+    },
+  );
 });

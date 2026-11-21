@@ -18,6 +18,7 @@ export type SideRead =
   | { kind: "large" }
   | { kind: "changing" }
   | { kind: "gone" }
+  | { kind: "not-local" }
   | { kind: "refused" };
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -33,6 +34,9 @@ const refused: SideRead = { kind: "refused" };
 const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
+const notLocal: SideRead = { kind: "not-local" };
+const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
+const falseValues = new Set(["", "false", "no", "off", "0"]);
 
 function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   if (!isSafeFileName(segment, platform)) return false;
@@ -120,8 +124,21 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
 }
 
 async function gitOutput(folder: string, args: string[], signal?: AbortSignal) {
-  const run = await runGit(folder, args, gitReadMs, signal);
+  const run = await runGit(folder, args, gitReadMs, signal, ["no-lazy-fetch"]);
   return run?.exitCode === 0 ? run.stdout : undefined;
+}
+
+function namesPromisor(entry: string): boolean {
+  const [, value] = entry.split("\n");
+  return value === undefined || !falseValues.has(value.toLowerCase());
+}
+
+async function missingBlob(folder: string, signal?: AbortSignal): Promise<SideRead> {
+  const args = ["config", "-z", "--get-regexp", promisorKeys];
+  const entries = (await gitOutput(folder, args, signal)) ?? "";
+  return entries.split("\0").some((entry) => entry !== "" && namesPromisor(entry))
+    ? notLocal
+    : gone;
 }
 
 export function isChangePath(path: string, platform: NodeJS.Platform = process.platform): boolean {
@@ -161,10 +178,10 @@ export async function readBlobSide(
 ): Promise<SideRead> {
   if (!oidPattern.test(oid) || allZeros.test(oid)) return refused;
   const size = sizeOutput.exec((await gitOutput(folder, ["cat-file", "-s", oid], signal)) ?? "");
-  if (size?.[1] === undefined) return gone;
+  if (size?.[1] === undefined) return missingBlob(folder, signal);
   if (Number(size[1]) > changesLimits.sideBytes) return large;
   const text = await gitOutput(folder, ["cat-file", "blob", oid], signal);
-  if (text === undefined) return gone;
+  if (text === undefined) return missingBlob(folder, signal);
   if (text.slice(0, changesLimits.binaryProbe).includes("\0")) return binary;
   if (text.length > changesLimits.sideBytes) return large;
   return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };

@@ -1,6 +1,6 @@
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified } from "../platform/paths.ts";
-import { AbandonedRun, runTool, type ToolRun } from "../platform/tools.ts";
+import { AbandonedRun, runTool, type GitSwitch, type ToolRun } from "../platform/tools.ts";
 import { gitReadTimeoutMs } from "../projects/repository-check.ts";
 
 export const gitReadMs = gitReadTimeoutMs;
@@ -39,11 +39,12 @@ export async function runGit(
   args: readonly string[],
   timeoutMs: number,
   signal?: AbortSignal,
+  switches: readonly GitSwitch[] = [],
 ): Promise<ToolRun | undefined> {
   if (foldersWithStuckGit.has(folder)) return undefined;
   let run: ToolRun | undefined;
   try {
-    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal });
+    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, switches });
   } catch (error) {
     if (error instanceof AbandonedRun) {
       foldersWithStuckGit.add(folder);
