@@ -154,7 +154,9 @@ function ProjectRows({
         <PixelAvatar seed={project.id} />
         <span className="min-w-0 truncate">{project.name}</span>
         {showParent && (
-          <span className="min-w-0 truncate font-medium text-dim">{project.parent}</span>
+          <span className="min-w-0 flex-[1_1_0%] truncate font-medium text-dim">
+            {project.parent}
+          </span>
         )}
         {project.missing !== null ? (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
