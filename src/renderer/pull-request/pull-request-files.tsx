@@ -16,7 +16,7 @@ import {
   unmarkedSentence,
 } from "./pull-request-words.ts";
 import { ThreadPanel } from "./thread-panel.tsx";
-import { threadPlaces } from "./thread-places.ts";
+import { fileStateOf, threadPlaces } from "./thread-places.ts";
 
 export interface ThreadTarget {
   index: number;
@@ -27,7 +27,7 @@ interface PullRequestFilesProps {
   workspace: WorkspaceRef;
   found: PullRequestFound;
   list: ChangesList | undefined;
-  clean: boolean;
+  uncommitted: ChangesList | undefined;
   error: string | null;
   handle: RefObject<DiffHandle | null>;
   current: ThreadTarget | null;
@@ -41,7 +41,7 @@ export function PullRequestFiles({
   workspace,
   found,
   list,
-  clean,
+  uncommitted,
   error,
   handle,
   current,
@@ -54,7 +54,6 @@ export function PullRequestFiles({
   const revealed = useRef(0);
   const changes = list?.changes;
   const files = useMemo(() => (changes?.kind === "files" ? changes.files : []), [changes]);
-  const unmarked = unmarkedSentence(found.atHead, clean);
   const detail = found.detail?.kind === "read" ? found.detail : null;
   const target = current === null ? undefined : detail?.threads[current.index];
   if (current !== null && current.seq !== handled && list !== undefined) {
@@ -65,15 +64,19 @@ export function PullRequestFiles({
     }
   }
   const file = files.find((listed) => listed.path === pickedPath) ?? files[0];
+  const state = fileStateOf(uncommitted?.changes, file?.path);
+  const unmarked = unmarkedSentence(found.atHead, state);
+  const markable = found.atHead === true && state === "clean";
   const places = useMemo(
     () =>
-      detail === null || file === undefined
-        ? null
-        : threadPlaces(detail, file.path, unmarked === null),
-    [detail, file, unmarked],
+      detail === null || file === undefined ? null : threadPlaces(detail, file.path, markable),
+    [detail, file, markable],
   );
   const marks = useMemo(
-    () => (places?.marks ?? []).map(({ line, unresolved }) => ({ line, unresolved })),
+    () =>
+      places === null || places.marks.length === 0
+        ? undefined
+        : places.marks.map(({ line, unresolved }) => ({ line, unresolved })),
     [places],
   );
   const onMark = useCallback(
@@ -93,7 +96,7 @@ export function PullRequestFiles({
   const revealAt =
     shown !== null && target?.path === shown.path && target.line !== null ? target.line : null;
   const seq = current?.seq ?? 0;
-  const markedAt = revealAt !== null && marks.some((mark) => mark.line === revealAt);
+  const markedAt = revealAt !== null && marks?.some((mark) => mark.line === revealAt) === true;
 
   useEffect(() => {
     if (seq === 0 || revealed.current === seq || revealAt === null || !markedAt) return;

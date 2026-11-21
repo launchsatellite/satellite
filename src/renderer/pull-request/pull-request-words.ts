@@ -182,10 +182,16 @@ export function resultPixel(result: CheckResult): PixelState {
   return resultPixels[result];
 }
 
-export function unmarkedSentence(atHead: boolean | null, clean: boolean): string | null {
-  if (atHead === true && clean) return null;
-  if (atHead === true)
-    return "This workspace has uncommitted changes, so threads are not marked on lines.";
+export type FileState = "clean" | "changed" | "unknown" | "loading";
+
+export function unmarkedSentence(atHead: boolean | null, file: FileState): string | null {
+  if (atHead === true && (file === "clean" || file === "loading")) return null;
+  if (atHead === true && file === "changed") {
+    return "This file has uncommitted changes, so its threads are not marked on lines.";
+  }
+  if (atHead === true) {
+    return "Satellite cannot tell whether this file has uncommitted changes, so its threads are not marked on lines.";
+  }
   if (atHead === false) {
     return "This workspace is not at the pull request's last commit, so threads are not marked on lines.";
   }

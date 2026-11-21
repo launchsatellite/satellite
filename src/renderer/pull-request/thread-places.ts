@@ -1,4 +1,5 @@
-import type { PullRequestDetail } from "../../shared/bridge-contract.ts";
+import type { ChangesList, PullRequestDetail } from "../../shared/bridge-contract.ts";
+import type { FileState } from "./pull-request-words.ts";
 
 type Read = Extract<PullRequestDetail, { kind: "read" }>;
 
@@ -37,4 +38,16 @@ export function threadPlaces(detail: Read, path: string, onLines = true): Thread
     .sort((left, right) => left.line - right.line)
     .map((mark) => ({ ...mark, threads: mark.threads.sort(unresolvedFirst) }));
   return { marks, listed: listed.sort(unresolvedFirst) };
+}
+
+export function fileStateOf(
+  changes: ChangesList["changes"] | undefined,
+  path: string | undefined,
+): FileState {
+  if (changes === undefined) return "loading";
+  if (changes.kind !== "files") return "unknown";
+  if (changes.files.some((changed) => changed.path === path || changed.from === path)) {
+    return "changed";
+  }
+  return changes.more > 0 || changes.longPaths > 0 ? "unknown" : "clean";
 }

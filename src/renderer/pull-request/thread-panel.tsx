@@ -138,9 +138,11 @@ export function ThreadPanel({
       />
       {off.length > 0 && (
         <>
-          <h4 className="px-3 pt-3 pb-1 font-pixel text-[11px] text-dim uppercase">
-            {offLineHeading}
-          </h4>
+          {onLines.length > 0 && (
+            <h4 className="px-3 pt-3 pb-1 font-pixel text-[11px] text-dim uppercase">
+              {offLineHeading}
+            </h4>
+          )}
           <Entries
             found={found}
             threads={threads}

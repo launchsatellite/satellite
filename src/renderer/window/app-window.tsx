@@ -361,6 +361,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownText?.path,
     pullRequestBase,
   );
+  const uncommitted = useChanges(
+    pullRequestFilesShown && shownPullRequest?.atHead === true ? changesHere : null,
+    "uncommitted",
+    finishedHere,
+    undefined,
+  );
   const listedWorkspace = useCallback(
     ({ projectId, workspace }: WorkspaceRef) =>
       (projects ?? []).some(
@@ -941,7 +947,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                       workspace={changesHere}
                       found={shownPullRequest}
                       list={changes.list}
-                      clean={selectedWorkspace.changed === 0}
+                      uncommitted={uncommitted.list}
                       error={changes.error}
                       handle={diffHandle}
                       current={threadTarget?.place === placeHere ? threadTarget : null}
