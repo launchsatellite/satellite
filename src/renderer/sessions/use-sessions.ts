@@ -25,7 +25,7 @@ export interface Sessions {
   tabsOf: (ref: WorkspaceRef) => SessionTab[];
   all: SessionTab[];
   activeOf: (ref: WorkspaceRef) => string | undefined;
-  open: (ref: WorkspaceRef, resume: boolean) => void;
+  open: (ref: WorkspaceRef, resume: boolean) => boolean;
   restart: (key: string) => void;
   close: (key: string) => void;
   activate: (key: string) => void;
@@ -40,7 +40,7 @@ interface State {
 }
 
 const tabLimit = bridgeLimits.terminals;
-const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
+export const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
 
 function stoppedSentence(names: readonly string[]): string {
   if (names.length === 1)
@@ -114,33 +114,28 @@ export function useSessions(notify: Notify): Sessions {
       }),
     [],
   );
-  const open = useCallback(
-    (ref: WorkspaceRef, resume: boolean) => {
-      if (count.current >= tabLimit) {
-        notify(tabLimitSentence, "error");
-        return;
-      }
-      count.current += 1;
-      const place = placeOf(ref);
-      const number = (numbers.current.get(place) ?? 0) + 1;
-      numbers.current.set(place, number);
-      const tab: SessionTab = {
-        key: crypto.randomUUID(),
-        terminalId: crypto.randomUUID(),
-        number,
-        workspace: { projectId: ref.projectId, workspace: ref.workspace },
-        resume,
-        status: "idle",
-        ready: false,
-        needsSince: null,
-      };
-      setState((current) => ({
-        tabs: [...current.tabs, tab],
-        active: new Map(current.active).set(place, tab.key),
-      }));
-    },
-    [notify],
-  );
+  const open = useCallback((ref: WorkspaceRef, resume: boolean) => {
+    if (count.current >= tabLimit) return false;
+    count.current += 1;
+    const place = placeOf(ref);
+    const number = (numbers.current.get(place) ?? 0) + 1;
+    numbers.current.set(place, number);
+    const tab: SessionTab = {
+      key: crypto.randomUUID(),
+      terminalId: crypto.randomUUID(),
+      number,
+      workspace: { projectId: ref.projectId, workspace: ref.workspace },
+      resume,
+      status: "idle",
+      ready: false,
+      needsSince: null,
+    };
+    setState((current) => ({
+      tabs: [...current.tabs, tab],
+      active: new Map(current.active).set(place, tab.key),
+    }));
+    return true;
+  }, []);
   const restart = useCallback((key: string) => {
     const terminalId = crypto.randomUUID();
     setState((current) => ({

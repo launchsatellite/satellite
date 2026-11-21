@@ -22,7 +22,7 @@ import { SampleDiff } from "../proving/sample-diff.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
-import { useSessions } from "../sessions/use-sessions.ts";
+import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
@@ -433,7 +433,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             shortcut: { key: "t" },
             available: sessionHere !== undefined && folderHere,
             run: () => {
-              if (sessionHere !== undefined) openSession(sessionHere, false);
+              if (sessionHere !== undefined && !openSession(sessionHere, false)) {
+                notify(tabLimitSentence, "error");
+              }
             },
           },
           {
