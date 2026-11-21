@@ -21,6 +21,38 @@ describe("noticeText", () => {
     });
   });
 
+  it("a pull request notice says only Satellite's sentence and cleaned names", () => {
+    const named = noticeText(
+      [{ project: hostile, parent: null, workspace: hostile }],
+      1,
+      "pull-request",
+    );
+    expect(named.body).toBe("The pull request needs you in b x b y z.");
+    for (const text of [named.title, named.body]) {
+      for (const character of unsafe) expect(text).not.toContain(character);
+    }
+    expect(
+      noticeText([{ project: "repo", parent: null, workspace: "alpha" }], 1, "pull-request"),
+    ).toEqual({ title: "alpha needs you", body: "The pull request needs you in repo." });
+  });
+
+  it("the main workspace has its own pull request sentence", () => {
+    expect(
+      noticeText([{ project: "repo", parent: null, workspace: null }], 1, "pull-request"),
+    ).toEqual({
+      title: "repo needs you",
+      body: "The pull request in the main workspace needs you.",
+    });
+  });
+
+  it("several workspaces keep the shared text whatever the reason", () => {
+    const subjects = [
+      { project: "repo", parent: null, workspace: "alpha" },
+      { project: "repo", parent: null, workspace: "beta" },
+    ] as const;
+    expect(noticeText(subjects, 2, "pull-request")).toEqual(noticeText(subjects, 2));
+  });
+
   it("counts every workspace that waits when it gathers several", () => {
     expect(
       noticeText(

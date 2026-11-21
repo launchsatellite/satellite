@@ -5,6 +5,7 @@ import {
   type InterfaceState,
   type ProjectView,
   type ThemeChoice,
+  type WorkspaceKey,
   type WorkspaceRef,
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
@@ -28,6 +29,14 @@ import { useFileTabs } from "../files/use-file-tabs.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
+import { ChecksList } from "../pull-request/checks-list.tsx";
+import { ConversationList } from "../pull-request/conversation-list.tsx";
+import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
+import { PullRequestFiles } from "../pull-request/pull-request-files.tsx";
+import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
+import { linkSentence } from "../pull-request/pull-request-words.ts";
+import { useThreadJump } from "../pull-request/use-thread-jump.ts";
+import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
@@ -60,6 +69,8 @@ interface ShownToast {
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
 const toastQueueLimit = 32;
+const terminalLinkSentence =
+  "The text Claude Code showed points to this address. Check it before you open it.";
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 
@@ -136,7 +147,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     workspace: WorkspaceView;
   } | null>(null);
   const [added, setAdded] = useState<string>();
-  const [asking, setAsking] = useState<string | null>(null);
+  const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
+  const askTerminalLink = useCallback((address: string) => {
+    setAsking({ address, description: terminalLinkSentence });
+  }, []);
+  const askPullRequestLink = useCallback((address: string) => {
+    setAsking({ address, description: linkSentence });
+  }, []);
   const closeLink = useCallback(() => {
     setAsking(null);
   }, []);
@@ -281,8 +298,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
+  const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
   const changesShown = shownHere && centreView === "changes";
   const filesShown = shownHere && centreView === "files";
+  const pullRequestShown = shownHere && centreView === "pull-request";
   const layoutShown =
     changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
@@ -291,11 +310,54 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
+  const listedRefs = useMemo(
+    () =>
+      (projects ?? [])
+        .filter((project) => project.missing === null)
+        .flatMap((project) =>
+          project.workspaces.map((workspace) => ({
+            projectId: project.id,
+            workspace: workspace.key,
+          })),
+        ),
+    [projects],
+  );
+  const finishedElsewhere = useMemo(() => {
+    const done = new Map<string, string[]>();
+    for (const tab of allSessions) {
+      if (tab.status !== "done") continue;
+      const place = `${tab.workspace.projectId}/${tab.workspace.workspace}`;
+      done.set(place, [...(done.get(place) ?? []), tab.key]);
+    }
+    return new Map([...done].map(([place, keys]) => [place, keys.join(" ")]));
+  }, [allSessions]);
+  const pullRequests = usePullRequests({
+    listed: listedRefs,
+    shown: changesHere,
+    detail: pullRequestShown,
+    finished: finishedHere,
+    finishedElsewhere,
+  });
+  const shownEntry = changesHere === null ? undefined : pullRequests.of(changesHere);
+  const shownPullRequest = foundOf(shownEntry);
+  const pullRequestFor = useCallback(
+    (ref: WorkspaceRef) => foundOf(pullRequests.of(ref)),
+    [pullRequests],
+  );
+  const pullRequestFilesShown = pullRequestShown && pullRequestSection === "files";
+  const pullRequestBase = pullRequestFilesShown ? (shownPullRequest?.base ?? undefined) : undefined;
   const changes = useChanges(
     changesHere,
-    filesShown ? "uncommitted" : changesView,
+    filesShown ? "uncommitted" : pullRequestFilesShown ? "branch" : changesView,
     finishedHere,
     shownText?.path,
+    pullRequestBase,
+  );
+  const uncommitted = useChanges(
+    pullRequestFilesShown && shownPullRequest?.atHead === true ? changesHere : null,
+    "uncommitted",
+    finishedHere,
+    undefined,
   );
   const listedWorkspace = useCallback(
     ({ projectId, workspace }: WorkspaceRef) =>
@@ -315,6 +377,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     },
     [openFileTab],
   );
+  const shownPullRequestUrl = shownPullRequest?.url ?? null;
+  const pullRequestFound = shownPullRequest !== null;
+  const placeHere =
+    changesHere === null ? null : `${changesHere.projectId}/${changesHere.workspace}`;
+  const thread = useThreadJump({
+    place: placeHere,
+    shown: pullRequestShown,
+    found: shownPullRequest,
+    notify,
+    onSection: setPullRequestSection,
+  });
+  const jumpToThread = thread.jump;
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -324,27 +398,46 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null || asking !== null;
+  const pullRequestNeeding = useMemo(
+    () =>
+      listedRefs.flatMap((workspace) => {
+        const entry = pullRequests.of(workspace);
+        const needs = entry?.last?.needs ?? [];
+        return entry?.needsSince === null || entry === undefined || needs.length === 0
+          ? []
+          : [{ workspace, needs, since: entry.needsSince }];
+      }),
+    [listedRefs, pullRequests],
+  );
   const inbox = useMemo(
     () =>
-      inboxRows(inboxReasons(allSessions), ({ projectId, workspace }) =>
+      inboxRows(inboxReasons(allSessions, pullRequestNeeding), ({ projectId, workspace }) =>
         (projects ?? []).some(
           (project) =>
             project.id === projectId &&
             project.workspaces.some((listed) => listed.key === workspace),
         ),
       ),
-    [allSessions, projects],
+    [allSessions, pullRequestNeeding, projects],
   );
   const newest = inbox[0]?.reasons[0];
-  const newestWorkspace = newest?.workspace;
-  const newestTab = newest?.tab;
-  const newestTerminal = newest?.terminalId;
+  const pixelFor = useCallback(
+    (projectId: string, workspace: WorkspaceKey) =>
+      pullRequests.of({ projectId, workspace })?.needsSince == null
+        ? sessions.pixelFor(projectId, workspace)
+        : "needs-you",
+    [pullRequests, sessions],
+  );
   const openFromInbox = useCallback(
-    ({ workspace, tab, terminalId }: InboxTarget) => {
+    (target: InboxTarget) => {
       if (modal) return;
-      select(workspace);
-      activateSession(tab);
-      focusSession(terminalId);
+      select(target.workspace);
+      if (target.kind === "pull-request") {
+        setCentreView("pull-request");
+        return;
+      }
+      activateSession(target.tab);
+      focusSession(target.terminalId);
     },
     [modal, select, activateSession],
   );
@@ -522,20 +615,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "inbox.newest",
             title: "Go to the newest workspace that needs you",
-            available: newestTab !== undefined,
+            available: newest !== undefined,
             run: () => {
-              if (
-                newestWorkspace === undefined ||
-                newestTab === undefined ||
-                newestTerminal === undefined
-              ) {
-                return;
-              }
-              openFromInbox({
-                workspace: newestWorkspace,
-                tab: newestTab,
-                terminalId: newestTerminal,
-              });
+              if (newest !== undefined) openFromInbox(newest);
             },
           },
           {
@@ -578,7 +660,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "files.show",
             title: "Show the files",
-            available: shownHere && centreView === "changes",
+            available: shownHere && centreView !== "files",
             run: () => {
               setCentreView("files");
             },
@@ -586,9 +668,36 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "changes.show",
             title: "Show the changes",
-            available: filesShown,
+            available: shownHere && centreView !== "changes",
             run: () => {
               setCentreView("changes");
+            },
+          },
+          {
+            id: "pull-request.show",
+            title: "Show the pull request",
+            available: shownHere && centreView !== "pull-request",
+            run: () => {
+              setCentreView("pull-request");
+            },
+          },
+          {
+            id: "pull-request.open",
+            title: "Open the pull request on GitHub",
+            available: shownHere && shownPullRequestUrl !== null,
+            run: () => {
+              if (shownPullRequestUrl !== null) askPullRequestLink(shownPullRequestUrl);
+            },
+          },
+          {
+            id: "pull-request.next-thread",
+            title: "Go to the next unresolved thread",
+            shortcut: { key: "j" },
+            available: shownHere && pullRequestFound,
+            run: () => {
+              setCentreView("pull-request");
+              setPullRequestSection("files");
+              jumpToThread();
             },
           },
           {
@@ -713,9 +822,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     forgetProject,
-    newestWorkspace,
-    newestTab,
-    newestTerminal,
+    newest,
     openFromInbox,
     changesShown,
     filesShown,
@@ -729,6 +836,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownText,
     fileShown,
     diffSelection,
+    shownPullRequestUrl,
+    pullRequestFound,
+    jumpToThread,
+    askPullRequestLink,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -748,6 +859,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           base={changes.header?.base ?? null}
           ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
           behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
+          pullRequest={shownPullRequest}
+          onShowPullRequest={() => {
+            setCentreView("pull-request");
+          }}
         />
         {selectedProject.missing !== null ? (
           <FolderMissing
@@ -757,7 +872,49 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         ) : (
           changesHere !== null &&
-          (centreView === "files" ? (
+          (centreView === "pull-request" ? (
+            <PullRequestView
+              entry={shownEntry}
+              pullRequest={shownPullRequest?.number ?? null}
+              section={pullRequestSection}
+              onSection={setPullRequestSection}
+              onCentre={setCentreView}
+              onLink={askPullRequestLink}
+            >
+              {shownPullRequest !== null && (
+                <>
+                  {pullRequestSection === "overview" && (
+                    <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
+                  )}
+                  <div hidden={pullRequestSection !== "checks"}>
+                    <ChecksList
+                      key={`${changesHere.projectId}/${changesHere.workspace}`}
+                      workspace={changesHere}
+                      found={shownPullRequest}
+                      onLink={askPullRequestLink}
+                    />
+                  </div>
+                  {pullRequestSection === "conversation" && (
+                    <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
+                  )}
+                  {pullRequestSection === "files" && (
+                    <PullRequestFiles
+                      key={`${changesHere.projectId}/${changesHere.workspace}`}
+                      workspace={changesHere}
+                      found={shownPullRequest}
+                      list={changes.list}
+                      uncommitted={uncommitted.list}
+                      error={changes.error}
+                      handle={diffHandle}
+                      current={thread.target}
+                      onCurrent={thread.select}
+                      onLink={askPullRequestLink}
+                    />
+                  )}
+                </>
+              )}
+            </PullRequestView>
+          ) : centreView === "files" ? (
             <FilesView
               key={`${changesHere.projectId}/${changesHere.workspace}`}
               workspace={changesHere}
@@ -765,6 +922,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               list={changes.list}
               finished={finishedHere}
               onCentre={setCentreView}
+              pullRequest={shownPullRequest?.number ?? null}
               handle={diffHandle}
               onShown={setFileShown}
             />
@@ -781,6 +939,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               onShown={setShownText}
               onNarrow={setDiffNarrow}
               onCentre={setCentreView}
+              pullRequest={shownPullRequest?.number ?? null}
               picked={picked}
               onPick={setPicked}
             />
@@ -810,7 +969,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onSelect={select}
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
-            pixelFor={sessions.pixelFor}
+            pixelFor={pixelFor}
+            pullRequestFor={pullRequestFor}
             inbox={
               projects === undefined ? null : (
                 <InboxList
@@ -857,7 +1017,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           <SessionsPane
             sessions={sessions}
             selected={sessionHere ?? null}
-            onAskLink={setAsking}
+            onAskLink={askTerminalLink}
             notify={notify}
           />
         </section>
@@ -893,7 +1053,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         )}
         {asking !== null && (
-          <LinkDialog key={asking} address={asking} onClose={closeLink} notify={notify} />
+          <LinkDialog
+            key={asking.address}
+            address={asking.address}
+            description={asking.description}
+            onClose={closeLink}
+            notify={notify}
+          />
         )}
         {toast !== undefined && (
           <Toast

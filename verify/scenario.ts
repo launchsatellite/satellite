@@ -26,12 +26,24 @@ const repoStepSchema = z.union([
   }),
   z.strictObject({ git: z.array(z.string()).min(1) }),
 ]);
-const ghAnswerSchema = z.strictObject({
-  args: z.array(z.string()),
+const ghResult = {
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   exitCode: z.int().min(0).max(255).optional(),
-});
+};
+const ghAnswerSchema = z.union([
+  z.strictObject({ args: z.array(z.string()), ...ghResult }),
+  z.strictObject({
+    call: z.enum(["pull-request", "threads", "failed-log"]),
+    number: z.int().min(1).optional(),
+    json: z.unknown().optional(),
+    after: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{0,40}$/)
+      .optional(),
+    ...ghResult,
+  }),
+]);
 const seededFileSchema = z.strictObject({ path: z.string().min(1), content: z.string() });
 const claudeStepSchema = z.union([
   z.strictObject({ print: z.string() }),

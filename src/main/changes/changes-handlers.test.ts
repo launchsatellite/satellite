@@ -189,17 +189,19 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     expect(await newer).toMatchObject({ kind: "text" });
   });
 
-  it("stops a page's older list when it asks for another view", async () => {
+  it("stops a page's older list only when it asks for the same view again", async () => {
     const { changes } = await repository();
     const list = changes.handlers["changes.list"];
     const page = ownerOf(1);
-    const first = list({ workspace, view: "uncommitted" }, page);
-    const second = list({ workspace, view: "branch" }, page);
+    const first = list({ workspace, view: "branch", base: "one" }, page);
+    const beside = list({ workspace, view: "uncommitted" }, page);
+    const second = list({ workspace, view: "branch", base: "two" }, page);
     await expect(first).rejects.toMatchObject({
       code: "refused",
       message: "Satellite moved on to a newer read.",
     });
-    expect(await second).toMatchObject({ changes: { kind: "unavailable", reason: "no-base" } });
+    expect(await beside).toMatchObject({ changes: { kind: "files" } });
+    expect(await second).toMatchObject({ changes: { kind: "unavailable" } });
     const same = [
       list({ workspace, view: "uncommitted" }, page),
       list({ workspace, view: "uncommitted" }, page),
@@ -274,6 +276,82 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     await expect(reading).rejects.toMatchObject({
       code: "not-found",
       message: "That workspace's folder is gone, so Satellite can't show its changes.",
+    });
+  });
+
+  describe("a named base", () => {
+    async function withRemote() {
+      const made = await repository();
+      const { git, repo } = made;
+      await git("commit", "-q", "-am", "two");
+      await git("remote", "add", "origin", join(repo, "..", "elsewhere"));
+      const first = (await git("rev-parse", "HEAD~1")).stdout.trim();
+      await git("update-ref", "refs/remotes/origin/main", first);
+      await git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+      await git("update-ref", "refs/remotes/origin/dev", "HEAD");
+      await git("checkout", "-q", "-b", "work");
+      await writeFile(join(repo, "calm.txt"), "busy\n");
+      await git("commit", "-q", "-am", "three");
+      return made;
+    }
+    const files = (listed: unknown) =>
+      typeof listed === "object" && listed !== null && "changes" in listed
+        ? JSON.stringify(listed.changes)
+        : "";
+
+    it("reads the branch diff against a named base", async () => {
+      const { changes } = await withRemote();
+      const page = ownerOf(1);
+      const listed = await changes.handlers["changes.list"](
+        { workspace, view: "branch", base: "dev" },
+        page,
+      );
+      expect(listed).toMatchObject({
+        base: "origin/dev",
+        changes: { kind: "files", files: [{ path: "calm.txt" }] },
+      });
+      expect(files(listed)).not.toContain("edit.txt");
+    });
+
+    it("answers no-base for a base branch with no remote ref", async () => {
+      const { changes } = await withRemote();
+      const listed = await changes.handlers["changes.list"](
+        { workspace, view: "branch", base: "absent" },
+        ownerOf(1),
+      );
+      expect(listed).toMatchObject({ changes: { kind: "unavailable", reason: "no-base" } });
+    });
+
+    it("keeps the default base when none is named", async () => {
+      const { changes } = await withRemote();
+      const listed = await changes.handlers["changes.list"](
+        { workspace, view: "branch" },
+        ownerOf(1),
+      );
+      expect(listed).toMatchObject({ base: "origin/main" });
+      expect(files(listed)).toContain("edit.txt");
+      expect(files(listed)).toContain("calm.txt");
+    });
+
+    it("caches a named base apart from the default", async () => {
+      const { changes } = await withRemote();
+      const page = ownerOf(1);
+      await changes.handlers["changes.list"]({ workspace, view: "branch", base: "dev" }, page);
+      await expect(
+        changes.handlers["changes.file"](
+          { workspace, view: "branch", path: "edit.txt", base: "dev" },
+          page,
+        ),
+      ).rejects.toMatchObject(notListed);
+      await expect(
+        changes.handlers["changes.file"]({ workspace, view: "branch", path: "calm.txt" }, page),
+      ).rejects.toMatchObject(notListed);
+      expect(
+        await changes.handlers["changes.file"](
+          { workspace, view: "branch", path: "calm.txt", base: "dev" },
+          page,
+        ),
+      ).toMatchObject({ kind: "text", modified: "busy\n" });
     });
   });
 });

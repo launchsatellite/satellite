@@ -1,0 +1,291 @@
+{
+  "description": "A clone of a local upstream with one pushed workspace, alpha, holding a commit, and a stand-in gh that answers an open pull request 12 with a Markdown description, three commits, four passed checks, one skipped, one approving review, one comment and one resolved thread. Satellite is set to the light theme.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        {
+          "write": {
+            "path": "README.md",
+            "content": "# Verify repo\n"
+          }
+        },
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  return \"Hello \" + name;\n}\n"
+          }
+        },
+        {
+          "write": {
+            "path": "old.txt",
+            "content": "This file goes away.\n"
+          }
+        },
+        {
+          "write": {
+            "path": "notes.md",
+            "content": "# Notes\n\nKeep this.\n"
+          }
+        },
+        {
+          "write": {
+            "path": ".gitignore",
+            "content": "*.log\nbuild/\n"
+          }
+        },
+        {
+          "write": {
+            "path": "Cargo.toml",
+            "content": "[package]\nname = \"verify\"\n"
+          }
+        },
+        {
+          "write": {
+            "path": "src/deep/er/than/usual/needle-target.ts",
+            "content": "export const needle = \"found\";\n"
+          }
+        },
+        {
+          "write": {
+            "path": "assets/pixel.png",
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        },
+        {
+          "git": ["init", "-b", "main"]
+        },
+        {
+          "git": ["add", "."]
+        },
+        {
+          "git": ["commit", "-m", "first commit"]
+        }
+      ]
+    }
+  ],
+  "repo": [
+    {
+      "git": ["clone", "../folders/upstream", "."]
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": [
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  const greeting = \"Hello\";\n  return `${greeting}, ${name}!`;\n}\n"
+          }
+        },
+        {
+          "git": ["add", "-A"]
+        },
+        {
+          "git": ["commit", "-m", "work on alpha"]
+        },
+        {
+          "git": ["push", "-u", "origin", "HEAD"]
+        }
+      ]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    },
+    {
+      "call": "pull-request",
+      "json": {
+        "number": 12,
+        "url": "https://github.com/example-org/verify-repo/pull/12",
+        "title": "Greet people by name",
+        "state": "OPEN",
+        "isDraft": false,
+        "baseRefName": "main",
+        "headRefName": "alpha",
+        "headRefOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "isCrossRepository": false,
+        "body": "## What changed\n\nThe greeting now names the person and ends with an exclamation mark.\n\n- Adds a `greeting` constant\n- Keeps the old export working\n- Updates the guide\n\n### Checklist\n\n- [x] Tests pass\n- [ ] Docs reviewed\n\n| File | Change |\n| --- | --- |\n| src/app.ts | Reworded |\n| docs/guide.md | New |\n\n```ts\nexport function greet(name: string) {\n  return `Hello, ${name}!`;\n}\n```\n\nSee the [contributing guide](https://github.com/example-org/verify-repo/blob/main/CONTRIBUTING.md) for the review rules.\n",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+        "reviewDecision": "APPROVED",
+        "changedFiles": 2,
+        "reviews": [
+          {
+            "state": "APPROVED",
+            "commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "login": "grace-example",
+            "association": "COLLABORATOR",
+            "at": "2025-01-02T09:00:00Z"
+          }
+        ],
+        "checks": [
+          {
+            "name": "lint",
+            "workflow": "CI",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "context": null,
+            "state": null,
+            "url": "https://github.com/example-org/verify-repo/actions/runs/1001/job/2001",
+            "startedAt": "2025-01-01T10:01:00Z"
+          },
+          {
+            "name": "build",
+            "workflow": "CI",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "context": null,
+            "state": null,
+            "url": "https://github.com/example-org/verify-repo/actions/runs/1001/job/2002",
+            "startedAt": "2025-01-01T10:02:00Z"
+          },
+          {
+            "name": "unit tests",
+            "workflow": "CI",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "context": null,
+            "state": null,
+            "url": "https://github.com/example-org/verify-repo/actions/runs/1001/job/2003",
+            "startedAt": "2025-01-01T10:03:00Z"
+          },
+          {
+            "name": "types",
+            "workflow": "CI",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS",
+            "context": null,
+            "state": null,
+            "url": "https://github.com/example-org/verify-repo/actions/runs/1001/job/2004",
+            "startedAt": "2025-01-01T10:04:00Z"
+          },
+          {
+            "name": "docs preview",
+            "workflow": "CI",
+            "status": "COMPLETED",
+            "conclusion": "SKIPPED",
+            "context": null,
+            "state": null,
+            "url": "https://github.com/example-org/verify-repo/actions/runs/1001/job/2005",
+            "startedAt": "2025-01-01T10:05:00Z"
+          }
+        ],
+        "commits": [
+          {
+            "oid": "1111111111111111111111111111111111111111",
+            "headline": "Add the greeting constant"
+          },
+          {
+            "oid": "2222222222222222222222222222222222222222",
+            "headline": "Name the person in the greeting"
+          },
+          {
+            "oid": "3333333333333333333333333333333333333333",
+            "headline": "Write the guide"
+          }
+        ]
+      }
+    },
+    {
+      "call": "threads",
+      "json": {
+        "data": {
+          "repository": {
+            "pullRequests": {
+              "nodes": [
+                {
+                  "number": 12,
+                  "state": "OPEN",
+                  "authorAssociation": "OWNER"
+                }
+              ]
+            },
+            "pullRequest": {
+              "reviews": {
+                "totalCount": 1,
+                "nodes": [
+                  {
+                    "url": "https://github.com/example-org/verify-repo/pull/12#pullrequestreview-4001",
+                    "state": "APPROVED",
+                    "submittedAt": "2025-01-02T09:00:00Z",
+                    "body": "Looks good to me.",
+                    "author": {
+                      "login": "grace-example"
+                    }
+                  }
+                ]
+              },
+              "comments": {
+                "totalCount": 1,
+                "nodes": [
+                  {
+                    "url": "https://github.com/example-org/verify-repo/pull/12#issuecomment-5001",
+                    "createdAt": "2025-01-01T12:00:00Z",
+                    "body": "Thanks for the quick turnaround.",
+                    "isMinimized": false,
+                    "author": {
+                      "login": "ada-example"
+                    }
+                  }
+                ]
+              },
+              "reviewThreads": {
+                "totalCount": 1,
+                "nodes": [
+                  {
+                    "isResolved": true,
+                    "isOutdated": false,
+                    "path": "src/app.ts",
+                    "line": 2,
+                    "diffSide": "RIGHT",
+                    "comments": {
+                      "totalCount": 1,
+                      "nodes": [
+                        {
+                          "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3001",
+                          "body": "Could this use a template string?",
+                          "createdAt": "2025-01-01T13:00:00Z",
+                          "author": {
+                            "login": "review-bot"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "\u001b[?2004h"
+      },
+      {
+        "print": "> "
+      }
+    ]
+  }
+}

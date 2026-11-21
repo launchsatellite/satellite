@@ -6,7 +6,7 @@ import { createChanges, type Changes } from "./changes/changes-handlers.ts";
 import { protectHome } from "./changes/file-sides.ts";
 import { createFiles, type Files } from "./files/files-handlers.ts";
 import { noticeSubject } from "./inbox/notice-subject.ts";
-import { createNotices, type Notices } from "./inbox/notices.ts";
+import { createNotices, type Needing, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
 import {
@@ -18,6 +18,7 @@ import {
   windowTookFocus,
 } from "./platform/system-notices.ts";
 import { createProjects, type Projects } from "./projects/project-list.ts";
+import { createPullRequests, type PullRequests } from "./pull-request/pull-request-reads.ts";
 import { startHookListener, type HookListener } from "./sessions/hook-listener.ts";
 import { createLastSessions, type LastSessions } from "./sessions/last-sessions.ts";
 import { sessionFolder } from "./sessions/session-folder.ts";
@@ -60,6 +61,7 @@ interface Parts {
   listening: Promise<HookListener | undefined>;
   notices: Notices;
   projects: Projects;
+  pullRequests: PullRequests;
   recorder: { flush(): Promise<void> };
   terminals: TerminalSessions;
   workspaces: Workspaces;
@@ -72,6 +74,7 @@ async function start({
   listening,
   notices,
   projects,
+  pullRequests,
   terminals,
   workspaces,
 }: Parts): Promise<void> {
@@ -105,6 +108,7 @@ async function start({
       ...terminals.handlers,
       ...changes.handlers,
       ...files.handlers,
+      ...pullRequests.handlers,
       ...linkHandlers(),
     },
     allowedOrigin(entryUrl),
@@ -169,13 +173,25 @@ function assemble(home: string): Parts {
       owner.emit("notices.open", { workspace });
     },
   });
+  let needingSessions: readonly Needing[] = [];
+  let needingPullRequests: readonly Needing[] = [];
   const terminals = createTerminalSessions({
     home,
     folder: (ref) => sessionFolder(home, projects.store, ref),
     listener: listening,
     last,
     onNeeding: (needing) => {
-      notices.update(needing);
+      needingSessions = needing;
+      notices.update([...needingSessions, ...needingPullRequests]);
+    },
+  });
+  const pullRequests = createPullRequests({
+    home,
+    store: projects.store,
+    sweepEveryMs: 60_000,
+    onNeeding: (needing) => {
+      needingPullRequests = needing;
+      notices.update([...needingSessions, ...needingPullRequests]);
     },
   });
   protectHome(home);
@@ -188,6 +204,7 @@ function assemble(home: string): Parts {
         terminals.sessionsInside.stopInside(folder),
         changes.stopInside(folder),
         files.stopInside(folder),
+        pullRequests.stopInside(folder),
       ]);
     },
   };
@@ -199,6 +216,7 @@ function assemble(home: string): Parts {
     listening,
     notices,
     projects,
+    pullRequests,
     recorder: { flush: recordedLines },
     terminals,
     workspaces: workspaceHandlers({

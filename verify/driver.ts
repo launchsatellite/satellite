@@ -40,6 +40,7 @@ export interface AppSession {
   selectDiffLines(side: "original" | "modified", start: number, end: number): Promise<void>;
   selectFileLines(start: number, end: number): Promise<void>;
   openedLinks(): Promise<string[]>;
+  mark(name: string): Promise<void>;
   notices(): Promise<RecordedNotice[]>;
   standInEvents(): Promise<StandInEvent[]>;
   consoleErrors: string[];
@@ -685,6 +686,11 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       await page.waitForFunction(() =>
         document.activeElement?.closest("[data-testid='file-text']"),
       );
+    },
+    async mark(name) {
+      if (!/^[a-z][a-z0-9-]{0,40}$/.test(name))
+        throw new Error("a mark is a short kebab-case name");
+      await writeFile(join(home, name), "");
     },
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");

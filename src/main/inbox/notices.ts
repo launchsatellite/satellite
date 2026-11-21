@@ -5,6 +5,7 @@ import { noticeText, type NoticeSubject, type NoticeText } from "./notice-text.t
 export interface Needing {
   workspace: WorkspaceRef;
   owner: BridgeOwner;
+  reason: "session" | "pull-request";
 }
 export interface ShownNotice {
   close(): void;
@@ -85,7 +86,11 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     const single = rest.length === 0 && needing.size === 1;
     const keys = single ? [placeKey(first.entry.workspace)] : [...needing.keys()];
     closeShown();
-    const words = noticeText([first.subject, ...rest.map(({ subject }) => subject)], needing.size);
+    const words = noticeText(
+      [first.subject, ...rest.map(({ subject }) => subject)],
+      needing.size,
+      first.entry.reason,
+    );
     const notice = show(words, () => {
       const alone = single ? needing.get(keys[0] ?? "") : undefined;
       open(alone ?? [...needing.values()].at(-1) ?? target.entry);

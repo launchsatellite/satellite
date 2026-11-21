@@ -5,6 +5,7 @@ import type { Notify } from "../ui/toast.tsx";
 
 interface LinkDialogProps {
   address: string;
+  description: string;
   onClose: () => void;
   notify: Notify;
 }
@@ -18,12 +19,12 @@ async function openLink(url: string, notify: Notify): Promise<boolean> {
   return result.ok;
 }
 
-export function LinkDialog({ address, onClose, notify }: LinkDialogProps) {
+export function LinkDialog({ address, description, onClose, notify }: LinkDialogProps) {
   const host = URL.parse(address)?.host ?? "";
   return (
     <Dialog
       title="Open this link"
-      description="The text Claude Code showed points to this address. Check it before you open it."
+      description={description}
       testId="link-dialog"
       onClose={onClose}
       closable

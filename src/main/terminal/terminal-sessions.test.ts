@@ -338,11 +338,15 @@ describe("createTerminalSessions", () => {
     );
     const [first, second] = listener.open.mock.calls.map(([launchId]) => launchId);
     sessions.hookEvent(first ?? "", { name: "PermissionRequest", agent: "" }, null);
-    expect(onNeeding).toHaveBeenLastCalledWith([{ workspace: main, owner: mine }]);
+    expect(onNeeding).toHaveBeenLastCalledWith([
+      { workspace: main, owner: mine, reason: "session" },
+    ]);
     sessions.hookEvent(first ?? "", { name: "PostToolUse", agent: "" }, null);
     expect(onNeeding).toHaveBeenLastCalledWith([]);
     sessions.hookEvent(second ?? "", { name: "PermissionRequest", agent: "" }, null);
-    expect(onNeeding).toHaveBeenLastCalledWith([{ workspace: other, owner: mine }]);
+    expect(onNeeding).toHaveBeenLastCalledWith([
+      { workspace: other, owner: mine, reason: "session" },
+    ]);
     await sessions.handlers["terminal.close"]({ id: terminalId(2) }, mine);
     expect(onNeeding).toHaveBeenLastCalledWith([]);
     sessions.hookEvent(first ?? "", { name: "PermissionRequest", agent: "" }, null);

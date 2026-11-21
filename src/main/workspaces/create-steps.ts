@@ -147,7 +147,7 @@ function excerptOf(stderr: string): string | null {
   return text.length <= excerptLimit ? text : `…${text.slice(-(excerptLimit - 1))}`;
 }
 
-function pickRemote(stdout: string): string | null {
+export function pickRemote(stdout: string): string | null {
   const remotes = stdout.split("\n").filter((remote) => remote !== "");
   const chosen = remotes.includes("origin") ? "origin" : remotes.length === 1 ? remotes[0] : null;
   return chosen !== undefined && chosen !== null && remotePattern.test(chosen) ? chosen : null;

@@ -1,8 +1,15 @@
-import type { ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
+import type { ProjectView, PullRequestFound, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { StatusPixel } from "../ui/status-pixel.tsx";
+import {
+  checksState,
+  readoutLabel,
+  readoutPixel,
+  readoutRest,
+} from "../pull-request/pull-request-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
 
 interface WorkspaceHeaderProps {
@@ -11,9 +18,19 @@ interface WorkspaceHeaderProps {
   base: string | null;
   ahead: number | null;
   behind: number | null;
+  pullRequest: PullRequestFound | null;
+  onShowPullRequest: () => void;
 }
 
-export function WorkspaceHeader({ project, workspace, base, ahead, behind }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({
+  project,
+  workspace,
+  base,
+  ahead,
+  behind,
+  pullRequest,
+  onShowPullRequest,
+}: WorkspaceHeaderProps) {
   const tracking = trackingWords(ahead, behind);
   return (
     <header
@@ -59,7 +76,25 @@ export function WorkspaceHeader({ project, workspace, base, ahead, behind }: Wor
           )}
         </span>
       )}
-      <span className="ml-auto flex flex-none items-center gap-1">
+      <span className="ml-auto flex min-w-0 flex-none items-center gap-1">
+        {project.missing === null && pullRequest !== null && (
+          <button
+            type="button"
+            data-testid="header-pull-request"
+            data-number={pullRequest.number}
+            data-checks={checksState(pullRequest.counts)}
+            aria-label={readoutLabel(pullRequest)}
+            title={readoutLabel(pullRequest)}
+            onClick={onShowPullRequest}
+            className="flex h-6 min-w-0 flex-none items-center gap-[7px] rounded-[6px] px-[7px] font-pixel text-[12px] text-dim uppercase hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <StatusPixel state={readoutPixel(pullRequest)} size={6} />
+            <span aria-hidden="true" className="truncate">
+              #{pullRequest.number}
+              <span className="hidden @2xl:inline">{readoutRest(pullRequest)}</span>
+            </span>
+          </button>
+        )}
         {workspace.key !== "main" && (
           <CommandButton
             command="workspace.archive"

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { isStartRef, workspaceNameLimit, workspaceNameProblem } from "./workspace-name.ts";
+import {
+  isBranchName,
+  isStartRef,
+  workspaceNameLimit,
+  workspaceNameProblem,
+} from "./workspace-name.ts";
 
 export type BridgeChannel = keyof typeof bridgeRequests;
 export type BridgeRequest<C extends BridgeChannel> = z.output<
@@ -106,6 +111,7 @@ export const workspaceName = z
 export const refName = z.string().min(6).max(300).refine(isStartRef);
 const count = z.int().min(0).max(1_000_000);
 export const changesView = z.enum(["branch", "uncommitted"]);
+const baseName = z.string().min(1).max(255).refine(isBranchName);
 const changePath = z.string().min(1).max(changesLimits.pathChars);
 const shortOid = z.string().regex(/^[0-9a-f]{7}$/);
 const sideText = z.string().max(changesLimits.sideBytes);
@@ -221,6 +227,157 @@ const windowsPty = z.strictObject({
   buildNumber: z.number().int().positive(),
 });
 export type WindowsPty = z.output<typeof windowsPty>;
+export const pullRequestLimits = {
+  titleChars: 256,
+  bodyChars: 20_000,
+  detailChars: 400_000,
+  nameChars: 255,
+  urlChars: 2048,
+  checks: 100,
+  commits: 100,
+  reviews: 50,
+  comments: 50,
+  threads: 100,
+  threadComments: 20,
+  logLines: 40,
+  logLineChars: 400,
+} as const;
+const pullRequestAddress = z
+  .string()
+  .max(pullRequestLimits.urlChars)
+  .regex(/^https:\/\//);
+const shortName = z.string().max(pullRequestLimits.nameChars);
+const moment = z.string().max(40).nullable();
+const pullRequestBody = z.string().max(pullRequestLimits.bodyChars);
+const digits = z.string().regex(/^[0-9]{1,20}$/);
+export const checkResult = z.enum([
+  "failed",
+  "pending",
+  "passed",
+  "skipped",
+  "cancelled",
+  "unknown",
+]);
+export const pullRequestNeed = z.enum(["checks", "review", "conflicts"]);
+export const pullRequestTrouble = z.enum([
+  "signed-out",
+  "gh-missing",
+  "gh-old",
+  "offline",
+  "other-host",
+  "rate-limited",
+  "hung",
+  "failed",
+]);
+const pullRequestCheck = z.strictObject({
+  name: shortName,
+  workflow: shortName.nullable(),
+  result: checkResult,
+  url: pullRequestAddress.nullable(),
+  run: digits.nullable(),
+  job: digits.nullable(),
+});
+export const hiddenReason = z.enum([
+  "abuse",
+  "duplicate",
+  "off-topic",
+  "outdated",
+  "resolved",
+  "spam",
+]);
+const pullRequestComment = z.strictObject({
+  author: shortName.nullable(),
+  at: moment,
+  body: pullRequestBody,
+  bodyCut: z.boolean(),
+  hidden: z.boolean(),
+  hiddenReason: hiddenReason.nullable(),
+  url: pullRequestAddress.nullable(),
+});
+const pullRequestReview = pullRequestComment.extend({
+  state: z.enum(["approved", "changes-requested", "commented", "dismissed", "pending"]),
+});
+const pullRequestThread = z.strictObject({
+  resolved: z.boolean(),
+  outdated: z.boolean(),
+  path: changePath.nullable(),
+  line: z.int().min(1).max(1_000_000).nullable(),
+  side: z.enum(["left", "right"]).nullable(),
+  url: pullRequestAddress.nullable(),
+  comments: z.array(pullRequestComment).max(pullRequestLimits.threadComments),
+  moreComments: count,
+});
+const pullRequestDetail = z.discriminatedUnion("kind", [
+  z
+    .strictObject({
+      kind: z.literal("read"),
+      reviews: z.array(pullRequestReview).max(pullRequestLimits.reviews),
+      moreReviews: count,
+      comments: z.array(pullRequestComment).max(pullRequestLimits.comments),
+      moreComments: count,
+      threads: z.array(pullRequestThread).max(pullRequestLimits.threads),
+      moreThreads: count,
+    })
+    .refine(
+      ({ reviews, comments, threads }) =>
+        [...reviews, ...comments, ...threads.flatMap((thread) => thread.comments)].reduce(
+          (total, { body }) => total + body.length,
+          0,
+        ) <= pullRequestLimits.detailChars,
+      { message: "The conversation holds more text than Satellite shows" },
+    ),
+  z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
+]);
+export const pullRequestAnswer = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("found"),
+    number: z.int().min(1).max(9_999_999_999),
+    url: pullRequestAddress,
+    host: z.string().regex(ghHost),
+    title: z.string().max(pullRequestLimits.titleChars),
+    state: z.enum(["open", "draft", "merged", "closed"]),
+    base: shortName.nullable(),
+    head: shortName.nullable(),
+    crossRepository: z.boolean(),
+    mergeable: z.enum(["mergeable", "conflicting", "unknown"]),
+    mergeState: z.enum([
+      "behind",
+      "blocked",
+      "clean",
+      "dirty",
+      "draft",
+      "has-hooks",
+      "unstable",
+      "unknown",
+    ]),
+    review: z.enum(["approved", "changes-requested", "review-required", "none"]),
+    counts: z.strictObject({ failed: count, pending: count, passed: count, total: count }),
+    needs: z.array(pullRequestNeed).max(3),
+    atHead: z.boolean().nullable(),
+    body: pullRequestBody,
+    bodyCut: z.boolean(),
+    changedFiles: count.nullable(),
+    commits: z
+      .array(
+        z.strictObject({ oid: z.string().regex(/^[0-9a-f]{7}$/), headline: z.string().max(256) }),
+      )
+      .max(pullRequestLimits.commits),
+    moreCommits: count,
+    checks: z.array(pullRequestCheck).max(pullRequestLimits.checks),
+    moreChecks: count,
+    detail: pullRequestDetail.nullable(),
+  }),
+  z.strictObject({ kind: z.literal("absent"), reason: z.enum(["none", "not-pushed", "target"]) }),
+  z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
+]);
+export type CheckResult = z.output<typeof checkResult>;
+export type PullRequestNeed = z.output<typeof pullRequestNeed>;
+export type PullRequestTrouble = z.output<typeof pullRequestTrouble>;
+export type PullRequestCheck = z.output<typeof pullRequestCheck>;
+export type PullRequestThread = z.output<typeof pullRequestThread>;
+export type PullRequestDetail = z.output<typeof pullRequestDetail>;
+export type PullRequestAnswer = z.output<typeof pullRequestAnswer>;
+export type PullRequestFound = Extract<PullRequestAnswer, { kind: "found" }>;
 export const installFix = z.strictObject({
   kind: z.enum(["command", "address"]),
   text: z.string().min(1).max(200),
@@ -344,7 +501,11 @@ export const bridgeRequests = {
     response: z.strictObject({ resumable: z.boolean() }),
   },
   "changes.list": {
-    request: z.strictObject({ workspace: workspaceRef, view: changesView }),
+    request: z.strictObject({
+      workspace: workspaceRef,
+      view: changesView,
+      base: baseName.optional(),
+    }),
     response: z.strictObject({
       branch: z.string().min(1).max(255).nullable(),
       base: z.string().min(1).max(255).nullable(),
@@ -385,7 +546,12 @@ export const bridgeRequests = {
     }),
   },
   "changes.file": {
-    request: z.strictObject({ workspace: workspaceRef, view: changesView, path: changePath }),
+    request: z.strictObject({
+      workspace: workspaceRef,
+      view: changesView,
+      path: changePath,
+      base: baseName.optional(),
+    }),
     response: z.discriminatedUnion("kind", [
       z.strictObject({ kind: z.literal("text"), original: sideText, modified: sideText }),
       z.strictObject({ kind: z.literal("binary") }),
@@ -459,6 +625,29 @@ export const bridgeRequests = {
         paths: z.array(filePath).max(filesLimits.findResults),
       }),
       z.strictObject({ kind: z.enum(["too-many", "hung", "failed"]) }),
+    ]),
+  },
+  "pullRequest.read": {
+    request: z.strictObject({
+      workspace: workspaceRef,
+      detail: z.boolean(),
+      fresh: z.boolean().optional(),
+    }),
+    response: pullRequestAnswer,
+  },
+  "pullRequest.log": {
+    request: z.strictObject({ workspace: workspaceRef, job: digits }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("lines"),
+        lines: z
+          .array(z.string().max(pullRequestLimits.logLineChars))
+          .max(pullRequestLimits.logLines),
+        more: z.boolean(),
+      }),
+      z.strictObject({ kind: z.literal("empty") }),
+      z.strictObject({ kind: z.literal("too-large") }),
+      z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
     ]),
   },
   "links.open": {

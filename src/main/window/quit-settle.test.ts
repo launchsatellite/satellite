@@ -16,6 +16,7 @@ describe("settleForQuit", () => {
       },
       changes: { stopAll: work("changes") },
       files: { stopAll: work("files") },
+      pullRequests: { stopAll: work("pullRequests") },
       terminals: { closeAll: work("closeAll") },
       last: { flush: work("last") },
       interfaceFile: { flush: work("interface") },
@@ -25,7 +26,7 @@ describe("settleForQuit", () => {
     };
     await settleForQuit(parts, 1000);
     expect(calls[0]).toBe("stop");
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(10);
   });
 
   it("waits for the recorded notification lines once every session ended, within the bound", async () => {
@@ -35,6 +36,7 @@ describe("settleForQuit", () => {
       notices: { stop: () => undefined },
       changes: { stopAll: () => Promise.resolve() },
       files: { stopAll: () => Promise.resolve() },
+      pullRequests: { stopAll: () => Promise.resolve() },
       terminals: {
         closeAll: () =>
           new Promise<void>((resolve) => {

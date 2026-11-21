@@ -15,6 +15,7 @@ import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
 import { projectsJourney } from "./journeys/projects.ts";
+import { pullRequestJourney } from "./journeys/pull-request.ts";
 import { quitJourney } from "./journeys/quit.ts";
 import { sessionsJourney } from "./journeys/sessions.ts";
 import { settingsJourney } from "./journeys/settings.ts";
@@ -24,6 +25,7 @@ export interface Journey {
   name: string;
   scenario: string;
   run(session: AppSession): Promise<void>;
+  then?: readonly Journey[];
 }
 interface Outcome {
   failure?: string;
@@ -40,6 +42,7 @@ const journeys: Journey[] = [
   conflictsJourney,
   sessionsJourney,
   inboxJourney,
+  pullRequestJourney,
   missingJourney,
   settingsJourney,
   quitJourney,
@@ -79,6 +82,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     selectDiffLines: (side, start, end) => session.selectDiffLines(side, start, end),
     selectFileLines: (start, end) => session.selectFileLines(start, end),
     openedLinks: () => session.openedLinks(),
+    mark: (name) => session.mark(name),
     notices: () => session.notices(),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
@@ -107,6 +111,19 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
   return failure === undefined ? { screenshots } : { failure, screenshots };
 }
 
+async function runWithParts(journey: Journey, target: AppTarget): Promise<Outcome> {
+  const first = await runJourney(journey, target);
+  const screenshots = [...first.screenshots];
+  let failure = first.failure;
+  for (const part of journey.then ?? []) {
+    if (failure !== undefined) break;
+    const outcome = await runJourney(part, target);
+    screenshots.push(...outcome.screenshots);
+    failure = outcome.failure === undefined ? undefined : `${part.scenario}, ${outcome.failure}`;
+  }
+  return failure === undefined ? { screenshots } : { failure, screenshots };
+}
+
 function report(name: string, { failure, screenshots }: Outcome): void {
   const verdict = failure === undefined ? `pass ${name}` : `fail ${name} ${failure}`;
   const lines = [verdict, ...screenshots.map((path) => `  ${path}`)];
@@ -124,7 +141,7 @@ async function main(): Promise<boolean> {
   }
   let passed = true;
   for (const journey of journeys) {
-    const outcome = await runJourney(journey, target);
+    const outcome = await runWithParts(journey, target);
     report(journey.name, outcome);
     if (outcome.failure !== undefined) passed = false;
   }

@@ -16,7 +16,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
-import type { DiffHandle, DiffSide } from "../diff/read-only-editor.tsx";
+import type { DiffHandle, DiffSide, MarkProps } from "../diff/read-only-editor.tsx";
 import { diffLabels, sideSentence } from "./change-words.ts";
 import { pollDelay } from "../ui/refresh-schedule.ts";
 import { changesPlace } from "./use-changes.ts";
@@ -29,7 +29,8 @@ export interface ShownText {
   base: string | null;
 }
 
-interface FileDiffProps {
+interface FileDiffProps extends MarkProps {
+  named?: string;
   workspace: WorkspaceRef;
   view: ChangesView;
   file: ChangedFile;
@@ -127,12 +128,14 @@ function Editors({
   file,
   inline,
   handle,
+  marks,
+  onMark,
 }: {
   sides: Extract<FileSides, { kind: "text" }>;
   file: ChangedFile;
   inline: boolean;
   handle: Ref<DiffHandle>;
-}) {
+} & MarkProps) {
   const labels = diffLabels(file);
   const only = sideOnly(file.letter);
   if (only === null) {
@@ -144,6 +147,8 @@ function Editors({
         inline={inline}
         labels={labels}
         handle={handle}
+        marks={marks}
+        onMark={onMark}
       />
     );
   }
@@ -154,6 +159,8 @@ function Editors({
       path={file.path}
       label={labels[only]}
       handle={handle}
+      marks={marks}
+      onMark={onMark}
     />
   );
 }
@@ -164,8 +171,19 @@ export function sideOnly(letter: ChangeLetter): DiffSide | null {
   return null;
 }
 
-export function FileDiff({ workspace, view, file, base, inline, handle, onShown }: FileDiffProps) {
-  const place = changesPlace(workspace, view);
+export function FileDiff({
+  workspace,
+  view,
+  file,
+  base,
+  named,
+  inline,
+  handle,
+  onShown,
+  marks,
+  onMark,
+}: FileDiffProps) {
+  const place = changesPlace(workspace, view, named);
   const key = `${place}\u0000${file.path}\u0000${file.stamp}`;
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [retried, setRetried] = useState({ key, count: 0 });
@@ -192,6 +210,7 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
       workspace: { projectId, workspace: workspaceKey },
       view,
       path,
+      ...(named === undefined ? {} : { base: named }),
     }).then((result) => {
       if (asked !== sequence.current) return;
       const answered: Answer = result.ok
@@ -200,7 +219,7 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
       if (result.ok && !passing(answered)) remember(key, result.value);
       setAnswer(answered);
     });
-  }, [key, projectId, workspaceKey, view, path, attempt]);
+  }, [key, projectId, workspaceKey, view, path, named, attempt]);
 
   useEffect(() => {
     if (answer?.key !== key || !passing(answer)) return;
@@ -255,7 +274,14 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
       {drawn.sides?.kind === "text" ? (
         <EditorBoundary sentence={editorFailedSentence} testId="changes-sentence">
           <Suspense fallback={<Opening />}>
-            <Editors sides={drawn.sides} file={drawn.file} inline={inline} handle={handle} />
+            <Editors
+              sides={drawn.sides}
+              file={drawn.file}
+              inline={inline}
+              handle={handle}
+              marks={marks}
+              onMark={onMark}
+            />
           </Suspense>
         </EditorBoundary>
       ) : (

@@ -35,6 +35,39 @@ describe("refresh delay", () => {
   });
 });
 
+describe("refresh pace", () => {
+  it("takes a pace and keeps the default", () => {
+    const slow = { firstMs: 30_000, maxMs: 300_000, factor: 4 };
+    expect(pollDelay(100, 0, slow)).toBe(30_000);
+    expect(pollDelay(100, 2, slow)).toBe(120_000);
+    expect(pollDelay(100, 9, slow)).toBe(300_000);
+    expect(pollDelay(20_000, 0, slow)).toBe(80_000);
+    expect(pollDelay(100, 0)).toBe(2000);
+    expect(pollDelay(100, 9)).toBe(30_000);
+  });
+
+  it("waits the pace's first delay after a calm", async () => {
+    const waits: number[] = [];
+    const schedule = createSchedule(
+      {
+        visible: () => true,
+        now: () => 0,
+        read: () => Promise.resolve({ files: true, key: "a" }),
+        after: (ms) => {
+          waits.push(ms);
+          return () => undefined;
+        },
+      },
+      { firstMs: 30_000, maxMs: 300_000, factor: 4 },
+    );
+    schedule.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    schedule.calm();
+    expect(waits).toEqual([30_000, 30_000]);
+  });
+});
+
 function harness() {
   const reads: { at: number; settle: (answer: ScheduleAnswer) => void }[] = [];
   const timers: { at: number; run: () => void; live: boolean }[] = [];

@@ -6,7 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 
-const ignoresHangup = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
+const ignoresHangup = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
 
 function isAlive(pid: number): boolean {
   try {
@@ -35,19 +35,25 @@ describe.skipIf(process.platform === "win32")("endUnixTree", () => {
     });
     const leaderPid = leader.pid ?? 0;
     const escapedPid = escaped.pid ?? 0;
-    const exited = new Promise<void>((resolve) =>
-      leader.once("exit", () => {
-        resolve();
-      }),
-    );
-    await Promise.all([
-      endUnixTree(leaderPid, exited, 500),
-      endUnixTree(escapedPid, new Promise<void>(() => undefined), 500),
-    ]);
-    await delay(100);
-    expect(isAlive(leaderPid)).toBe(false);
-    expect(isAlive(escapedPid)).toBe(false);
-    expect(isAlive(grandchild)).toBe(false);
+    try {
+      const exited = new Promise<void>((resolve) =>
+        leader.once("exit", () => {
+          resolve();
+        }),
+      );
+      await Promise.all([
+        endUnixTree(leaderPid, exited, 500),
+        endUnixTree(escapedPid, new Promise<void>(() => undefined), 500),
+      ]);
+      await delay(100);
+      expect(isAlive(leaderPid)).toBe(false);
+      expect(isAlive(escapedPid)).toBe(false);
+      expect(isAlive(grandchild)).toBe(false);
+    } finally {
+      for (const pid of [leaderPid, escapedPid, grandchild]) {
+        if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+      }
+    }
   });
 });
 

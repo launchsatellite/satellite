@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  childEnvironment,
   claudeEnvironment,
   parseToolOverride,
   resolveTool,
@@ -24,17 +27,17 @@ vi.mock("./user-environment.ts", () => ({
 
 const leavesAChild = `
 const { spawn } = require("node:child_process");
-const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" });
+const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000)"], { stdio: "inherit" });
 require("node:fs").writeFileSync(process.argv[1], String(child.pid));
-setInterval(() => {}, 1000);
+setTimeout(() => {}, 60_000);
 `;
 
 const leavesAnOrphan = `
 const { spawn } = require("node:child_process");
-const keep = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
+const keep = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
 const orphan = \`const o = require("node:child_process").spawn(process.execPath, ["-e", \${JSON.stringify(keep)}], { detached: true, stdio: ["ignore", "inherit", "inherit"] }); require("node:fs").writeFileSync(process.argv[1], String(o.pid)); process.exit(0);\`;
 spawn(process.execPath, ["-e", orphan, process.argv[1]], { stdio: "inherit" });
-setInterval(() => {}, 1000);
+setTimeout(() => {}, 60_000);
 `;
 
 function isAlive(pid: number): boolean {
@@ -116,13 +119,64 @@ describe("toolEnvironment", () => {
       SSH_ASKPASS_REQUIRE: "never",
     });
     const gh = toolEnvironment("gh", { gh_prompt_disabled: "0", no_color: "0", Gh_Telemetry: "1" });
-    expect(Object.keys(gh).sort()).toEqual([
-      "GH_NO_EXTENSION_UPDATE_NOTIFIER",
-      "GH_NO_UPDATE_NOTIFIER",
-      "GH_PROMPT_DISABLED",
-      "GH_TELEMETRY",
-      "NO_COLOR",
-    ]);
+    expect(Object.keys(gh).sort()).toEqual(Object.keys(toolEnvironment("gh", {})).sort());
+    expect(gh["GH_PROMPT_DISABLED"]).toBe("1");
+    expect(gh["NO_COLOR"]).toBe("1");
+    expect(gh["GH_TELEMETRY"]).toBe("false");
+  });
+
+  it("gives gh its quiet keys, git's prompt keys and an empty fsmonitor", () => {
+    expect(toolEnvironment("gh", { PATH: "/usr/bin" })).toEqual({
+      PATH: "/usr/bin",
+      GH_PROMPT_DISABLED: "1",
+      GH_NO_UPDATE_NOTIFIER: "1",
+      GH_NO_EXTENSION_UPDATE_NOTIFIER: "1",
+      GH_TELEMETRY: "false",
+      NO_COLOR: "1",
+      GIT_TERMINAL_PROMPT: "0",
+      GCM_INTERACTIVE: "false",
+      SSH_ASKPASS_REQUIRE: "never",
+      GIT_OPTIONAL_LOCKS: "0",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.fsmonitor",
+      GIT_CONFIG_VALUE_0: "",
+    });
+  });
+
+  it("drops the keys that could steer gh or its git", () => {
+    const env = toolEnvironment("gh", {
+      GH_HOST: "evil.example.invalid",
+      gh_repo: "evil/x",
+      GH_PAGER: "x",
+      PAGER: "x",
+      GH_BROWSER: "x",
+      BROWSER: "x",
+      GH_EDITOR: "x",
+      GIT_DIR: "/tmp/x",
+      GIT_WORK_TREE: "/tmp/x",
+      GIT_CONFIG_PARAMETERS: "'core.pager=x'",
+      GIT_CONFIG_COUNT: "5",
+      GIT_CONFIG_KEY_3: "core.pager",
+      GH_TOKEN: "token-value",
+      GH_CONFIG_DIR: "/tmp/gh",
+    });
+    for (const key of [
+      "GH_HOST",
+      "gh_repo",
+      "GH_PAGER",
+      "PAGER",
+      "GH_BROWSER",
+      "BROWSER",
+      "GH_EDITOR",
+      "GIT_DIR",
+      "GIT_WORK_TREE",
+      "GIT_CONFIG_PARAMETERS",
+    ]) {
+      expect(Object.keys(env)).not.toContain(key);
+    }
+    expect(env["GIT_CONFIG_COUNT"]).toBe("1");
+    expect(env["GH_TOKEN"]).toBe("token-value");
+    expect(env["GH_CONFIG_DIR"]).toBe("/tmp/gh");
   });
 });
 
@@ -273,6 +327,7 @@ describe("runTool", () => {
         expect(isAlive(child)).toBe(false);
       }, 10_000);
     } finally {
+      if (child === 0) child = Number(await readFile(pidFile, "utf8").catch(() => "0"));
       if (child > 0 && isAlive(child)) process.kill(child, "SIGKILL");
       await rm(folder, { recursive: true, force: true });
     }
@@ -300,6 +355,46 @@ describe("runTool", () => {
       }
     },
     20_000,
+  );
+});
+
+describe("runTool in a folder", () => {
+  it("runs a tool in the folder it is given", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "satellite-cwd-"));
+    vi.stubEnv(
+      "SATELLITE_GH",
+      JSON.stringify([process.execPath, "-e", "process.stdout.write(process.cwd())"]),
+    );
+    const run = await runTool("gh", [], { cwd: folder });
+    expect(await realpath(run?.stdout ?? "")).toBe(await realpath(folder));
+  });
+});
+
+describe("git in a repository that configures programs", () => {
+  it.skipIf(process.platform === "win32")(
+    "starts none of them under the gh environment, and does without it",
+    async () => {
+      const folder = await mkdtemp(join(tmpdir(), "satellite-hostile-"));
+      const marker = join(folder, "marker");
+      const program = join(folder, "program.sh");
+      await writeFile(program, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+      const repo = join(folder, "repo");
+      await mkdir(repo);
+      const git = (...args: string[]) => {
+        const done = spawnSync("git", ["-C", repo, ...args]);
+        expect(done.status).toBe(0);
+      };
+      git("init", "--quiet");
+      git("config", "core.fsmonitor", program);
+      const hardened = spawnSync("git", ["-C", repo, "status"], {
+        env: toolEnvironment("gh", await childEnvironment()),
+      });
+      expect(hardened.status).toBe(0);
+      expect(existsSync(marker)).toBe(false);
+      const control = spawnSync("git", ["-C", repo, "status"]);
+      expect(control.status).toBe(0);
+      expect(existsSync(marker)).toBe(true);
+    },
   );
 });
 

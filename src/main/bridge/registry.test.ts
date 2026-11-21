@@ -104,6 +104,12 @@ function spies() {
     "files.find": vi.fn<BridgeHandler<"files.find">>(() =>
       Promise.resolve({ kind: "found", paths: [] }),
     ),
+    "pullRequest.read": vi.fn<BridgeHandler<"pullRequest.read">>(() =>
+      Promise.resolve({ kind: "absent", reason: "none" }),
+    ),
+    "pullRequest.log": vi.fn<BridgeHandler<"pullRequest.log">>(() =>
+      Promise.resolve({ kind: "empty" }),
+    ),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
       Promise.resolve({ windowsPty: null }),
@@ -416,6 +422,24 @@ describe("createBridgeRouter", () => {
     expect(handlers["interface.save"]).toHaveBeenCalledTimes(2);
   });
 
+  it("refuses a changes request whose base is not a plain branch name", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const workspace = { projectId: terminalId, workspace: "main" };
+    const bases = ["-x", "a..b", "refs/heads/x y", "a".repeat(256), 7, ""];
+    for (const base of bases) {
+      const list = await route("changes.list", { workspace, view: "branch", base }, owner);
+      const file = await route(
+        "changes.file",
+        { workspace, view: "branch", path: "a.txt", base },
+        owner,
+      );
+      expect(list).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+      expect(file).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
   it("refuses a changes request that names a view, a path or a field of its own", async () => {
     const handlers = spies();
     const route = createBridgeRouter(handlers);
@@ -448,6 +472,44 @@ describe("createBridgeRouter", () => {
       ok: true,
       value: { kind: "text", original: "", modified: "" },
     });
+  });
+
+  it("refuses a pull request request that names more, other or longer than the contract allows", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const workspace = { projectId: terminalId, workspace: "main" };
+    const reads = [
+      { workspace, detail: "true" },
+      { workspace },
+      { workspace, detail: false, host: "github.com" },
+      { workspace, detail: false, url: "https://github.com/o/r/pull/1" },
+      { workspace: { ...workspace, workspace: "../main" }, detail: false },
+      { detail: true },
+    ];
+    for (const payload of reads) {
+      const result = await route("pullRequest.read", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    const logs = [
+      { workspace, job: "12a" },
+      { workspace, job: "1".repeat(21) },
+      { workspace, job: "-R" },
+      { workspace, job: "" },
+      { workspace, job: 12 },
+      { workspace, job: "12", repo: "o/r" },
+      { workspace: { ...workspace, workspace: "../main" }, job: "12" },
+    ];
+    for (const payload of logs) {
+      const result = await route("pullRequest.log", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("pullRequest.read", { workspace, detail: true }, owner)).toMatchObject({
+      ok: true,
+    });
+    expect(await route("pullRequest.log", { workspace, job: "1".repeat(20) }, owner)).toMatchObject(
+      { ok: true },
+    );
   });
 
   it("refuses a files request that names more, longer or other than the contract allows", async () => {

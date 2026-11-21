@@ -1,4 +1,4 @@
-import type { SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { PullRequestNeed, SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { needsYou } from "../../shared/needs-you.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
 
@@ -11,21 +11,44 @@ interface SessionReason {
   onlySession: boolean;
   since: number;
 }
-export type InboxReason = SessionReason;
-export type InboxTarget = Pick<InboxReason, "workspace" | "tab" | "terminalId">;
+interface PullRequestReason {
+  kind: "pull-request";
+  workspace: WorkspaceRef;
+  needs: readonly PullRequestNeed[];
+  since: number;
+}
+export interface PullRequestNeeding {
+  workspace: WorkspaceRef;
+  needs: readonly PullRequestNeed[];
+  since: number;
+}
+export type InboxReason = SessionReason | PullRequestReason;
+export type InboxTarget =
+  | Pick<SessionReason, "kind" | "workspace" | "tab" | "terminalId">
+  | Pick<PullRequestReason, "kind" | "workspace">;
 export interface InboxRow {
   workspace: WorkspaceRef;
   since: number;
   reasons: InboxReason[];
 }
 
-const sentences: Record<InboxReason["kind"], (reasons: readonly InboxReason[]) => string> = {
-  session: ([first, ...rest]) => {
-    if (rest.length > 0) return `${String(rest.length + 1)} sessions need you.`;
-    if (first === undefined || first.onlySession) return "Claude Code needs you.";
-    return `Session ${String(first.session)} needs you.`;
-  },
+const needSentences: Record<PullRequestNeed, string> = {
+  checks: "Checks failed on the pull request.",
+  review: "A review asks for changes.",
+  conflicts: "The pull request has conflicts.",
 };
+
+function sessionSentence([first, ...rest]: readonly SessionReason[]): string {
+  if (rest.length > 0) return `${String(rest.length + 1)} sessions need you.`;
+  if (first === undefined || first.onlySession) return "Claude Code needs you.";
+  return `Session ${String(first.session)} needs you.`;
+}
+
+function pullRequestSentence([first]: readonly PullRequestReason[]): string {
+  const [need, ...more] = first?.needs ?? [];
+  if (need === undefined) return "";
+  return more.length > 0 ? "The pull request needs you." : needSentences[need];
+}
 
 function placeOf(ref: WorkspaceRef): string {
   return `${ref.projectId}/${ref.workspace}`;
@@ -41,13 +64,16 @@ export function needsSince(
   return next();
 }
 
-export function inboxReasons(tabs: readonly SessionTab[]): InboxReason[] {
+export function inboxReasons(
+  tabs: readonly SessionTab[],
+  pullRequests: readonly PullRequestNeeding[],
+): InboxReason[] {
   const open = new Map<string, number>();
   for (const tab of tabs) {
     const place = placeOf(tab.workspace);
     open.set(place, (open.get(place) ?? 0) + 1);
   }
-  return tabs.flatMap((tab): InboxReason[] =>
+  const sessions = tabs.flatMap((tab): InboxReason[] =>
     needsYou(tab.status) && tab.needsSince !== null
       ? [
           {
@@ -62,6 +88,10 @@ export function inboxReasons(tabs: readonly SessionTab[]): InboxReason[] {
         ]
       : [],
   );
+  const requests = pullRequests.flatMap(({ workspace, needs, since }): InboxReason[] =>
+    needs.length > 0 ? [{ kind: "pull-request", workspace, needs, since }] : [],
+  );
+  return [...sessions, ...requests];
 }
 
 export function inboxRows(
@@ -85,8 +115,8 @@ export function inboxRows(
 export function reasonSentence(row: InboxRow): string {
   const [first] = row.reasons;
   if (first === undefined) return "";
-  const byKind = Map.groupBy(row.reasons, (reason) => reason.kind);
-  return sentences[first.kind](byKind.get(first.kind) ?? []);
+  if (first.kind === "pull-request") return pullRequestSentence([first]);
+  return sessionSentence(row.reasons.filter((reason) => reason.kind === "session"));
 }
 
 export function noticeTarget(

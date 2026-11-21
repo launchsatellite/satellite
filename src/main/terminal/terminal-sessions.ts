@@ -148,7 +148,7 @@ export function createTerminalSessions({
   const tellNeeding = () => {
     onNeeding(
       [...sessions.values()].flatMap(({ ended, state, workspace, owner }) =>
-        !ended && needsYou(state.status) ? [{ workspace, owner }] : [],
+        !ended && needsYou(state.status) ? [{ workspace, owner, reason: "session" as const }] : [],
       ),
     );
   };

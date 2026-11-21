@@ -8,6 +8,8 @@ const standInEventSchema = z.discriminatedUnion("type", [
     tool: z.enum(["claude", "gh"]),
     pid: z.int(),
     args: z.array(z.string()),
+    cwd: z.string().optional(),
+    call: z.enum(["pull-request", "threads", "failed-log"]).nullable().optional(),
   }),
   z.strictObject({ type: z.literal("input"), data: z.string() }),
   z.strictObject({ type: z.literal("resize"), cols: z.int(), rows: z.int() }),

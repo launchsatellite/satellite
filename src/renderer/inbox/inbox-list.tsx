@@ -119,6 +119,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                 <button
                   type="button"
                   data-testid={testId}
+                  data-reason={row.reasons[0]?.kind}
                   aria-label={full}
                   title={full}
                   onFocus={() => {
@@ -145,7 +146,10 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                     </span>
                     <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12.5px]">
                       <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
-                      <span data-testid={`${testId}-reason`} className="flex-none text-fg2">
+                      <span
+                        data-testid={`${testId}-reason`}
+                        className="max-w-full min-w-0 whitespace-normal text-fg2"
+                      >
                         {sentence}
                       </span>
                     </span>

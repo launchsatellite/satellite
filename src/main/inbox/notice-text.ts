@@ -1,4 +1,5 @@
 import { noticeName } from "../../shared/notice-name.ts";
+import type { Needing } from "./notices.ts";
 
 export interface NoticeSubject {
   project: string;
@@ -15,6 +16,7 @@ export const noticeParentLimit = 16;
 export function noticeText(
   subjects: readonly [NoticeSubject, ...NoticeSubject[]],
   waiting: number,
+  reason: Needing["reason"] = "session",
 ): NoticeText {
   if (subjects.length > 1 || waiting > 1) {
     return {
@@ -29,11 +31,17 @@ export function noticeText(
   if (workspace === null) {
     return {
       title: `${project} needs you`,
-      body: "Claude Code is waiting for you in the main workspace.",
+      body:
+        reason === "pull-request"
+          ? "The pull request in the main workspace needs you."
+          : "Claude Code is waiting for you in the main workspace.",
     };
   }
   return {
     title: `${noticeName(workspace, "a workspace")} needs you`,
-    body: `Claude Code is waiting for you in ${project}.`,
+    body:
+      reason === "pull-request"
+        ? `The pull request needs you in ${project}.`
+        : `Claude Code is waiting for you in ${project}.`,
   };
 }
