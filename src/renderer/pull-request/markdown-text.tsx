@@ -1,7 +1,8 @@
-import { createContext, useContext, type ReactNode } from "react";
+import type { Nodes, Root } from "mdast";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { revealLines } from "../../shared/visible-text.ts";
+import { revealLines, visibleText } from "../../shared/visible-text.ts";
 
 interface MarkdownTextProps {
   text: string;
@@ -10,8 +11,14 @@ interface MarkdownTextProps {
 
 const InsideLink = createContext(false);
 const deepestNesting = 24;
-const longestDrawn = 60_000;
-const nestingPrefix = /^(?:[ \t]*(?:>|[-*+]|\d{1,9}[.)])(?=[ \t]|$))*[ \t]*/;
+const longestDrawn = 20_000;
+const emphasisBudget = 1200;
+const bracketBudget = 1500;
+const ruleBudget = 200;
+const ruleLine = /^[ \t]*[=-]+[ \t]*$/;
+const emphasisCharacter = /[*_~]/g;
+const bracketCharacter = /[[\]]/g;
+const nestingPrefix = /^(?:[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)))*[ \t]*/;
 
 const linkLook =
   "inline cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-fg underline decoration-dim underline-offset-2 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -31,6 +38,30 @@ function isTooDeep(text: string): boolean {
     const indent = prefix.replaceAll("\t", "    ").length - markers;
     return markers > 0 && markers + indent / 2 > deepestNesting;
   });
+}
+
+function isCostly(text: string): boolean {
+  if ((text.match(emphasisCharacter)?.length ?? 0) > emphasisBudget) return true;
+  if ((text.match(bracketCharacter)?.length ?? 0) > bracketBudget) return true;
+  let rules = 0;
+  for (const line of text.split("\n")) {
+    if (ruleLine.test(line)) rules += 1;
+  }
+  return rules > ruleBudget;
+}
+
+function reveal(node: Nodes): void {
+  if ("value" in node) node.value = visibleText(node.value);
+  if (node.type === "image" || node.type === "imageReference") {
+    node.alt = visibleText(node.alt ?? "");
+  }
+  if ("children" in node) node.children.forEach(reveal);
+}
+
+function revealAfterParse() {
+  return (tree: Root) => {
+    reveal(tree);
+  };
 }
 
 function isHttps(address: string | undefined): address is string {
@@ -142,15 +173,17 @@ function ImageLink({
 
 function plain(text: string): ReactNode {
   return (
-    <pre className="my-2 font-mono text-[12px] break-words whitespace-pre-wrap text-fg">{text}</pre>
+    <pre className="my-2 font-mono text-[12px] break-words whitespace-pre-wrap text-fg">
+      {revealLines(text).text}
+    </pre>
   );
 }
 
 function drawn(text: string, onLink: (address: string) => void): ReactNode {
-  if (text.length > longestDrawn || isTooDeep(text)) return plain(text);
+  if (text.length > longestDrawn || isTooDeep(text) || isCostly(text)) return plain(text);
   try {
     return Markdown({
-      remarkPlugins: [remarkGfm],
+      remarkPlugins: [remarkGfm, revealAfterParse],
       skipHtml: true,
       components: components(onLink),
       children: text,
@@ -161,9 +194,10 @@ function drawn(text: string, onLink: (address: string) => void): ReactNode {
 }
 
 export function MarkdownText({ text, onLink }: MarkdownTextProps) {
+  const body = useMemo(() => drawn(text, onLink), [text, onLink]);
   return (
     <div data-testid="markdown" className="min-w-0 text-[13px] leading-[1.5] text-fg">
-      {drawn(revealLines(text).text, onLink)}
+      {body}
     </div>
   );
 }

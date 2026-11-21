@@ -179,10 +179,61 @@ describe("MarkdownText", () => {
     expect(render(`${" ".repeat(80)}code`)).toContain("code");
   });
 
-  it("draws a document whose revealed text is huge as plain text, quickly", () => {
+  it("reveals every hidden character, however it was written", () => {
+    const html = render(
+      "a&#8238;b &#x200B; &#xFEFF; &lrm; `c\u202Ed` [e&#8238;f](https://example.invalid/x) ![g&#x200B;h](https://example.invalid/i.png)\n\n```\nj&#x202E;k \u202E\n```",
+    );
+    for (const code of ["202E", "200B", "FEFF", "200E"]) expect(html).toContain(`[U+${code}]`);
+    expect(html).toContain("a[U+202E]b");
+    expect(html).toContain("c[U+202E]d");
+    expect(html).toContain("e[U+202E]f");
+    expect(html).toContain("Image g[U+200B]h");
+    expect(html).toContain("j&amp;#x202E;k [U+202E]");
+    expect(html).not.toMatch(/[\u200B\u200E\u202E\uFEFF]/u);
+  });
+
+  it("draws a long run of hidden characters as a paragraph, quickly", () => {
+    const began = performance.now();
     const html = render("\u202E".repeat(20_000));
     expect(html).toContain("U+202E");
-    expect(html).not.toContain("<p class");
+    expect(performance.now() - began).toBeLessThan(1500);
+  });
+
+  it("never spends seconds on pathological input at the full body size", () => {
+    const shapes = [
+      "*_",
+      "_*",
+      "*a_",
+      "a\n=\n",
+      "a\n---\n",
+      "[a]",
+      "*a ",
+      "**a_",
+      "~a",
+      "`a",
+      "[a](",
+      "![a]",
+      "<a ",
+      "&#8238;",
+      "> ",
+      ">",
+      "- ",
+      "| a ",
+      "\\*",
+    ];
+    for (const shape of shapes) {
+      const text = shape.repeat(Math.ceil(20_000 / shape.length)).slice(0, 20_000);
+      const began = performance.now();
+      render(text);
+      expect(performance.now() - began, JSON.stringify(shape)).toBeLessThan(1000);
+    }
+  });
+
+  it("draws plain text past the delimiter budgets and Markdown below them", () => {
+    expect(render("*_".repeat(2000))).not.toContain("<p class");
+    expect(render("[a]".repeat(1000))).not.toContain("<p class");
+    expect(render("a\n=\n".repeat(400))).not.toContain("<h1");
+    expect(render(`${"**bold** and _it_ ".repeat(50)}\n\n- [ ] task`)).toContain("<strong>");
   });
 
   it("survives malformed, very long and deeply nested input", () => {
