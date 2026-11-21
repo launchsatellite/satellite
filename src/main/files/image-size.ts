@@ -1,4 +1,5 @@
-export type ImageType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+import type { ImageType } from "../../shared/bridge-contract.ts";
+
 export interface ImageKind {
   type: ImageType;
   width: number;

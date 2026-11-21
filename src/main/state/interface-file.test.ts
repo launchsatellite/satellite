@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultInterfaceState } from "../../shared/bridge-contract.ts";
-import { createInterfaceFile } from "./interface-file.ts";
+import { createInterfaceFile, keptTabs } from "./interface-file.ts";
 
 const permissionsApply = process.platform !== "win32" && process.getuid?.() !== 0;
+const projectId = "0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
 const saved = { ...defaultInterfaceState, columns: { left: 300, right: 500 } };
 
 describe("createInterfaceFile", () => {
@@ -43,22 +45,6 @@ describe("createInterfaceFile", () => {
     },
   );
 
-  it("reads a layout saved before notifications as notifications on", async () => {
-    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
-    await writeFile(
-      join(home, "interface.json"),
-      '{"version":1,"selected":null,"columns":{"left":300,"right":500},"theme":"dark"}',
-    );
-    const { state, notice } = await createInterfaceFile(home).load();
-    expect(state).toEqual({
-      selected: null,
-      columns: { left: 300, right: 500 },
-      theme: "dark",
-      notifications: true,
-    });
-    expect(notice).toBeNull();
-  });
-
   it("sets aside a version 1 layout that carries notifications", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     await writeFile(
@@ -70,12 +56,104 @@ describe("createInterfaceFile", () => {
     expect(notice).toMatch(/set that file aside and started fresh\.$/);
   });
 
-  it("writes the layout as version 2", async () => {
+  it("writes the layout as version 3", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const interfaceFile = createInterfaceFile(home);
     await interfaceFile.save({ ...saved, notifications: false });
     await interfaceFile.flush();
     const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
-    expect(written).toMatchObject({ version: 2, notifications: false });
+    expect(written).toMatchObject({ version: 3, notifications: false, files: [] });
+  });
+
+  it("reads a version 1 and a version 2 file as version 3 with no tabs and keeps the rest", async () => {
+    const layout = '"selected":null,"columns":{"left":300,"right":500},"theme":"dark"';
+    const files = [
+      [`{"version":1,${layout}}`, true],
+      [`{"version":2,${layout},"notifications":false}`, false],
+    ] as const;
+    for (const [text, notifications] of files) {
+      const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+      await writeFile(join(home, "interface.json"), text);
+      const { state, notice } = await createInterfaceFile(home).load();
+      expect(state).toEqual({
+        selected: null,
+        columns: { left: 300, right: 500 },
+        theme: "dark",
+        notifications,
+        files: [],
+      });
+      expect(notice).toBeNull();
+    }
+  });
+
+  it("round-trips tabs", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const files = [{ projectId, workspace: "main", paths: ["a.ts", "b/c.ts"], active: 1 }];
+    const first = createInterfaceFile(home);
+    await first.save({ ...saved, files });
+    await first.flush();
+    const { state, notice } = await createInterfaceFile(home).load();
+    expect(state.files).toEqual(files);
+    expect(notice).toBeNull();
+  });
+
+  it("sets aside a file whose active tab is out of range or that holds more than 12 paths or 100 workspaces", async () => {
+    const paths = (count: number) => Array.from({ length: count }, (_, at) => `f${String(at)}.ts`);
+    const tabs = (workspace: string, count: number, active: number) => ({
+      projectId,
+      workspace,
+      paths: paths(count),
+      active,
+    });
+    const hundredOne = Array.from({ length: 101 }, () => randomUUID()).map((workspace) =>
+      tabs(workspace, 1, 0),
+    );
+    const damaged = [
+      [tabs("main", 2, 2)],
+      [tabs("main", 13, 0)],
+      [tabs("main", 1, 0), tabs("main", 1, 0)],
+      [{ ...tabs("main", 2, 0), paths: ["a.ts", "a.ts"] }],
+      hundredOne,
+    ];
+    for (const files of damaged) {
+      const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+      const text = JSON.stringify({ version: 3, ...saved, files });
+      await writeFile(join(home, "interface.json"), text);
+      const { state, notice } = await createInterfaceFile(home).load();
+      expect(state).toEqual(defaultInterfaceState);
+      expect(notice).toMatch(/set that file aside and started fresh\.$/);
+    }
+  });
+
+  it("sets aside a version 3 file that an older version would not understand and a version 4 file", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    await writeFile(join(home, "interface.json"), JSON.stringify({ version: 4, ...saved }));
+    const { state, notice } = await createInterfaceFile(home).load();
+    expect(state).toEqual(defaultInterfaceState);
+    expect(notice).toMatch(/set that file aside and started fresh\.$/);
+  });
+});
+
+describe("keptTabs", () => {
+  it("drops a workspace that is gone, a path that fails the path rule and an empty tab list", () => {
+    const other = "7f3a1c2e-9b4d-4e5f-8a6b-0c1d2e3f4a5b";
+    const kept = keptTabs(
+      [
+        {
+          projectId,
+          workspace: "main",
+          paths: ["../x", "ok.ts", "/etc/hosts", "d/e.ts"],
+          active: 3,
+        },
+        { projectId, workspace: "main2".padEnd(36, "0"), paths: ["a.ts"], active: 0 },
+        { projectId, workspace: other, paths: [".git/config"], active: 0 },
+        { projectId, workspace: other, paths: ["a.ts"], active: 0 },
+      ],
+      new Set([`${projectId}/main`, `${projectId}/${other}`]),
+    );
+    expect(kept).toEqual([
+      { projectId, workspace: "main", paths: ["ok.ts", "d/e.ts"], active: 1 },
+      { projectId, workspace: other, paths: ["a.ts"], active: 0 },
+    ]);
   });
 });

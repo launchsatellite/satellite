@@ -1,7 +1,8 @@
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listFolder, type FolderListing } from "./folder-listing.ts";
+import type { FolderListing } from "../../shared/bridge-contract.ts";
+import { listFolder } from "./folder-listing.ts";
 import { readFileForViewing } from "./file-read.ts";
 import { readNames } from "./name-index.ts";
 import {

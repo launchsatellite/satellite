@@ -3,6 +3,7 @@ import { app, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
+import { createFiles, type Files } from "./files/files-handlers.ts";
 import { noticeSubject } from "./inbox/notice-subject.ts";
 import { createNotices, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
@@ -52,6 +53,7 @@ function allowedOrigin(entryUrl: string): string {
 
 interface Parts {
   changes: Changes;
+  files: Files;
   interfaceFile: InterfaceFile;
   last: LastSessions;
   listening: Promise<HookListener | undefined>;
@@ -64,6 +66,7 @@ interface Parts {
 
 async function start({
   changes,
+  files,
   interfaceFile,
   listening,
   notices,
@@ -87,11 +90,20 @@ async function start({
   registerBridge(
     {
       "tools.check": checkTools,
-      ...interfaceHandlers(interfaceFile, applyInterface),
+      ...interfaceHandlers(interfaceFile, applyInterface, async () => {
+        const recorded = await projects.store.list();
+        return new Set(
+          recorded.flatMap(({ id, workspaces }) => [
+            `${id}/main`,
+            ...workspaces.map((workspace) => `${id}/${workspace.id}`),
+          ]),
+        );
+      }),
       ...projects.handlers,
       ...workspaces.handlers,
       ...terminals.handlers,
       ...changes.handlers,
+      ...files.handlers,
       ...linkHandlers(),
     },
     allowedOrigin(entryUrl),
@@ -166,14 +178,20 @@ function assemble(home: string): Parts {
     },
   });
   const changes = createChanges({ home, store: projects.store });
+  const files = createFiles({ home, store: projects.store });
   const sessionsInside = {
     countInside: (folder: string) => terminals.sessionsInside.countInside(folder),
     stopInside: async (folder: string) => {
-      await Promise.all([terminals.sessionsInside.stopInside(folder), changes.stopInside(folder)]);
+      await Promise.all([
+        terminals.sessionsInside.stopInside(folder),
+        changes.stopInside(folder),
+        files.stopInside(folder),
+      ]);
     },
   };
   return {
     changes,
+    files,
     interfaceFile: createInterfaceFile(home),
     last,
     listening,

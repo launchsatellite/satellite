@@ -1,6 +1,6 @@
 import { lstat, opendir } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
-import { filesLimits } from "../../shared/bridge-contract.ts";
+import { filesLimits, type FileEntry, type FolderListing } from "../../shared/bridge-contract.ts";
 import {
   confinedFolder,
   isChangePath,
@@ -12,15 +12,6 @@ import {
 import { errorCode, isMissing } from "../platform/file-system.ts";
 import { gitReadMs } from "../workspaces/git-command.ts";
 import { checkIgnored } from "./ignore-check.ts";
-
-export interface FileEntry {
-  name: string;
-  kind: "file" | "folder" | "repository" | "link";
-  ignored: boolean;
-}
-export type FolderListing =
-  | { state: "listed"; entries: FileEntry[]; more: number }
-  | { state: "missing" | "unreadable" | "too-many" | "hung" | "failed" };
 
 const lstatsAtOnce = 32;
 const ignoreCheckMs = 2000;

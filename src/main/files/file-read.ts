@@ -1,7 +1,7 @@
 import type { BigIntStats } from "node:fs";
 import { lstat } from "node:fs/promises";
 import { join, posix } from "node:path";
-import { changesLimits, filesLimits } from "../../shared/bridge-contract.ts";
+import { changesLimits, filesLimits, type FileRead } from "../../shared/bridge-contract.ts";
 import {
   confinedFolder,
   decodedText,
@@ -17,20 +17,7 @@ import {
 } from "../changes/file-sides.ts";
 import { isMissing } from "../platform/file-system.ts";
 import { gitReadMs } from "../workspaces/git-command.ts";
-import {
-  hasImageSignature,
-  readImageHeader,
-  type ImageKind,
-  type ImageType,
-} from "./image-size.ts";
-
-export type FileRead =
-  | { kind: "text"; text: string; stamp: string }
-  | { kind: "link"; text: string; stamp: string }
-  | { kind: "image"; type: ImageType; data: string; stamp: string }
-  | { kind: "binary" | "large" | "not-utf8"; stamp: string }
-  | { kind: "same" }
-  | { kind: "gone" | "changing" | "hung" | "unreadable" };
+import { hasImageSignature, readImageHeader, type ImageKind } from "./image-size.ts";
 
 const headBytes = 65_536;
 const gone: FileRead = { kind: "gone" };

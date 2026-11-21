@@ -3,8 +3,10 @@ import { z } from "zod";
 import {
   defaultInterfaceState,
   interfaceState,
+  type FileTabs,
   type InterfaceState,
 } from "../../shared/bridge-contract.ts";
+import { isChangePath } from "../changes/file-sides.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "./json-file.ts";
 
@@ -19,12 +21,21 @@ interface LoadedInterface {
   writable: boolean;
 }
 
-const version2 = interfaceState.extend({ version: z.literal(2) });
+const version3 = interfaceState.extend({ version: z.literal(3) });
+const version2 = interfaceState
+  .omit({ files: true })
+  .extend({ version: z.literal(2) })
+  .transform((file): z.output<typeof version3> => ({ ...file, version: 3, files: [] }));
 const version1 = interfaceState
-  .omit({ notifications: true })
+  .omit({ notifications: true, files: true })
   .extend({ version: z.literal(1) })
-  .transform((file): z.output<typeof version2> => ({ ...file, version: 2, notifications: true }));
-const fileSchema = z.union([version1, version2]);
+  .transform((file): z.output<typeof version3> => ({
+    ...file,
+    version: 3,
+    notifications: true,
+    files: [],
+  }));
+const fileSchema = z.union([version1, version2, version3]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -41,7 +52,7 @@ const saveFailure =
 async function readInterfaceFile(file: string): Promise<LoadedInterface> {
   const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
-    version: 2,
+    version: 3,
   });
   return {
     state: {
@@ -49,6 +60,7 @@ async function readInterfaceFile(file: string): Promise<LoadedInterface> {
       columns: value.columns,
       theme: value.theme,
       notifications: value.notifications,
+      files: value.files,
     },
     notice: notices[outcome.kind],
     writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
@@ -71,21 +83,36 @@ export function createInterfaceFile(home: string): InterfaceFile {
     async save(state) {
       const loaded = await load();
       cached = Promise.resolve({ ...loaded, state });
-      if (loaded.writable) await writer.write({ version: 2, ...state });
+      if (loaded.writable) await writer.write({ version: 3, ...state });
     },
     flush: () => writer.flush(),
   };
 }
 
+export function keptTabs(tabs: readonly FileTabs[], workspaces: ReadonlySet<string>): FileTabs[] {
+  return tabs.flatMap((entry) => {
+    if (!workspaces.has(`${entry.projectId}/${entry.workspace}`)) return [];
+    const paths = entry.paths.filter((path) => isChangePath(path));
+    const shown = entry.paths[entry.active];
+    const at = shown === undefined ? -1 : paths.indexOf(shown);
+    return paths.length === 0 ? [] : [{ ...entry, paths, active: Math.max(at, 0) }];
+  });
+}
+
 export function interfaceHandlers(
   file: InterfaceFile,
   apply: (state: InterfaceState) => void,
+  recorded: () => Promise<ReadonlySet<string>>,
 ): Pick<BridgeHandlers, "interface.load" | "interface.save"> {
   let noticeGiven = false;
   return {
     "interface.load": async () => {
       const { state, notice } = await file.load();
-      const answer = { state, notice: noticeGiven ? null : notice };
+      const workspaces = await recorded().catch(() => new Set<string>());
+      const answer = {
+        state: { ...state, files: keptTabs(state.files, workspaces) },
+        notice: noticeGiven ? null : notice,
+      };
       noticeGiven = true;
       return answer;
     },

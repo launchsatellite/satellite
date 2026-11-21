@@ -32,6 +32,13 @@ export type ChangeLetter = z.output<typeof changeLetter>;
 export type ChangesView = z.output<typeof changesView>;
 export type ChangedFile = z.output<typeof changedFile>;
 export type ChangesList = BridgeResponse<"changes.list">;
+export type FilesList = BridgeResponse<"files.list">;
+export type FolderListing = z.output<typeof folderListing>;
+export type FileEntry = z.output<typeof fileEntry>;
+export type FileRead = BridgeResponse<"files.read">;
+export type FilesFind = BridgeResponse<"files.find">;
+export type FileTabs = z.output<typeof fileTabs>;
+export type ImageType = z.output<typeof imageType>;
 export type FileSides = BridgeResponse<"changes.file">;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
@@ -111,6 +118,34 @@ export const changedFile = z.strictObject({
   removed: count.nullable(),
   stamp: z.string().min(1).max(changesLimits.stampChars),
 });
+const filePath = z.string().min(1).max(changesLimits.pathChars);
+const folderPath = z.string().max(changesLimits.pathChars);
+const fileStamp = z.string().min(1).max(changesLimits.stampChars);
+export const fileEntry = z.strictObject({
+  name: z.string().min(1).max(filesLimits.nameChars),
+  kind: z.enum(["file", "folder", "repository", "link"]),
+  ignored: z.boolean(),
+});
+export const folderListing = z.discriminatedUnion("state", [
+  z.strictObject({
+    state: z.literal("listed"),
+    entries: z.array(fileEntry).max(filesLimits.folderEntries),
+    more: count,
+  }),
+  z.strictObject({ state: z.enum(["missing", "unreadable", "too-many", "hung", "failed"]) }),
+]);
+export const imageType = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+export const fileTabs = z
+  .strictObject({
+    projectId: z.uuid(),
+    workspace: workspaceKey,
+    paths: z.array(filePath).min(1).max(filesLimits.tabsPerWorkspace),
+    active: z
+      .int()
+      .min(0)
+      .max(filesLimits.tabsPerWorkspace - 1),
+  })
+  .refine(({ paths, active }) => active < paths.length && new Set(paths).size === paths.length);
 export const interfaceState = z.strictObject({
   selected: workspaceRef.nullable(),
   columns: z.strictObject({
@@ -119,6 +154,14 @@ export const interfaceState = z.strictObject({
   }),
   theme: themeChoice,
   notifications: z.boolean(),
+  files: z
+    .array(fileTabs)
+    .max(filesLimits.tabbedWorkspaces)
+    .refine(
+      (tabs) =>
+        new Set(tabs.map(({ projectId, workspace }) => `${projectId}/${workspace}`)).size ===
+        tabs.length,
+    ),
 });
 export const workspaceView = z.strictObject({
   key: workspaceKey,
@@ -200,6 +243,7 @@ export const defaultInterfaceState: InterfaceState = {
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
   theme: "system",
   notifications: true,
+  files: [],
 };
 
 const terminalId = z.uuid();
@@ -359,6 +403,61 @@ export const bridgeRequests = {
       z.strictObject({ kind: z.literal("not-local") }),
       z.strictObject({ kind: z.literal("unreadable") }),
       z.strictObject({ kind: z.literal("not-utf8") }),
+    ]),
+  },
+  "files.list": {
+    request: z.strictObject({
+      workspace: workspaceRef,
+      folders: z.array(folderPath).min(1).max(filesLimits.folders),
+    }),
+    response: z.strictObject({
+      folders: z
+        .array(z.strictObject({ path: folderPath, listing: folderListing }))
+        .max(filesLimits.folders),
+    }),
+  },
+  "files.read": {
+    request: z.strictObject({
+      workspace: workspaceRef,
+      path: filePath,
+      known: fileStamp.nullable(),
+    }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("text"),
+        text: z.string().max(changesLimits.sideBytes),
+        stamp: fileStamp,
+      }),
+      z.strictObject({
+        kind: z.literal("link"),
+        text: z.string().max(changesLimits.linkChars),
+        stamp: fileStamp,
+      }),
+      z.strictObject({
+        kind: z.literal("image"),
+        type: imageType,
+        data: z
+          .string()
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+          .max(filesLimits.imageBase64Chars),
+        stamp: fileStamp,
+      }),
+      z.strictObject({ kind: z.enum(["binary", "large", "not-utf8"]), stamp: fileStamp }),
+      z.strictObject({ kind: z.literal("same") }),
+      z.strictObject({ kind: z.enum(["gone", "changing", "hung", "unreadable"]) }),
+    ]),
+  },
+  "files.find": {
+    request: z.strictObject({
+      workspace: workspaceRef,
+      query: z.string().min(1).max(filesLimits.queryChars),
+    }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("found"),
+        paths: z.array(filePath).max(filesLimits.findResults),
+      }),
+      z.strictObject({ kind: z.enum(["too-many", "hung", "failed"]) }),
     ]),
   },
   "links.open": {

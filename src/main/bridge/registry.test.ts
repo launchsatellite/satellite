@@ -98,6 +98,11 @@ function spies() {
     "changes.file": vi.fn<BridgeHandler<"changes.file">>(() =>
       Promise.resolve({ kind: "text", original: "", modified: "" }),
     ),
+    "files.list": vi.fn<BridgeHandler<"files.list">>(() => Promise.resolve({ folders: [] })),
+    "files.read": vi.fn<BridgeHandler<"files.read">>(() => Promise.resolve({ kind: "gone" })),
+    "files.find": vi.fn<BridgeHandler<"files.find">>(() =>
+      Promise.resolve({ kind: "found", paths: [] }),
+    ),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
       Promise.resolve({ windowsPty: null }),
@@ -420,6 +425,56 @@ describe("createBridgeRouter", () => {
       ok: true,
       value: { kind: "text", original: "", modified: "" },
     });
+  });
+
+  it("refuses a files request that names more, longer or other than the contract allows", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const workspace = { projectId: terminalId, workspace: "main" };
+    const lists = [
+      { workspace, folders: Array.from({ length: 17 }, (_, at) => `d${String(at)}`) },
+      { workspace, folders: [] },
+      { workspace, folders: ["a".repeat(4097)] },
+      { workspace, folders: [1] },
+      { workspace, folders: "" },
+      { workspace, folders: [""], follow: true },
+      { workspace: { ...workspace, workspace: "../main" }, folders: [""] },
+    ];
+    for (const payload of lists) {
+      const result = await route("files.list", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    const reads = [
+      { workspace, path: "", known: null },
+      { workspace, path: "a".repeat(4097), known: null },
+      { workspace, path: "a.txt", known: {} },
+      { workspace, path: "a.txt", known: "" },
+      { workspace, path: "a.txt", known: "1".repeat(201) },
+      { workspace, path: "a.txt" },
+      { workspace, path: "a.txt", known: null, encoding: "latin1" },
+      { workspace, path: ["a.txt"], known: null },
+    ];
+    for (const payload of reads) {
+      const result = await route("files.read", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    const finds = [
+      { workspace, query: "" },
+      { workspace, query: "a".repeat(201) },
+      { workspace, query: 1 },
+      { workspace, query: "a", limit: 1000 },
+      { query: "a" },
+    ];
+    for (const payload of finds) {
+      const result = await route("files.find", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    const folders = Array.from({ length: 16 }, (_, at) => `d${String(at)}`);
+    expect(await route("files.list", { workspace, folders }, owner)).toMatchObject({ ok: true });
+    expect(
+      await route("files.read", { workspace, path: "a".repeat(4096), known: null }, owner),
+    ).toMatchObject({ ok: true });
   });
 
   it("passes a valid request to its handler and returns its value", async () => {
