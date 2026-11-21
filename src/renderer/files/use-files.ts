@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-  BridgeResult,
-  FileRead,
-  FilesList,
-  FolderListing,
-  WorkspaceRef,
+import {
+  filesLimits,
+  type BridgeResult,
+  type FileRead,
+  type FilesList,
+  type FolderListing,
+  type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule } from "../ui/refresh-schedule.ts";
@@ -25,7 +26,6 @@ interface Outcome<T> {
   problem: string | null;
 }
 
-const rememberedListings = 64;
 const cachedReads = 8;
 const cachedChars = 8_388_608;
 const reads = new Map<string, KeptRead>();
@@ -68,7 +68,7 @@ function isKept(read: ShownRead): read is KeptRead {
   return keptReads.includes(read.kind);
 }
 
-function afterRead(
+export function afterRead(
   current: FileShown | undefined,
   key: string,
   path: string,
@@ -76,7 +76,9 @@ function afterRead(
 ): Outcome<FileShown | undefined> {
   const good =
     current?.path === path && goodKinds.includes(current.read.kind) ? current : undefined;
-  if (!result.ok) return { value: good, problem: result.error.message };
+  if (!result.ok) {
+    return { value: current?.path === path ? current : undefined, problem: result.error.message };
+  }
   const read = result.value;
   if (read.kind === "same") {
     if (current?.path === path) return { value: current, problem: null };
@@ -94,7 +96,7 @@ function afterRead(
   return { value: { path, read }, problem: null };
 }
 
-function afterList(
+export function afterList(
   current: Listings,
   folders: readonly string[],
   result: BridgeResult<FilesList>,
@@ -117,7 +119,7 @@ function afterList(
   }
   if (next === undefined) return { value: current, problem };
   for (const path of next.keys()) {
-    if (next.size <= rememberedListings) break;
+    if (next.size <= filesLimits.folders) break;
     if (!folders.includes(path)) next.delete(path);
   }
   return { value: next, problem };
