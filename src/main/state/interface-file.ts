@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import {
   defaultInterfaceState,
+  filesLimits,
   interfaceState,
   type FileTabs,
   type InterfaceState,
@@ -89,14 +90,31 @@ export function createInterfaceFile(home: string): InterfaceFile {
   };
 }
 
-export function keptTabs(tabs: readonly FileTabs[], workspaces: ReadonlySet<string>): FileTabs[] {
+const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/u;
+
+function keptPath(path: string): boolean {
+  return (
+    path.length <= filesLimits.tabPathChars && !controlCharacter.test(path) && isChangePath(path)
+  );
+}
+
+export function keptTabs(
+  tabs: readonly FileTabs[],
+  workspaces: ReadonlySet<string> | null,
+): FileTabs[] {
   return tabs.flatMap((entry) => {
-    if (!workspaces.has(`${entry.projectId}/${entry.workspace}`)) return [];
-    const paths = entry.paths.filter((path) => isChangePath(path));
+    if (workspaces?.has(`${entry.projectId}/${entry.workspace}`) === false) return [];
+    const paths = entry.paths.filter(keptPath);
     const shown = entry.paths[entry.active];
     const at = shown === undefined ? -1 : paths.indexOf(shown);
     return paths.length === 0 ? [] : [{ ...entry, paths, active: Math.max(at, 0) }];
   });
+}
+
+function recordedOrUnknown(
+  recorded: () => Promise<ReadonlySet<string>>,
+): Promise<ReadonlySet<string> | null> {
+  return recorded().catch(() => null);
 }
 
 export function interfaceHandlers(
@@ -108,18 +126,18 @@ export function interfaceHandlers(
   return {
     "interface.load": async () => {
       const { state, notice } = await file.load();
-      const workspaces = await recorded().catch(() => new Set<string>());
       const answer = {
-        state: { ...state, files: keptTabs(state.files, workspaces) },
+        state: { ...state, files: keptTabs(state.files, await recordedOrUnknown(recorded)) },
         notice: noticeGiven ? null : notice,
       };
       noticeGiven = true;
       return answer;
     },
     "interface.save": async ({ state }) => {
-      apply(state);
+      const kept = { ...state, files: keptTabs(state.files, await recordedOrUnknown(recorded)) };
+      apply(kept);
       try {
-        await file.save(state);
+        await file.save(kept);
       } catch (error) {
         console.error("Satellite could not write interface.json", error);
         throw new BridgeFailure("failed", saveFailure);

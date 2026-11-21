@@ -82,7 +82,8 @@ export const filesLimits = {
   findResults: 50,
   queryChars: 200,
   tabsPerWorkspace: 12,
-  tabbedWorkspaces: 100,
+  tabbedWorkspaces: 50,
+  tabPathChars: 1024,
 };
 
 export const interfaceLimits = {

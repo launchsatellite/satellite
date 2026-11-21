@@ -14,7 +14,7 @@ const tabs = (index: number): FileTabs => ({
 });
 
 describe("file tabs", () => {
-  it("opens a path once, closes the leftmost at the limit, moves the active tab on close, and prunes workspaces that are gone and keeps at most 100", () => {
+  it("opens a path once, closes the leftmost at the limit, moves the active tab on close, and prunes workspaces that are gone and keeps at most 50", () => {
     const twice = tabsAfterOpen(tabsAfterOpen(undefined, "a"), "a");
     expect(twice).toEqual({ paths: ["a"], active: 0 });
     expect(tabsAfterOpen({ paths: ["a", "b"], active: 1 }, "a").active).toBe(0);

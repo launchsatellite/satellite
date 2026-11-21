@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { defaultInterfaceState, type ToolCheck } from "../../shared/bridge-contract.ts";
 import type { BridgeHandler, BridgeHandlers, BridgeOwner } from "./registry.ts";
@@ -372,6 +373,28 @@ describe("createBridgeRouter", () => {
       { selected: null, columns, theme: "system" },
     ];
     for (const state of states) {
+      const result = await route("interface.save", { state }, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+  });
+
+  it("refuses saved tabs out of bounds", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const entry = { projectId: terminalId, workspace: "main", paths: ["a.ts"], active: 0 };
+    const many = Array.from({ length: 51 }, () => ({ ...entry, workspace: randomUUID() }));
+    const files = [
+      [{ ...entry, paths: Array.from({ length: 13 }, (_, at) => `f${String(at)}`) }],
+      [{ ...entry, active: 1 }],
+      [{ ...entry, paths: ["a.ts", "a.ts"] }],
+      [entry, entry],
+      [{ ...entry, paths: ["a".repeat(4097)] }],
+      [{ ...entry, extra: true }],
+      many,
+    ];
+    for (const kept of files) {
+      const state = { ...defaultInterfaceState, files: kept };
       const result = await route("interface.save", { state }, owner);
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
