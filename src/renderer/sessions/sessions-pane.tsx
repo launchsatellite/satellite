@@ -13,7 +13,7 @@ import {
   type PromptTarget,
 } from "./send-to-claude-code.ts";
 import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
-import { tabLimitSentence, type Sessions } from "./use-sessions.ts";
+import { tabLimit, tabLimitSentence, type Sessions } from "./use-sessions.ts";
 
 interface SessionsPaneProps {
   sessions: Sessions;
@@ -61,10 +61,12 @@ function InstallStep() {
 function EmptyWorkspace({
   workspace,
   missing,
+  atLimit,
   onOpen,
 }: {
   workspace: WorkspaceRef;
   missing: string | undefined;
+  atLimit: boolean;
   onOpen: (resume: boolean) => boolean;
 }) {
   const { projectId, workspace: key } = workspace;
@@ -96,7 +98,7 @@ function EmptyWorkspace({
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
       <p role="status" data-testid="sessions-empty" className="text-[13px] text-fg2">
         {missing ??
-          (full ? tabLimitSentence : undefined) ??
+          (full && atLimit ? tabLimitSentence : undefined) ??
           (resumable
             ? "Your last session here can pick up where it left off."
             : "No Claude Code session here yet.")}
@@ -215,6 +217,7 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
           key={`${selected.projectId}/${selected.workspace}`}
           workspace={selected}
           missing={missing}
+          atLimit={sessions.all.length >= tabLimit}
           onOpen={(resume) => sessions.open(selected, resume)}
         />
       );

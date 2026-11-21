@@ -39,7 +39,7 @@ interface State {
   active: ReadonlyMap<string, string>;
 }
 
-const tabLimit = bridgeLimits.terminals;
+export const tabLimit = bridgeLimits.terminals;
 export const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
 
 function stoppedSentence(names: readonly string[]): string {
