@@ -85,7 +85,7 @@ export const changesLimits = {
 ```
 
 - `changesReadMs = 15_000` in `src/main/changes/change-list.ts`, for the diff and the untracked list. Every other new git read uses `gitReadMs` (5 seconds). `conflictReadMs = 15_000` in `src/main/changes/conflict-check.ts`.
-- `changesReadSlots = 4` in `src/main/changes/changes-handlers.ts`, one `createSlots(4)` shared by every list and file read across the app.
+- `changesReadSlots = 4` in `src/main/changes/changes-handlers.ts`, one `createReadQueue(4, 16)` from `src/main/changes/read-queue.ts` shared by every list and file read across the app, at most 16 waiting, a stopped read leaving the queue at once.
 - `cachedLists = 8` per page.
 - `changesPollMs = 2000`, `changesPollMaxMs = 30_000`, `changesPollFactor = 4` in `src/renderer/changes/use-changes.ts`.
 - `oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/` in `src/main/changes/file-sides.ts`. An all-zero name means none.
@@ -140,10 +140,11 @@ Requests, added to `bridgeRequests`.
         kind: z.literal("files"),
         files: z.array(changedFile).max(changesLimits.files),
         more: count,
+        longPaths: count,
       }),
       z.strictObject({
         kind: z.literal("unavailable"),
-        reason: z.enum(["no-commits", "no-base", "unrelated", "failed"]),
+        reason: z.enum(["no-commits", "no-base", "unrelated", "not-local", "too-many", "failed"]),
       }),
     ]),
   }),
@@ -158,6 +159,8 @@ Requests, added to `bridgeRequests`.
     z.strictObject({ kind: z.literal("repository") }),
     z.strictObject({ kind: z.literal("unmerged") }),
     z.strictObject({ kind: z.literal("changing") }),
+    z.strictObject({ kind: z.literal("hung") }),
+    z.strictObject({ kind: z.literal("not-local") }),
     z.strictObject({ kind: z.literal("unreadable") }),
   ]),
 },
@@ -165,6 +168,8 @@ Requests, added to `bridgeRequests`.
 
 - `branch` is `git branch --show-current` in the worktree, `null` when detached. `base` is the base's short name, `origin/main` for `refs/remotes/origin/main`, `main` for `refs/heads/main`. `ahead` and `behind` follow the sidebar's rule, against the upstream, or without one `ahead` counts the commits on no remote and `behind` is `null`, both `null` without a remote.
 - `conflict` is `null` until Task 7.
+- `longPaths` counts the files whose path or former path is longer than `pathChars`, left out of `files`. `not-local` is a list git cannot build because a partial clone never downloaded its objects, `too-many` one whose git output passed the 16 MiB `runTool` reads. A file listed twice, deleted from the index and untracked on disk, is listed once as its tracked record. A file the index holds in merge stages is `U`.
+- `hung` is a side whose read did not finish in time, `not-local` a committed side a partial clone never downloaded.
 - An added file's `original` and a deleted file's `modified` are `""`.
 - No new event. `window.satellite` keeps its three functions.
 
@@ -176,11 +181,12 @@ Thrown as `BridgeFailure` from `src/main/changes/changes-handlers.ts`.
 - Being archived, `refused`, `Satellite is archiving that workspace, so its changes can't be read.`
 - A path the last list did not name, `not-found`, `That file is no longer in the list of changes. The list refreshes in a moment.`
 - An aborted read, `refused`, `Satellite moved on to a newer read.` The page ignores answers to requests it superseded, so this sentence is never shown.
+- More than 16 reads waiting, `limit`, `Satellite is reading a lot of changes at once. It tries again in a moment.`
 - git missing, the existing `tool-missing` from `runGit`.
 
 ### What a page running hostile script could do
 
-Recorded in `ARCHITECTURE.md` in Task 9, decided here.
+Recorded in `ARCHITECTURE.md` Changes and Bridge.
 
 - **Read files.** Only those git reports changed or untracked and not ignored in a workspace Satellite lists, inside that worktree, plus their committed version, each side at most 1 MiB. It cannot name another path, an object, a git argument or a program. A link shows its target text, a link anywhere above the file refuses the read, `.git` is refused by name, and a pipe or device is never opened. That page could already read every one of those files through `terminal.write` and Claude Code's shell.
 - **Learn metadata.** The size and modification time of listed files, folded into `stamp`.
@@ -194,10 +200,10 @@ Every sentence is fixed here. Names inside them are `visibleText` of the name. N
 - Centre tab `Changes`. View control labelled `Changes to show`, options `Branch` and `Uncommitted`. Layout control labelled `Diff layout`, options `Side by side` and `Inline`.
 - Header, after the branch, `from <base>` in `text-dim` font-mono, then the readout `↑<ahead>` and `↓<behind>` in `font-pixel text-[12px] text-dim uppercase`, each shown only when not null, beside an `sr-only` span `<ahead> ahead, <behind> behind`, leaving out a part that is null.
 - Empty, Uncommitted `Nothing changed since the last commit.`, Branch `Nothing changed against <base>.`
-- Unavailable, `no-commits` `This branch has no commits yet, so there is nothing to compare.`, `no-base` `Satellite found no base branch to compare with. Uncommitted shows the work here.`, `unrelated` `This branch shares no history with <base>, so Branch has nothing to compare.`, `failed` `Satellite couldn't read the changes here. It tries again in a moment.`
-- Below a capped list, `1 more file is not listed.` or `<n> more files are not listed.`
+- Unavailable, `no-commits` `This branch has no commits yet, so there is nothing to compare.`, `no-base` `Satellite found no base branch to compare with. Uncommitted shows the work here.`, `unrelated` `This branch shares no history with <base>, so Branch has nothing to compare.`, `not-local` `This clone never downloaded some of the files these changes need, so Satellite can't list them.`, `too-many` `Too many files changed here for Satellite to list.`, `failed` `Satellite couldn't read the changes here. It tries again in a moment.`
+- Below a capped list, `1 more file is not listed.` or `<n> more files are not listed.`, and for `longPaths` `1 file has a path too long to show.` or `<n> files have paths too long to show.`
 - A row's accessible name and tooltip, `<path>, <state>` then `, <added> added, <removed> removed` when both counts are numbers, or `, binary` for a binary file. `<state>` is `added`, `added, not tracked yet`, `modified`, `deleted`, `renamed from <from>`, `copied from <from>`, `changed type` or `in a merge`.
-- Instead of a diff, `binary` `This is a binary file, so there is no diff to show.`, `large` `This file is too large to show here, over 1 MB or 20,000 lines.`, `repository` `This folder is a repository of its own, so Satellite shows no diff for it.`, `unmerged` `This file is in the middle of a merge. Claude Code can resolve it.`, `changing` `This file changed while Satellite read it. It shows again on the next refresh.`, `unreadable` `This file's name isn't valid text, so Satellite can't read it.`, `submodule` `This submodule moved from <from> to <to>.`, or with no `from` `This submodule was added at <to>.`, with no `to` `This submodule was removed. It was at <from>.`, with neither `This submodule changed.`
+- Instead of a diff, `binary` `This is a binary file, so there is no diff to show.`, `large` `This file is too large to show here, over 1 MB or 20,000 lines.`, `repository` `This folder is a repository of its own, so Satellite shows no diff for it.`, `unmerged` `This file is in the middle of a merge. Claude Code can resolve it.`, `changing` `This file changed while Satellite read it. It shows again on the next refresh.`, `hung` `Reading this file took too long. It tries again on the next refresh.`, `not-local` `This clone never downloaded the earlier version of this file, so there is no diff to show.`, `unreadable` `This file's name isn't valid text, so Satellite can't read it.`, `submodule` `This submodule moved from <from> to <to>.`, or with no `from` `This submodule was added at <to>.`, with no `to` `This submodule was removed. It was at <from>.`, with neither `This submodule changed.`
 - Diff labels, `originalAriaLabel` `Before, <from or path>` and `modifiedAriaLabel` `After, <path>`.
 - Banner, `<base> moved, and 1 file conflicts with this branch.` or `<base> moved, and <n> files conflict with this branch.`, with the button `Send to Claude Code`.
 - Conflict request, `Update this branch from <name> and resolve the conflicts.` where `<name>` is the raw base when `holdsHiddenText(base)` is false and it matches `/^[^\s"'`]+$/`, else `the base branch`.
@@ -367,7 +373,7 @@ The parsers, the base resolution and the list read. Nothing calls them from the 
 - Produces:
   - Contract and Limits per Global Constraints.
   - `sessionFolder(home, store, ref, sentences = sessionSentences)` with `sessionSentences = { gone: "That folder is gone, so Claude Code can't start there.", archiving: "Satellite is archiving that workspace, so Claude Code can't start there." }` exported, and the changes handlers passing their own two sentences from Background failures. Behaviour is otherwise unchanged.
-  - `changesHandlers({ home, store }: { home: string; store: ProjectStore }): Pick<BridgeHandlers, "changes.list" | "changes.file">`, spread into `registerBridge` in `main.ts` with `projects.store`.
+  - `createChanges({ home, store }: { home: string; store: ProjectStore }): Changes`, `Changes = { handlers: Pick<BridgeHandlers, "changes.list" | "changes.file">; stopInside(folder: string): Promise<void> }`. `handlers` is spread into `registerBridge` in `main.ts` with `projects.store`, and `stopInside` runs beside the terminals' own for an archive and a project removal.
 - **`changes.list`.** Per page, held in a `WeakMap<BridgeOwner, PageReads>` cleared through `owner.onGone`, which aborts everything the page runs. The key is `${projectId}/${workspace}/${view}`. A request whose key is already running shares that promise. Any other running list of the page is aborted first, its promise rejecting with the aborted read failure. The read takes one of the four slots, checks its signal before each git run, and does in order.
   1. `folder = await sessionFolder(...)`, `project = await store.project(projectId)`.
   2. `head`, `branch` and `base = resolveBase(project.path, folder)` together.

@@ -85,6 +85,19 @@ function spies() {
     "sessions.resumable": vi.fn<BridgeHandler<"sessions.resumable">>(() =>
       Promise.resolve({ resumable: false }),
     ),
+    "changes.list": vi.fn<BridgeHandler<"changes.list">>(() =>
+      Promise.resolve({
+        branch: "main",
+        base: null,
+        ahead: null,
+        behind: null,
+        conflict: null,
+        changes: { kind: "files", files: [], more: 0, longPaths: 0 },
+      }),
+    ),
+    "changes.file": vi.fn<BridgeHandler<"changes.file">>(() =>
+      Promise.resolve({ kind: "text", original: "", modified: "" }),
+    ),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
       Promise.resolve({ windowsPty: null }),
@@ -373,6 +386,40 @@ describe("createBridgeRouter", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     expect(handlers["interface.save"]).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a changes request that names a view, a path or a field of its own", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const workspace = { projectId: terminalId, workspace: "main" };
+    const lists = [
+      { workspace, view: "staged" },
+      { workspace, view: "branch", args: ["--output=/tmp/x"] },
+      { view: "uncommitted" },
+      { workspace: { ...workspace, workspace: "../main" }, view: "branch" },
+      { workspace, view: 1 },
+    ];
+    for (const payload of lists) {
+      const result = await route("changes.list", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    const files = [
+      { workspace, view: "branch", path: "" },
+      { workspace, view: "branch", path: "a".repeat(4097) },
+      { workspace, view: "branch", path: "a.txt", oid: "a".repeat(40) },
+      { workspace, view: "branch", path: ["a.txt"] },
+      { workspace, path: "a.txt" },
+    ];
+    for (const payload of files) {
+      const result = await route("changes.file", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    const path = "a".repeat(4096);
+    expect(await route("changes.file", { workspace, view: "uncommitted", path }, owner)).toEqual({
+      ok: true,
+      value: { kind: "text", original: "", modified: "" },
+    });
   });
 
   it("passes a valid request to its handler and returns its value", async () => {

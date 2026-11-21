@@ -29,6 +29,10 @@ export type ToolCheck = z.output<typeof toolCheck>;
 export type GhTokenVariable = z.output<typeof ghTokenVariable>;
 export type InstallFix = z.output<typeof installFix>;
 export type ChangeLetter = z.output<typeof changeLetter>;
+export type ChangesView = z.output<typeof changesView>;
+export type ChangedFile = z.output<typeof changedFile>;
+export type ChangesList = BridgeResponse<"changes.list">;
+export type FileSides = BridgeResponse<"changes.file">;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -77,6 +81,20 @@ export const workspaceName = z
   .refine((name) => workspaceNameProblem(name) === null);
 export const refName = z.string().min(6).max(300).refine(isStartRef);
 const count = z.int().min(0).max(1_000_000);
+export const changesView = z.enum(["branch", "uncommitted"]);
+const changePath = z.string().min(1).max(changesLimits.pathChars);
+const shortOid = z.string().regex(/^[0-9a-f]{7}$/);
+const sideText = z.string().max(changesLimits.sideBytes);
+export const changedFile = z.strictObject({
+  path: changePath,
+  from: changePath.nullable(),
+  letter: changeLetter,
+  tracked: z.boolean(),
+  kind: z.enum(["text", "binary", "submodule", "repository"]),
+  added: count.nullable(),
+  removed: count.nullable(),
+  stamp: z.string().min(1).max(changesLimits.stampChars),
+});
 export const interfaceState = z.strictObject({
   selected: workspaceRef.nullable(),
   columns: z.strictObject({
@@ -263,6 +281,47 @@ export const bridgeRequests = {
   "sessions.resumable": {
     request: z.strictObject({ workspace: workspaceRef }),
     response: z.strictObject({ resumable: z.boolean() }),
+  },
+  "changes.list": {
+    request: z.strictObject({ workspace: workspaceRef, view: changesView }),
+    response: z.strictObject({
+      branch: z.string().min(1).max(255).nullable(),
+      base: z.string().min(1).max(255).nullable(),
+      ahead: count.nullable(),
+      behind: count.nullable(),
+      conflict: z.strictObject({ files: z.int().min(1).max(1_000_000) }).nullable(),
+      changes: z.discriminatedUnion("kind", [
+        z.strictObject({
+          kind: z.literal("files"),
+          files: z.array(changedFile).max(changesLimits.files),
+          more: count,
+          longPaths: count,
+        }),
+        z.strictObject({
+          kind: z.literal("unavailable"),
+          reason: z.enum(["no-commits", "no-base", "unrelated", "not-local", "too-many", "failed"]),
+        }),
+      ]),
+    }),
+  },
+  "changes.file": {
+    request: z.strictObject({ workspace: workspaceRef, view: changesView, path: changePath }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({ kind: z.literal("text"), original: sideText, modified: sideText }),
+      z.strictObject({ kind: z.literal("binary") }),
+      z.strictObject({ kind: z.literal("large") }),
+      z.strictObject({
+        kind: z.literal("submodule"),
+        from: shortOid.nullable(),
+        to: shortOid.nullable(),
+      }),
+      z.strictObject({ kind: z.literal("repository") }),
+      z.strictObject({ kind: z.literal("unmerged") }),
+      z.strictObject({ kind: z.literal("changing") }),
+      z.strictObject({ kind: z.literal("hung") }),
+      z.strictObject({ kind: z.literal("not-local") }),
+      z.strictObject({ kind: z.literal("unreadable") }),
+    ]),
   },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),

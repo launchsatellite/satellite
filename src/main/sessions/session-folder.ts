@@ -5,9 +5,17 @@ import type { ProjectStore } from "../projects/project-list.ts";
 import { answerWithin, folderReadMs } from "../projects/repository-check.ts";
 import { isConfined } from "../workspaces/workspace-archive.ts";
 
-const folderGone = "That folder is gone, so Claude Code can't start there.";
+export interface FolderSentences {
+  gone: string;
+  archiving: string;
+}
 
-async function recordedFolder(store: ProjectStore, ref: WorkspaceRef) {
+export const sessionSentences: FolderSentences = {
+  gone: "That folder is gone, so Claude Code can't start there.",
+  archiving: "Satellite is archiving that workspace, so Claude Code can't start there.",
+};
+
+async function recordedFolder(store: ProjectStore, ref: WorkspaceRef, archiving: string) {
   const project = await store.project(ref.projectId);
   if (ref.workspace === "main") return { project, path: project.path, record: undefined };
   const record = project.workspaces.find((workspace) => workspace.id === ref.workspace);
@@ -15,10 +23,7 @@ async function recordedFolder(store: ProjectStore, ref: WorkspaceRef) {
     throw new BridgeFailure("not-found", "That workspace is not in Satellite.");
   }
   if (store.busy.has(record.id)) {
-    throw new BridgeFailure(
-      "refused",
-      "Satellite is archiving that workspace, so Claude Code can't start there.",
-    );
+    throw new BridgeFailure("refused", archiving);
   }
   return { project, path: record.path, record };
 }
@@ -39,12 +44,13 @@ export async function sessionFolder(
   home: string,
   store: ProjectStore,
   ref: WorkspaceRef,
+  sentences: FolderSentences = sessionSentences,
 ): Promise<string> {
-  const found = await recordedFolder(store, ref);
+  const found = await recordedFolder(store, ref, sentences.archiving);
   if ((await answerWithin(isUsableFolder(home, found), folderReadMs)) !== true) {
-    throw new BridgeFailure("not-found", folderGone);
+    throw new BridgeFailure("not-found", sentences.gone);
   }
-  const latest = await recordedFolder(store, ref);
-  if (latest.path !== found.path) throw new BridgeFailure("not-found", folderGone);
+  const latest = await recordedFolder(store, ref, sentences.archiving);
+  if (latest.path !== found.path) throw new BridgeFailure("not-found", sentences.gone);
   return found.path;
 }
