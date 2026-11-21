@@ -184,20 +184,26 @@ describe("createNotices", () => {
     expect(opened).toEqual([asking]);
   });
 
-  it("opens the newest workspace a gathered notification named that still needs you", async () => {
+  it("counts every waiting workspace in a gathered notification and opens the newest", async () => {
     const { shown, opened, notices } = setup();
     notices.update([need("1")]);
     await settle();
-    notices.update([need("1"), need("2"), need("3")]);
-    await settle(noticeGapMs);
-    expect(shown[1]?.text.title).toBe("2 workspaces need you");
     notices.update([need("1"), need("2")]);
+    notices.update([need("3"), need("1"), need("2")]);
+    await settle(noticeGapMs);
+    expect(shown[1]?.text.title).toBe("3 workspaces need you");
     shown[1]?.click();
-    notices.update([need("1"), need("2"), need("3", 4)]);
+    notices.update([need("4"), need("3"), need("1"), need("2")]);
+    shown[1]?.click();
+    notices.update([need("1"), need("2"), need("3", 5)]);
+    shown[1]?.click();
+    notices.update([]);
     shown[1]?.click();
     expect(opened.map(({ workspace, owner }) => [nameOf(workspace), owner.id])).toEqual([
-      ["2", 1],
-      ["3", 4],
+      ["3", 1],
+      ["4", 1],
+      ["3", 5],
+      ["3", 1],
     ]);
   });
 

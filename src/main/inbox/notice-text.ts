@@ -41,10 +41,13 @@ export function noticeName(raw: string, fallback: string, limit = noticeNameLimi
   return letterOrDigit.test(cut) ? cut : fallback;
 }
 
-export function noticeText(subjects: readonly [NoticeSubject, ...NoticeSubject[]]): NoticeText {
+export function noticeText(
+  subjects: readonly [NoticeSubject, ...NoticeSubject[]],
+  waiting: number,
+): NoticeText {
   if (subjects.length > 1) {
     return {
-      title: `${String(subjects.length)} workspaces need you`,
+      title: `${String(Math.max(waiting, subjects.length))} workspaces need you`,
       body: "Open Satellite to answer them from the inbox.",
     };
   }

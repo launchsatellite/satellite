@@ -120,7 +120,7 @@ Every sentence is fixed here, nothing else may be shown, and no text is shown th
 - Toasts, after turning off `Notifications are off. The inbox still shows what needs you.` and after turning on `Notifications are on for every workspace that needs you.`
 - Notification for one workspace with a record, title `<workspace> needs you` and body `Claude Code is waiting for you in <project>.`
 - Notification for one main workspace, title `<project> needs you` and body `Claude Code is waiting for you in the main workspace.`
-- Notification for several workspaces, title `<n> workspaces need you` and body `Open Satellite to answer them from the inbox.`
+- Notification for several workspaces, title `<n> workspaces need you`, where `<n>` counts every workspace that needs you when it shows, and body `Open Satellite to answer them from the inbox.`
 - In a notification `<project>` is followed by ` in <parent>` when another project has the same name, from the same shared `shownParent` the inbox row uses, so two notifications never read the same. The parent is cleaned like a name, cut to 16 characters, and becomes `a folder` when nothing is left.
 
 ### Scenarios, steps and journeys

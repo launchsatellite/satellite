@@ -33,7 +33,7 @@ const alphaNotice: Shown = {
 };
 const foldedNotice: Shown = {
   kind: "notice",
-  title: "2 workspaces need you",
+  title: "3 workspaces need you",
   body: "Open Satellite to answer them from the inbox.",
 };
 const closed: Shown = { kind: "close" };

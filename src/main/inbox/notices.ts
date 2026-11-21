@@ -84,9 +84,10 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     if (first === undefined || target === undefined) return false;
     const keys = named.map(({ entry }) => placeKey(entry.workspace));
     closeShown();
-    const notice = show(noticeText([first.subject, ...rest.map(({ subject }) => subject)]), () => {
-      const asking = keys.findLast((key) => needing.has(key));
-      open((asking === undefined ? undefined : needing.get(asking)) ?? target.entry);
+    const words = noticeText([first.subject, ...rest.map(({ subject }) => subject)], needing.size);
+    const notice = show(words, () => {
+      const alone = rest.length === 0 ? needing.get(keys[0] ?? "") : undefined;
+      open(alone ?? [...needing.values()].at(-1) ?? target.entry);
     });
     if (notice !== undefined) shown = { notice, keys };
     return true;
@@ -113,10 +114,15 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   };
   return {
     update(list) {
-      const next = new Map<string, Needing>();
+      const listed = new Map<string, Needing>();
       for (const entry of list) {
         const key = placeKey(entry.workspace);
-        if (!next.has(key)) next.set(key, entry);
+        if (!listed.has(key)) listed.set(key, entry);
+      }
+      const next = new Map<string, Needing>();
+      for (const key of [...needing.keys(), ...listed.keys()]) {
+        const entry = listed.get(key);
+        if (entry !== undefined && !next.has(key)) next.set(key, entry);
       }
       if (next.size !== needing.size) setBadge(next.size);
       const announce = !quiet();
