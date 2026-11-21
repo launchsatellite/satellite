@@ -75,7 +75,7 @@ function Row({
           ))}
           {row.cut ? "…" : ""}
         </p>
-        <p className={`flex flex-wrap items-center gap-x-[10px] gap-y-1 ${note}`}>
+        <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${note}`}>
           <span data-testid={`${testId}-session`}>{sessionName(number)}</span>
           <span data-testid={`${testId}-age`}>
             <span className="sr-only">running for {ageWords(age)}</span>
@@ -107,7 +107,7 @@ function Row({
                 onClick={() => {
                   onPort(url);
                 }}
-                className={`-mx-[5px] rounded-[6px] px-[5px] font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
+                className={`-mx-1 rounded-[6px] px-1 font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
               >
                 :{port}
               </button>
