@@ -195,6 +195,18 @@ async function checksFailed(session: AppSession): Promise<void> {
   );
 }
 
+const movedOnSentence = "Satellite moved on to a newer read.";
+
+async function filesHold(session: AppSession, when: string): Promise<void> {
+  for (let look = 0; look < 25; look += 1) {
+    const text = await session.page.getByTestId("pull-request").innerText();
+    assert.ok(!text.includes(movedOnSentence), `the Files section said it moved on ${when}`);
+    const marks = await session.page.locator(".thread-mark").count();
+    assert.equal(marks, 1, `the diff held ${String(marks)} thread marks ${when}`);
+    await delay(100);
+  }
+}
+
 async function changesRequested(session: AppSession): Promise<void> {
   await inboxReads(session, "A review asks for changes.", "after launch");
   await startedClaude(session);
@@ -211,6 +223,11 @@ async function changesRequested(session: AppSession): Promise<void> {
     .getByTestId("changes-file-0")
     .waitFor({ state: "attached" })
     .catch(() => undefined);
+  await filesHold(session, "on first open");
+  await session.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await filesHold(session, "after focus");
+  await endTurn(session, true);
+  await filesHold(session, "after a finished turn");
   await session.page.keyboard.press(nextThreadKey);
   await attributeIs(session, "thread-0", "aria-current", "true", "after the key");
   await session.mark("answered");
