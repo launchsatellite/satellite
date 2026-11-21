@@ -620,9 +620,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         <WorkspaceHeader
           project={selectedProject}
           workspace={selectedWorkspace}
-          base={changes.list?.base ?? null}
-          ahead={changes.list === undefined ? selectedWorkspace.ahead : changes.list.ahead}
-          behind={changes.list === undefined ? selectedWorkspace.behind : changes.list.behind}
+          base={changes.header?.base ?? null}
+          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
+          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
         />
         {selectedProject.missing !== null ? (
           <FolderMissing

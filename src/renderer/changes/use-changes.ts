@@ -8,6 +8,13 @@ import type {
 import { invoke } from "../bridge/bridge-client.ts";
 import { unavailableSentence } from "./change-words.ts";
 
+interface Header {
+  workspace: string;
+  base: string | null;
+  ahead: number | null;
+  behind: number | null;
+}
+
 interface ListedPlace {
   place: string;
   list: ChangesList | undefined;
@@ -45,6 +52,15 @@ function settled(current: ListedPlace | null, next: ListedPlace): ListedPlace {
   return JSON.stringify(current.list) === JSON.stringify(next.list) ? current : next;
 }
 
+function sameHeader(current: Header | null, next: Header): boolean {
+  return (
+    current?.workspace === next.workspace &&
+    current.base === next.base &&
+    current.ahead === next.ahead &&
+    current.behind === next.behind
+  );
+}
+
 export function pollDelay(elapsedMs: number, failures: number): number {
   const backoff = changesPollMs * 2 ** failures;
   return Math.min(changesPollMaxMs, Math.max(backoff, changesPollFactor * elapsedMs));
@@ -58,13 +74,20 @@ export function useChanges(
   workspace: WorkspaceRef | null,
   view: ChangesView,
   finished: string,
-): { list: ChangesList | undefined; error: string | null } {
+): { list: ChangesList | undefined; error: string | null; header: Header | undefined } {
   const [listed, setListed] = useState<ListedPlace | null>(null);
+  const [header, setHeader] = useState<Header | null>(null);
   const refresh = useRef<() => void>(() => undefined);
   const seen = useRef<{ place: string | null; finished: string }>({ place: null, finished });
   const projectId = workspace?.projectId;
   const key = workspace?.workspace;
   const place = workspace === null ? null : changesPlace(workspace, view);
+  const here = workspace === null ? null : `${workspace.projectId}/${workspace.workspace}`;
+  const [askedPlace, setAskedPlace] = useState(place);
+  if (askedPlace !== place) {
+    setAskedPlace(place);
+    setListed(null);
+  }
 
   useEffect(() => {
     if (projectId === undefined || key === undefined || place === null) return;
@@ -89,6 +112,11 @@ export function useChanges(
           if (stopped) return;
           failures = result.ok && result.value.changes.kind === "files" ? 0 : failures + 1;
           setListed((current) => settled(current, answered(current, place, result)));
+          if (result.ok) {
+            const { base, ahead, behind } = result.value;
+            const next = { workspace: `${projectId}/${key}`, base, ahead, behind };
+            setHeader((current) => (sameHeader(current, next) ? current : next));
+          }
           if (again) {
             again = false;
             ask();
@@ -127,6 +155,7 @@ export function useChanges(
     }
   }, [place, finished]);
 
-  if (listed?.place !== place) return { list: undefined, error: null };
-  return { list: listed.list, error: listed.error };
+  const shownHeader = header?.workspace === here ? header : undefined;
+  if (listed?.place !== place) return { list: undefined, error: null, header: shownHeader };
+  return { list: listed.list, error: listed.error, header: shownHeader };
 }
