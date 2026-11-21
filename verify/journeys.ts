@@ -14,6 +14,7 @@ import { filesJourney } from "./journeys/files.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
+import { processesJourney } from "./journeys/processes.ts";
 import { projectsJourney } from "./journeys/projects.ts";
 import { pullRequestJourney } from "./journeys/pull-request.ts";
 import { quitJourney } from "./journeys/quit.ts";
@@ -41,6 +42,7 @@ const journeys: Journey[] = [
   filesJourney,
   conflictsJourney,
   sessionsJourney,
+  processesJourney,
   inboxJourney,
   pullRequestJourney,
   missingJourney,

@@ -49,7 +49,7 @@ const claudeStepSchema = z.union([
   z.strictObject({ print: z.string() }),
   z.strictObject({ wait: z.int().min(0).max(60_000) }),
   z.strictObject({ flood: z.int().min(1).max(50_000_000) }),
-  z.strictObject({ child: z.literal("ignores-hangup") }),
+  z.strictObject({ child: z.enum(["ignores-hangup", "dev-server"]) }),
   z.strictObject({
     hook: z.enum(hookEvents),
     fields: z.record(z.string(), z.string()).optional(),

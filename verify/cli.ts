@@ -296,6 +296,8 @@ function parseStep(raw: string): Step {
       return step(({ session }) => session.mark(needsValue()));
     case "log":
       return step(({ session }) => session.standInEvents());
+    case "links":
+      return step(({ session }) => session.openedLinks());
     case "notices":
       return step(({ session }) => session.notices());
     case "restart":

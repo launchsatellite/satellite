@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { loadScenario, type Scenario } from "../scenario.ts";
@@ -74,6 +75,22 @@ function startStubbornChild(): void {
   if (child.pid !== undefined) appendStandInEvent({ type: "child", pid: child.pid });
 }
 
+function startDevServer(): void {
+  const script = join(import.meta.dirname, "dev-server.ts");
+  if (process.platform === "win32") {
+    spawn(
+      process.env["ComSpec"] ?? "cmd.exe",
+      ["/d", "/s", "/c", `""${process.execPath}" "${script}""`],
+      {
+        stdio: "ignore",
+        windowsVerbatimArguments: true,
+      },
+    );
+    return;
+  }
+  spawn("/bin/sh", ["-c", '"$0" "$1"; exit $?', process.execPath, script], { stdio: "ignore" });
+}
+
 function meetWaiter(): void {
   if (waiter === undefined) return;
   const at = unread.indexOf(waiter.text);
@@ -127,7 +144,8 @@ async function play(step: ClaudeStep, settings: Settings | undefined): Promise<v
     trusted = true;
   } else if ("hook" in step) {
     appendStandInEvent({ type: "hook", event: step.hook, status: await post(settings, step) });
-  } else startStubbornChild();
+  } else if (step.child === "dev-server") startDevServer();
+  else startStubbornChild();
 }
 
 function listen(): void {

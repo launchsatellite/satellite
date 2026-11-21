@@ -14,6 +14,7 @@ const standInEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("input"), data: z.string() }),
   z.strictObject({ type: z.literal("resize"), cols: z.int(), rows: z.int() }),
   z.strictObject({ type: z.literal("child"), pid: z.int() }),
+  z.strictObject({ type: z.literal("server"), pid: z.int(), port: z.int(), child: z.int() }),
   z.strictObject({ type: z.literal("hook"), event: z.string(), status: z.int() }),
 ]);
 

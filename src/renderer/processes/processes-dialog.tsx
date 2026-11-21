@@ -105,7 +105,7 @@ function Row({
         </p>
       </div>
       <Button
-        variant="danger"
+        variant="secondary"
         size="small"
         testId={`${testId}-stop`}
         disabled={stopping}
