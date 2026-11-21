@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { devNull } from "node:os";
 import { delimiter, join } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
@@ -16,6 +15,7 @@ export type ConflictCheck =
 export const conflictReadMs = 15_000;
 
 const quarantineFolder = "quarantine";
+const noConfigFile = "no-config";
 const unsupportedExit = 129;
 const countCap = 1_000_000;
 const cachedChecks = 512;
@@ -85,6 +85,7 @@ async function makeScratchRepository(home: string, sha256: boolean): Promise<str
   await mkdir(join(folder, "objects"), { mode: 0o700 });
   await mkdir(join(folder, "refs"), { mode: 0o700 });
   await writeFile(join(folder, "HEAD"), "ref: refs/heads/main\n");
+  await writeFile(join(folder, noConfigFile), "");
   if (sha256) {
     await writeFile(
       join(folder, "config"),
@@ -125,8 +126,8 @@ async function trialMerge(
       {
         gitVariables: {
           GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
-          GIT_CONFIG_GLOBAL: devNull,
-          GIT_CONFIG_SYSTEM: devNull,
+          GIT_CONFIG_GLOBAL: join(scratch, noConfigFile),
+          GIT_CONFIG_SYSTEM: join(scratch, noConfigFile),
         },
       },
     );

@@ -94,6 +94,44 @@ async function tree(folder: string): Promise<string[]> {
   return listed;
 }
 
+async function checked(home: string, repo: string, head: string, base: string) {
+  const found = await conflictCheck(home, repo, head, base);
+  if (found !== null) return found;
+  const scratch = join(home, "diagnosis");
+  await run("git", ["init", "-q", "--bare", scratch]);
+  const empty = join(scratch, "no-config");
+  await writeFile(empty, "");
+  const objects = (
+    await run("git", ["-C", repo, "rev-parse", "--path-format=absolute", "--git-path", "objects"])
+  ).stdout.trim();
+  const trial = await run(
+    "git",
+    [
+      "--git-dir",
+      scratch,
+      "merge-tree",
+      "--write-tree",
+      "--name-only",
+      "--no-messages",
+      "-z",
+      head,
+      base,
+    ],
+    {
+      env: {
+        ...process.env,
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
+        GIT_CONFIG_GLOBAL: empty,
+        GIT_CONFIG_SYSTEM: empty,
+      },
+    },
+  ).then(
+    (done) => `exit 0 ${done.stderr}`,
+    (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  );
+  throw new Error(`the check answered null, and the same trial merge says ${trial}`);
+}
+
 const twoLines = (second: string) => `one\n${second}\nthree\n`;
 
 afterEach(() => {
@@ -109,7 +147,7 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
       () => box.write("shared.txt", twoLines("alpha")),
       () => box.write("shared.txt", twoLines("main")),
     );
-    expect(await conflictCheck(box.home, box.repo, head, base)).toEqual({
+    expect(await checked(box.home, box.repo, head, base)).toEqual({
       kind: "files",
       files: 1,
       names: ["shared.txt"],
@@ -126,18 +164,19 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
       () => box.write("shared.txt", twoLines("alpha")),
       () => box.write("shared.txt", twoLines("main")),
     );
-    expect(await conflictCheck(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
+    expect(await checked(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
   });
 
   it("reads none of the user's config, so a global merge setting cannot abort it or run the user's driver", async () => {
     const box = await sandbox();
+    const inConfig = (path: string) => path.split("\\").join("/");
     const marker = join(box.base, "driver-ran");
     const attributes = join(box.base, "attributes");
     await writeFile(attributes, "* merge=mine\n");
     const config = process.env["GIT_CONFIG_GLOBAL"] ?? "";
     await appendFile(
       config,
-      `[merge]\n\trenormalize = true\n[merge "mine"]\n\tdriver = touch ${marker}\n[core]\n\tattributesFile = ${attributes}\n`,
+      `[merge]\n\trenormalize = true\n[merge "mine"]\n\tdriver = touch ${inConfig(marker)}\n[core]\n\tattributesFile = ${inConfig(attributes)}\n`,
     );
     const { head, base } = await diverge(
       box,
@@ -145,7 +184,7 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
       () => box.write("shared.txt", twoLines("alpha")),
       () => box.write("shared.txt", twoLines("main")),
     );
-    expect(await conflictCheck(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
+    expect(await checked(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
     expect(await exists(marker)).toBe(false);
   });
 
@@ -175,7 +214,7 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
     const head = await git("rev-parse", "HEAD");
     const other = await git("rev-parse", "main");
     expect(head).toHaveLength(64);
-    expect(await conflictCheck(home, repo, head, other)).toMatchObject({ kind: "files" });
+    expect(await checked(home, repo, head, other)).toMatchObject({ kind: "files" });
   });
 
   it("answers none for a base that merges cleanly, and for a branch already merged", async () => {
