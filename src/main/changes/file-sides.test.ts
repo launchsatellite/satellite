@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { gitReadMs } from "../workspaces/git-command.ts";
-import { isChangePath, readBlobSide, readWorktreeSide } from "./file-sides.ts";
+import { isChangePath, lineCount, readBlobSide, readWorktreeSide } from "./file-sides.ts";
 
 const fileCalls = vi.hoisted(() => {
   const calls: { realpath?: ((path: string) => Promise<string>) | undefined } = {};
@@ -158,6 +158,13 @@ describe("readWorktreeSide", () => {
     });
     expect(await readWorktreeSide(root, "lines.txt")).toEqual({ kind: "large" });
     expect((await readWorktreeSide(root, "most-lines.txt")).kind).toBe("text");
+    await writeFile(join(root, "returns.txt"), "a\r".repeat(20_001));
+    await writeFile(join(root, "windows.txt"), "a\r\n".repeat(19_999) + "a");
+    expect(await readWorktreeSide(root, "returns.txt")).toEqual({ kind: "large" });
+    expect((await readWorktreeSide(root, "windows.txt")).kind).toBe("text");
+    expect(["", "a", "a\n", "a\r", "a\r\n", "a\rb", "a\r\nb\n", "\n\r\r\n"].map(lineCount)).toEqual(
+      [0, 1, 1, 1, 1, 2, 2, 3],
+    );
   });
 
   it("answers binary when a NUL sits in the first 8000 bytes", async () => {

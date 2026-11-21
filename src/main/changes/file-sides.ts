@@ -36,6 +36,8 @@ const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
 const notLocal: SideRead = { kind: "not-local" };
+const lineFeed = 10;
+const carriageReturn = 13;
 const rootsWithStuckReads = new Set<string>();
 const objectLengths = new Map<string, number>();
 const objectFormatLengths = new Map([
@@ -174,8 +176,14 @@ export function looksBinary(bytes: Uint8Array): boolean {
 
 export function lineCount(text: string): number {
   let lines = 0;
-  for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) lines += 1;
-  return text !== "" && !text.endsWith("\n") ? lines + 1 : lines;
+  for (let at = 0; at < text.length; at += 1) {
+    const code = text.charCodeAt(at);
+    if (code === lineFeed || (code === carriageReturn && text.charCodeAt(at + 1) !== lineFeed)) {
+      lines += 1;
+    }
+  }
+  const last = text.charCodeAt(text.length - 1);
+  return text !== "" && last !== lineFeed && last !== carriageReturn ? lines + 1 : lines;
 }
 
 export async function readWorktreeSide(
