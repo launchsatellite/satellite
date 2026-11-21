@@ -36,6 +36,7 @@ const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
 const notLocal: SideRead = { kind: "not-local" };
+const rootsWithStuckReads = new Set<string>();
 const unreadable: SideRead = { kind: "unreadable" };
 const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
 const falseValues = new Set(["", "false", "no", "off", "0"]);
@@ -96,11 +97,11 @@ async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {
   }
 }
 
-async function withinTime(work: Promise<SideRead>, ms: number): Promise<SideRead> {
+async function withinTime(work: Promise<SideRead>, ms: number): Promise<SideRead | undefined> {
   let timer: NodeJS.Timeout | undefined;
-  const late = new Promise<SideRead>((settle) => {
+  const late = new Promise<undefined>((settle) => {
     timer = setTimeout(() => {
-      settle(changing);
+      settle(undefined);
     }, ms);
   });
   try {
@@ -119,7 +120,7 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   if (entry.isSymbolicLink()) return linkSide(file);
   if (!entry.isFile()) return binary;
   if (entry.size > BigInt(bytes)) return large;
-  const read = await withinTime(openedSide(file, entry), gitReadMs);
+  const read = await openedSide(file, entry);
   const recheck = await confinedFolder(root, parent);
   if (typeof recheck !== "string") return recheck;
   return sameFolder(recheck, folder) ? read : refused;
@@ -166,11 +167,18 @@ export async function readWorktreeSide(
   bytes: number = changesLimits.sideBytes,
 ): Promise<SideRead> {
   if (!isChangePath(path)) return unreadable;
-  try {
-    return await confinedSide(root, path, bytes);
-  } catch (error) {
-    return isMissing(error) ? gone : refused;
-  }
+  if (rootsWithStuckReads.has(root)) return changing;
+  const work = confinedSide(root, path, bytes).catch((error: unknown) =>
+    isMissing(error) ? gone : refused,
+  );
+  const read = await withinTime(work, gitReadMs);
+  if (read !== undefined) return read;
+  rootsWithStuckReads.add(root);
+  const release = () => {
+    rootsWithStuckReads.delete(root);
+  };
+  void work.then(release, release);
+  return changing;
 }
 
 export async function readBlobSide(

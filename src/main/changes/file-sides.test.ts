@@ -3,8 +3,22 @@ import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { gitReadMs } from "../workspaces/git-command.ts";
 import { isChangePath, readBlobSide, readWorktreeSide } from "./file-sides.ts";
+
+const fileCalls = vi.hoisted(() => {
+  const calls: { realpath?: ((path: string) => Promise<string>) | undefined } = {};
+  return calls;
+});
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    realpath: (path: string) => fileCalls.realpath?.(path) ?? actual.realpath(path),
+  };
+});
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -204,6 +218,38 @@ describe("readWorktreeSide", () => {
     expect(await readWorktreeSide(root, "café folder/inner.txt")).toEqual({
       kind: "text",
       text: "inner\n",
+    });
+  });
+});
+
+describe("readWorktreeSide on a file system that stalls", () => {
+  afterEach(() => {
+    fileCalls.realpath = undefined;
+    vi.useRealTimers();
+  });
+
+  it("answers within its time and then skips a stuck worktree until it settles", async () => {
+    const { root } = await worktree();
+    await writeFile(join(root, "file.txt"), "file\n");
+    const { promise: stuck, resolve: unstick } = Promise.withResolvers<undefined>();
+    let calls = 0;
+    fileCalls.realpath = async (path) => {
+      calls += 1;
+      await stuck;
+      return realpath(path);
+    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const first = readWorktreeSide(root, "file.txt");
+    await vi.advanceTimersByTimeAsync(gitReadMs);
+    expect(await first).toEqual({ kind: "changing" });
+    const seen = calls;
+    expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "changing" });
+    expect(calls).toBe(seen);
+    fileCalls.realpath = undefined;
+    vi.useRealTimers();
+    unstick(undefined);
+    await vi.waitFor(async () => {
+      expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "text", text: "file\n" });
     });
   });
 });
