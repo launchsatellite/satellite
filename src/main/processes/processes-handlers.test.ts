@@ -105,6 +105,15 @@ describe("processes.list", () => {
     ).toBe(false);
   });
 
+  it("reads no table while no session runs", async () => {
+    const { list, stop, readTable } = setup({ roots: [] });
+    expect(await list()).toEqual({ at: fixtureNow, rows: [], more: 0 });
+    await expect(stop(4201, startOf(parsePsTable(psMacos), 4201))).rejects.toMatchObject({
+      code: "not-found",
+    });
+    expect(readTable).not.toHaveBeenCalled();
+  });
+
   it("reads no ports when nothing is listed", async () => {
     const { list, readPorts } = setup({ roots: [] });
     expect(await list()).toEqual({ at: fixtureNow, rows: [], more: 0 });
@@ -163,11 +172,11 @@ describe("processes.stop", () => {
     await expect(stop(4201, startOf(table, 4201) + 1000)).rejects.toMatchObject({
       code: "not-found",
     });
-    await expect(stop(5000, startOf(table, 5000))).rejects.toMatchObject({ code: "refused" });
-    await expect(stop(4100, startOf(table, 4100))).rejects.toMatchObject({ code: "refused" });
-    await expect(stop(4200, startOf(table, 4200))).rejects.toMatchObject({ code: "refused" });
+    await expect(stop(5000, startOf(table, 5000))).rejects.toMatchObject({ code: "not-found" });
+    await expect(stop(4100, startOf(table, 4100))).rejects.toMatchObject({ code: "not-found" });
+    await expect(stop(4200, startOf(table, 4200))).rejects.toMatchObject({ code: "not-found" });
     await expect(stop(4201, startOf(table, 4201), pageTwo)).rejects.toMatchObject({
-      code: "refused",
+      code: "not-found",
     });
     expect(end).not.toHaveBeenCalled();
   });
@@ -241,11 +250,11 @@ describe.skipIf(process.platform === "win32")("with real processes", () => {
       const everyoneAlive = () =>
         [programPid, shellPid, serverPid, strangerPid].every((pid) => isAlive(pid));
       const refusals: [number, number, BridgeOwner, string][] = [
-        [programPid, await startOfPid(programPid), pageOne, "refused"],
-        [shellPid, await startOfPid(shellPid), pageOne, "refused"],
-        [strangerPid, await startOfPid(strangerPid), pageOne, "refused"],
-        [process.pid, await startOfPid(process.pid), pageOne, "refused"],
-        [serverPid, await startOfPid(serverPid), pageTwo, "refused"],
+        [programPid, await startOfPid(programPid), pageOne, "not-found"],
+        [shellPid, await startOfPid(shellPid), pageOne, "not-found"],
+        [strangerPid, await startOfPid(strangerPid), pageOne, "not-found"],
+        [process.pid, await startOfPid(process.pid), pageOne, "not-found"],
+        [serverPid, await startOfPid(serverPid), pageTwo, "not-found"],
         [serverPid, (server.started ?? 0) + 1000, pageOne, "not-found"],
         [serverPid + 100_000, server.started ?? 0, pageOne, "not-found"],
       ];

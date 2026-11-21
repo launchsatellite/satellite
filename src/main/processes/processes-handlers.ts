@@ -84,6 +84,7 @@ export function createProcesses({
   const read = async (): Promise<Snapshot> => {
     const at = now();
     const running = roots();
+    if (running.length === 0) return { at, rows: [] };
     const table = await readTable();
     const listed = listedProcesses(
       table,
@@ -141,6 +142,10 @@ export function createProcesses({
             "Satellite is already stopping a process. Try again in a moment.",
           );
         }
+        const own = roots()
+          .filter((running) => running.owner === owner)
+          .map(({ root }) => root);
+        if (own.length === 0) throw new BridgeFailure("not-found", "That process already ended.");
         stopping = true;
         dropRead();
         try {
@@ -151,19 +156,9 @@ export function createProcesses({
               "Satellite couldn't read the running processes, so it stopped nothing.",
             );
           }
-          const own = roots()
-            .filter((running) => running.owner === owner)
-            .map(({ root }) => root);
           const owned = ownedProcess(table, own, pid, started);
-          if (owned === undefined) {
-            if (table.some((entry) => entry.pid === pid && entry.started === started)) {
-              throw new BridgeFailure(
-                "refused",
-                "Satellite only stops processes that its own sessions started.",
-              );
-            }
+          if (owned === undefined)
             throw new BridgeFailure("not-found", "That process already ended.");
-          }
           await end(owned.entry, table);
           return {};
         } finally {
