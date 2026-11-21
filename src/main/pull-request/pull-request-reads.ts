@@ -24,7 +24,7 @@ import {
 import { ghFailure } from "./gh-failure.ts";
 import { createPace } from "./gh-pace.ts";
 import { failedLines, parseThreads, parseView } from "./pull-request-parse.ts";
-import { isPushed } from "./pushed-branch.ts";
+import { branchFacts, isPushed, type BranchFacts } from "./pushed-branch.ts";
 
 export interface PullRequests {
   handlers: Pick<BridgeHandlers, "pullRequest.read" | "pullRequest.log">;
@@ -99,6 +99,16 @@ async function runGh(
     if (error instanceof AbandonedRun) return { failure: "hung" };
     return { failure: "failed" };
   }
+}
+
+function belongsTo(
+  found: { head: string | null; crossRepository: boolean },
+  branch: string | null,
+  facts: BranchFacts,
+): boolean {
+  if (facts.isDefault) return false;
+  if (found.head !== null && found.head === facts.upstream) return true;
+  return !found.crossRepository && found.head === branch;
 }
 
 export function createPullRequests({
@@ -204,9 +214,11 @@ export function createPullRequests({
         const pushed = await isPushed(folder, branch, signal);
         if (pushed === undefined) return { failure: "failed" as const };
         if (!pushed) return { failure: "not-pushed" as const };
+        const facts = await branchFacts(folder, branch, signal);
+        if (facts === undefined) return { failure: "failed" as const };
         const result = await runGh(viewArguments(), folder, viewMs, signal);
         if ("failure" in result) return result;
-        return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch };
+        return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch, facts };
       },
       { signal },
     );
@@ -219,7 +231,7 @@ export function createPullRequests({
     }
     const parsed = parseView(viewed.run.stdout, viewed.head);
     if (parsed === null) return { answer: unavailable("failed"), place: null };
-    if (parsed.found.head !== viewed.branch) {
+    if (!belongsTo(parsed.found, viewed.branch, viewed.facts)) {
       return { answer: { kind: "absent", reason: "none" }, place: null };
     }
     if (!detail) return { answer: { ...parsed.found, detail: null }, place: parsed.place };
