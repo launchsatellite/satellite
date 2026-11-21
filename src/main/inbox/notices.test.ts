@@ -20,7 +20,11 @@ const ref = (name: string): WorkspaceRef => ({
   projectId,
   workspace: name === "main" ? "main" : `00000000-0000-4000-8000-${name.padStart(12, "0")}`,
 });
-const need = (name: string, page = 1): Needing => ({ workspace: ref(name), owner: owner(page) });
+const need = (name: string, page = 1): Needing => ({
+  workspace: ref(name),
+  owner: owner(page),
+  reason: "session",
+});
 const nameOf = (workspace: WorkspaceRef) =>
   workspace.workspace === "main" ? "main" : workspace.workspace.slice(-12).replace(/^0+/, "");
 

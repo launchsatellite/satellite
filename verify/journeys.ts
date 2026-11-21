@@ -79,6 +79,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     selectDiffLines: (side, start, end) => session.selectDiffLines(side, start, end),
     selectFileLines: (start, end) => session.selectFileLines(start, end),
     openedLinks: () => session.openedLinks(),
+    mark: (name) => session.mark(name),
     notices: () => session.notices(),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),

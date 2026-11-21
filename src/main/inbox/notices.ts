@@ -5,6 +5,7 @@ import { noticeText, type NoticeSubject, type NoticeText } from "./notice-text.t
 export interface Needing {
   workspace: WorkspaceRef;
   owner: BridgeOwner;
+  reason: "session" | "pull-request";
 }
 export interface ShownNotice {
   close(): void;

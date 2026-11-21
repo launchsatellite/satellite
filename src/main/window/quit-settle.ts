@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 export interface QuitParts {
   changes: { stopAll(): Promise<void> };
   files: { stopAll(): Promise<void> };
+  pullRequests: { stopAll(): Promise<void> };
   notices: { stop(): void };
   terminals: { closeAll(): Promise<void> };
   last: { flush(): Promise<void> };
@@ -27,5 +28,6 @@ export async function settleForQuit(parts: QuitParts | undefined, boundMs: numbe
     parts.workspaces.stopAll().then(() => bounded(parts.projects.flush())),
     bounded(parts.changes.stopAll()),
     bounded(parts.files.stopAll()),
+    bounded(parts.pullRequests.stopAll()),
   ]);
 }

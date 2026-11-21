@@ -603,6 +603,24 @@ export const bridgeRequests = {
       z.strictObject({ kind: z.enum(["too-many", "hung", "failed"]) }),
     ]),
   },
+  "pullRequest.read": {
+    request: z.strictObject({ workspace: workspaceRef, detail: z.boolean() }),
+    response: pullRequestAnswer,
+  },
+  "pullRequest.log": {
+    request: z.strictObject({ workspace: workspaceRef, job: digits }),
+    response: z.discriminatedUnion("kind", [
+      z.strictObject({
+        kind: z.literal("lines"),
+        lines: z
+          .array(z.string().max(pullRequestLimits.logLineChars))
+          .max(pullRequestLimits.logLines),
+        more: z.boolean(),
+      }),
+      z.strictObject({ kind: z.literal("empty") }),
+      z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
+    ]),
+  },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),
     response: empty,

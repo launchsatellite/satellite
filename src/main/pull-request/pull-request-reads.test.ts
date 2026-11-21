@@ -1,0 +1,355 @@
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { z } from "zod";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
+import { BridgeFailure, type BridgeOwner } from "../bridge/registry.ts";
+import type { Needing } from "../inbox/notices.ts";
+import type { ProjectStore } from "../projects/project-list.ts";
+import { threadsArguments, viewArguments } from "./gh-arguments.ts";
+import { createPullRequests } from "./pull-request-reads.ts";
+
+vi.mock("../platform/user-environment.ts", () => ({
+  userEnvironment: () =>
+    Promise.resolve(
+      Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+    ),
+}));
+
+const run = promisify(execFile);
+const recorded = z.strictObject({ args: z.array(z.string()), cwd: z.string() });
+const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
+const headOid = "a".repeat(40);
+const jobAddress = "https://github.com/example-org/verify-repo/actions/runs/1001/job/2001";
+const place = { host: "github.com", owner: "example-org", repo: "verify-repo", number: 12 };
+const script = `
+const { appendFileSync, existsSync, readFileSync } = require("node:fs");
+const { join } = require("node:path");
+const dir = process.argv[2];
+const args = process.argv.slice(3);
+appendFileSync(join(dir, "calls.jsonl"), JSON.stringify({ args, cwd: process.cwd() }) + "\\n");
+const name = { pr: "view", api: "threads", run: "log" }[args[0]];
+const file = join(dir, name + ".json");
+const answer = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { exitCode: 1, stderr: "boom" };
+process.stdout.write(answer.stdout ?? "");
+process.stderr.write(answer.stderr ?? "");
+process.exitCode = answer.exitCode ?? 0;
+`;
+
+interface Check {
+  conclusion: string;
+}
+
+function viewJson(checks: Check[] = []) {
+  return JSON.stringify({
+    number: 12,
+    url: "https://github.com/example-org/verify-repo/pull/12",
+    title: "Add a thing",
+    state: "OPEN",
+    isDraft: false,
+    baseRefName: "main",
+    headRefName: "topic",
+    headRefOid: headOid,
+    isCrossRepository: false,
+    body: "Body",
+    mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
+    reviewDecision: "",
+    changedFiles: 1,
+    reviews: [],
+    checks: checks.map(({ conclusion }) => ({
+      name: "build",
+      workflow: "ci",
+      status: "COMPLETED",
+      conclusion,
+      url: jobAddress,
+      startedAt: "2026-01-01T00:00:00Z",
+    })),
+    commits: [],
+  });
+}
+
+const threadsJson = JSON.stringify({
+  data: {
+    repository: {
+      pullRequest: {
+        reviews: { totalCount: 0, nodes: [] },
+        comments: { totalCount: 0, nodes: [] },
+        reviewThreads: { totalCount: 0, nodes: [] },
+      },
+    },
+  },
+});
+
+async function repository(base: string, name: string, push: boolean) {
+  const repo = join(base, name);
+  const remote = join(base, `${name}.git`);
+  const config = join(base, "gitconfig");
+  await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+  const kept = Object.entries(process.env).filter(
+    (entry): entry is [string, string] =>
+      entry[1] !== undefined && !entry[0].toUpperCase().startsWith("GIT_"),
+  );
+  const env = { ...Object.fromEntries(kept), GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: "1" };
+  await run("git", ["init", "-q", "--bare", "-b", "main", remote], { env });
+  await run("git", ["init", "-q", "-b", "main", repo], { env });
+  const git = (...args: string[]) => run("git", ["-C", repo, ...args], { env });
+  await git("commit", "-q", "--allow-empty", "-m", "one");
+  await git("remote", "add", "origin", remote);
+  if (push) await git("push", "-q", "-u", "origin", "main");
+  return repo;
+}
+
+function storeOf(projects: { id: string; path: string }[]): ProjectStore {
+  const find = (id: string) => {
+    const found = projects.find((project) => project.id === id);
+    if (found === undefined) {
+      throw new BridgeFailure("not-found", "That project is not in Satellite.");
+    }
+    return Promise.resolve({ ...found, workspaces: [] });
+  };
+  return {
+    list: () => Promise.all(projects.map(({ id }) => find(id))),
+    project: find,
+    available: () => Promise.resolve(true),
+    addWorkspace: () => Promise.resolve(),
+    writable: () => Promise.resolve(true),
+    removeWorkspace: () => Promise.resolve(),
+    busy: new Set(),
+    creating: new Set(),
+  };
+}
+
+const firstId = "0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
+const secondId = "1c9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
+const first: WorkspaceRef = { projectId: firstId, workspace: "main" };
+const second: WorkspaceRef = { projectId: secondId, workspace: "main" };
+
+async function setup(options: { push?: boolean } = {}) {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-pr-")));
+  const dir = join(base, "gh");
+  await mkdir(dir);
+  const file = join(dir, "gh.cjs");
+  await writeFile(file, script);
+  process.env["SATELLITE_GH"] = JSON.stringify([process.execPath, file, dir]);
+  const repo = await repository(base, "one", options.push ?? true);
+  const other = await repository(base, "two", true);
+  let time = 1_000_000;
+  const needing = vi.fn<(list: readonly Needing[]) => void>();
+  const reads = createPullRequests({
+    home: base,
+    store: storeOf([
+      { id: firstId, path: repo },
+      { id: secondId, path: other },
+    ]),
+    onNeeding: needing,
+    now: () => time,
+    after: () => Promise.resolve(),
+  });
+  const answer = (name: "view" | "threads" | "log", body: object) =>
+    writeFile(join(dir, `${name}.json`), JSON.stringify(body));
+  const calls = async () => {
+    const text = await readFile(join(dir, "calls.jsonl"), "utf8").catch(() => "");
+    return text
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => recorded.parse(JSON.parse(line)));
+  };
+  const read = (workspace: WorkspaceRef, detail = false) =>
+    reads.handlers["pullRequest.read"]({ workspace, detail }, owner);
+  return {
+    reads,
+    repo,
+    other,
+    needing,
+    answer,
+    calls,
+    read,
+    advance: (ms: number) => {
+      time += ms;
+    },
+  };
+}
+
+describe("pull request reads", { timeout: 30_000 }, () => {
+  beforeEach(() => {
+    delete process.env["SATELLITE_GH"];
+  });
+  afterEach(() => {
+    delete process.env["SATELLITE_GH"];
+  });
+
+  it("runs gh from the workspace folder with exactly the view arguments", async () => {
+    const { answer, read, calls, repo } = await setup();
+    await answer("view", { stdout: viewJson() });
+    const result = await read(first);
+    expect(result).toMatchObject({ kind: "found", number: 12, detail: null });
+    expect(await calls()).toEqual([{ args: viewArguments(), cwd: repo }]);
+  });
+
+  it("asks for threads only with detail and names the host of the pull request", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { stdout: viewJson() });
+    await answer("threads", { stdout: threadsJson });
+    await read(first);
+    expect(await calls()).toHaveLength(1);
+    advance(10_000);
+    const result = await read(first, true);
+    expect(result).toMatchObject({ kind: "found", detail: { kind: "read" } });
+    const made = await calls();
+    expect(made).toHaveLength(3);
+    expect(made[2]?.args).toEqual(threadsArguments(place));
+  });
+
+  it("never runs gh for a branch that is not pushed", async () => {
+    const { answer, read, calls } = await setup({ push: false });
+    await answer("view", { stdout: viewJson() });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "not-pushed" });
+    expect(await calls()).toEqual([]);
+  });
+
+  it("reuses an answer for ten seconds", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { stdout: viewJson() });
+    await read(first);
+    advance(9_999);
+    await read(first);
+    expect(await calls()).toHaveLength(1);
+    advance(1);
+    await read(first);
+    expect(await calls()).toHaveLength(2);
+  });
+
+  it("joins two reads of one workspace", async () => {
+    const { answer, read, calls } = await setup();
+    await answer("view", { stdout: viewJson() });
+    const [one, two] = await Promise.all([read(first), read(first)]);
+    expect(one).toEqual(two);
+    expect(await calls()).toHaveLength(1);
+  });
+
+  it("holds a failed workspace for a minute and doubles it, and detail skips the hold", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { exitCode: 1, stderr: "boom" });
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "failed" });
+    advance(59_999);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "failed" });
+    expect(await calls()).toHaveLength(1);
+    advance(1);
+    await read(first);
+    expect(await calls()).toHaveLength(2);
+    advance(119_999);
+    await read(first);
+    expect(await calls()).toHaveLength(2);
+    await read(first, true);
+    expect(await calls()).toHaveLength(3);
+    advance(240_000);
+    await read(first);
+    expect(await calls()).toHaveLength(4);
+  });
+
+  it("a rate limit pauses every workspace", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { exitCode: 1, stderr: "API rate limit exceeded for user" });
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "rate-limited" });
+    expect(await read(second)).toEqual({ kind: "unavailable", reason: "rate-limited" });
+    expect(await calls()).toHaveLength(1);
+    advance(899_999);
+    await read(second);
+    expect(await calls()).toHaveLength(1);
+    advance(1);
+    await read(second);
+    expect(await calls()).toHaveLength(2);
+  });
+
+  it("a failed threads run keeps the overview", async () => {
+    const { answer, read } = await setup();
+    await answer("view", { stdout: viewJson() });
+    await answer("threads", { exitCode: 1, stderr: "boom" });
+    expect(await read(first, true)).toMatchObject({
+      kind: "found",
+      number: 12,
+      detail: { kind: "unavailable", reason: "failed" },
+    });
+  });
+
+  it("tells needing when checks fail and again when they pass", async () => {
+    const { answer, read, needing, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+    await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
+    advance(10_000);
+    await read(first);
+    expect(needing).toHaveBeenLastCalledWith([]);
+    expect(needing).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps needing through an offline answer and drops it when signed out", async () => {
+    const { answer, read, needing, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await answer("view", { exitCode: 1, stderr: "dial tcp: no such host" });
+    advance(10_000);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "offline" });
+    expect(needing).toHaveBeenCalledTimes(1);
+    await answer("view", { exitCode: 4, stderr: "gh auth login" });
+    expect(await read(first, true)).toEqual({ kind: "unavailable", reason: "signed-out" });
+    expect(needing).toHaveBeenLastCalledWith([]);
+  });
+
+  it("forgets a workspace when it is archived", async () => {
+    const { answer, read, needing, reads, repo } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await reads.stopInside(repo);
+    expect(needing).toHaveBeenLastCalledWith([]);
+  });
+
+  it("refuses a log for a job that is not on the pull request", async () => {
+    const { answer, read, reads } = await setup();
+    const log = reads.handlers["pullRequest.log"];
+    await expect(log({ workspace: first, job: "2001" }, owner)).rejects.toMatchObject({
+      code: "not-found",
+    });
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await answer("log", {
+      stdout: "build\tstep\t2026-01-01T00:00:00.0000000Z ##[error]It broke\n",
+    });
+    expect(await log({ workspace: first, job: "2001" }, owner)).toEqual({
+      kind: "lines",
+      lines: ["It broke"],
+      more: false,
+    });
+    await expect(log({ workspace: first, job: "2002" }, owner)).rejects.toMatchObject({
+      code: "not-found",
+    });
+    await expect(log({ workspace: second, job: "2001" }, owner)).rejects.toMatchObject({
+      code: "not-found",
+    });
+  });
+
+  it("answers not-found for a workspace that is not on record", async () => {
+    const { reads } = await setup();
+    const strangers = [
+      { projectId: firstId, workspace: "5f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6" },
+      { projectId: "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6", workspace: "main" },
+    ];
+    for (const workspace of strangers) {
+      await expect(
+        reads.handlers["pullRequest.read"]({ workspace, detail: false }, owner),
+      ).rejects.toMatchObject({ code: "not-found" });
+      await expect(
+        reads.handlers["pullRequest.log"]({ workspace, job: "1" }, owner),
+      ).rejects.toMatchObject({ code: "not-found" });
+    }
+  });
+});

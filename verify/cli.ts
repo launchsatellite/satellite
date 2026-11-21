@@ -292,6 +292,8 @@ function parseStep(raw: string): Step {
       const end = boundedInt(last, name, start, 1_000_000);
       return step(({ session }) => session.selectFileLines(start, end));
     }
+    case "mark":
+      return step(({ session }) => session.mark(needsValue()));
     case "log":
       return step(({ session }) => session.standInEvents());
     case "notices":

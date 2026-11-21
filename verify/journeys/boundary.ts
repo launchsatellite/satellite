@@ -536,6 +536,90 @@ async function checkFilesFlood(page: Page, workspace: unknown): Promise<void> {
   assert.equal(after.kind, "text", "files.read no longer answered after a flood");
 }
 
+async function checkPullRequestRequests(session: AppSession, projectId: string): Promise<void> {
+  const { page } = session;
+  const workspace = { projectId, workspace: "main" };
+  for (const payload of [
+    { workspace, detail: "true" },
+    { workspace },
+    { workspace, detail: false, host: "github.com" },
+    { workspace, detail: false, url: "https://github.com/o/r/pull/1" },
+    { workspace: { projectId, workspace: "../main" }, detail: false },
+  ]) {
+    await refusedWith(page, "pullRequest.read", payload, "invalid-request");
+  }
+  for (const job of ["12a", "1".repeat(21), "-R", "", 12]) {
+    await refusedWith(page, "pullRequest.log", { workspace, job }, "invalid-request");
+  }
+  await refusedWith(
+    page,
+    "pullRequest.log",
+    { workspace, job: "1", repo: "o/r" },
+    "invalid-request",
+  );
+  const elsewhere = { projectId: randomUUID(), workspace: "main" };
+  await refusedWith(page, "pullRequest.read", { workspace: elsewhere, detail: false }, "not-found");
+  await refusedWith(page, "pullRequest.log", { workspace: elsewhere, job: "1" }, "not-found");
+  await refusedWith(page, "pullRequest.log", { workspace, job: "1" }, "not-found");
+  const read = await okValue(
+    page,
+    "pullRequest.read",
+    { workspace, detail: true },
+    z.object({ kind: z.string() }),
+  );
+  assert.equal(
+    read.kind,
+    "absent",
+    `pullRequest.read of an unpushed workspace answered ${read.kind}`,
+  );
+  const codes = await page.evaluate(
+    async ({ target, requests }) => {
+      const api: unknown = Reflect.get(window, "satellite");
+      const invoke: unknown =
+        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+      if (typeof invoke !== "function") return ["window.satellite.invoke is missing"];
+      return Promise.all(
+        Array.from({ length: requests }, async () => {
+          const answer: unknown = await Reflect.apply(invoke, api, [
+            "pullRequest.read",
+            { workspace: target, detail: true },
+          ]);
+          const error: unknown =
+            typeof answer === "object" && answer !== null
+              ? Reflect.get(answer, "error")
+              : undefined;
+          const code: unknown =
+            typeof error === "object" && error !== null ? Reflect.get(error, "code") : "ok";
+          return typeof code === "string" ? code : "unreadable";
+        }),
+      );
+    },
+    { target: workspace, requests: 300 },
+  );
+  const unexpected = codes.filter((code) => !["ok", "limit"].includes(code));
+  assert.deepEqual(
+    unexpected,
+    [],
+    `a flood of pull request reads answered ${unexpected.join(", ")}`,
+  );
+  const runs = (await session.standInEvents()).flatMap((event) =>
+    event.type === "start" &&
+    event.tool === "gh" &&
+    ["pr", "api", "run"].includes(event.args[0] ?? "")
+      ? [event]
+      : [],
+  );
+  assert.deepEqual(
+    runs.filter((event) => event.call === null || event.call === undefined),
+    [],
+    "gh was started with arguments no pull request call builds",
+  );
+  assert.ok(
+    runs.length <= 2,
+    `a flood of pull request reads started gh ${String(runs.length)} times`,
+  );
+}
+
 async function checkFilesRequests(session: AppSession, projectId: string): Promise<void> {
   const { page, repo } = session;
   const link = join(repo, "link-out");
@@ -833,6 +917,7 @@ async function run(session: AppSession): Promise<void> {
   const projectId = await checkWorkspaceRequests(session);
   await checkChangesRequests(page, projectId, session.repo);
   await checkFilesRequests(session, projectId);
+  await checkPullRequestRequests(session, projectId);
   await checkFingerprint(session, projectId);
   await resumableRefused(page, projectId);
   await startsRefused(session, projectId);
