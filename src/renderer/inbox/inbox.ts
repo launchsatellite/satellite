@@ -1,4 +1,5 @@
 import type { SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import { needsYou } from "../../shared/needs-you.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
 
 interface SessionReason {
@@ -35,8 +36,8 @@ export function needsSince(
   status: SessionStatus,
   next: () => number,
 ): number | null {
-  if (status !== "needs-you") return null;
-  if (previous.status === "needs-you" && previous.needsSince !== null) return previous.needsSince;
+  if (!needsYou(status)) return null;
+  if (needsYou(previous.status) && previous.needsSince !== null) return previous.needsSince;
   return next();
 }
 
@@ -47,7 +48,7 @@ export function inboxReasons(tabs: readonly SessionTab[]): InboxReason[] {
     open.set(place, (open.get(place) ?? 0) + 1);
   }
   return tabs.flatMap((tab): InboxReason[] =>
-    tab.status === "needs-you" && tab.needsSince !== null
+    needsYou(tab.status) && tab.needsSince !== null
       ? [
           {
             kind: "session",

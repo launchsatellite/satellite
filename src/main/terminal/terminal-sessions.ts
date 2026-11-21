@@ -6,6 +6,7 @@ import {
   type SessionStatus,
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
+import { needsYou } from "../../shared/needs-you.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import type { Needing } from "../inbox/notices.ts";
 import { isInsidePath } from "../platform/paths.ts";
@@ -147,7 +148,7 @@ export function createTerminalSessions({
   const tellNeeding = () => {
     onNeeding(
       [...sessions.values()].flatMap(({ ended, state, workspace, owner }) =>
-        !ended && state.status === "needs-you" ? [{ workspace, owner }] : [],
+        !ended && needsYou(state.status) ? [{ workspace, owner }] : [],
       ),
     );
   };
