@@ -1,0 +1,263 @@
+import type { ReactNode } from "react";
+import type { PullRequestFound, PullRequestThread } from "../../shared/bridge-contract.ts";
+import { visibleText } from "../../shared/visible-text.ts";
+import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
+import { Button } from "../ui/button.tsx";
+import { VisibleName } from "../ui/visible-name.tsx";
+import { MarkdownText } from "./markdown-text.tsx";
+import { threadRequest } from "./pull-request-requests.ts";
+import {
+  bodyCutSentence,
+  conversationTroubleSentence,
+  hiddenCommentSentence,
+  loadingSentence,
+  moreSentence,
+  noConversationSentence,
+  openLabel,
+  reviewWord,
+  sendLabel,
+  someone,
+  threadBadges,
+} from "./pull-request-words.ts";
+import { conversationItems, type ConversationItem } from "./thread-order.ts";
+
+type Spoken = PullRequestThread["comments"][number];
+
+function Author({ name, at }: { name: string | null; at: string | null }) {
+  return (
+    <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[12px]">
+      <span dir="ltr" className="min-w-0 truncate font-medium text-fg [unicode-bidi:isolate]">
+        {name === null || name === "" ? someone : visibleText(name)}
+      </span>
+      {at !== null && <time className="text-dim">{at.slice(0, 10)}</time>}
+    </span>
+  );
+}
+
+function Said({ spoken, onLink }: { spoken: Spoken; onLink: (address: string) => void }) {
+  if (spoken.hidden) return <p className="text-[12px] text-dim">{hiddenCommentSentence}</p>;
+  return (
+    <>
+      {spoken.body.trim() !== "" && (
+        <div className="min-w-0 text-[13px] leading-[20px] break-words text-fg2 [&>:first-child]:mt-0">
+          <MarkdownText text={spoken.body} onLink={onLink} />
+        </div>
+      )}
+      {spoken.bodyCut && <p className="text-[12px] text-dim">{bodyCutSentence}</p>}
+    </>
+  );
+}
+
+function OpenButton({
+  testId,
+  found,
+  address,
+  onLink,
+}: {
+  testId: string;
+  found: PullRequestFound;
+  address: string | null;
+  onLink: (address: string) => void;
+}) {
+  if (address === null) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="small"
+      testId={testId}
+      onClick={() => {
+        onLink(address);
+      }}
+    >
+      {openLabel(found.host, address, "Open link")}
+    </Button>
+  );
+}
+
+function ThreadBody({
+  thread,
+  onLink,
+}: {
+  thread: PullRequestThread;
+  onLink: (address: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {thread.comments.map((spoken, at) => (
+        <div key={at} className="flex flex-col gap-1">
+          <Author name={spoken.author} at={spoken.at} />
+          <Said spoken={spoken} onLink={onLink} />
+        </div>
+      ))}
+      {thread.moreComments > 0 && (
+        <p className="text-[12px] text-dim">{moreSentence(thread.moreComments)}</p>
+      )}
+    </div>
+  );
+}
+
+function Frame({
+  id,
+  kind,
+  resolved,
+  children,
+}: {
+  id: string;
+  kind: ConversationItem["kind"];
+  resolved?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <li
+      data-testid={id}
+      data-kind={kind}
+      data-resolved={resolved}
+      className="flex flex-col gap-2 border-b border-line px-4 py-3 last:border-b-0"
+    >
+      {children}
+    </li>
+  );
+}
+
+function ThreadHead({ thread }: { thread: PullRequestThread }) {
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-[9px] gap-y-1 text-[12px]">
+      {thread.path !== null && (
+        <span dir="ltr" className="min-w-0 truncate font-mono text-fg [unicode-bidi:isolate]">
+          <VisibleName text={thread.path} />
+          {thread.line !== null && `:${String(thread.line)}`}
+        </span>
+      )}
+      {threadBadges(thread).map((badge) => (
+        <span key={badge} className="font-pixel text-[11px] text-fg2 uppercase">
+          {badge}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function Item({
+  index,
+  item,
+  found,
+  onLink,
+}: {
+  index: number;
+  item: ConversationItem;
+  found: PullRequestFound;
+  onLink: (address: string) => void;
+}) {
+  const id = `pull-request-item-${String(index)}`;
+  if (item.kind === "thread") {
+    const { thread } = item;
+    const actions = (
+      <span className="ml-auto flex items-center gap-[6px]">
+        {!thread.resolved && (
+          <Button
+            variant="secondary"
+            size="small"
+            testId={`${id}-send`}
+            onClick={() => {
+              sendToClaudeCode(threadRequest(found.number, thread.url));
+            }}
+          >
+            {sendLabel}
+          </Button>
+        )}
+        <OpenButton testId={`${id}-open`} found={found} address={thread.url} onLink={onLink} />
+      </span>
+    );
+    if (thread.resolved) {
+      return (
+        <Frame id={id} kind="thread" resolved>
+          <details className="group flex flex-col gap-2">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+              <ThreadHead thread={thread} />
+              <span className="text-[12px] text-dim group-open:hidden">Show thread</span>
+              <span className="hidden text-[12px] text-dim group-open:inline">Hide thread</span>
+              {actions}
+            </summary>
+            <div className="pt-2">
+              <ThreadBody thread={thread} onLink={onLink} />
+            </div>
+          </details>
+        </Frame>
+      );
+    }
+    return (
+      <Frame id={id} kind="thread" resolved={false}>
+        <div className="flex flex-wrap items-center gap-2">
+          <ThreadHead thread={thread} />
+          {actions}
+        </div>
+        <ThreadBody thread={thread} onLink={onLink} />
+      </Frame>
+    );
+  }
+  const spoken = item.kind === "review" ? item.review : item.comment;
+  return (
+    <Frame id={id} kind={item.kind}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Author name={spoken.author} at={spoken.at} />
+        {item.kind === "review" && (
+          <span className="font-pixel text-[11px] text-fg2 uppercase">
+            {reviewWord(item.review.state)}
+          </span>
+        )}
+        <span className="ml-auto flex items-center">
+          <OpenButton testId={`${id}-open`} found={found} address={spoken.url} onLink={onLink} />
+        </span>
+      </div>
+      <Said spoken={spoken} onLink={onLink} />
+    </Frame>
+  );
+}
+
+export function ConversationList({
+  found,
+  onLink,
+}: {
+  found: PullRequestFound;
+  onLink: (address: string) => void;
+}) {
+  const { detail } = found;
+  if (detail === null) {
+    return (
+      <p
+        data-testid="pull-request-conversation"
+        role="status"
+        className="px-4 py-3 text-[13px] text-dim"
+      >
+        {loadingSentence}
+      </p>
+    );
+  }
+  if (detail.kind === "unavailable") {
+    return (
+      <p
+        data-testid="pull-request-conversation"
+        role="status"
+        className="px-4 py-3 text-[13px] text-fg2"
+      >
+        {conversationTroubleSentence}
+      </p>
+    );
+  }
+  const items = conversationItems(detail);
+  const more = detail.moreThreads + detail.moreReviews + detail.moreComments;
+  return (
+    <div data-testid="pull-request-conversation" className="flex flex-col">
+      {items.length === 0 ? (
+        <p className="px-4 py-3 text-[13px] text-dim">{noConversationSentence}</p>
+      ) : (
+        <ul className="flex flex-col">
+          {items.map((item, index) => (
+            <Item key={index} index={index} item={item} found={found} onLink={onLink} />
+          ))}
+        </ul>
+      )}
+      {more > 0 && <p className="px-4 py-2 text-[12px] text-dim">{moreSentence(more)}</p>}
+    </div>
+  );
+}

@@ -18,7 +18,7 @@ import {
   untitled,
 } from "./pull-request-words.ts";
 
-export type PullRequestSection = "overview" | "checks";
+export type PullRequestSection = "overview" | "checks" | "conversation";
 
 interface PullRequestViewProps {
   entry: PullRequestEntry | undefined;
@@ -33,6 +33,7 @@ interface PullRequestViewProps {
 const sections: readonly { value: PullRequestSection; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "checks", label: "Checks" },
+  { value: "conversation", label: "Conversation" },
 ];
 const sectionPanelId = "pull-request-section-panel";
 

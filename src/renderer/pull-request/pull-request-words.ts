@@ -1,13 +1,16 @@
 import type {
   PullRequestAnswer,
   PullRequestCheck,
+  PullRequestDetail,
   PullRequestFound,
+  PullRequestThread,
   PullRequestTrouble,
 } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 
 type CheckResult = PullRequestCheck["result"];
+type Review = Extract<PullRequestDetail, { kind: "read" }>["reviews"][number];
 type Counts = PullRequestFound["counts"];
 type Absence = Extract<PullRequestAnswer, { kind: "absent" }>["reason"];
 
@@ -62,6 +65,13 @@ const resultPixels: Record<CheckResult, PixelState> = {
   skipped: "idle",
   cancelled: "idle",
   unknown: "idle",
+};
+const reviewWords: Record<Review["state"], string> = {
+  approved: "Approved",
+  "changes-requested": "Changes requested",
+  commented: "Commented",
+  dismissed: "Dismissed",
+  pending: "Pending",
 };
 const states: Record<PullRequestFound["state"], string> = {
   open: "Open",
@@ -170,4 +180,12 @@ export function moreSentence(count: number): string {
 
 export function openLabel(host: string, address: string, otherLabel: string): string {
   return URL.parse(address)?.host === host ? "Open on GitHub" : otherLabel;
+}
+
+export function reviewWord(state: Review["state"]): string {
+  return reviewWords[state];
+}
+
+export function threadBadges(thread: PullRequestThread): string[] {
+  return [thread.resolved ? "Resolved" : "Unresolved", ...(thread.outdated ? ["Outdated"] : [])];
 }

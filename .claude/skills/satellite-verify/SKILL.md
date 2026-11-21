@@ -168,4 +168,5 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 007 Files, listing, reading and finding refused outside the workspace folder, through a link and for a made-up workspace | `default` | `boundary` |
 | 008 Pull request, an open pull request with its overview, blocks, commits and a Markdown description, the tab label and the readouts in the row and the header | `pr-open` | |
 | 008 Pull request, Checks with failed, running and skipped rows, failing lines read once when a failed check is opened, a failed check with no job and its sentence, and Send to Claude Code holding only the run and job | `checks-failed` | |
+| 008 Pull request, Conversation with unresolved threads above reviews and comments and resolved threads last, a resolved thread as a closed disclosure, and Send to Claude Code holding only the thread address | `changes-requested` | |
 | 008 Pull request, the signed out sentence, and the sentence with its prepared request for a branch with no pull request | `not-signed-in`, `mixed-changes` | |

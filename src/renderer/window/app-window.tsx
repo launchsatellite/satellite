@@ -29,6 +29,7 @@ import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { ChecksList } from "../pull-request/checks-list.tsx";
+import { ConversationList } from "../pull-request/conversation-list.tsx";
 import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
 import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
 import { linkSentence } from "../pull-request/pull-request-words.ts";
@@ -851,6 +852,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                       onLink={askPullRequestLink}
                     />
                   </div>
+                  {pullRequestSection === "conversation" && (
+                    <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
+                  )}
                 </>
               )}
             </PullRequestView>
