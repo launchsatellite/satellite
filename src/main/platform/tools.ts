@@ -8,7 +8,7 @@ import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
-export type GitSwitch = "no-lazy-fetch";
+export type GitVariable = (typeof gitVariables)[number];
 export interface ResolvedCommand {
   readonly file: string;
   readonly args: readonly string[];
@@ -74,9 +74,7 @@ const gitQuiet = {
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
 };
-const gitSwitchVariables: Readonly<Record<GitSwitch, Readonly<Record<string, string>>>> = {
-  "no-lazy-fetch": { GIT_NO_LAZY_FETCH: "1" },
-};
+const gitVariables = ["GIT_NO_LAZY_FETCH"] as const;
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
@@ -227,15 +225,16 @@ export async function runTool(
   options: {
     timeoutMs?: number;
     signal?: AbortSignal;
-    switches?: readonly GitSwitch[];
+    gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
     bytes?: boolean;
   } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
   const env = toolEnvironment(tool, await childEnvironment());
-  if (tool === "git") {
-    for (const name of options.switches ?? []) Object.assign(env, gitSwitchVariables[name]);
+  for (const name of tool === "git" ? gitVariables : []) {
+    const value = options.gitVariables?.[name];
+    if (value !== undefined) env[name] = value;
   }
   return new Promise((resolve, reject) => {
     const child = spawn(command.file, [...command.args, ...args], {

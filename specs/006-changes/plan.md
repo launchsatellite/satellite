@@ -509,12 +509,12 @@ The background process checks a moved base in memory, and the banner offers the 
 
 **Interfaces:**
 - Produces:
-  - `runTool(tool, args, { timeoutMs, signal, env })`, where `env?: Readonly<Record<string, string>>` is spread over `toolEnvironment(...)`, and `runGit(folder, args, timeoutMs, signal?, env?)` passing it on. Only the conflict check passes one.
+  - `GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES` join the closed `gitVariables` list in `tools.ts`, which `runTool`'s `gitVariables` option and `runGit`'s last argument `{ gitVariables }` already pass on, copying only names on that list. Only the conflict check passes these two.
   - In `conflict-check.ts`, `conflictReadMs`, and `conflictCount(home: string, folder: string, head: string, base: string, signal?: AbortSignal): Promise<number | null>`.
     1. `null` once this run has seen an unsupported git. Every call first awaits one sweep promise, made at the first call of the run, that removes `<home>/quarantine` with `rm(..., { recursive: true, force: true })`, so a sweep never races a running check.
     2. `rev-parse --path-format=absolute --git-path objects` and `rev-parse --show-object-format`, `null` unless the first is a fully qualified path holding no `path.delimiter`, newline or leading `"`, and the second is `sha1` or `sha256`, which picks the empty tree from Rulings checked.
     3. `mkdir(<home>/quarantine, { mode: 0o700 })` tolerating `EEXIST`, then `mkdir(<home>/quarantine/<randomUUID()>, { mode: 0o700 })`.
-    4. `runGit(folder, ["--attr-source=<empty tree>", "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", head, base], conflictReadMs, signal, { GIT_OBJECT_DIRECTORY: <quarantine>, GIT_ALTERNATE_OBJECT_DIRECTORIES: <objects> })`.
+    4. `runGit(folder, ["--attr-source=<empty tree>", "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", head, base], conflictReadMs, signal, { gitVariables: { GIT_OBJECT_DIRECTORY: <quarantine>, GIT_ALTERNATE_OBJECT_DIRECTORIES: <objects> } })`.
     5. In a `finally`, `rm(<quarantine>, { recursive: true, force: true })`, only for the path step 3 built.
     6. Exit 129 marks git unsupported for the run and answers `null`. Exit 0 answers `0`. Exit 1 answers the count of distinct non-empty fields after the first, capped at 1000000. Anything else `null`.
   - In `changes.list`, after the list, when `base` and `fork` are set and `fork !== base.oid`, `conflict` is `{ files: n }` for `conflictCount(home, folder, head, base.oid, signal)` above 0, else `null`.
@@ -595,7 +595,7 @@ One key sends a reference to the selected lines, and the driver can select lines
   - Repositories and Projects' Reads paragraph. Every new git command, `diff --raw --numstat -z` with its flags, `ls-files --others --exclude-standard -z`, `cat-file -s` and `cat-file blob`, `rev-parse`, `branch --show-current`, `symbolic-ref`, `merge-base` and `merge-tree --write-tree` under `--attr-source`, with what each can start, the diff's clean and process filter only, and that the only write is the quarantine folder in the Satellite home.
   - A new section `## Changes` after Inbox and notifications, in a few bullets, the base rule, the two views, the parse and the limits, the confinement, the per-page reads and cache, the conflict check with its quarantine and its git 2.41 floor, and the refresh.
   - Diff. Rewrite the bullets, the languages, the two features, inline as the user's choice replacing Always side by side, hidden regions, hidden characters, the selection, the theme rules, and the lazy chunk.
-  - Platform. `runTool`'s `env` option, used only for the quarantine.
+  - Platform. `runTool`'s `gitVariables` option and its closed list, used for the quarantine and to keep the blob reader from fetching.
   - Folder layout. `src/main/changes/`, `src/renderer/changes/`, `src/renderer/window/centre-tabs.tsx`, `src/shared/visible-text.ts`, `src/renderer/ui/segmented.tsx`, `src/renderer/diff/diff-language.ts`, and the `src/renderer/proving/` row removed.
   - Decisions. Rows for polling over watching, the base from git's local refs over a stored base, the quarantine and empty attribute source over writing objects or running merge drivers, and plain-word references over `@` mentions.
 - [ ] **Step 2: SATELLITE.md.** A short `## Changes` section after Inbox, in sentences, the default tab, the two views, the header, the refresh, the banner and its request, sending lines, and the sentence for large and binary files, plus that the conflict banner needs git 2.41.

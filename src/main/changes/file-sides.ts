@@ -36,6 +36,7 @@ const large: SideRead = { kind: "large" };
 const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
 const notLocal: SideRead = { kind: "not-local" };
+const unreadable: SideRead = { kind: "unreadable" };
 const lineFeed = 10;
 const carriageReturn = 13;
 const rootsWithStuckReads = new Set<string>();
@@ -44,7 +45,6 @@ const objectFormatLengths = new Map([
   ["sha1\n", 40],
   ["sha256\n", 64],
 ]);
-const unreadable: SideRead = { kind: "unreadable" };
 const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
 const falseValues = new Set(["", "false", "no", "off", "0"]);
 
@@ -141,7 +141,7 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
 
 async function gitOutput(folder: string, args: string[], signal?: AbortSignal, bytes = false) {
   const run = await runGit(folder, args, gitReadMs, signal, {
-    switches: ["no-lazy-fetch"],
+    gitVariables: { GIT_NO_LAZY_FETCH: "1" },
     bytes,
   });
   return run?.exitCode === 0 ? run.stdout : undefined;

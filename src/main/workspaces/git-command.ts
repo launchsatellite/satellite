@@ -1,6 +1,6 @@
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified } from "../platform/paths.ts";
-import { AbandonedRun, runTool, type GitSwitch, type ToolRun } from "../platform/tools.ts";
+import { AbandonedRun, runTool, type GitVariable, type ToolRun } from "../platform/tools.ts";
 import { gitReadTimeoutMs } from "../projects/repository-check.ts";
 
 export const gitReadMs = gitReadTimeoutMs;
@@ -39,7 +39,7 @@ export async function runGit(
   args: readonly string[],
   timeoutMs: number,
   signal?: AbortSignal,
-  extra: { switches?: readonly GitSwitch[]; bytes?: boolean } = {},
+  extra: { gitVariables?: Readonly<Partial<Record<GitVariable, string>>>; bytes?: boolean } = {},
 ): Promise<ToolRun | undefined> {
   if (foldersWithStuckGit.has(folder)) return undefined;
   let run: ToolRun | undefined;
