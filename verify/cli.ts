@@ -146,7 +146,8 @@ function parseStep(raw: string): Step {
     case "box": {
       const testId = needsValue();
       return step(async ({ session }) => {
-        const box = await session.page.getByTestId(testId).boundingBox();
+        const element = session.page.getByTestId(testId);
+        const box = (await element.isVisible()) ? await element.boundingBox() : null;
         if (box === null) throw new Error(`${testId} is not on screen`);
         return {
           x: Math.round(box.x),
