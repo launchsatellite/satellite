@@ -47,3 +47,4 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 | 007 | [Files](007-files/spec.md) | Done |
 | 008 | [Pull request](008-pull-request/spec.md) | Done |
 | 009 | [Running processes](009-running-processes/spec.md) | Done |
+| 010 | [First-run guide](010-first-run-guide/spec.md) | Approved |
