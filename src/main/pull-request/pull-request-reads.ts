@@ -339,6 +339,7 @@ export function createPullRequests({
         if (again === null) return nothing(unavailable("failed"));
         if ("failure" in again) return nothing(unavailable(again.failure));
         if (
+          again.place.host !== parsed.place.host ||
           !sameRepository(again.place, parsed.place) ||
           !belongsTo(again.found, again.place, viewed.branch, viewed.facts)
         ) {

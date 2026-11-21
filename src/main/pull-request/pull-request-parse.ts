@@ -12,7 +12,7 @@ import { checkedAddress } from "./checked-address.ts";
 import { checksOf, countsOf } from "./check-result.ts";
 import { cutText } from "./cut-text.ts";
 import { placeOf, type PullRequestPlace } from "./gh-arguments.ts";
-import { hasWriteAccess, needsOf, type ReviewFact } from "./pull-request-needs.ts";
+import { isOwnerMemberOrCollaborator, needsOf, type ReviewFact } from "./pull-request-needs.ts";
 
 type Found = Omit<PullRequestFound, "detail">;
 type ReadDetail = Extract<PullRequestDetail, { kind: "read" }>;
@@ -368,7 +368,7 @@ function candidatesOf(list: readonly unknown[] | null | undefined): Candidate[] 
           {
             number: node.number,
             open: node.state === "OPEN",
-            writer: hasWriteAccess(node.authorAssociation),
+            writer: isOwnerMemberOrCollaborator(node.authorAssociation),
             here: node.isCrossRepository === false,
           },
         ]

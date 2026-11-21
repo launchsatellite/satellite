@@ -20,7 +20,7 @@ export interface NeedsView {
 const deciding = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
 const writers = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-export function hasWriteAccess(association: string | null | undefined): boolean {
+export function isOwnerMemberOrCollaborator(association: string | null | undefined): boolean {
   return association !== null && association !== undefined && writers.has(association);
 }
 
@@ -28,7 +28,7 @@ function asksForChangesOnHead(reviews: readonly ReviewFact[], headOid: string | 
   if (headOid === null) return false;
   const newest = new Map<string, ReviewFact>();
   for (const review of reviews) {
-    if (!deciding.has(review.state) || !hasWriteAccess(review.association)) continue;
+    if (!deciding.has(review.state) || !isOwnerMemberOrCollaborator(review.association)) continue;
     const login = review.login ?? "";
     const earlier = newest.get(login);
     if (earlier === undefined || (review.at ?? "") >= (earlier.at ?? "")) newest.set(login, review);

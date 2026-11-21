@@ -60,7 +60,7 @@ const troubles: Record<PullRequestTrouble, string> = {
 const absences: Record<Absence, string> = {
   none: "No pull request for this branch yet.",
   "not-pushed": "This branch is not on GitHub yet. Push it and its pull request shows up here.",
-  target: "Pull requests land on this branch. They live on other branches.",
+  target: "Pull requests land on this branch, so it has none of its own.",
 };
 const results: Record<CheckResult, string> = {
   failed: "Failed",
