@@ -128,6 +128,7 @@
             "state": "APPROVED",
             "commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
             "login": "grace-example",
+            "association": "COLLABORATOR",
             "at": "2025-01-02T09:00:00Z"
           }
         ],
@@ -205,6 +206,15 @@
       "json": {
         "data": {
           "repository": {
+            "pullRequests": {
+              "nodes": [
+                {
+                  "number": 12,
+                  "state": "OPEN",
+                  "authorAssociation": "OWNER"
+                }
+              ]
+            },
             "pullRequest": {
               "reviews": {
                 "totalCount": 1,

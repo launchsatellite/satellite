@@ -274,6 +274,15 @@
       "json": {
         "data": {
           "repository": {
+            "pullRequests": {
+              "nodes": [
+                {
+                  "number": 12,
+                  "state": "OPEN",
+                  "authorAssociation": "OWNER"
+                }
+              ]
+            },
             "pullRequest": {
               "reviews": {
                 "totalCount": 1,

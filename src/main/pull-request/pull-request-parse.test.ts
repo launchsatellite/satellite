@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pullRequestAnswer, pullRequestLimits } from "../../shared/bridge-contract.ts";
 import type { PullRequestPlace } from "./gh-arguments.ts";
-import { failedLines, parseThreads, parseView } from "./pull-request-parse.ts";
+import { failedLines, parseConversation, parseView } from "./pull-request-parse.ts";
 
 const head = "a".repeat(40);
 const address = "https://github.com/example-org/verify-repo/pull/12";
@@ -12,6 +12,10 @@ const place: PullRequestPlace = {
   number: 12,
 };
 const job = "https://github.com/example-org/verify-repo/actions/runs/1001/job/2001";
+
+function parseThreads(text: string, at: PullRequestPlace) {
+  return parseConversation(text, at, true)?.detail ?? null;
+}
 
 function view(changes: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -30,7 +34,13 @@ function view(changes: Record<string, unknown> = {}): Record<string, unknown> {
     reviewDecision: "REVIEW_REQUIRED",
     changedFiles: 3,
     reviews: [
-      { state: "APPROVED", commit: head, login: "grace-example", at: "2026-01-02T00:00:00Z" },
+      {
+        state: "APPROVED",
+        commit: head,
+        login: "grace-example",
+        association: "MEMBER",
+        at: "2026-01-02T00:00:00Z",
+      },
     ],
     checks: [
       { name: "build", workflow: "ci", status: "COMPLETED", conclusion: "SUCCESS", url: job },
@@ -244,6 +254,7 @@ describe("parseView", () => {
             state: "CHANGES_REQUESTED",
             commit: head,
             login: "ada-example",
+            association: "OWNER",
             at: "2026-01-01T00:00:00Z",
           },
         ],
@@ -251,6 +262,20 @@ describe("parseView", () => {
       }),
     )?.found;
     expect(found?.needs).toEqual(["checks", "review", "conflicts"]);
+    const stranger = read(
+      view({
+        reviews: [
+          {
+            state: "CHANGES_REQUESTED",
+            commit: head,
+            login: "passer-by",
+            association: "NONE",
+            at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    )?.found;
+    expect(stranger?.needs).toEqual([]);
     expect(read(view({ state: "MERGED", mergeable: "CONFLICTING" }))?.found.needs).toEqual([]);
   });
 });
@@ -294,6 +319,44 @@ const full = () => ({
   },
   comments: { totalCount: 1, nodes: [comment()] },
   reviewThreads: { totalCount: 1, nodes: [thread()] },
+});
+
+describe("parseConversation", () => {
+  const candidates = (nodes: unknown[]) =>
+    JSON.stringify({ data: { repository: { pullRequests: { nodes } } } });
+
+  it("lists the pull requests of the head with who may have opened them", () => {
+    const answer = parseConversation(
+      candidates([
+        { number: 41, state: "OPEN", authorAssociation: "NONE" },
+        { number: 40, state: "OPEN", authorAssociation: "OWNER" },
+        { number: 39, state: "MERGED", authorAssociation: "COLLABORATOR" },
+        { number: 38, state: "CLOSED", authorAssociation: "CONTRIBUTOR" },
+        { number: 37, state: "OPEN", authorAssociation: "MEMBER" },
+        { number: 36, state: "OPEN" },
+        { state: "OPEN", authorAssociation: "OWNER" },
+      ]),
+      place,
+      false,
+    );
+    expect(answer?.detail).toBeNull();
+    expect(answer?.candidates).toEqual([
+      { number: 41, open: true, writer: false },
+      { number: 40, open: true, writer: true },
+      { number: 39, open: false, writer: true },
+      { number: 38, open: false, writer: false },
+      { number: 37, open: true, writer: true },
+      { number: 36, open: true, writer: false },
+    ]);
+  });
+
+  it("reads the detail only when it was asked for", () => {
+    const text = JSON.stringify({
+      data: { repository: { pullRequests: { nodes: [] }, pullRequest: full() } },
+    });
+    expect(parseConversation(text, place, false)?.detail).toBeNull();
+    expect(parseConversation(text, place, true)?.detail).toMatchObject({ kind: "read" });
+  });
 });
 
 describe("parseThreads", () => {

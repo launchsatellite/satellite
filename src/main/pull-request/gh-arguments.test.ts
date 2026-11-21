@@ -24,8 +24,20 @@ describe("the arguments", () => {
     expect(viewArguments()).toEqual(viewArguments());
   });
 
+  it("the view arguments name a pull request only by its number", () => {
+    expect(viewArguments(7)).toEqual([
+      "pr",
+      "view",
+      "7",
+      "--json",
+      viewFields,
+      "--jq",
+      viewProjection,
+    ]);
+  });
+
   it("the threads arguments carry only a checked host, owner, repository and number", () => {
-    expect(threadsArguments(place)).toEqual([
+    expect(threadsArguments(place, "alpha", true)).toEqual([
       "api",
       "graphql",
       "--hostname",
@@ -34,8 +46,12 @@ describe("the arguments", () => {
       "owner=example-org",
       "-f",
       "repo=verify-repo",
+      "-f",
+      "head=alpha",
       "-F",
       "number=12",
+      "-F",
+      "detail=true",
       "-f",
       `query=${threadsQuery}`,
     ]);

@@ -19,16 +19,20 @@ const place: PullRequestPlace = {
 describe("callOf", () => {
   it("names what the builders make and nothing else", () => {
     expect(callOf(viewArguments())).toBe("pull-request");
-    expect(callOf(threadsArguments(place))).toBe("threads");
+    expect(callOf(viewArguments(7))).toBe("pull-request");
+    expect(callOf(threadsArguments(place, "alpha", false))).toBe("threads");
     expect(callOf(logArguments(place, "2001"))).toBe("failed-log");
 
-    const threads = threadsArguments(place);
+    const threads = threadsArguments(place, "alpha", true);
     const log = logArguments(place, "2001");
     const withValue = (args: string[], index: number, value: string) =>
       args.map((arg, at) => (at === index ? value : arg));
     for (const args of [
       [],
       ["pr", "view"],
+      ["pr", "view", "0", ...viewArguments().slice(2)],
+      ["pr", "view", "07", ...viewArguments().slice(2)],
+      ["pr", "view", "-R", "evil/x", ...viewArguments().slice(2)],
       [...viewArguments(), "--web"],
       withValue(viewArguments(), 5, `${viewProjection} `),
       [...threads, "--paginate"],
@@ -36,10 +40,13 @@ describe("callOf", () => {
       withValue(threads, 3, "github.com:8443"),
       withValue(threads, 5, "owner=-bad"),
       withValue(threads, 7, "repo=.."),
-      withValue(threads, 9, "number=0"),
-      withValue(threads, 9, "number=1a"),
-      withValue(threads, 11, `query=${threadsQuery}x`),
-      withValue(threads, 11, `query=${threadsQuery.replace("isResolved", "isResolveD")}`),
+      withValue(threads, 9, "head=-oProxyCommand=x"),
+      withValue(threads, 9, "head=a b"),
+      withValue(threads, 11, "number=0"),
+      withValue(threads, 11, "number=1a"),
+      withValue(threads, 13, "detail=yes"),
+      withValue(threads, 15, `query=${threadsQuery}x`),
+      withValue(threads, 15, `query=${threadsQuery.replace("isResolved", "isResolveD")}`),
       withValue(threads, 2, "--hostnames"),
       [...log, "--extra"],
       withValue(log, 3, "20a1"),

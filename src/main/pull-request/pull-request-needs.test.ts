@@ -11,14 +11,44 @@ const base: NeedsView = {
   reviews: [],
   headOid: head,
 };
-const review = (state: string, at: string, commit = head, login = "ada-example"): ReviewFact => ({
+const review = (
+  state: string,
+  at: string,
+  commit = head,
+  login = "ada-example",
+  association = "COLLABORATOR",
+): ReviewFact => ({
   login,
   state,
   commit,
+  association,
   at,
 });
 
 describe("needsOf", () => {
+  it("a request for changes counts only from an owner, a member or a collaborator", () => {
+    for (const association of ["OWNER", "MEMBER", "COLLABORATOR"]) {
+      const reviews = [review("CHANGES_REQUESTED", "2026-01-01", head, "ada-example", association)];
+      expect(needsOf({ ...base, reviews }), association).toEqual(["review"]);
+    }
+    for (const association of [
+      "NONE",
+      "CONTRIBUTOR",
+      "FIRST_TIMER",
+      "FIRST_TIME_CONTRIBUTOR",
+      "",
+    ]) {
+      const reviews = [review("CHANGES_REQUESTED", "2026-01-01", head, "stranger", association)];
+      expect(needsOf({ ...base, reviews }), association).toEqual([]);
+    }
+  });
+
+  it("a stranger's later approval or request neither hides nor raises the need", () => {
+    const own = review("CHANGES_REQUESTED", "2026-01-01");
+    const approval = review("APPROVED", "2026-01-02", head, "ada-example", "NONE");
+    expect(needsOf({ ...base, reviews: [own, approval] })).toEqual(["review"]);
+  });
+
   it("a failed check needs you", () => {
     expect(needsOf({ ...base, counts: { ...none, failed: 1, total: 4 } })).toEqual(["checks"]);
   });

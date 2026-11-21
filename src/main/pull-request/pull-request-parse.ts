@@ -10,7 +10,7 @@ import { isChangePath } from "../changes/file-sides.ts";
 import { checksOf, countsOf } from "./check-result.ts";
 import { cutText } from "./cut-text.ts";
 import { placeOf, type PullRequestPlace } from "./gh-arguments.ts";
-import { needsOf, type ReviewFact } from "./pull-request-needs.ts";
+import { hasWriteAccess, needsOf, type ReviewFact } from "./pull-request-needs.ts";
 
 type Found = Omit<PullRequestFound, "detail">;
 type ReadDetail = Extract<PullRequestDetail, { kind: "read" }>;
@@ -46,6 +46,7 @@ const reviewFactShape = z.object({
   state: looseText,
   commit: looseText,
   login: looseText,
+  association: looseText,
   at: looseText,
 });
 const commitShape = z.object({ oid: looseText, headline: looseText });
@@ -71,11 +72,17 @@ const threadNode = z.object({
   diffSide: looseText,
   comments: looseNode(connection),
 });
+const candidateNode = z.object({
+  number: looseCount,
+  state: looseText,
+  authorAssociation: looseText,
+});
 const threadsShape = z.object({
   data: looseNode(
     z.object({
       repository: looseNode(
         z.object({
+          pullRequests: looseNode(z.object({ nodes: looseList })),
           pullRequest: looseNode(
             z.object({
               reviews: looseNode(connection),
@@ -258,6 +265,7 @@ function reviewFactsOf(list: readonly unknown[] | null | undefined): ReviewFact[
     login: review.login ?? null,
     state: review.state ?? "",
     commit: review.commit ?? null,
+    association: review.association ?? null,
     at: review.at ?? null,
   }));
 }
@@ -330,10 +338,37 @@ export function parseView(
   return { place, found, headOid };
 }
 
-export function parseThreads(stdout: string, place: PullRequestPlace): ReadDetail | null {
-  const parsed = threadsShape.safeParse(parseJson(stdout));
-  const pullRequest = parsed.success ? parsed.data.data?.repository?.pullRequest : undefined;
-  if (pullRequest === undefined || pullRequest === null) return null;
+export interface Candidate {
+  number: number;
+  open: boolean;
+  writer: boolean;
+}
+
+export interface Conversation {
+  candidates: Candidate[];
+  detail: ReadDetail | null;
+}
+
+function candidatesOf(list: readonly unknown[] | null | undefined): Candidate[] {
+  return each(list, candidateNode).flatMap((node) =>
+    node.number !== undefined && node.number !== null && Number.isInteger(node.number)
+      ? [
+          {
+            number: node.number,
+            open: node.state === "OPEN",
+            writer: hasWriteAccess(node.authorAssociation),
+          },
+        ]
+      : [],
+  );
+}
+
+function detailOf(
+  pullRequest: NonNullable<
+    NonNullable<NonNullable<z.output<typeof threadsShape>["data"]>["repository"]>["pullRequest"]
+  >,
+  place: PullRequestPlace,
+): ReadDetail {
   const budget = { left: pullRequestLimits.detailChars };
   const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
     0,
@@ -355,6 +390,24 @@ export function parseThreads(stdout: string, place: PullRequestPlace): ReadDetai
       restOf(pullRequest.comments?.totalCount, nodes.length) + nodes.length - comments.length,
     threads,
     moreThreads: restOf(pullRequest.reviewThreads?.totalCount, threadNodes.length),
+  };
+}
+
+export function parseConversation(
+  stdout: string,
+  place: PullRequestPlace,
+  detail: boolean,
+): Conversation | null {
+  const parsed = threadsShape.safeParse(parseJson(stdout));
+  const repository = parsed.success ? parsed.data.data?.repository : undefined;
+  if (repository === undefined || repository === null) return null;
+  const pullRequest = repository.pullRequest;
+  return {
+    candidates: candidatesOf(repository.pullRequests?.nodes),
+    detail:
+      detail && pullRequest !== undefined && pullRequest !== null
+        ? detailOf(pullRequest, place)
+        : null,
   };
 }
 

@@ -35,7 +35,8 @@ const { join } = require("node:path");
 const dir = process.argv[2];
 const args = process.argv.slice(3);
 appendFileSync(join(dir, "calls.jsonl"), JSON.stringify({ args, cwd: process.cwd() }) + "\\n");
-const name = { pr: "view", api: "threads", run: "log" }[args[0]];
+const numbered = args[0] === "pr" && /^[0-9]+$/.test(args[2]);
+const name = numbered ? "view-" + args[2] : { pr: "view", api: "threads", run: "log" }[args[0]];
 const file = join(dir, name + ".json");
 const answer = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { exitCode: 1, stderr: "boom" };
 process.stdout.write(answer.stdout ?? "");
@@ -47,10 +48,16 @@ interface Check {
   conclusion: string;
 }
 
-function viewJson(checks: Check[] = [], head = "main", crossRepository = false, base = "trunk") {
+function viewJson(
+  checks: Check[] = [],
+  head = "main",
+  crossRepository = false,
+  base = "trunk",
+  number = 12,
+) {
   return JSON.stringify({
-    number: 12,
-    url: "https://github.com/example-org/verify-repo/pull/12",
+    number,
+    url: `https://github.com/example-org/verify-repo/pull/${String(number)}`,
     title: "Add a thing",
     state: "OPEN",
     isDraft: false,
@@ -76,17 +83,22 @@ function viewJson(checks: Check[] = [], head = "main", crossRepository = false, 
   });
 }
 
-const threadsJson = JSON.stringify({
-  data: {
-    repository: {
-      pullRequest: {
-        reviews: { totalCount: 0, nodes: [] },
-        comments: { totalCount: 0, nodes: [] },
-        reviewThreads: { totalCount: 0, nodes: [] },
+const owned = [{ number: 12, state: "OPEN", authorAssociation: "OWNER" }];
+
+function threadsJson(nodes: object[] = owned) {
+  return JSON.stringify({
+    data: {
+      repository: {
+        pullRequests: { nodes },
+        pullRequest: {
+          reviews: { totalCount: 0, nodes: [] },
+          comments: { totalCount: 0, nodes: [] },
+          reviewThreads: { totalCount: 0, nodes: [] },
+        },
       },
     },
-  },
-});
+  });
+}
 
 function inRepo(repo: string, ...args: string[]) {
   const kept = Object.entries(process.env).filter(
@@ -146,6 +158,7 @@ async function setup(options: { push?: boolean } = {}) {
   await mkdir(dir);
   const file = join(dir, "gh.cjs");
   await writeFile(file, script);
+  await writeFile(join(dir, "threads.json"), JSON.stringify({ stdout: threadsJson() }));
   process.env["SATELLITE_GH"] = JSON.stringify([process.execPath, file, dir]);
   const repo = await repository(base, "one", options.push ?? true);
   const other = await repository(base, "two", true);
@@ -161,7 +174,7 @@ async function setup(options: { push?: boolean } = {}) {
     now: () => time,
     after: () => Promise.resolve(),
   });
-  const answer = (name: "view" | "threads" | "log", body: object) =>
+  const answer = (name: "view" | `view-${number}` | "threads" | "log", body: object) =>
     writeFile(join(dir, `${name}.json`), JSON.stringify(body));
   const calls = async () => {
     const text = await readFile(join(dir, "calls.jsonl"), "utf8").catch(() => "");
@@ -199,21 +212,24 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson() });
     const result = await read(first);
     expect(result).toMatchObject({ kind: "found", number: 12, detail: null });
-    expect(await calls()).toEqual([{ args: viewArguments(), cwd: repo }]);
+    expect(await calls()).toEqual([
+      { args: viewArguments(), cwd: repo },
+      { args: threadsArguments(place, "main", false), cwd: repo },
+    ]);
   });
 
   it("asks for threads only with detail and names the host of the pull request", async () => {
     const { answer, read, calls, advance } = await setup();
     await answer("view", { stdout: viewJson() });
-    await answer("threads", { stdout: threadsJson });
+    await answer("threads", { stdout: threadsJson() });
     await read(first);
-    expect(await calls()).toHaveLength(1);
+    expect((await calls()).map(({ args }) => args[0])).toEqual(["pr", "api"]);
     advance(10_000);
     const result = await read(first, true);
     expect(result).toMatchObject({ kind: "found", detail: { kind: "read" } });
     const made = await calls();
-    expect(made).toHaveLength(3);
-    expect(made[2]?.args).toEqual(threadsArguments(place));
+    expect(made).toHaveLength(4);
+    expect(made[3]?.args).toEqual(threadsArguments(place, "main", true));
   });
 
   it("shows no pull request whose head branch is not the workspace branch", async () => {
@@ -306,16 +322,16 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await calls()).toEqual([]);
   });
 
-  it("reuses an answer for ten seconds", async () => {
+  it("reuses an answer for ten seconds and asks who opened a pull request only once", async () => {
     const { answer, read, calls, advance } = await setup();
     await answer("view", { stdout: viewJson() });
     await read(first);
     advance(9_999);
     await read(first);
-    expect(await calls()).toHaveLength(1);
+    expect(await calls()).toHaveLength(2);
     advance(1);
     await read(first);
-    expect(await calls()).toHaveLength(2);
+    expect(await calls()).toHaveLength(3);
   });
 
   it("reuses a failed answer for a detail read within ten seconds", async () => {
@@ -338,7 +354,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson() });
     expect(await read(first, false, false)).toEqual({ kind: "absent", reason: "none" });
     expect(await read(first, false, true)).toMatchObject({ kind: "found", number: 12 });
-    expect(await calls()).toHaveLength(2);
+    expect(await calls()).toHaveLength(3);
   });
 
   it("never answers a fresh read from a held pull request", async () => {
@@ -349,7 +365,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
     expect(await read(first)).toMatchObject({ counts: { failed: 1 } });
     expect(await read(first, false, true)).toMatchObject({ counts: { failed: 0 } });
-    expect(await calls()).toHaveLength(2);
+    expect(await calls()).toHaveLength(3);
   });
 
   it("answers a fresh read from a held signed out answer again", async () => {
@@ -362,7 +378,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     advance(2_000);
     await answer("view", { stdout: viewJson() });
     expect(await read(first, false, true)).toMatchObject({ kind: "found" });
-    expect(await calls()).toHaveLength(2);
+    expect(await calls()).toHaveLength(3);
   });
 
   it("joins two reads of one workspace", async () => {
@@ -370,7 +386,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson() });
     const [one, two] = await Promise.all([read(first), read(first)]);
     expect(one).toEqual(two);
-    expect(await calls()).toHaveLength(1);
+    expect(await calls()).toHaveLength(2);
   });
 
   it("holds a failed workspace for a minute and doubles it, and detail skips the hold", async () => {
@@ -407,15 +423,84 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await calls()).toHaveLength(2);
   });
 
-  it("a failed threads run keeps the overview", async () => {
+  it("shows no pull request it could not check the author of", async () => {
     const { answer, read } = await setup();
     await answer("view", { stdout: viewJson() });
     await answer("threads", { exitCode: 1, stderr: "boom" });
-    expect(await read(first, true)).toMatchObject({
-      kind: "found",
-      number: 12,
-      detail: { kind: "unavailable", reason: "failed" },
+    expect(await read(first, true)).toEqual({ kind: "unavailable", reason: "failed" });
+    await answer("threads", { stdout: threadsJson([{ number: 12, state: "OPEN" }]) });
+    expect(await read(first, true, true)).toEqual({ kind: "absent", reason: "none" });
+  });
+
+  it("shows the newest pull request opened by someone with write access, never a stranger's", async () => {
+    const { answer, read, calls } = await setup();
+    await answer("view", { stdout: viewJson([], "main", false, "trunk", 41) });
+    await answer("view-12", { stdout: viewJson() });
+    await answer("threads", {
+      stdout: threadsJson([
+        { number: 41, state: "OPEN", authorAssociation: "NONE" },
+        { number: 40, state: "OPEN", authorAssociation: "CONTRIBUTOR" },
+        { number: 12, state: "OPEN", authorAssociation: "COLLABORATOR" },
+      ]),
     });
+    expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+    expect((await calls()).map(({ args }) => args.slice(0, 3))).toEqual([
+      ["pr", "view", "--json"],
+      ["api", "graphql", "--hostname"],
+      ["pr", "view", "12"],
+    ]);
+  });
+
+  it("prefers an open pull request of a writer to a merged one, and shows a merged one when none is open", async () => {
+    const { answer, read } = await setup();
+    await answer("view", { stdout: viewJson([], "main", false, "trunk", 41) });
+    await answer("view-12", { stdout: viewJson() });
+    await answer("view-11", { stdout: viewJson([], "main", false, "trunk", 11) });
+    await answer("threads", {
+      stdout: threadsJson([
+        { number: 41, state: "OPEN", authorAssociation: "NONE" },
+        { number: 40, state: "MERGED", authorAssociation: "OWNER" },
+        { number: 12, state: "OPEN", authorAssociation: "MEMBER" },
+      ]),
+    });
+    expect(await read(first)).toMatchObject({ number: 12 });
+    await answer("threads", {
+      stdout: threadsJson([
+        { number: 41, state: "OPEN", authorAssociation: "NONE" },
+        { number: 11, state: "CLOSED", authorAssociation: "OWNER" },
+      ]),
+    });
+    expect(await read(first, false, true)).toMatchObject({ number: 11 });
+  });
+
+  it("shows no pull request when only strangers opened one for the branch", async () => {
+    const { answer, read, needing } = await setup();
+    await answer("view", {
+      stdout: viewJson([{ conclusion: "FAILURE" }], "main", false, "trunk", 41),
+    });
+    await answer("threads", {
+      stdout: threadsJson([{ number: 41, state: "OPEN", authorAssociation: "NONE" }]),
+    });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+    expect(needing).not.toHaveBeenCalled();
+  });
+
+  it("reads the conversation of the pull request it shows when a stranger's is newer", async () => {
+    const { answer, read, calls } = await setup();
+    await answer("view", { stdout: viewJson([], "main", false, "trunk", 41) });
+    await answer("view-12", { stdout: viewJson() });
+    await answer("threads", {
+      stdout: threadsJson([
+        { number: 41, state: "OPEN", authorAssociation: "NONE" },
+        { number: 12, state: "OPEN", authorAssociation: "OWNER" },
+      ]),
+    });
+    expect(await read(first, true)).toMatchObject({
+      number: 12,
+      detail: { kind: "read" },
+    });
+    const made = await calls();
+    expect(made.at(-1)?.args).toEqual(threadsArguments(place, "main", true));
   });
 
   it("tells needing when checks fail and again when they pass", async () => {

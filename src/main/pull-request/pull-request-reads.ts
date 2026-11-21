@@ -23,7 +23,12 @@ import {
 } from "./gh-arguments.ts";
 import { ghFailure } from "./gh-failure.ts";
 import { createPace } from "./gh-pace.ts";
-import { failedLines, parseThreads, parseView } from "./pull-request-parse.ts";
+import {
+  failedLines,
+  parseConversation,
+  parseView,
+  type Conversation,
+} from "./pull-request-parse.ts";
 import { branchFacts, isPushed, type BranchFacts } from "./pushed-branch.ts";
 
 export interface PullRequests {
@@ -48,6 +53,7 @@ interface Remembered {
   owner: BridgeOwner;
   kept: PullRequestFound | null;
   place: PullRequestPlace | null;
+  verified: string | null;
   jobs: ReadonlySet<string>;
   failures: number;
   holdUntil: number;
@@ -79,6 +85,10 @@ const sentences = { gone, archiving };
 
 function isSettled(answer: PullRequestAnswer): boolean {
   return answer.kind === "unavailable" && settledTroubles.has(answer.reason);
+}
+
+function addressKey({ host, owner, repo, number }: PullRequestPlace): string {
+  return `${host}/${owner}/${repo}#${String(number)}`;
 }
 
 function keyOf({ projectId, workspace }: WorkspaceRef): string {
@@ -171,6 +181,7 @@ export function createPullRequests({
     base: Pick<Remembered, "folder" | "workspace" | "owner">,
     answer: PullRequestAnswer,
     place: PullRequestPlace | null,
+    verified: string | null,
   ) => {
     const before = memory.get(key);
     const failed = answer.kind === "unavailable";
@@ -184,6 +195,7 @@ export function createPullRequests({
       at: now(),
       kept,
       place: answer.kind === "found" ? place : keeps ? (before?.place ?? null) : null,
+      verified: answer.kind === "found" ? verified : keeps ? (before?.verified ?? null) : null,
       jobs:
         answer.kind === "found"
           ? new Set(answer.checks.flatMap((check) => (check.job === null ? [] : [check.job])))
@@ -207,31 +219,60 @@ export function createPullRequests({
     lastLogs.set(asked, { at: now(), answer });
   };
 
-  const readDetail = async (
+  const askConversation = async (
     place: PullRequestPlace,
+    head: string,
+    detail: boolean,
     folder: string,
     signal: AbortSignal,
-  ): Promise<PullRequestDetail> => {
+  ): Promise<Conversation | { failure: PullRequestTrouble }> => {
     const result = await pace.run(
       () =>
         pace.paused()
           ? Promise.resolve({ failure: "rate-limited" as const })
-          : runGh(threadsArguments(place), folder, threadsMs, signal),
+          : runGh(threadsArguments(place, head, detail), folder, threadsMs, signal),
       { signal },
     );
     if ("failure" in result) {
       const reason = troubleOf(result.failure);
       if (reason === "rate-limited") pace.pause();
-      return { kind: "unavailable", reason };
+      return { failure: reason };
     }
-    return parseThreads(result.run.stdout, place) ?? { kind: "unavailable", reason: "failed" };
+    return parseConversation(result.run.stdout, place, detail) ?? { failure: "failed" };
+  };
+
+  const readNumber = async (
+    number: number,
+    local: string | null,
+    folder: string,
+    signal: AbortSignal,
+  ): Promise<ReturnType<typeof parseView> | { failure: PullRequestTrouble }> => {
+    const result = await pace.run(
+      () =>
+        pace.paused()
+          ? Promise.resolve({ failure: "rate-limited" as const })
+          : runGh(viewArguments(number), folder, viewMs, signal),
+      { signal },
+    );
+    if ("failure" in result) {
+      const reason = troubleOf(result.failure);
+      if (reason === "rate-limited") pace.pause();
+      return { failure: reason };
+    }
+    return parseView(result.run.stdout, local);
   };
 
   const readView = async (
     folder: string,
     detail: boolean,
     signal: AbortSignal,
-  ): Promise<{ answer: PullRequestAnswer; place: PullRequestPlace | null }> => {
+    known: string | null,
+  ): Promise<{
+    answer: PullRequestAnswer;
+    place: PullRequestPlace | null;
+    verified: string | null;
+  }> => {
+    const nothing = (answer: PullRequestAnswer) => ({ answer, place: null, verified: null });
     const viewed = await pace.run(
       async () => {
         if (pace.paused()) return { failure: "rate-limited" as const };
@@ -251,18 +292,57 @@ export function createPullRequests({
     if ("failure" in viewed) {
       if (viewed.failure === "rate-limited") pace.pause();
       if (viewed.failure === "none" || viewed.failure === "not-pushed") {
-        return { answer: { kind: "absent", reason: viewed.failure }, place: null };
+        return nothing({ kind: "absent", reason: viewed.failure });
       }
-      return { answer: unavailable(viewed.failure), place: null };
+      return nothing(unavailable(viewed.failure));
     }
-    const parsed = parseView(viewed.run.stdout, viewed.head);
-    if (parsed === null) return { answer: unavailable("failed"), place: null };
-    if (!belongsTo(parsed.found, parsed.place, viewed.branch, viewed.facts)) {
-      return { answer: { kind: "absent", reason: "none" }, place: null };
+    let parsed = parseView(viewed.run.stdout, viewed.head);
+    if (parsed === null) return nothing(unavailable("failed"));
+    if (
+      !belongsTo(parsed.found, parsed.place, viewed.branch, viewed.facts) ||
+      parsed.found.head === null
+    ) {
+      return nothing({ kind: "absent", reason: "none" });
     }
-    if (!detail) return { answer: { ...parsed.found, detail: null }, place: parsed.place };
-    const read = await readDetail(parsed.place, folder, signal);
-    return { answer: { ...parsed.found, detail: read }, place: parsed.place };
+    const head = parsed.found.head;
+    let conversation: Conversation | null = null;
+    if (detail || known !== addressKey(parsed.place)) {
+      const asked = await askConversation(parsed.place, head, detail, folder, signal);
+      if ("failure" in asked) return nothing(unavailable(asked.failure));
+      conversation = asked;
+      const number = parsed.found.number;
+      if (!asked.candidates.some((candidate) => candidate.number === number && candidate.writer)) {
+        const better =
+          asked.candidates.find((candidate) => candidate.writer && candidate.open) ??
+          asked.candidates.find((candidate) => candidate.writer);
+        if (better === undefined) return nothing({ kind: "absent", reason: "none" });
+        const again = await readNumber(better.number, viewed.head, folder, signal);
+        if (again === null) return nothing(unavailable("failed"));
+        if ("failure" in again) return nothing(unavailable(again.failure));
+        if (
+          !sameRepository(again.place, parsed.place) ||
+          !belongsTo(again.found, again.place, viewed.branch, viewed.facts)
+        ) {
+          return nothing({ kind: "absent", reason: "none" });
+        }
+        parsed = again;
+        conversation = null;
+        if (detail) {
+          const own = await askConversation(again.place, head, true, folder, signal);
+          if ("failure" in own) return nothing(unavailable(own.failure));
+          conversation = own;
+        }
+      }
+    }
+    const verified = addressKey(parsed.place);
+    if (!detail) {
+      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified };
+    }
+    const read: PullRequestDetail = conversation?.detail ?? {
+      kind: "unavailable",
+      reason: "failed",
+    };
+    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified };
   };
 
   const answerFrom = (
@@ -293,9 +373,14 @@ export function createPullRequests({
     const read: ActiveRead = { controller, folder, done: Promise.resolve() };
     active.add(read);
     const answer = (async () => {
-      const result = await readView(folder, detail, controller.signal);
+      const result = await readView(
+        folder,
+        detail,
+        controller.signal,
+        memory.get(key)?.verified ?? null,
+      );
       controller.signal.throwIfAborted();
-      remember(key, { folder, workspace, owner }, result.answer, result.place);
+      remember(key, { folder, workspace, owner }, result.answer, result.place, result.verified);
       return result.answer;
     })().finally(() => {
       active.delete(read);

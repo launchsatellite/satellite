@@ -10,9 +10,9 @@ export interface PullRequestPlace {
 export const viewFields =
   "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews,statusCheckRollup,commits";
 export const viewProjection =
-  "{number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews:[.reviews[]?|{state,commit:.commit.oid,login:.author.login,at:.submittedAt}],checks:[.statusCheckRollup[]?|{name,workflow:.workflowName,status,conclusion,context,state,url:(.detailsUrl//.targetUrl),startedAt}],commits:[.commits[]?|{oid,headline:.messageHeadline}]}";
+  "{number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews:[.reviews[]?|{state,commit:.commit.oid,login:.author.login,association:.authorAssociation,at:.submittedAt}],checks:[.statusCheckRollup[]?|{name,workflow:.workflowName,status,conclusion,context,state,url:(.detailsUrl//.targetUrl),startedAt}],commits:[.commits[]?|{oid,headline:.messageHeadline}]}";
 export const threadsQuery =
-  "query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:100){totalCount nodes{url state submittedAt body author{login}}}comments(last:50){totalCount nodes{url createdAt body isMinimized author{login}}}reviewThreads(first:100){totalCount nodes{isResolved isOutdated path line diffSide comments(first:20){totalCount nodes{url body createdAt author{login}}}}}}}}";
+  "query($owner:String!,$repo:String!,$head:String!,$number:Int!,$detail:Boolean!){repository(owner:$owner,name:$repo){pullRequests(headRefName:$head,first:100,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number state authorAssociation}}pullRequest(number:$number)@include(if:$detail){reviews(last:100){totalCount nodes{url state submittedAt body author{login}}}comments(last:50){totalCount nodes{url createdAt body isMinimized author{login}}}reviewThreads(first:100){totalCount nodes{isResolved isOutdated path line diffSide comments(first:20){totalCount nodes{url body createdAt author{login}}}}}}}}";
 
 const ownerPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/;
 const repoPattern = /^[A-Za-z0-9._-]{1,100}$/;
@@ -33,11 +33,16 @@ export function isCheckedPlace({ host, owner, repo, number }: PullRequestPlace):
   );
 }
 
-export function viewArguments(): string[] {
-  return ["pr", "view", "--json", viewFields, "--jq", viewProjection];
+export function viewArguments(number?: number): string[] {
+  const selector = number === undefined ? [] : [String(number)];
+  return ["pr", "view", ...selector, "--json", viewFields, "--jq", viewProjection];
 }
 
-export function threadsArguments({ host, owner, repo, number }: PullRequestPlace): string[] {
+export function threadsArguments(
+  { host, owner, repo, number }: PullRequestPlace,
+  head: string,
+  detail: boolean,
+): string[] {
   return [
     "api",
     "graphql",
@@ -47,8 +52,12 @@ export function threadsArguments({ host, owner, repo, number }: PullRequestPlace
     `owner=${owner}`,
     "-f",
     `repo=${repo}`,
+    "-f",
+    `head=${head}`,
     "-F",
     `number=${String(number)}`,
+    "-F",
+    `detail=${String(detail)}`,
     "-f",
     `query=${threadsQuery}`,
   ];

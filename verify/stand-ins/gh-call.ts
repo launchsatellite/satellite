@@ -1,3 +1,4 @@
+import { isBranchName } from "../../src/shared/workspace-name.ts";
 import {
   isCheckedPlace,
   logArguments,
@@ -26,12 +27,24 @@ function threadsCall(args: readonly string[]): boolean {
   const host = valueAfter(args, 2, "--hostname");
   const owner = prefixed(valueAfter(args, 4, "-f"), "owner=");
   const repo = prefixed(valueAfter(args, 6, "-f"), "repo=");
-  const number = prefixed(valueAfter(args, 8, "-F"), "number=");
-  if (host === undefined || owner === undefined || repo === undefined || number === undefined) {
+  const head = prefixed(valueAfter(args, 8, "-f"), "head=");
+  const number = prefixed(valueAfter(args, 10, "-F"), "number=");
+  const detail = prefixed(valueAfter(args, 12, "-F"), "detail=");
+  if (
+    host === undefined ||
+    owner === undefined ||
+    repo === undefined ||
+    head === undefined ||
+    number === undefined ||
+    detail === undefined ||
+    !isBranchName(head)
+  ) {
     return false;
   }
   const place = { host, owner, repo, number: Number(number) };
-  return isCheckedPlace(place) && sameArguments(args, threadsArguments(place));
+  return (
+    isCheckedPlace(place) && sameArguments(args, threadsArguments(place, head, detail === "true"))
+  );
 }
 
 function logCall(args: readonly string[]): boolean {
@@ -45,6 +58,10 @@ function logCall(args: readonly string[]): boolean {
 
 export function callOf(args: readonly string[]): GhCall | null {
   if (sameArguments(args, viewArguments())) return "pull-request";
+  const number = args[0] === "pr" && args[1] === "view" ? Number(args[2]) : Number.NaN;
+  if (number >= 1 && number <= 9_999_999_999 && sameArguments(args, viewArguments(number))) {
+    return "pull-request";
+  }
   if (args[0] === "api" && threadsCall(args)) return "threads";
   if (args[0] === "run" && logCall(args)) return "failed-log";
   return null;
