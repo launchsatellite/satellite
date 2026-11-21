@@ -23,11 +23,12 @@ export async function readNames(
   root: string,
   signal?: AbortSignal,
   limit = filesLimits.findNames,
+  timeoutMs = findReadMs,
 ): Promise<NameIndex> {
   const run = await readGit(
     root,
     ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-    findReadMs,
+    timeoutMs,
     signal,
     { gitVariables: noLazyFetch },
   );

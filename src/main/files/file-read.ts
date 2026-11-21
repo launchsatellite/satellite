@@ -48,6 +48,7 @@ async function readEntry(file: string, entry: BigIntStats, stamp: string): Promi
     const link = await linkSide(file);
     return link.kind === "text" ? { kind: "link", text: link.text, stamp } : viewed(link, stamp);
   }
+  if (entry.isDirectory()) return gone;
   if (!entry.isFile()) return { kind: "binary", stamp };
   if (entry.size > BigInt(filesLimits.imageBytes)) return { kind: "large", stamp };
   const sniffed: { image: ImageKind | undefined; signed: boolean } = {

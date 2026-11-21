@@ -178,6 +178,6 @@ describe("readFileForViewing", () => {
     execFileSync("mkfifo", [join(root, "pipe")]);
     await mkdir(join(root, "dir"));
     expect(await seen(root, "pipe", null)).toEqual({ kind: "binary" });
-    expect(await seen(root, "dir", null)).toEqual({ kind: "binary" });
+    expect(await seen(root, "dir", null)).toEqual({ kind: "gone" });
   });
 });

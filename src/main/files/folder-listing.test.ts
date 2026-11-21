@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -105,9 +106,10 @@ describe("listFolder", () => {
       "link:linked",
     ]);
     await put(root, { "nested/sub/b.txt": "x" });
-    expect(await listFolder(root, "nested")).toEqual({ state: "unreadable" });
-    expect(await listFolder(root, "nested/sub")).toEqual({ state: "unreadable" });
-    expect(await listFolder(root, "nested/missing")).toEqual({ state: "unreadable" });
+    expect(shown(await listFolder(root, "nested"))).toEqual(["folder:sub", "file:a.txt"]);
+    expect(shown(await listFolder(root, "nested/sub"))).toEqual(["file:b.txt"]);
+    expect(await listFolder(root, "nested/.git")).toEqual({ state: "unreadable" });
+    expect(await listFolder(root, "nested/missing")).toEqual({ state: "missing" });
   });
 
   it.skipIf(process.platform === "win32")(
@@ -158,6 +160,28 @@ describe("listFolder", () => {
     expect(listing.state === "listed" && listing.more).toBe(100);
   });
 
+  it.skipIf(process.platform === "win32")(
+    "reads a name that starts with a colon literally and counts a name it cannot show",
+    async () => {
+      const root = await makeRepository();
+      await put(root, {
+        ".gitignore": ":(foo)ig\nign.txt\n",
+        ":(foo)ig": "x",
+        ":(top)ign.txt": "x",
+        "plain.txt": "x",
+        "back\\slash.txt": "x",
+      });
+      const listing = await listFolder(root, "");
+      expect(shown(listing)).toEqual([
+        "file:.gitignore",
+        "~file::(foo)ig",
+        "file::(top)ign.txt",
+        "file:plain.txt",
+      ]);
+      expect(listing.state === "listed" && listing.more).toBe(1);
+    },
+  );
+
   it("answers missing for a folder that is gone and for a file", async () => {
     const root = await makeRepository();
     await put(root, { "a.txt": "x" });
@@ -178,4 +202,25 @@ describe("listFolder", () => {
     await readFileForViewing(root, "a.txt", null);
     expect(await snapshot(join(root, ".git"))).toEqual(before);
   });
+});
+
+describe("a git that hangs", () => {
+  it.skipIf(process.platform === "win32")(
+    "shows the entries plain in time and answers the name list as hung",
+    async () => {
+      const root = await makeRepository();
+      await put(root, { "a.txt": "x", "b.log": "x", ".gitignore": "*.log\n" });
+      const pipe = join(await scratch(), "excludes");
+      execFileSync("mkfifo", [pipe]);
+      await git(root, "config", "core.excludesFile", pipe);
+      const started = Date.now();
+      expect(shown(await listFolder(root, ""))).toEqual([
+        "file:.gitignore",
+        "file:a.txt",
+        "file:b.log",
+      ]);
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(await readNames(root, undefined, undefined, 300)).toEqual({ kind: "hung" });
+    },
+  );
 });

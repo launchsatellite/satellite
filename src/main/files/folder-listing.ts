@@ -1,5 +1,5 @@
 import { lstat, opendir } from "node:fs/promises";
-import { dirname, join, posix } from "node:path";
+import { join, posix } from "node:path";
 import { filesLimits, type FileEntry, type FolderListing } from "../../shared/bridge-contract.ts";
 import {
   confinedFolder,
@@ -18,10 +18,6 @@ const ignoreCheckMs = 2000;
 const missing: FolderListing = { state: "missing" };
 const unreadable: FolderListing = { state: "unreadable" };
 const hung: FolderListing = { state: "hung" };
-
-function depthOf(folder: string): number {
-  return folder === "." ? 0 : folder.split("/").length;
-}
 
 function isListable(name: string): boolean {
   return name.length <= filesLimits.nameChars && isChangePath(name);
@@ -44,15 +40,22 @@ async function classify(folder: string, name: string): Promise<FileEntry | undef
   return { name, kind, ignored: false };
 }
 
-async function scan(folder: string): Promise<string[] | undefined> {
+async function scan(folder: string): Promise<{ names: string[]; dropped: number } | undefined> {
   const names: string[] = [];
   let seen = 0;
+  let dropped = 0;
   for await (const entry of await opendir(folder)) {
     seen += 1;
     if (seen > filesLimits.folderScan) return undefined;
     if (isListable(entry.name)) names.push(entry.name);
+    else if (entry.name !== ".git") dropped += 1;
   }
-  return names;
+  return { names, dropped };
+}
+
+function checkedPath(folder: string, name: string): string {
+  if (folder !== "") return `${folder}/${name}`;
+  return name.startsWith(":") ? `./${name}` : name;
 }
 
 async function classified(folder: string, names: string[]): Promise<FileEntry[]> {
@@ -84,7 +87,6 @@ async function listConfined(
   if (typeof parentReal !== "string") {
     return parentReal.kind === "gone" ? missing : unreadable;
   }
-  if (await repositoryOnTheWay(parentReal, depthOf(parent))) return unreadable;
   if (folder !== "") {
     const entry = await lstat(join(parentReal, posix.basename(folder))).catch(() => undefined);
     if (entry?.isSymbolicLink() === true) return unreadable;
@@ -92,11 +94,10 @@ async function listConfined(
   }
   const real = folder === "" ? parentReal : await confinedFolder(root, folder);
   if (typeof real !== "string") return real.kind === "gone" ? missing : unreadable;
-  if (folder !== "" && (await holdsGit(real))) return unreadable;
-  const names = await scan(real);
-  if (names === undefined) return { state: "too-many" };
-  const entries = await classified(real, names);
-  const paths = entries.map((entry) => (folder === "" ? entry.name : `${folder}/${entry.name}`));
+  const scanned = await scan(real);
+  if (scanned === undefined) return { state: "too-many" };
+  const entries = await classified(real, scanned.names);
+  const paths = entries.map((entry) => checkedPath(folder, entry.name));
   const check = await checkIgnored(root, paths, signal, ignoreCheckMs);
   const marked = entries.map((entry, at) => ({
     ...entry,
@@ -108,17 +109,8 @@ async function listConfined(
   return {
     state: "listed",
     entries: marked.slice(0, filesLimits.folderEntries),
-    more: Math.max(0, marked.length - filesLimits.folderEntries),
+    more: Math.max(0, marked.length - filesLimits.folderEntries) + scanned.dropped,
   };
-}
-
-async function repositoryOnTheWay(real: string, depth: number): Promise<boolean> {
-  let at = real;
-  for (let level = 0; level < depth; level += 1) {
-    if (await holdsGit(at)) return true;
-    at = dirname(at);
-  }
-  return false;
 }
 
 export async function listFolder(
