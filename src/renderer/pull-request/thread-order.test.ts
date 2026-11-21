@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PullRequestDetail } from "../../shared/bridge-contract.ts";
-import { conversationItems, drawnCount, threadOrder } from "./thread-order.ts";
+import { conversationItems, drawnBy, drawnCount, threadOrder } from "./thread-order.ts";
 
 type Read = Extract<PullRequestDetail, { kind: "read" }>;
 
@@ -115,6 +115,13 @@ describe("drawnCount", () => {
     expect(drawnCount(items([40, 40, 40]), 100)).toBe(2);
     expect(drawnCount(items([500, 10]), 100)).toBe(1);
     expect(drawnCount(items([]), 100)).toBe(0);
+  });
+
+  it("cuts one thread's comments by the same budget, keeping at least one", () => {
+    expect(drawnBy([60, 60, 60], 100)).toBe(1);
+    expect(drawnBy([20_000, 20_000, 20_000], 40_000)).toBe(2);
+    expect(drawnBy([5, 5], 100)).toBe(2);
+    expect(drawnBy([], 100)).toBe(0);
   });
 
   it("counts a thread's every comment", () => {

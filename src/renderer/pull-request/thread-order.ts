@@ -49,13 +49,17 @@ function charsOf(item: ConversationItem): number {
   return item.thread.comments.reduce((total, { body }) => total + body.length, 0);
 }
 
-export function drawnCount(items: readonly ConversationItem[], budget: number): number {
+export function drawnBy(sizes: readonly number[], budget: number): number {
   let used = 0;
-  for (const [index, item] of items.entries()) {
-    used += charsOf(item);
+  for (const [index, size] of sizes.entries()) {
+    used += size;
     if (used > budget) return Math.max(index, 1);
   }
-  return items.length;
+  return sizes.length;
+}
+
+export function drawnCount(items: readonly ConversationItem[], budget: number): number {
+  return drawnBy(items.map(charsOf), budget);
 }
 
 export function threadOrder(detail: Read): number[] {

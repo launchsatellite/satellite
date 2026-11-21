@@ -21,7 +21,7 @@ import {
   someone,
   threadBadges,
 } from "./pull-request-words.ts";
-import { conversationItems, drawnCount, type ConversationItem } from "./thread-order.ts";
+import { conversationItems, drawnBy, drawnCount, type ConversationItem } from "./thread-order.ts";
 
 type Spoken = PullRequestThread["comments"][number];
 
@@ -86,14 +86,33 @@ export function ThreadBody({
   thread: PullRequestThread;
   onLink: (address: string) => void;
 }) {
+  const [budget, setBudget] = useState(drawnPage);
+  const drawn = drawnBy(
+    thread.comments.map(({ body }) => body.length),
+    budget,
+  );
   return (
     <div className="flex flex-col gap-3">
-      {thread.comments.map((spoken, at) => (
+      {thread.comments.slice(0, drawn).map((spoken, at) => (
         <div key={at} className="flex flex-col gap-1">
           <Author name={spoken.author} at={spoken.at} />
           <Said spoken={spoken} onLink={onLink} />
         </div>
       ))}
+      {drawn < thread.comments.length && (
+        <div>
+          <Button
+            variant="secondary"
+            size="small"
+            testId="pull-request-thread-more"
+            onClick={() => {
+              setBudget((kept) => kept + drawnPage);
+            }}
+          >
+            {showMoreLabel(thread.comments.length - drawn)}
+          </Button>
+        </div>
+      )}
       {thread.moreComments > 0 && (
         <p className="text-[12px] text-dim">{moreSentence(thread.moreComments)}</p>
       )}
