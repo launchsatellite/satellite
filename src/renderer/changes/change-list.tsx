@@ -43,20 +43,21 @@ export function ChangeList({ files, more, longPaths, selected, onSelect }: Chang
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1">
-      <ul data-testid="changes-list" aria-label="Changed files" onKeyDown={move}>
+      <ul data-testid="changes-list" role="listbox" aria-label="Changed files" onKeyDown={move}>
         {files.map((file, index) => {
           const current = file.path === selected;
           const { folder, name } = splitPath(file.path);
           const testId = `changes-file-${String(index)}`;
           const label = rowName(file);
           return (
-            <li key={file.path}>
+            <li key={file.path} role="none">
               <button
                 type="button"
                 data-testid={testId}
                 data-path={file.path}
                 data-state={file.letter}
-                aria-current={current || undefined}
+                role="option"
+                aria-selected={current}
                 aria-label={label}
                 title={label}
                 tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}

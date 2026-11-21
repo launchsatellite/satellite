@@ -51,7 +51,7 @@ async function rows(page: Page): Promise<Row[]> {
         path: row.dataset["path"] ?? "",
         state: row.dataset["state"] ?? "",
         text: row.innerText,
-        current: row.getAttribute("aria-current") === "true",
+        current: row.getAttribute("aria-selected") === "true",
       }),
     ),
   );

@@ -68,7 +68,8 @@ export function ChangesView({
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [layoutShown, setLayoutShown] = useState(false);
-  const listFocused = useRef(false);
+  const inside = useRef(false);
+  const panel = useRef<HTMLDivElement>(null);
   const listHost = useRef<HTMLDivElement>(null);
   const show = useCallback(
     (shown: ShownText | null) => {
@@ -91,9 +92,10 @@ export function ChangesView({
   };
   const selectedPath = file?.path;
   useEffect(() => {
-    if (selectedPath === undefined || !listFocused.current || !isLost()) return;
-    listHost.current?.querySelector<HTMLElement>("[aria-current='true']")?.focus();
-  }, [selectedPath, list]);
+    if (!inside.current || !isLost()) return;
+    const row = listHost.current?.querySelector<HTMLElement>("[aria-selected='true']");
+    (row ?? panel.current)?.focus();
+  });
 
   const body = () => {
     if (list === undefined || changes === undefined) {
@@ -115,12 +117,6 @@ export function ChangesView({
         <div className="flex h-full min-h-0 w-full flex-col @min-[640px]:flex-row">
           <div
             ref={listHost}
-            onFocus={() => {
-              listFocused.current = true;
-            }}
-            onBlur={(event) => {
-              if (event.relatedTarget !== null) listFocused.current = false;
-            }}
             className="flex max-h-[40%] min-h-0 flex-none flex-col border-b border-line @min-[640px]:max-h-none @min-[640px]:w-[260px] @min-[640px]:border-r @min-[640px]:border-b-0"
           >
             <ChangeList
@@ -155,7 +151,17 @@ export function ChangesView({
   };
 
   return (
-    <div data-testid="changes" className="flex min-h-0 flex-1 flex-col">
+    <div
+      data-testid="changes"
+      className="flex min-h-0 flex-1 flex-col"
+      onFocus={() => {
+        inside.current = true;
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Node) || !event.currentTarget.contains(next)) inside.current = false;
+      }}
+    >
       <div className="flex h-10 flex-none items-center gap-2 border-b border-line bg-side px-2">
         <CentreTabs />
         <div className="ml-auto flex flex-none items-center gap-2">
@@ -173,10 +179,12 @@ export function ChangesView({
         </div>
       </div>
       <div
+        ref={panel}
         role="tabpanel"
         id={centrePanelId}
         aria-labelledby={centreTabId}
-        className="min-h-0 flex-1"
+        tabIndex={selectedPath === undefined ? 0 : undefined}
+        className="min-h-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >
         {body()}
       </div>
