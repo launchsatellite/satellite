@@ -109,7 +109,9 @@ async function promptToDone(session: AppSession, row: string, count: number): Pr
 async function seededHashes(session: AppSession, alpha: string): Promise<Record<string, string>> {
   const { scenario } = await loadScenario(scenarioName);
   const committed = scenario.repo.flatMap((step) =>
-    "write" in step && step.write.path.startsWith(".claude/") ? [step.write] : [],
+    "write" in step && "content" in step.write && step.write.path.startsWith(".claude/")
+      ? [step.write]
+      : [],
   );
   const seeded: [string, Seeded[]][] = [
     [session.userHome, scenario.userHome ?? []],

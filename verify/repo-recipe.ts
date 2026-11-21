@@ -9,7 +9,7 @@ const run = promisify(execFile);
 export async function writeInside(
   target: string,
   path: string,
-  content: string,
+  content: string | Uint8Array,
   executable = false,
 ): Promise<void> {
   const file = resolve(target, path);
@@ -37,7 +37,9 @@ export async function buildRepo(
   const env = { ...withoutGitVariables(process.env), ...gitEnv };
   for (const step of steps) {
     if ("write" in step) {
-      await writeInside(target, step.write.path, step.write.content, step.write.executable);
+      const { write } = step;
+      const content = "content" in write ? write.content : Buffer.from(write.base64, "base64");
+      await writeInside(target, write.path, content, write.executable);
       continue;
     }
     try {

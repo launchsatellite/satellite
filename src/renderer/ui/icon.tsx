@@ -10,7 +10,9 @@ export type IconName =
   | "keys"
   | "check"
   | "archive"
-  | "bell";
+  | "bell"
+  | "chevron-right"
+  | "chevron-down";
 
 const shapes: Record<IconName, ReactNode> = {
   plus: <path d="M8 3v10M3 8h10" />,
@@ -47,6 +49,8 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   bell: <path d="M4 11V7a4 4 0 0 1 8 0v4l1.25 1.5H2.75zM6.5 14.25h3" />,
+  "chevron-right": <path d="m6 3.5 4.5 4.5L6 12.5" />,
+  "chevron-down": <path d="M3.5 6 8 10.5 12.5 6" />,
 };
 
 export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {

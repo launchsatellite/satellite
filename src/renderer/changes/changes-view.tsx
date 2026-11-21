@@ -9,7 +9,7 @@ import { CommandButton } from "../commands/commands-context.tsx";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Segmented } from "../ui/segmented.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { CentreTabs, centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
+import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
 import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
@@ -27,6 +27,7 @@ interface ChangesViewProps {
   diffHandle: RefObject<DiffHandle | null>;
   onShown: (shown: ShownText | null) => void;
   onNarrow: (narrow: boolean) => void;
+  onCentre: (view: CentreView) => void;
 }
 
 interface Picked {
@@ -72,6 +73,7 @@ export function ChangesView({
   diffHandle,
   onShown,
   onNarrow,
+  onCentre,
 }: ChangesViewProps) {
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -188,7 +190,7 @@ export function ChangesView({
       }}
     >
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs />
+        <CentreTabs value="changes" onChange={onCentre} />
         {list?.base != null && (
           <span
             data-testid="changes-base"
@@ -225,8 +227,8 @@ export function ChangesView({
       <div
         ref={panel}
         role="tabpanel"
-        id={centrePanelId}
-        aria-labelledby={centreTabId}
+        id={centrePanelId("changes")}
+        aria-labelledby={centreTabId("changes")}
         tabIndex={selectedPath === undefined ? 0 : undefined}
         className="min-h-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >

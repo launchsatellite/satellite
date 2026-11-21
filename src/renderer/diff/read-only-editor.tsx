@@ -19,6 +19,8 @@ export type DiffSide = DiffSelection["side"];
 const noBracketColours = { enabled: false, independentColorPoolPerBracketType: false };
 const longLineSentence =
   "A changed line here runs past 10,000 characters, so the diff shows only its start.";
+const longFileLineSentence =
+  "A line here runs past 10,000 characters, so the file shows only its start.";
 const confusables = AmbiguousCharacters.getInstance(new Set());
 const revealedMarks = 10_000;
 
@@ -110,14 +112,14 @@ export function selectedLines(sideEditor: editor.ICodeEditor, side: DiffSide) {
   return range === null ? null : { side, ...range };
 }
 
-export function CutShort({ shown }: { shown: boolean }) {
+export function CutShort({ shown, plain = false }: { shown: boolean; plain?: boolean }) {
   if (!shown) return null;
   return (
     <p
       data-testid="diff-cut-short"
       className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
     >
-      {longLineSentence}
+      {plain ? longFileLineSentence : longLineSentence}
     </p>
   );
 }

@@ -14,6 +14,7 @@ import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
 import { conflictRequest, lineReference, noLinesSentence } from "../changes/prompt-requests.ts";
 import { useChanges } from "../changes/use-changes.ts";
 import { useDiffSelection } from "../changes/use-diff-selection.ts";
+import { FilesView } from "../files/files-view.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
@@ -33,6 +34,7 @@ import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
+import type { CentreView } from "./centre-tabs.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
@@ -264,13 +266,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const folderHere = selectedProject?.missing === null;
+  const [centreView, setCentreView] = useState<CentreView>("changes");
   const [changesView, setChangesView] = useState<ChangesShown>("branch");
   const [diffInline, setDiffInline] = useState(false);
   const [diffNarrow, setDiffNarrow] = useState(true);
   const [shownText, setShownText] = useState<ShownText | null>(null);
   const { handle: diffHandle, read: diffSelection } = useDiffSelection();
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
-  const changesShown = changesHere !== null;
+  const shownHere = changesHere !== null;
+  const changesShown = shownHere && centreView === "changes";
+  const filesShown = shownHere && centreView === "files";
   const layoutShown =
     changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
@@ -279,7 +284,20 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
-  const changes = useChanges(changesHere, changesView, finishedHere, shownText?.path);
+  const changes = useChanges(
+    changesHere,
+    filesShown ? "uncommitted" : changesView,
+    finishedHere,
+    shownText?.path,
+  );
+  const listedWorkspace = useCallback(
+    ({ projectId, workspace }: WorkspaceRef) =>
+      (projects ?? []).some(
+        (project) =>
+          project.id === projectId && project.workspaces.some((listed) => listed.key === workspace),
+      ),
+    [projects],
+  );
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -541,6 +559,31 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             run: notifications(true),
           },
           {
+            id: "files.show",
+            title: "Show the files",
+            available: shownHere && centreView === "changes",
+            run: () => {
+              setCentreView("files");
+            },
+          },
+          {
+            id: "changes.show",
+            title: "Show the changes",
+            available: filesShown,
+            run: () => {
+              setCentreView("changes");
+            },
+          },
+          {
+            id: "files.open",
+            title: "Open a file by name",
+            shortcut: { key: "f" },
+            available: shownHere,
+            run: () => {
+              setCentreView("files");
+            },
+          },
+          {
             id: "changes.branch",
             title: "Show the branch's changes",
             available: changesShown && changesView === "uncommitted",
@@ -640,6 +683,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     newestTerminal,
     openFromInbox,
     changesShown,
+    filesShown,
+    shownHere,
+    centreView,
     changesView,
     layoutShown,
     diffInline,
@@ -674,7 +720,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             missing={selectedProject.missing}
           />
         ) : (
-          changesHere !== null && (
+          changesHere !== null &&
+          (centreView === "files" ? (
+            <FilesView
+              key={`${changesHere.projectId}/${changesHere.workspace}`}
+              workspace={changesHere}
+              state={state}
+              update={update}
+              listed={listedWorkspace}
+              list={changes.list}
+              onCentre={setCentreView}
+            />
+          ) : (
             <ChangesView
               workspace={changesHere}
               view={changesView}
@@ -686,8 +743,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               diffHandle={diffHandle}
               onShown={setShownText}
               onNarrow={setDiffNarrow}
+              onCentre={setCentreView}
             />
-          )
+          ))
         )}
       </>
     );

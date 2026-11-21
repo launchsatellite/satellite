@@ -14,7 +14,11 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react(), tailwindcss(), thirdPartyLicenses()],
-    build: { minify: true, license: { fileName: thirdPartyLicensesFile } },
+    build: {
+      minify: true,
+      assetsInlineLimit: (file) => (file.endsWith(".svg") ? false : undefined),
+      license: { fileName: thirdPartyLicensesFile },
+    },
     server: { headers: { "Content-Security-Policy": contentSecurityPolicy("development") } },
   },
 });

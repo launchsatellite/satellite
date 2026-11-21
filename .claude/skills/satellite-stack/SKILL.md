@@ -88,6 +88,7 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 - Type is `font-sans` (Funnel Sans, app text at 13px), `font-display`, `font-mono` (Geist Mono) and `font-pixel` (readouts, uppercase).
 - The colour scheme follows `prefers-color-scheme`, which the background process points at the saved theme choice, `system`, `light` or `dark`, through `nativeTheme.themeSource` at start and on every `interface.save`, so DOM parts need nothing and no part reads the choice itself. A part that takes colours as options, like the terminal and the diff editor, reads tokens with `getComputedStyle(document.documentElement).getPropertyValue("--bg")` and rebuilds on `matchMedia("(prefers-color-scheme: dark)")` `change`, as `terminal-theme.ts` and `monaco-environment.ts` do. Monaco needs six digit hex, so its theme passes each token through a canvas.
 - Fonts come from the `@fontsource` packages imported at the top of `app.css` and are bundled. `entry.tsx` waits for each family in `fontFamilies` before the first render, so a new family goes in that list. Nothing loads from the network.
+- File kind icons come from `material-icon-theme`, a dev dependency. Its SVGs are bundled as files, never inlined (`assetsInlineLimit` refuses `.svg`), loaded lazily with the Files tab and drawn as `<img>` from the app's own origin, so `img-src 'self'` covers them. Its licence is added in `scripts/third-party-licenses.ts`.
 
 ## Interface parts
 
