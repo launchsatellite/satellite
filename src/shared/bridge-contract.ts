@@ -227,6 +227,7 @@ const windowsPty = z.strictObject({
   buildNumber: z.number().int().positive(),
 });
 export type WindowsPty = z.output<typeof windowsPty>;
+export const processesLimits = { rows: 200, ports: 4, commandChars: 200 };
 export const pullRequestLimits = {
   titleChars: 256,
   bodyChars: 20_000,

@@ -165,17 +165,20 @@ export function subtreeOf(root: ProcessEntry, entries: readonly ProcessEntry[]):
   return found;
 }
 
+export function windowsPowerShell(): string {
+  return join(
+    process.env["SystemRoot"] ?? "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+}
+
 export async function readProcessTable(): Promise<ProcessEntry[]> {
   if (process.platform === "win32") {
-    const powershell = join(
-      process.env["SystemRoot"] ?? "C:\\Windows",
-      "System32",
-      "WindowsPowerShell",
-      "v1.0",
-      "powershell.exe",
-    );
     const text = await readOutput(
-      powershell,
+      windowsPowerShell(),
       ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsTableScript],
       { timeout: windowsReadTimeoutMs, windowsHide: true },
     );
