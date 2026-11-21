@@ -74,7 +74,17 @@ describe("readImageHeader against a size a decoder would not use", () => {
   it("answers nothing for a JPEG with a marker it does not know before the frame", () => {
     const decoy = [0xff, 0xc0, 0x00, 0x0b, 8, 0, 1, 0, 1, 1, 1];
     const real = [0xff, 0xc0, 0x00, 0x0b, 8, 0x59, 0xd8, 0x59, 0xd8, 1, 1];
-    const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 0x00, 0x15, ...real, ...decoy]);
+    const bytes = Uint8Array.from([
+      0xff,
+      0xd8,
+      0xff,
+      0x00,
+      0x00,
+      0x15,
+      ...real,
+      ...new Array<number>(8).fill(0),
+      ...decoy,
+    ]);
     expect(readImageHeader(bytes)).toBeUndefined();
   });
 });
