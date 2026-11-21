@@ -105,13 +105,15 @@ export function createPullRequests({
   home,
   store,
   onNeeding,
-  now = Date.now,
+  now = () => performance.now(),
   after = (ms) => delay(ms),
 }: Options): PullRequests {
   const pace = createPace({ now, after });
   const memory = new Map<string, Remembered>();
   const running = new Map<string, Running>();
   const active = new Set<ActiveRead>();
+  const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
+  const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
   let told = "";
 
   const tellNeeding = () => {
@@ -158,12 +160,29 @@ export function createPullRequests({
     tellNeeding();
   };
 
+  const rememberLog = (
+    workspaceKey: string,
+    asked: string,
+    answer: BridgeResponse<"pullRequest.log">,
+  ) => {
+    for (const key of lastLogs.keys()) {
+      if (key.startsWith(`${workspaceKey}/`)) lastLogs.delete(key);
+    }
+    lastLogs.set(asked, { at: now(), answer });
+  };
+
   const readDetail = async (
     place: PullRequestPlace,
     folder: string,
     signal: AbortSignal,
   ): Promise<PullRequestDetail> => {
-    const result = await pace.run(() => runGh(threadsArguments(place), folder, threadsMs, signal));
+    const result = await pace.run(
+      () =>
+        pace.paused()
+          ? Promise.resolve({ failure: "rate-limited" as const })
+          : runGh(threadsArguments(place), folder, threadsMs, signal),
+      { signal },
+    );
     if ("failure" in result) {
       const reason = troubleOf(result.failure);
       if (reason === "rate-limited") pace.pause();
@@ -177,16 +196,20 @@ export function createPullRequests({
     detail: boolean,
     signal: AbortSignal,
   ): Promise<{ answer: PullRequestAnswer; place: PullRequestPlace | null }> => {
-    const viewed = await pace.run(async () => {
-      const branch = await currentBranch(folder, signal);
-      if (branch === undefined) return { failure: "failed" as const };
-      const pushed = await isPushed(folder, branch, signal);
-      if (pushed === undefined) return { failure: "failed" as const };
-      if (!pushed) return { failure: "not-pushed" as const };
-      const result = await runGh(viewArguments(), folder, viewMs, signal);
-      if ("failure" in result) return result;
-      return { run: result.run, head: (await headOid(folder, signal)) ?? null };
-    });
+    const viewed = await pace.run(
+      async () => {
+        if (pace.paused()) return { failure: "rate-limited" as const };
+        const branch = await currentBranch(folder, signal);
+        if (branch === undefined) return { failure: "failed" as const };
+        const pushed = await isPushed(folder, branch, signal);
+        if (pushed === undefined) return { failure: "failed" as const };
+        if (!pushed) return { failure: "not-pushed" as const };
+        const result = await runGh(viewArguments(), folder, viewMs, signal);
+        if ("failure" in result) return result;
+        return { run: result.run, head: (await headOid(folder, signal)) ?? null };
+      },
+      { signal },
+    );
     if ("failure" in viewed) {
       if (viewed.failure === "rate-limited") pace.pause();
       if (viewed.failure === "none" || viewed.failure === "not-pushed") {
@@ -242,13 +265,18 @@ export function createPullRequests({
     place: PullRequestPlace,
     job: string,
     folder: string,
+    owner: string,
   ): Promise<BridgeResponse<"pullRequest.log">> => {
     const controller = new AbortController();
     const read: ActiveRead = { controller, folder, done: Promise.resolve() };
     active.add(read);
     try {
-      const result = await pace.run(() =>
-        runGh(logArguments(place, job), folder, logMs, controller.signal),
+      const result = await pace.run(
+        () =>
+          pace.paused()
+            ? Promise.resolve({ failure: "rate-limited" as const })
+            : runGh(logArguments(place, job), folder, logMs, controller.signal),
+        { signal: controller.signal, lane: "log", owner },
       );
       if ("failure" in result) {
         const reason = troubleOf(result.failure);
@@ -289,7 +317,22 @@ export function createPullRequests({
           throw new BridgeFailure("not-found", "That check is not on this pull request.");
         }
         if (pace.paused()) return { kind: "unavailable", reason: "rate-limited" };
-        return logOf(held.place, job, folder);
+        const asked = `${keyOf(workspace)}/${job}`;
+        const recent = lastLogs.get(asked);
+        if (recent !== undefined && now() - recent.at < reuseMs) return recent.answer;
+        const joined = logging.get(asked);
+        if (joined !== undefined) return joined;
+        const answer = logOf(held.place, job, folder, keyOf(workspace)).then((got) => {
+          if (got.kind !== "unavailable") rememberLog(keyOf(workspace), asked, got);
+          return got;
+        });
+        logging.set(asked, answer);
+        void answer
+          .finally(() => {
+            logging.delete(asked);
+          })
+          .catch(() => undefined);
+        return answer;
       },
     },
     async stopInside(folder) {
@@ -298,7 +341,11 @@ export function createPullRequests({
       );
       for (const read of stopping) read.controller.abort(new BridgeFailure("not-found", gone));
       for (const [key, held] of memory) {
-        if (isInsidePath(folder, held.folder)) memory.delete(key);
+        if (!isInsidePath(folder, held.folder)) continue;
+        memory.delete(key);
+        for (const asked of lastLogs.keys()) {
+          if (asked.startsWith(`${key}/`)) lastLogs.delete(asked);
+        }
       }
       tellNeeding();
       await waitForReads(stopping);

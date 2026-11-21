@@ -337,6 +337,22 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     });
   });
 
+  it("joins identical log requests and reuses the answer for ten seconds", async () => {
+    const { answer, read, reads, calls, advance } = await setup();
+    const log = () => reads.handlers["pullRequest.log"]({ workspace: first, job: "2001" }, owner);
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await answer("log", { stdout: "build\tstep\t2026-01-01T00:00:00.0000000Z ##[error]Oops\n" });
+    const flood = await Promise.all(Array.from({ length: 50 }, log));
+    expect(new Set(flood.map((got) => JSON.stringify(got))).size).toBe(1);
+    await log();
+    const logRuns = async () => (await calls()).filter(({ args }) => args[0] === "run").length;
+    expect(await logRuns()).toBe(1);
+    advance(11_000);
+    await log();
+    expect(await logRuns()).toBe(2);
+  });
+
   it("answers not-found for a workspace that is not on record", async () => {
     const { reads } = await setup();
     const strangers = [
