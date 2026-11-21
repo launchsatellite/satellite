@@ -1,6 +1,6 @@
 # 008 Pull request
 
-Status **In progress** · Depends on **004, 006**
+Status **Done** · Depends on **004, 006**
 
 ## Why
 
