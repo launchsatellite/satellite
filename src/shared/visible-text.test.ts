@@ -1,15 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { visibleText } from "./visible-text.ts";
+import { visibleLines, visibleText } from "./visible-text.ts";
 
 describe("visibleText", () => {
   it("reveals direction and invisible characters in a name", () => {
-    expect(visibleText("a‮b​c\tz")).toBe("a[U+202E]b[U+200B]c[U+0009]z");
-    expect(visibleText("tag\u{E0041}.txt")).toBe("tag[U+E0041].txt");
+    expect(visibleText("a\u{202e}b\u{200b}c\tz")).toBe("a[U+202E]b[U+200B]c[U+0009]z");
+    expect(visibleText("tag\u{e0041}.txt")).toBe("tag[U+E0041].txt");
+  });
+
+  it("reveals blank fillers that make two names look the same", () => {
+    expect(visibleText("a\u{3164}.txt")).toBe("a[U+3164].txt");
+    expect(visibleText("\u{115f}\u{1160}\u{ffa0}\u{2800}\u{34f}\u{180b}")).toBe(
+      "[U+115F][U+1160][U+FFA0][U+2800][U+034F][U+180B]",
+    );
+    expect(visibleText("a\u{a0}b\u{3000}c")).toBe("a[U+00A0]b[U+3000]c");
+  });
+
+  it("keeps the joiners words and emoji are written with, as the prompt cleaner does", () => {
+    const persian = "\u{645}\u{6cc}\u{200c}\u{634}\u{648}\u{62f}.md";
+    const emoji = "\u{2764}\u{fe0f}\u{200d}\u{1f525}.png";
+    expect(visibleText(persian)).toBe(persian);
+    expect(visibleText(emoji)).toBe(emoji);
+    expect(visibleText("a\u{200c}b\u{fe0f}")).toBe("a[U+200C]b[U+FE0F]");
   });
 
   it("keeps plain unicode names as they are", () => {
-    for (const name of ["café notes.md", "日本語.txt", "it's new.txt"]) {
+    for (const name of ["caf\u{e9} notes.md", "\u{65e5}\u{672c}\u{8a9e}.txt", "it's new.txt"]) {
       expect(visibleText(name)).toBe(name);
     }
+  });
+});
+
+describe("visibleLines", () => {
+  it("keeps git's lines while showing carriage returns and a byte order mark", () => {
+    const shown = visibleLines("\u{feff}#!/bin/sh\r\nlone\rreturn\nplain\n");
+    expect(shown).toBe("[U+FEFF]#!/bin/sh\u{240d}\nlone\u{240d}return\nplain\n");
+    expect(shown.split("\n")).toHaveLength(4);
+  });
+
+  it("reveals hidden characters however many harmless letters the text holds", () => {
+    const text = `${"\u{436}".repeat(1000)}\nconst a\u{200b}b = 1;\t// \u{2028}\n`;
+    expect(visibleLines(text)).toBe(
+      `${"\u{436}".repeat(1000)}\nconst a[U+200B]b = 1;\t// [U+2028]\n`,
+    );
   });
 });
