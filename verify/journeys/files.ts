@@ -314,6 +314,40 @@ async function staysStill(session: AppSession): Promise<void> {
   );
 }
 
+async function setHidden(page: Page, hidden: boolean): Promise<void> {
+  await page.evaluate((hide) => {
+    if (hide) {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+    } else {
+      Reflect.deleteProperty(document, "visibilityState");
+    }
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+}
+
+async function stopsWhenHidden(session: AppSession, folder: string): Promise<void> {
+  const { page } = session;
+  await setHidden(page, true);
+  await delay(500);
+  await writeFile(join(folder, "src", "unseen.txt"), "written while hidden\n");
+  await appendFile(join(folder, deepFile), "export const hidden = true;\n");
+  await delay(settleMs);
+  assert.ok(
+    !(await rows(page)).some((row) => row.path === "src/unseen.txt"),
+    "the tree read the disk while the window was hidden",
+  );
+  assert.ok(
+    !(await editorText(page)).includes("hidden"),
+    "the open file read the disk while the window was hidden",
+  );
+  await setHidden(page, false);
+  await rowOf(session, "src/unseen.txt", "once the window was visible again");
+  await editorShows(session, "hidden", "once the window was visible again");
+}
+
 async function followsTheDisk(session: AppSession, folder: string): Promise<void> {
   const { page } = session;
   await appendFile(join(folder, deepFile), 'export const second = "appeared";\n');
@@ -449,6 +483,7 @@ export const filesJourney: Journey = {
     await opensReadOnly(session, folder);
     await staysStill(session);
     await keepsFocus(session, folder);
+    await stopsWhenHidden(session, folder);
     await followsTheDisk(session, folder);
     await managesTabs(session);
     await remembersTabs(session);
