@@ -47,4 +47,5 @@ The background process has full access to the machine. The interface has none an
 
 - Latest stable versions, checked against current docs, never from memory.
 - A new runtime dependency is the maintainer's decision. Check it is maintained and MIT compatible, and worth more than a few lines of our own. Dev dependencies are yours.
+- A dev dependency whose files ship in the app, such as the fonts and the icon set, adds its licence to `scripts/third-party-licenses.ts` in the same change.
 - Commit the lockfile. Never hand-edit generated files or lockfiles.

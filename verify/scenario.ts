@@ -11,11 +11,18 @@ const kebabCase = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const scenariosRoot = join(import.meta.dirname, "scenarios");
 const repoStepSchema = z.union([
   z.strictObject({
-    write: z.strictObject({
-      path: z.string().min(1),
-      content: z.string(),
-      executable: z.boolean().optional(),
-    }),
+    write: z.union([
+      z.strictObject({
+        path: z.string().min(1),
+        content: z.string(),
+        executable: z.boolean().optional(),
+      }),
+      z.strictObject({
+        path: z.string().min(1),
+        base64: z.base64(),
+        executable: z.boolean().optional(),
+      }),
+    ]),
   }),
   z.strictObject({ git: z.array(z.string()).min(1) }),
 ]);

@@ -1,6 +1,7 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import { revealLines, type RevealedRange } from "../../shared/visible-text.ts";
 import { AmbiguousCharacters } from "monaco-editor/base/common/strings";
+import { drawnColumns } from "./read-only-options.ts";
 import { lineRange } from "./line-range.ts";
 import { confusableColumns, lookAlikeColumns, type ColumnRange } from "./look-alikes.ts";
 
@@ -19,35 +20,10 @@ export type DiffSide = DiffSelection["side"];
 const noBracketColours = { enabled: false, independentColorPoolPerBracketType: false };
 const longLineSentence =
   "A changed line here runs past 10,000 characters, so the diff shows only its start.";
+const longFileLineSentence =
+  "A line here runs past 10,000 characters, so the file shows only its start.";
 const confusables = AmbiguousCharacters.getInstance(new Set());
 const revealedMarks = 10_000;
-
-export const drawnColumns = 10_000;
-
-export const readOnlyOptions = {
-  readOnly: true,
-  domReadOnly: true,
-  renderLineHighlight: "none",
-  automaticLayout: true,
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  overviewRulerLanes: 0,
-  overviewRulerBorder: false,
-  scrollbar: { useShadows: false },
-  fontFamily: '"Geist Mono Variable", monospace',
-  fontSize: 13,
-  stopRenderingLineAfter: drawnColumns,
-  unicodeHighlight: {
-    invisibleCharacters: false,
-    ambiguousCharacters: false,
-    nonBasicASCII: false,
-  },
-  tabFocusMode: true,
-  dropIntoEditor: { enabled: false },
-  dragAndDrop: false,
-  contextmenu: false,
-  links: false,
-} satisfies editor.IEditorOptions;
 
 export function plainModel(text: string, language: string) {
   const { text: shown, revealed } = revealLines(text);
@@ -110,14 +86,14 @@ export function selectedLines(sideEditor: editor.ICodeEditor, side: DiffSide) {
   return range === null ? null : { side, ...range };
 }
 
-export function CutShort({ shown }: { shown: boolean }) {
+export function CutShort({ shown, plain = false }: { shown: boolean; plain?: boolean }) {
   if (!shown) return null;
   return (
     <p
       data-testid="diff-cut-short"
       className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
     >
-      {longLineSentence}
+      {plain ? longFileLineSentence : longLineSentence}
     </p>
   );
 }

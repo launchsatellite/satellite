@@ -34,6 +34,7 @@ async function shippedOutsideTheBundle(listed: string): Promise<string[]> {
   return [
     ...(await Promise.all(runtime.map((name) => section(name, "LICENSE")))),
     ...(await Promise.all(fonts.map((name) => section(name, "LICENSE")))),
+    await section("material-icon-theme", "LICENSE"),
     await section("monaco-editor", "ThirdPartyNotices.txt"),
   ];
 }

@@ -1,5 +1,5 @@
 {
-  "description": "A clone of a local upstream with one workspace, alpha, holding a commit that edits, adds, deletes and renames files and uncommitted work on top, with names that hold spaces, quotes, unicode, a leading dash and a direction override, a stand-in gh, a stand-in Claude Code that reports one prompt, and Satellite set to the light theme.",
+  "description": "A clone of a local upstream with one workspace, alpha, holding a commit that edits, adds, deletes and renames files and uncommitted work on top, with names that hold spaces, quotes, unicode, a leading dash and a direction override, a deep file, an image, ignored files, a stand-in gh, a stand-in Claude Code that reports one prompt, and Satellite set to the light theme.",
   "folders": [
     {
       "name": "upstream",
@@ -13,6 +13,20 @@
         },
         { "write": { "path": "old.txt", "content": "This file goes away.\n" } },
         { "write": { "path": "notes.md", "content": "# Notes\n\nKeep this.\n" } },
+        { "write": { "path": ".gitignore", "content": "*.log\nbuild/\n" } },
+        { "write": { "path": "Cargo.toml", "content": "[package]\nname = \"verify\"\n" } },
+        {
+          "write": {
+            "path": "src/deep/er/than/usual/needle-target.ts",
+            "content": "export const needle = \"found\";\n"
+          }
+        },
+        {
+          "write": {
+            "path": "assets/pixel.png",
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        },
         { "git": ["init", "-b", "main"] },
         { "git": ["add", "."] },
         { "git": ["commit", "-m", "first commit"] }
@@ -39,7 +53,9 @@
         { "write": { "path": "it's new.txt", "content": "fresh\n" } },
         { "write": { "path": "-dash.txt", "content": "leading dash\n" } },
         { "write": { "path": "report\u202etxt.md", "content": "hidden direction\n" } },
-        { "write": { "path": "logo.bin", "content": "\u0000\u0001PNG" } }
+        { "write": { "path": "logo.bin", "content": "\u0000\u0001PNG" } },
+        { "write": { "path": "debug.log", "content": "noise\n" } },
+        { "write": { "path": "build/out.js", "content": "console.log(1);\n" } }
       ]
     }
   ],

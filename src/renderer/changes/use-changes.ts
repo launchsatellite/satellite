@@ -6,7 +6,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
-import { createSchedule } from "./list-schedule.ts";
+import { createSchedule } from "../ui/refresh-schedule.ts";
 import { unavailableSentence } from "./change-words.ts";
 
 interface Header {

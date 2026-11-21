@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rmdir, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -319,6 +319,255 @@ async function checkChangesFlood(page: Page, workspace: unknown): Promise<void> 
   assert.equal(changes.kind, "files", "changes.list no longer answered after a flood");
 }
 
+const refusedFilePaths = [
+  "..",
+  "a/../../x",
+  "/etc/hosts",
+  "C:\\Windows",
+  ".git",
+  ".GIT/config",
+  "link-out/inside.txt",
+];
+const treeFolder = "tree";
+const treeFile = "tree/inner.txt";
+const nestedFolder = "tree/nested";
+const ignoredFile = "secret.log";
+const findName = "find-me-by-name.txt";
+
+async function checkFilesRefusals(page: Page, projectId: string): Promise<void> {
+  const workspace = { projectId, workspace: "main" };
+  const folders = Array.from({ length: 17 }, (_, at) => `d${String(at)}`);
+  for (const payload of [
+    { workspace, folders },
+    { workspace, folders: [] },
+    { workspace, folders: [1] },
+    { workspace, folders: "" },
+    { workspace, folders: ["a".repeat(4097)] },
+    { workspace, folders: [""], follow: true },
+    { workspace: { projectId, workspace: "../main" }, folders: [""] },
+  ]) {
+    await refusedWith(page, "files.list", payload, "invalid-request");
+  }
+  for (const payload of [
+    { workspace, path: "a".repeat(4097), known: null },
+    { workspace, path: 1, known: null },
+    { workspace, path: "", known: null },
+    { workspace, path: treeFile, known: {} },
+    { workspace, path: treeFile },
+    { workspace, path: treeFile, known: null, encoding: "latin1" },
+  ]) {
+    await refusedWith(page, "files.read", payload, "invalid-request");
+  }
+  for (const payload of [
+    { workspace, query: "" },
+    { workspace, query: "a".repeat(201) },
+    { workspace, query: 1 },
+    { workspace, query: "a", limit: 5000 },
+  ]) {
+    await refusedWith(page, "files.find", payload, "invalid-request");
+  }
+  for (const elsewhere of [
+    { projectId: randomUUID(), workspace: "main" },
+    { projectId, workspace: randomUUID() },
+  ]) {
+    await refusedWith(page, "files.list", { workspace: elsewhere, folders: [""] }, "not-found");
+    await refusedWith(
+      page,
+      "files.read",
+      { workspace: elsewhere, path: "README.md", known: null },
+      "not-found",
+    );
+    await refusedWith(page, "files.find", { workspace: elsewhere, query: "readme" }, "not-found");
+  }
+}
+
+async function checkFilesAnswers(page: Page, projectId: string): Promise<void> {
+  const workspace = { projectId, workspace: "main" };
+  const listings = await okValue(
+    page,
+    "files.list",
+    { workspace, folders: [...refusedFilePaths.slice(0, 6), "link-out", ""] },
+    z.object({
+      folders: z.array(z.object({ path: z.string(), listing: z.object({ state: z.string() }) })),
+    }),
+  );
+  for (const { path, listing } of listings.folders.slice(0, -1)) {
+    assert.equal(listing.state, "unreadable", `files.list of ${path} answered ${listing.state}`);
+  }
+  for (const path of refusedFilePaths) {
+    const refused = await okValue(
+      page,
+      "files.read",
+      { workspace, path, known: null },
+      z.object({ kind: z.string() }),
+    );
+    assert.equal(refused.kind, "unreadable", `files.read of ${path} answered ${refused.kind}`);
+  }
+  const root = await okValue(
+    page,
+    "files.list",
+    { workspace, folders: ["", treeFolder, ""] },
+    z.object({
+      folders: z.array(
+        z.object({
+          path: z.string(),
+          listing: z.object({
+            state: z.literal("listed"),
+            entries: z.array(z.object({ name: z.string(), ignored: z.boolean() })),
+          }),
+        }),
+      ),
+    }),
+  );
+  assert.deepEqual(
+    root.folders.map(({ path }) => path),
+    ["", treeFolder],
+    "files.list did not answer each folder once in the order asked",
+  );
+  const entries = root.folders[0]?.listing.entries ?? [];
+  const names = entries.map(({ name }) => name);
+  assert.ok(!names.includes(".git"), "files.list listed .git");
+  assert.ok(names.includes("README.md") && names.includes(treeFolder), "files.list missed entries");
+  assert.equal(
+    entries.find(({ name }) => name === ignoredFile)?.ignored,
+    true,
+    "files.list did not flag the ignored file",
+  );
+  const text = z.object({ kind: z.literal("text"), text: z.string(), stamp: z.string() });
+  const ignored = await okValue(
+    page,
+    "files.read",
+    { workspace, path: ignoredFile, known: null },
+    text,
+  );
+  assert.equal(ignored.text, "ignored\n", "files.read did not read the ignored file");
+  const read = await okValue(page, "files.read", { workspace, path: treeFile, known: null }, text);
+  assert.equal(read.text, "inner\n", "files.read did not answer a listed text file");
+  const same = await okValue(
+    page,
+    "files.read",
+    { workspace, path: treeFile, known: read.stamp },
+    z.object({ kind: z.literal("same") }),
+  );
+  assert.equal(same.kind, "same", "files.read of the same stamp did not answer same");
+  const found = await okValue(
+    page,
+    "files.find",
+    { workspace, query: "find-me" },
+    z.object({ kind: z.literal("found"), paths: z.array(z.string()) }),
+  );
+  assert.deepEqual(found.paths, [findName], "files.find missed a name written into the folder");
+  const hidden = await okValue(
+    page,
+    "files.find",
+    { workspace, query: "secret" },
+    z.object({ kind: z.literal("found"), paths: z.array(z.string()) }),
+  );
+  assert.deepEqual(
+    hidden.paths,
+    [],
+    `files.find named ${JSON.stringify(hidden.paths)} for a name git ignores`,
+  );
+}
+
+async function checkNestedRepository(page: Page, projectId: string): Promise<void> {
+  const workspace = { projectId, workspace: "main" };
+  const inside = await okValue(
+    page,
+    "files.list",
+    { workspace, folders: [nestedFolder, `${nestedFolder}/.git`] },
+    z.object({
+      folders: z.array(z.object({ listing: z.object({ state: z.string() }).loose() })),
+    }),
+  );
+  const [opened, hidden] = inside.folders;
+  assert.equal(opened?.listing.state, "listed", "a nested repository did not open like a folder");
+  assert.equal(
+    JSON.stringify(opened).includes(".git"),
+    false,
+    "files.list listed a nested repository's .git",
+  );
+  assert.equal(hidden?.listing.state, "unreadable", "files.list opened a nested .git");
+  const config = await okValue(
+    page,
+    "files.read",
+    { workspace, path: `${nestedFolder}/.git/config`, known: null },
+    z.object({ kind: z.string() }),
+  );
+  assert.equal(config.kind, "unreadable", `files.read of a nested .git answered ${config.kind}`);
+}
+
+async function checkFilesFlood(page: Page, workspace: unknown): Promise<void> {
+  const codes = await page.evaluate(
+    async ({ target, requests }) => {
+      const api: unknown = Reflect.get(window, "satellite");
+      const invoke: unknown =
+        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+      if (typeof invoke !== "function") return ["window.satellite.invoke is missing"];
+      const ask = async (channel: string, payload: unknown) => {
+        const answer: unknown = await Reflect.apply(invoke, api, [channel, payload]);
+        const error: unknown =
+          typeof answer === "object" && answer !== null ? Reflect.get(answer, "error") : undefined;
+        const code: unknown =
+          typeof error === "object" && error !== null ? Reflect.get(error, "code") : "ok";
+        return typeof code === "string" ? code : "unreadable";
+      };
+      return Promise.all(
+        Array.from({ length: requests }, (_, index) => {
+          if (index % 3 === 0)
+            return ask("files.list", { workspace: target, folders: ["", "tree"] });
+          if (index % 3 === 1) {
+            return ask("files.read", { workspace: target, path: "README.md", known: null });
+          }
+          return ask("files.find", { workspace: target, query: "readme" });
+        }),
+      );
+    },
+    { target: workspace, requests: 300 },
+  );
+  const unexpected = codes.filter((code) => !["ok", "refused"].includes(code));
+  assert.deepEqual(unexpected, [], `a flood of files requests answered ${unexpected.join(", ")}`);
+  const after = await okValue(
+    page,
+    "files.read",
+    { workspace, path: "README.md", known: null },
+    z.object({ kind: z.literal("text") }),
+  );
+  assert.equal(after.kind, "text", "files.read no longer answered after a flood");
+}
+
+async function checkFilesRequests(session: AppSession, projectId: string): Promise<void> {
+  const { page, repo } = session;
+  const link = join(repo, "link-out");
+  const written = [
+    join(repo, ".gitignore"),
+    join(repo, ignoredFile),
+    join(repo, treeFile),
+    join(repo, findName),
+    join(repo, nestedFolder, ".git", "config"),
+    join(repo, nestedFolder, "n.txt"),
+  ];
+  await mkdir(join(repo, nestedFolder, ".git"), { recursive: true });
+  await symlink(session.home, link, "junction");
+  try {
+    await writeFile(written[0] ?? "", `${ignoredFile}\n`);
+    await writeFile(written[1] ?? "", "ignored\n");
+    await writeFile(written[2] ?? "", "inner\n");
+    await writeFile(written[3] ?? "", "found\n");
+    await writeFile(written[4] ?? "", "[core]\n");
+    await writeFile(written[5] ?? "", "nested\n");
+    await checkFilesRefusals(page, projectId);
+    await checkFilesAnswers(page, projectId);
+    await checkNestedRepository(page, projectId);
+    await checkFilesFlood(page, { projectId, workspace: "main" });
+  } finally {
+    for (const file of [...written, link]) await unlink(file).catch(() => undefined);
+    for (const folder of [join(nestedFolder, ".git"), nestedFolder, treeFolder]) {
+      await rmdir(join(repo, folder)).catch(() => undefined);
+    }
+  }
+}
+
 async function checkFingerprint(session: AppSession, projectId: string): Promise<void> {
   const { page } = session;
   const { workspace } = await okValue(
@@ -583,6 +832,7 @@ async function run(session: AppSession): Promise<void> {
   await checkRelativeDrop(page);
   const projectId = await checkWorkspaceRequests(session);
   await checkChangesRequests(page, projectId, session.repo);
+  await checkFilesRequests(session, projectId);
   await checkFingerprint(session, projectId);
   await resumableRefused(page, projectId);
   await startsRefused(session, projectId);

@@ -6,20 +6,19 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
-  drawnColumns,
   CutShort,
   lineMarks,
   plainModel,
-  readOnlyOptions,
   gitLineCount,
   selectedLines,
   type DiffHandle,
   type DiffSide,
 } from "./read-only-editor.tsx";
+import { drawnColumns, readOnlyOptions } from "./read-only-options.ts";
 
 interface SideViewProps {
   text: string;
-  side: DiffSide;
+  side: DiffSide | null;
   path: string;
   label: string;
   handle?: Ref<DiffHandle>;
@@ -51,7 +50,8 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
   useImperativeHandle(
     handle,
     () => ({
-      selection: () => (created.current === null ? null : selectedLines(created.current, side)),
+      selection: () =>
+        created.current === null ? null : selectedLines(created.current, side ?? "modified"),
     }),
     [side],
   );
@@ -90,21 +90,28 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
     previous?.dispose();
     const lines = gitLines(model);
     const last = lines.length;
-    const sideMark = {
-      range: { startLineNumber: 1, startColumn: 1, endLineNumber: last, endColumn: 1 },
-      options: { isWholeLine: true, ...sideLook[side] },
-    };
-    made.createDecorationsCollection([
-      ...(last === 0 ? [] : [sideMark]),
-      ...lineMarks(model, lines, revealed),
-    ]);
+    const sideMark =
+      side === null || last === 0
+        ? []
+        : [
+            {
+              range: { startLineNumber: 1, startColumn: 1, endLineNumber: last, endColumn: 1 },
+              options: { isWholeLine: true, ...sideLook[side] },
+            },
+          ];
+    made.createDecorationsCollection([...sideMark, ...lineMarks(model, lines, revealed)]);
     setCutShort(lines.some((line) => model.getLineMaxColumn(line) > drawnColumns));
   }, [text, side, path]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <CutShort shown={cutShort} />
-      <div ref={host} data-testid="diff" data-side={side} className="min-h-0 flex-1" />
+      <CutShort shown={cutShort} plain={side === null} />
+      <div
+        ref={host}
+        data-testid={side === null ? "file-text" : "diff"}
+        data-side={side ?? undefined}
+        className="min-h-0 flex-1"
+      />
     </div>
   );
 }

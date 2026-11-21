@@ -1,0 +1,30 @@
+import { gitReadMs, noLazyFetch, readGit } from "../workspaces/git-command.ts";
+
+type IgnoreCheck =
+  { kind: "checked"; ignored: ReadonlySet<string> } | { kind: "hung" } | { kind: "failed" };
+
+const maxPaths = 5000;
+const failed: IgnoreCheck = { kind: "failed" };
+const hung: IgnoreCheck = { kind: "hung" };
+
+export async function checkIgnored(
+  folder: string,
+  paths: readonly string[],
+  signal?: AbortSignal,
+  timeoutMs = gitReadMs,
+): Promise<IgnoreCheck> {
+  if (paths.length === 0) return { kind: "checked", ignored: new Set() };
+  if (paths.length > maxPaths || paths.some((path) => path === "" || path.includes("\0"))) {
+    return failed;
+  }
+  const run = await readGit(folder, ["check-ignore", "-z", "--stdin"], timeoutMs, signal, {
+    gitVariables: noLazyFetch,
+    input: `${paths.join("\0")}\0`,
+  });
+  if (run === "time" || run === "stuck") return hung;
+  if (typeof run === "string" || (run.exitCode !== 0 && run.exitCode !== 1)) return failed;
+  const asked = new Set(paths);
+  const ignored = new Set(run.stdout.split("\0").filter((path) => path !== ""));
+  for (const path of ignored) if (!asked.has(path)) return failed;
+  return { kind: "checked", ignored };
+}

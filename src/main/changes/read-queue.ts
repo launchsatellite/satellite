@@ -9,7 +9,11 @@ function abortReason(signal: AbortSignal): Error {
   return reason instanceof Error ? reason : new Error("The read was stopped");
 }
 
-export function createReadQueue(size: number, waitLimit: number): ReadQueue {
+export function createReadQueue(
+  size: number,
+  waitLimit: number,
+  fullSentence: string = queueFull,
+): ReadQueue {
   let free = size;
   const waiting: (() => void)[] = [];
   const turn = (signal: AbortSignal) =>
@@ -30,7 +34,7 @@ export function createReadQueue(size: number, waitLimit: number): ReadQueue {
   return async (signal, work) => {
     signal.throwIfAborted();
     if (free > 0) free -= 1;
-    else if (waiting.length >= waitLimit) throw new BridgeFailure("limit", queueFull);
+    else if (waiting.length >= waitLimit) throw new BridgeFailure("limit", fullSentence);
     else await turn(signal);
     try {
       signal.throwIfAborted();

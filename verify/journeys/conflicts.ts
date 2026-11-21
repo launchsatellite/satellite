@@ -38,8 +38,9 @@ async function nudge(session: AppSession): Promise<void> {
 }
 
 async function bannerText(session: AppSession): Promise<string> {
-  const banner = session.page.getByTestId("changes-banner");
-  return (await banner.count()) === 0 ? "" : banner.innerText();
+  return session.page
+    .getByTestId("changes-banner")
+    .evaluateAll((banners) => (banners[0] instanceof HTMLElement ? banners[0].innerText : ""));
 }
 
 async function bannerReads(session: AppSession, expected: string, when: string): Promise<void> {
@@ -87,8 +88,17 @@ async function leavesNothing(session: AppSession, when: string): Promise<void> {
 async function namesTheConflict(session: AppSession): Promise<void> {
   await session.page.getByTestId("workspace-repo-alpha").click();
   await bannerReads(session, bannerSentence, "on opening the workspace");
-  const files = await session.page.getByTestId("changes-banner-files").innerText();
-  assert.equal(files, "shared.txt", `the banner named ${JSON.stringify(files)}`);
+  let files = "";
+  await waitUntil(
+    async () => {
+      files = await session.page
+        .getByTestId("changes-banner-files")
+        .evaluateAll((names) => names[0]?.textContent ?? "");
+      return files === "shared.txt";
+    },
+    waitMs,
+    () => `the banner named ${JSON.stringify(files)}`,
+  );
   const live = await session.page.locator('[role="status"] [data-testid="changes-banner"]').count();
   assert.equal(live, 1, "the banner is not inside a polite live region");
   const colour = await session.page

@@ -1,5 +1,5 @@
 import { constants, type BigIntStats } from "node:fs";
-import { lstat, open, readlink } from "node:fs/promises";
+import { lstat, open, readlink, type FileHandle } from "node:fs/promises";
 import { join, posix, win32 } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import {
@@ -9,7 +9,7 @@ import {
   nonBlocking,
   noTerminal,
 } from "../platform/file-system.ts";
-import { realpathOrUndefined, samePath } from "../platform/paths.ts";
+import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
 import { gitReadMs, noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
@@ -24,6 +24,10 @@ export type SideRead =
   | { kind: "not-utf8" }
   | { kind: "refused" };
 type FolderKind = "plain" | "missing" | "other";
+interface ReadBounds {
+  probe: number;
+  limitFor: (head: Uint8Array) => number;
+}
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
@@ -43,7 +47,8 @@ const notLocal: SideRead = { kind: "not-local" };
 const unreadable: SideRead = { kind: "unreadable" };
 const notUtf8: SideRead = { kind: "not-utf8" };
 const utf8 = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
-const rootsWithStuckReads = new Set<string>();
+export const rootsWithStuckReads = new Set<string>();
+let protectedHome: string | undefined;
 const objectLengths = new Map<string, number>();
 const objectFormatLengths = new Map([
   ["sha1\n", 40],
@@ -56,7 +61,7 @@ function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   return platform !== "win32" || !windowsShortName.test(segment);
 }
 
-function sameFolder(a: string, b: string): boolean {
+export function sameFolder(a: string, b: string): boolean {
   if (process.platform !== "darwin") return samePath(a, b);
   return samePath(a.normalize("NFC"), b.normalize("NFC"));
 }
@@ -71,7 +76,7 @@ function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
   );
 }
 
-function decodedText(bytes: Uint8Array): SideRead {
+export function decodedText(bytes: Uint8Array): SideRead {
   if (looksBinary(bytes)) return binary;
   let text: string;
   try {
@@ -96,7 +101,19 @@ async function folderPathKind(realRoot: string, parent: string): Promise<FolderK
   return "plain";
 }
 
-async function confinedFolder(root: string, parent: string): Promise<string | SideRead> {
+export function protectHome(home: string | undefined): void {
+  protectedHome = home;
+}
+
+async function isSatelliteState(realRoot: string, folder: string): Promise<boolean> {
+  if (protectedHome === undefined) return false;
+  const realHome = await realpathOrUndefined(protectedHome);
+  return (
+    realHome !== undefined && isInsidePath(realHome, folder) && !isInsidePath(realHome, realRoot)
+  );
+}
+
+export async function confinedFolder(root: string, parent: string): Promise<string | SideRead> {
   const realRoot = await realpathOrUndefined(root);
   if (realRoot === undefined) return gone;
   const kind = await folderPathKind(realRoot, parent);
@@ -104,15 +121,37 @@ async function confinedFolder(root: string, parent: string): Promise<string | Si
   const expected = join(realRoot, parent);
   const realParent = await realpathOrUndefined(expected);
   if (realParent === undefined) return gone;
-  return sameFolder(realParent, expected) ? realParent : refused;
+  if (!sameFolder(realParent, expected) || (await isSatelliteState(realRoot, realParent))) {
+    return refused;
+  }
+  return realParent;
 }
 
-async function linkSide(file: string): Promise<SideRead> {
+export async function linkSide(file: string): Promise<SideRead> {
   const target = await readlink(file, "buffer");
   return target.length > changesLimits.linkChars ? large : decodedText(target);
 }
 
-async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {
+async function fill(
+  handle: FileHandle,
+  buffer: Uint8Array,
+  from: number,
+  to: number,
+): Promise<number> {
+  let filled = from;
+  while (filled < to) {
+    const { bytesRead } = await handle.read(buffer, filled, to - filled, filled);
+    if (bytesRead === 0) break;
+    filled += bytesRead;
+  }
+  return filled;
+}
+
+export async function openedBytes(
+  file: string,
+  entry: BigIntStats,
+  bounds?: ReadBounds,
+): Promise<Uint8Array | SideRead> {
   const handle = await open(file, readFlags);
   try {
     const opened = await handle.stat({ bigint: true });
@@ -120,20 +159,25 @@ async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {
     const size = Number(entry.size);
     const buffer = new Uint8Array(size + 1);
     let filled = 0;
-    while (filled < buffer.length) {
-      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
-      if (bytesRead === 0) break;
-      filled += bytesRead;
+    if (bounds !== undefined) {
+      filled = await fill(handle, buffer, 0, Math.min(buffer.length, bounds.probe));
+      if (size > bounds.limitFor(buffer.subarray(0, filled))) return large;
     }
+    filled = await fill(handle, buffer, filled, buffer.length);
     const after = await handle.stat({ bigint: true });
     if (filled !== size || !sameVersion(after, entry)) return changing;
-    return decodedText(buffer.subarray(0, size));
+    return buffer.subarray(0, size);
   } finally {
     await handle.close();
   }
 }
 
-async function withinTime<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {
+  const read = await openedBytes(file, entry);
+  return read instanceof Uint8Array ? decodedText(read) : read;
+}
+
+export async function withinTime<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<undefined>((settle) => {
     timer = setTimeout(() => {
@@ -164,6 +208,10 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
 
 const refusedStamp = "refused";
 
+export function stampOf(entry: BigIntStats): string {
+  return `${String(entry.size)}:${String(entry.mtimeNs)}:${String(entry.ctimeNs)}`;
+}
+
 async function fileStamp(realRoot: string | undefined, path: string): Promise<string> {
   if (!isChangePath(path)) return refusedStamp;
   if (realRoot === undefined) return "gone";
@@ -172,13 +220,13 @@ async function fileStamp(realRoot: string | undefined, path: string): Promise<st
   try {
     const entry = await lstat(join(realRoot, path), { bigint: true });
     if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
-    return `${String(entry.size)}:${String(entry.mtimeNs)}:${String(entry.ctimeNs)}`;
+    return stampOf(entry);
   } catch {
     return "gone";
   }
 }
 
-function markStuck(root: string, work: Promise<unknown>): void {
+export function markStuck(root: string, work: Promise<unknown>): void {
   rootsWithStuckReads.add(root);
   const release = () => {
     rootsWithStuckReads.delete(root);

@@ -32,6 +32,7 @@ const notReadySentence =
 const waitMs = 15_000;
 const settleMs = 5000;
 const quickMs = 2000;
+const quietMs = 1500;
 const backoffMs = 20_000;
 const pollCapMs = 30_000;
 const turnRefreshMs = 5000;
@@ -273,10 +274,20 @@ async function listsUncommitted(session: AppSession): Promise<void> {
   );
 }
 
+async function untilQuiet(page: Page): Promise<void> {
+  for (let round = 0; round < 10; round += 1) {
+    await watchMutations(page);
+    await delay(quietMs);
+    if ((await mutationsSeen(page)).length === 0) return;
+  }
+  throw new Error("the diff never stopped drawing after it opened");
+}
+
 async function staysStill(session: AppSession, folder: string): Promise<void> {
   const { page } = session;
   await select(session, "README.md");
   await modifiedShows(session, "Edited by the agent.", "for README.md");
+  await untilQuiet(page);
   await watchMutations(page);
   const later = new Date(Date.now() + 60_000);
   await utimes(join(folder, "README.md"), later, later);

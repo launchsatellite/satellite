@@ -18,7 +18,7 @@ import type {
 import { invoke } from "../bridge/bridge-client.ts";
 import type { DiffHandle, DiffSide } from "../diff/read-only-editor.tsx";
 import { diffLabels, sideSentence } from "./change-words.ts";
-import { pollDelay } from "./list-schedule.ts";
+import { pollDelay } from "../ui/refresh-schedule.ts";
 import { changesPlace } from "./use-changes.ts";
 
 export interface ShownText {
@@ -87,7 +87,10 @@ function peeked(key: string): FileSides | undefined {
   return answers.get(key)?.sides;
 }
 
-class EditorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export class EditorBoundary extends Component<
+  { children: ReactNode; sentence: string; testId: string },
+  { failed: boolean }
+> {
   override state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -99,10 +102,10 @@ class EditorBoundary extends Component<{ children: ReactNode }, { failed: boolea
     return (
       <div className="flex h-full items-center justify-center p-8">
         <p
-          data-testid="changes-sentence"
+          data-testid={this.props.testId}
           className="max-w-[360px] text-center text-[13px] text-fg2"
         >
-          {editorFailedSentence}
+          {this.props.sentence}
         </p>
       </div>
     );
@@ -250,7 +253,7 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
   return (
     <div className={`h-full ${stale ? "opacity-50" : ""}`} aria-busy={stale || undefined}>
       {drawn.sides?.kind === "text" ? (
-        <EditorBoundary>
+        <EditorBoundary sentence={editorFailedSentence} testId="changes-sentence">
           <Suspense fallback={<Opening />}>
             <Editors sides={drawn.sides} file={drawn.file} inline={inline} handle={handle} />
           </Suspense>

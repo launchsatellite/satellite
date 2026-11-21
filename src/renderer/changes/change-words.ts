@@ -10,6 +10,11 @@ import { visibleText } from "../../shared/visible-text.ts";
 type UnavailableReason = Extract<ChangesList["changes"], { kind: "unavailable" }>["reason"];
 type SideSentenceKind = Exclude<FileSides, { kind: "text" }>;
 
+export const letterColours: Partial<Record<ChangeLetter, string>> = {
+  A: "text-addfg",
+  D: "text-delfg",
+};
+
 const letterStates: Record<Exclude<ChangeLetter, "A" | "R" | "C">, string> = {
   M: "modified",
   D: "deleted",

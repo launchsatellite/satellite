@@ -242,6 +242,7 @@ export async function runTool(
     signal?: AbortSignal;
     gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
     bytes?: boolean;
+    input?: string;
   } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
@@ -252,13 +253,24 @@ export async function runTool(
     if (value !== undefined) env[name] = value;
   }
   return new Promise((resolve, reject) => {
-    const child = spawn(command.file, [...command.args, ...args], {
+    const launch = {
       env,
       shell: false,
       windowsHide: true,
       detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    };
+    const child =
+      options.input === undefined
+        ? spawn(command.file, [...command.args, ...args], {
+            ...launch,
+            stdio: ["ignore", "pipe", "pipe"],
+          })
+        : spawn(command.file, [...command.args, ...args], {
+            ...launch,
+            stdio: ["pipe", "pipe", "pipe"],
+          });
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(options.input);
     const exited = new Promise<void>((settle) =>
       child.once("exit", () => {
         settle();

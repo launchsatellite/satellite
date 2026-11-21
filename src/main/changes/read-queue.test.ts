@@ -73,4 +73,14 @@ describe("createReadQueue", () => {
     await expect(second).rejects.toThrow("broke");
     expect(await queue(new AbortController().signal, () => Promise.resolve("free"))).toBe("free");
   });
+
+  it("refuses with the sentence it was given", async () => {
+    const queue = createReadQueue(1, 0, "Busy.");
+    const first = queue(new AbortController().signal, held().work);
+    await expect(queue(new AbortController().signal, held().work)).rejects.toMatchObject({
+      code: "limit",
+      message: "Busy.",
+    });
+    first.catch(() => undefined);
+  });
 });
