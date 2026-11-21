@@ -151,14 +151,14 @@ describe("readFileForViewing", () => {
 
   it("answers binary for a NUL, not-utf8 for bytes that are not text, large past the line limit", async () => {
     const root = await makeRepository();
-    await writeFile(join(root, "nul.bin"), Buffer.from([65, 0, 66]));
+    await writeFile(join(root, "zero.bin"), Buffer.from([65, 0, 66]));
     await writeFile(join(root, "latin.txt"), Buffer.from([0xc3, 0x28]));
     await writeFile(join(root, "tall.txt"), "\n".repeat(20_001));
     await writeFile(join(root, "limit.txt"), "\n".repeat(20_000));
     await writeFile(join(root, "wide.txt"), Buffer.alloc(1_048_577, 65));
     await writeFile(join(root, "crlf.txt"), "a\r\nb\r\n");
     await writeFile(join(root, "empty.txt"), "");
-    expect(await seen(root, "nul.bin", null)).toEqual({ kind: "binary" });
+    expect(await seen(root, "zero.bin", null)).toEqual({ kind: "binary" });
     expect(await seen(root, "latin.txt", null)).toEqual({ kind: "not-utf8" });
     expect(await seen(root, "tall.txt", null)).toEqual({ kind: "large" });
     expect(await seen(root, "limit.txt", null)).toMatchObject({ kind: "text" });
