@@ -7,8 +7,6 @@ export interface PullRequestPlace {
   number: number;
 }
 
-export type GhCall = "pull-request" | "threads" | "failed-log";
-
 export const viewFields =
   "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews,statusCheckRollup,commits";
 export const viewProjection =
@@ -19,11 +17,10 @@ export const threadsQuery =
 const ownerPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/;
 const repoPattern = /^[A-Za-z0-9._-]{1,100}$/;
 const numberPattern = /^[1-9][0-9]{0,9}$/;
-const jobPattern = /^[0-9]{1,20}$/;
 const addressPattern =
   /^\/([A-Za-z0-9][A-Za-z0-9_-]{0,38})\/([A-Za-z0-9._-]{1,100})\/pull\/([1-9][0-9]{0,9})$/;
 
-function isCheckedPlace({ host, owner, repo, number }: PullRequestPlace): boolean {
+export function isCheckedPlace({ host, owner, repo, number }: PullRequestPlace): boolean {
   return (
     ghHost.test(host) &&
     !host.includes(":") &&
@@ -34,40 +31,6 @@ function isCheckedPlace({ host, owner, repo, number }: PullRequestPlace): boolea
     Number.isSafeInteger(number) &&
     numberPattern.test(String(number))
   );
-}
-
-function sameArguments(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((arg, index) => arg === right[index]);
-}
-
-function valueAfter(args: readonly string[], index: number, name: string): string | undefined {
-  const [flag, value] = [args[index], args[index + 1]];
-  return flag === name && value !== undefined ? value : undefined;
-}
-
-function prefixed(value: string | undefined, prefix: string): string | undefined {
-  return value?.startsWith(prefix) === true ? value.slice(prefix.length) : undefined;
-}
-
-function threadsCall(args: readonly string[]): boolean {
-  const host = valueAfter(args, 2, "--hostname");
-  const owner = prefixed(valueAfter(args, 4, "-f"), "owner=");
-  const repo = prefixed(valueAfter(args, 6, "-f"), "repo=");
-  const number = prefixed(valueAfter(args, 8, "-F"), "number=");
-  if (host === undefined || owner === undefined || repo === undefined || number === undefined) {
-    return false;
-  }
-  const place = { host, owner, repo, number: Number(number) };
-  return isCheckedPlace(place) && sameArguments(args, threadsArguments(place));
-}
-
-function logCall(args: readonly string[]): boolean {
-  const job = valueAfter(args, 2, "--job");
-  const repository = valueAfter(args, 5, "-R")?.split("/");
-  if (job === undefined || !jobPattern.test(job) || repository?.length !== 3) return false;
-  const [host = "", owner = "", repo = ""] = repository;
-  const place = { host, owner, repo, number: 1 };
-  return isCheckedPlace(place) && sameArguments(args, logArguments(place, job));
 }
 
 export function viewArguments(): string[] {
@@ -103,11 +66,4 @@ export function placeOf(url: string): PullRequestPlace | null {
   const [, owner = "", repo = "", number = ""] = addressPattern.exec(parsed.pathname) ?? [];
   const place = { host: parsed.hostname, owner, repo, number: Number(number) };
   return isCheckedPlace(place) ? place : null;
-}
-
-export function callOf(args: readonly string[]): GhCall | null {
-  if (sameArguments(args, viewArguments())) return "pull-request";
-  if (args[0] === "api" && threadsCall(args)) return "threads";
-  if (args[0] === "run" && logCall(args)) return "failed-log";
-  return null;
 }

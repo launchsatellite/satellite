@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { callOf } from "../../src/main/pull-request/gh-arguments.ts";
+import { callOf } from "./gh-call.ts";
 import { loadScenario, type Scenario } from "../scenario.ts";
 import { appendStandInEvent } from "./stand-in-log.ts";
 
