@@ -485,7 +485,7 @@ async function sendsLines(session: AppSession): Promise<void> {
   await page.getByTestId("new-session").click();
   await stateIs(session, "session-tab-2", "idle", "for the second session");
   from = (await session.standInEvents()).length;
-  await page.getByTestId("diff-send-lines").click();
+  await page.keyboard.press(shortcut);
   await toastReads(session, notReadySentence, "after sending lines to a session not ready");
   assert.equal(await standInInput(session, from), "", "lines reached a session not ready");
 }
