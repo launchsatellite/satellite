@@ -27,8 +27,14 @@ const notListed = {
   message: "That file is no longer in the list of changes. The list refreshes in a moment.",
 };
 
-function storeOf(path: string, asked: () => void): ProjectStore {
-  const project = { id: projectId, path, workspaces: [] };
+function storeOf(path: string | (() => string), asked: () => void): ProjectStore {
+  const project = {
+    id: projectId,
+    get path() {
+      return typeof path === "string" ? path : path();
+    },
+    workspaces: [],
+  };
   return {
     list: () => Promise.resolve([project]),
     project: () => {
@@ -121,6 +127,66 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     await expect(file({ workspace, view, path: "edit.txt" }, page)).rejects.toMatchObject(
       notListed,
     );
+  });
+
+  it("answers a file only from the folder its list read", async () => {
+    const first = await repository();
+    const second = await repository();
+    let path = first.repo;
+    const changes = createChanges({
+      home: first.home,
+      store: storeOf(
+        () => path,
+        () => undefined,
+      ),
+    });
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    await changes.handlers["changes.list"]({ workspace, view }, page);
+    path = second.repo;
+    await expect(
+      changes.handlers["changes.file"]({ workspace, view, path: "edit.txt" }, page),
+    ).rejects.toMatchObject(notListed);
+  });
+
+  it("keeps a page's last 8 lists and forgets older ones", async () => {
+    const { repo, home } = await repository();
+    const changes = createChanges({ home, store: storeOf(repo, () => undefined) });
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    const projects = Array.from(
+      { length: 9 },
+      (_, at) => `0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d${String(at).padStart(2, "0")}`,
+    );
+    for (const id of projects) {
+      await changes.handlers["changes.list"](
+        { workspace: { ...workspace, projectId: id }, view },
+        page,
+      );
+    }
+    const fileOf = (id: string) =>
+      changes.handlers["changes.file"](
+        { workspace: { ...workspace, projectId: id }, view, path: "edit.txt" },
+        page,
+      );
+    await expect(fileOf(projects[0] ?? "")).rejects.toMatchObject(notListed);
+    for (const id of projects.slice(1)) {
+      expect(await fileOf(id)).toMatchObject({ kind: "text", modified: "two\n" });
+    }
+  });
+
+  it("stops a page's older file read when it asks for another", async () => {
+    const { changes } = await repository();
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    await changes.handlers["changes.list"]({ workspace, view }, page);
+    const older = changes.handlers["changes.file"]({ workspace, view, path: "edit.txt" }, page);
+    const newer = changes.handlers["changes.file"]({ workspace, view, path: "edit.txt" }, page);
+    await expect(older).rejects.toMatchObject({
+      code: "refused",
+      message: "Satellite moved on to a newer read.",
+    });
+    expect(await newer).toMatchObject({ kind: "text" });
   });
 
   it("stops a page's older list when it asks for another view", async () => {

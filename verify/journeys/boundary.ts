@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -34,6 +34,7 @@ const settleMs = 1_000;
 const violationTimeoutMs = 10_000;
 const policyDirectives = ["script-src-elem", "connect-src", "img-src", "frame-src"];
 const madeUpFingerprint = "0".repeat(64);
+const listedName = "listed by changes.txt";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const hookSettings = z.object({
@@ -200,7 +201,7 @@ async function checkWorkspaceRequests(session: AppSession): Promise<string> {
   return projectId;
 }
 
-async function checkChangesRequests(page: Page, projectId: string): Promise<void> {
+async function checkChangesRequests(page: Page, projectId: string, repo: string): Promise<void> {
   const workspace = { projectId, workspace: "main" };
   const view = "uncommitted";
   for (const payload of [
@@ -224,6 +225,23 @@ async function checkChangesRequests(page: Page, projectId: string): Promise<void
     z.object({ changes: z.object({ kind: z.literal("files"), files: z.array(z.unknown()) }) }),
   );
   assert.deepEqual(changes.files, [], "changes.list listed files in a clean main workspace");
+  await writeFile(join(repo, listedName), "listed\n");
+  const listed = await okValue(
+    page,
+    "changes.list",
+    { workspace, view },
+    z.object({
+      changes: z.object({
+        kind: z.literal("files"),
+        files: z.array(z.object({ path: z.string() })),
+      }),
+    }),
+  );
+  assert.deepEqual(
+    listed.changes.files.map((file) => file.path),
+    [listedName],
+    "changes.list missed a new untracked file",
+  );
   for (const path of [
     "../../../etc/hosts",
     ".git/config",
@@ -235,6 +253,13 @@ async function checkChangesRequests(page: Page, projectId: string): Promise<void
   ]) {
     await refusedWith(page, "changes.file", { workspace, view, path }, "not-found");
   }
+  const shown = await okValue(
+    page,
+    "changes.file",
+    { workspace, view, path: listedName },
+    z.object({ kind: z.literal("text"), modified: z.string() }),
+  );
+  assert.equal(shown.modified, "listed\n", "changes.file did not answer a listed file");
   const elsewhere = { projectId: randomUUID(), workspace: "main" };
   await refusedWith(
     page,
@@ -251,6 +276,7 @@ async function checkChangesRequests(page: Page, projectId: string): Promise<void
     { workspace, view, path: "README.md", oid: "0".repeat(40) },
     "invalid-request",
   );
+  await unlink(join(repo, listedName));
   await checkChangesFlood(page, workspace);
 }
 
@@ -556,7 +582,7 @@ async function run(session: AppSession): Promise<void> {
   await checkPathForFile(page);
   await checkRelativeDrop(page);
   const projectId = await checkWorkspaceRequests(session);
-  await checkChangesRequests(page, projectId);
+  await checkChangesRequests(page, projectId, session.repo);
   await checkFingerprint(session, projectId);
   await resumableRefused(page, projectId);
   await startsRefused(session, projectId);
