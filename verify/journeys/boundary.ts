@@ -330,6 +330,7 @@ const refusedFilePaths = [
 ];
 const treeFolder = "tree";
 const treeFile = "tree/inner.txt";
+const nestedFolder = "tree/nested";
 const ignoredFile = "secret.log";
 const findName = "find-me-by-name.txt";
 
@@ -465,6 +466,33 @@ async function checkFilesAnswers(page: Page, projectId: string): Promise<void> {
   assert.deepEqual(hidden.paths, [], "files.find named a file git ignores");
 }
 
+async function checkNestedRepository(page: Page, projectId: string): Promise<void> {
+  const workspace = { projectId, workspace: "main" };
+  const inside = await okValue(
+    page,
+    "files.list",
+    { workspace, folders: [nestedFolder, `${nestedFolder}/.git`] },
+    z.object({
+      folders: z.array(z.object({ listing: z.object({ state: z.string() }).loose() })),
+    }),
+  );
+  const [opened, hidden] = inside.folders;
+  assert.equal(opened?.listing.state, "listed", "a nested repository did not open like a folder");
+  assert.equal(
+    JSON.stringify(opened?.listing).includes(".git"),
+    false,
+    "files.list listed a nested repository's .git",
+  );
+  assert.equal(hidden?.listing.state, "unreadable", "files.list opened a nested .git");
+  const config = await okValue(
+    page,
+    "files.read",
+    { workspace, path: `${nestedFolder}/.git/config`, known: null },
+    z.object({ kind: z.string() }),
+  );
+  assert.equal(config.kind, "unreadable", `files.read of a nested .git answered ${config.kind}`);
+}
+
 async function checkFilesFlood(page: Page, workspace: unknown): Promise<void> {
   const codes = await page.evaluate(
     async ({ target, requests }) => {
@@ -512,20 +540,27 @@ async function checkFilesRequests(session: AppSession, projectId: string): Promi
     join(repo, ignoredFile),
     join(repo, treeFile),
     join(repo, findName),
+    join(repo, nestedFolder, ".git", "config"),
+    join(repo, nestedFolder, "n.txt"),
   ];
-  await mkdir(join(repo, treeFolder));
+  await mkdir(join(repo, nestedFolder, ".git"), { recursive: true });
   await symlink(session.home, link, "junction");
   try {
     await writeFile(written[0] ?? "", `${ignoredFile}\n`);
     await writeFile(written[1] ?? "", "ignored\n");
     await writeFile(written[2] ?? "", "inner\n");
     await writeFile(written[3] ?? "", "found\n");
+    await writeFile(written[4] ?? "", "[core]\n");
+    await writeFile(written[5] ?? "", "nested\n");
     await checkFilesRefusals(page, projectId);
     await checkFilesAnswers(page, projectId);
+    await checkNestedRepository(page, projectId);
     await checkFilesFlood(page, { projectId, workspace: "main" });
   } finally {
     for (const file of [...written, link]) await unlink(file).catch(() => undefined);
-    await rmdir(join(repo, treeFolder)).catch(() => undefined);
+    for (const folder of [join(nestedFolder, ".git"), nestedFolder, treeFolder]) {
+      await rmdir(join(repo, folder)).catch(() => undefined);
+    }
   }
 }
 
