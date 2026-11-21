@@ -77,23 +77,15 @@ function decodedText(bytes: Uint8Array): SideRead {
   return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };
 }
 
-async function folderPathKind(
-  realRoot: string,
-  parent: string,
-  checked: Map<string, FolderKind>,
-): Promise<FolderKind> {
+async function folderPathKind(realRoot: string, parent: string): Promise<FolderKind> {
   if (parent === ".") return "plain";
   let folder = "";
   for (const segment of parent.split("/")) {
     folder = folder === "" ? segment : `${folder}/${segment}`;
-    const known = checked.get(folder);
-    if (known === "plain") continue;
-    if (known !== undefined) return known;
     const kind = await lstat(join(realRoot, folder)).then(
       (entry) => (entry.isDirectory() ? "plain" : "other"),
       (error: unknown) => (isMissing(error) ? "missing" : "other"),
     );
-    checked.set(folder, kind);
     if (kind !== "plain") return kind;
   }
   return "plain";
@@ -102,7 +94,7 @@ async function folderPathKind(
 async function confinedFolder(root: string, parent: string): Promise<string | SideRead> {
   const realRoot = await realpathOrUndefined(root);
   if (realRoot === undefined) return gone;
-  const kind = await folderPathKind(realRoot, parent, new Map());
+  const kind = await folderPathKind(realRoot, parent);
   if (kind !== "plain") return kind === "missing" ? gone : refused;
   const expected = join(realRoot, parent);
   const realParent = await realpathOrUndefined(expected);
@@ -165,15 +157,13 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   return sameFolder(recheck, folder) ? read : refused;
 }
 
-async function fileStamp(
-  realRoot: string | undefined,
-  path: string,
-  checked: Map<string, FolderKind>,
-): Promise<string> {
+async function fileStamp(realRoot: string | undefined, path: string): Promise<string> {
   if (realRoot === undefined || !isChangePath(path)) return "gone";
-  if ((await folderPathKind(realRoot, posix.dirname(path), checked)) !== "plain") return "gone";
+  const parent = posix.dirname(path);
+  if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
   try {
     const entry = await lstat(join(realRoot, path), { bigint: true });
+    if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
     return `${String(entry.size)}:${String(entry.mtimeNs)}`;
   } catch {
     return "gone";
@@ -262,19 +252,22 @@ export async function worktreeStamps(
 ): Promise<Map<string, string>> {
   const stamps = new Map<string, string>();
   if (rootsWithStuckReads.has(root)) return stamps;
+  const pass = { late: false };
   const work = (async () => {
     const realRoot = await realpathOrUndefined(root);
-    const checked = new Map<string, FolderKind>();
     for (const path of paths) {
-      if (signal.aborted) return;
-      stamps.set(path, await fileStamp(realRoot, path, checked));
+      if (signal.aborted || pass.late) return;
+      stamps.set(path, await fileStamp(realRoot, path));
     }
   })();
   const finished = await withinTime(
     work.then(() => true),
     gitReadMs,
   );
-  if (finished === undefined) markStuck(root, work);
+  if (finished === undefined) {
+    pass.late = true;
+    markStuck(root, work);
+  }
   return new Map(stamps);
 }
 

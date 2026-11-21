@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import type { BigIntStats } from "node:fs";
+import { renameSync, symlinkSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rename, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -548,6 +549,73 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       ["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)],
       ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)],
     ]);
+  });
+
+  it("never stamps through a folder swapped for a link while the stamps are read", async () => {
+    const { repo, git } = await repository();
+    await mkdir(join(repo, "dir"));
+    await writeFile(join(repo, "dir", "a.txt"), "a\n");
+    await writeFile(join(repo, "dir", "b.txt"), "b\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "dir", "a.txt"), "a2\n");
+    await writeFile(join(repo, "dir", "b.txt"), "b2\n");
+    const outside = join(repo, "..", "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "b.txt"), "twenty one bytes long");
+    const head = await git("rev-parse", "HEAD");
+    fileCalls.lstat = (path) => {
+      if (path.endsWith(join("dir", "a.txt"))) {
+        fileCalls.lstat = undefined;
+        renameSync(join(repo, "dir"), join(repo, "..", "moved"));
+        symlinkSync(outside, join(repo, "dir"), "junction");
+      }
+      return undefined;
+    };
+    try {
+      const list = await listed(repo, head);
+      const stamp = list.records.find((record) => record.path === "dir/b.txt")?.stamp;
+      expect(stamp).toMatch(/^[0-9a-f]{40}:gone$/);
+    } finally {
+      fileCalls.lstat = undefined;
+    }
+  });
+
+  it("stops a stamp pass that ran out of time after the call in flight", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "edit.txt"), "one\n");
+    await writeFile(join(repo, "other.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "edit.txt"), "two\n");
+    await writeFile(join(repo, "other.txt"), "two\n");
+    const head = await git("rev-parse", "HEAD");
+    const { promise: reached, resolve: reach } = Promise.withResolvers<undefined>();
+    const { promise: held, resolve: release } = Promise.withResolvers<undefined>();
+    const touched: string[] = [];
+    fileCalls.lstat = (path) => {
+      touched.push(path);
+      if (!path.endsWith("edit.txt")) return undefined;
+      reach(undefined);
+      return held.then(() => {
+        throw Object.assign(new Error("gone"), { code: "ENOENT" });
+      });
+    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const reading = readChangeList(repo, head, new AbortController().signal);
+      await reached;
+      await vi.advanceTimersByTimeAsync(gitReadMs);
+      await reading;
+      release(undefined);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(touched.filter((path) => path.endsWith("other.txt"))).toEqual([]);
+      fileCalls.lstat = undefined;
+      expect((await readWorktreeSide(repo, "edit.txt")).kind).toBe("text");
+    } finally {
+      fileCalls.lstat = undefined;
+      vi.useRealTimers();
+    }
   });
 
   it("stops counting untracked lines as soon as the list is stopped", async () => {
