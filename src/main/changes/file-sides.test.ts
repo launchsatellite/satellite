@@ -179,10 +179,10 @@ describe("readWorktreeSide", () => {
     expect((await readWorktreeSide(root, "most-lines.txt")).kind).toBe("text");
     await writeFile(join(root, "returns.txt"), "a\r".repeat(20_001));
     await writeFile(join(root, "windows.txt"), "a\r\n".repeat(19_999) + "a");
-    expect(await readWorktreeSide(root, "returns.txt")).toEqual({ kind: "large" });
+    expect((await readWorktreeSide(root, "returns.txt")).kind).toBe("text");
     expect((await readWorktreeSide(root, "windows.txt")).kind).toBe("text");
     expect(["", "a", "a\n", "a\r", "a\r\n", "a\rb", "a\r\nb\n", "\n\r\r\n"].map(lineCount)).toEqual(
-      [0, 1, 1, 1, 1, 2, 2, 3],
+      [0, 1, 1, 1, 1, 1, 2, 2],
     );
   });
 
