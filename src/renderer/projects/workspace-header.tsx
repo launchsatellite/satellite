@@ -40,7 +40,8 @@ export function WorkspaceHeader({
   return (
     <header
       data-testid="workspace-header"
-      className="@container flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
+      tabIndex={-1}
+      className="@container focus:outline-none flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
       <h1 className="max-w-[45%] min-w-10 truncate text-[14px] font-semibold">
         {workspace.name ?? project.name}

@@ -20,6 +20,7 @@ interface ProcessesDialogProps {
   more: number;
   sessionNumber: (terminalId: string) => number | undefined;
   stopping: ReadonlySet<string>;
+  problem: string | null;
   onStop: (row: ProcessRow) => void;
   onPort: (url: string) => void;
   onClose: () => void;
@@ -40,6 +41,7 @@ function Row({
   at,
   number,
   stopping,
+  busy,
   onStop,
   onPort,
 }: {
@@ -48,6 +50,7 @@ function Row({
   at: number;
   number: number | undefined;
   stopping: boolean;
+  busy: boolean;
   onStop: () => void;
   onPort: (url: string) => void;
 }) {
@@ -119,7 +122,7 @@ function Row({
         variant="secondary"
         size="small"
         testId={`${testId}-stop`}
-        disabled={stopping}
+        disabled={busy}
         onClick={onStop}
       >
         {stopping ? (
@@ -141,6 +144,7 @@ export function ProcessesDialog({
   more,
   sessionNumber,
   stopping,
+  problem,
   onStop,
   onPort,
   onClose,
@@ -161,6 +165,7 @@ export function ProcessesDialog({
       testId="processes-dialog"
       onClose={onClose}
       closable
+      returnFocusTo="workspace-header"
       footer={
         <Button onClick={onClose} testId="processes-close" autoFocus>
           Done
@@ -182,6 +187,7 @@ export function ProcessesDialog({
                 at={at}
                 number={sessionNumber(row.session)}
                 stopping={stopping.has(stopKey(row))}
+                busy={stopping.size > 0}
                 onStop={() => {
                   onStop(row);
                 }}
@@ -189,6 +195,11 @@ export function ProcessesDialog({
               />
             ))}
           </ul>
+        )}
+        {problem !== null && (
+          <p data-testid="processes-problem" role="alert" className={note}>
+            {problem}
+          </p>
         )}
         {more > 0 && (
           <p data-testid="processes-more" className={note}>

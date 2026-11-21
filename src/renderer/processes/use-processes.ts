@@ -10,6 +10,8 @@ export interface Processes {
   at: number;
   moreOf: (ref: WorkspaceRef) => number;
   stopping: ReadonlySet<string>;
+  problem: string | null;
+  refresh: () => void;
   stop: (row: ProcessRow) => void;
 }
 interface ProcessesInput {
@@ -43,11 +45,15 @@ function shownKey(rows: readonly ProcessRow[], at: number, more: ProcessesMore):
 export function useProcesses({ live, finished, notify }: ProcessesInput): Processes {
   const [shown, setShown] = useState<Shown>(nothing);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
+  const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
+  const [problem, setProblem] = useState<string | null>(null);
   const refreshNow = useRef<() => void>(() => undefined);
   const previous = useRef({ live, finished });
   const running = live !== "";
 
   if (!running && shown !== nothing) setShown(nothing);
+  if (!running && ended.size > 0) setEnded(new Set());
+  if (!running && problem !== null) setProblem(null);
 
   useEffect(() => {
     if (!running) {
@@ -110,18 +116,23 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
         (row) =>
           row.workspace.projectId === ref.projectId &&
           row.workspace.workspace === ref.workspace &&
-          liveIds.has(row.session),
+          liveIds.has(row.session) &&
+          !ended.has(stopKey(row)),
       ),
-    [shown.rows, liveIds],
+    [shown.rows, liveIds, ended],
   );
 
   const stop = useCallback(
     (row: ProcessRow) => {
       const key = stopKey(row);
+      setProblem(null);
       setStopping((current) => new Set(current).add(key));
       void invoke("processes.stop", { pid: row.pid, started: row.started }).then((result) => {
-        if (!result.ok) {
-          notify(result.error.message, result.error.code === "not-found" ? "info" : "error");
+        if (result.ok || result.error.code === "not-found") {
+          setEnded((current) => new Set(current).add(key));
+        } else {
+          setProblem(result.error.message);
+          notify(result.error.message, "error");
         }
         setStopping((current) => {
           const next = new Set(current);
@@ -134,6 +145,10 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
     [notify],
   );
 
+  const refresh = useCallback(() => {
+    refreshNow.current();
+  }, []);
+
   const moreOf = useCallback(
     (ref: WorkspaceRef) =>
       shown.more
@@ -145,5 +160,13 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
     [shown.more],
   );
 
-  return { rowsOf, at: shown.at, moreOf, stopping, stop };
+  return {
+    rowsOf,
+    at: shown.at,
+    moreOf,
+    stopping,
+    problem,
+    refresh,
+    stop,
+  };
 }

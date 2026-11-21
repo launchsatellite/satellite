@@ -417,6 +417,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .map((tab) => tab.key)
     .join(" ");
   const processes = useProcesses({ live: liveTerminals, finished: finishedTabs, notify });
+  const refreshProcesses = processes.refresh;
+  useEffect(() => {
+    if (processesOpen) refreshProcesses();
+  }, [processesOpen, refreshProcesses]);
   const processesHere = changesHere === null ? [] : processes.rowsOf(changesHere);
   const processesFor = useCallback(
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
@@ -1104,9 +1108,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             label={workspaceLabel(selectedProject, selectedWorkspace)}
             rows={processesHere}
             at={processes.at}
-            more={changesHere === null ? 0 : processes.moreOf(changesHere)}
+            more={processes.moreOf(changesHere)}
             sessionNumber={sessionNumber}
             stopping={processes.stopping}
+            problem={processes.problem}
             onStop={processes.stop}
             onPort={askProcessPort}
             onClose={closeProcesses}

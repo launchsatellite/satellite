@@ -8,6 +8,7 @@ interface DialogProps {
   closable: boolean;
   children: ReactNode;
   footer: ReactNode;
+  returnFocusTo?: string;
 }
 
 const focusable =
@@ -40,6 +41,7 @@ export function Dialog({
   closable,
   children,
   footer,
+  returnFocusTo,
 }: DialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -82,9 +84,15 @@ export function Dialog({
     if (!element.contains(focused)) element.focus();
     return () => {
       for (const sibling of behind) sibling.removeAttribute("inert");
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      if (opener instanceof HTMLElement && opener.isConnected) {
+        opener.focus();
+        return;
+      }
+      if (returnFocusTo !== undefined) {
+        document.querySelector<HTMLElement>(`[data-testid="${returnFocusTo}"]`)?.focus();
+      }
     };
-  }, [focusedAtRender]);
+  }, [focusedAtRender, returnFocusTo]);
 
   return (
     <div className="fixed inset-0 z-50">
