@@ -49,8 +49,6 @@ const objectFormatLengths = new Map([
   ["sha1\n", 40],
   ["sha256\n", 64],
 ]);
-const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
-const falseValues = new Set(["", "false", "no", "off", "0"]);
 
 function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   if (!isSafeFileName(segment, platform)) return false;
@@ -218,21 +216,6 @@ async function objectLength(folder: string, signal?: AbortSignal) {
   return length;
 }
 
-function namesPromisor(entry: string): boolean {
-  const [, value] = entry.split("\n");
-  return value === undefined || !falseValues.has(value.toLowerCase());
-}
-
-async function missingBlob(folder: string, signal?: AbortSignal): Promise<SideRead> {
-  return (await isPartialClone(folder, signal)) ? notLocal : gone;
-}
-
-export async function isPartialClone(folder: string, signal?: AbortSignal): Promise<boolean> {
-  const args = ["config", "-z", "--get-regexp", promisorKeys];
-  const entries = stdoutOf(await gitOutput(folder, args, signal)) ?? "";
-  return entries.split("\0").some((entry) => entry !== "" && namesPromisor(entry));
-}
-
 export function isChangePath(path: string, platform: NodeJS.Platform = process.platform): boolean {
   if (path.length === 0 || path.length > changesLimits.pathChars) return false;
   if (path.includes("\0") || path.includes("\ufffd") || drivePrefix.test(path)) return false;
@@ -305,12 +288,12 @@ export async function readBlobSide(
   const sized = await gitOutput(folder, ["cat-file", "-s", oid], signal);
   if (isHung(sized)) return hung;
   const size = sizeOutput.exec(stdoutOf(sized) ?? "");
-  if (size?.[1] === undefined) return missingBlob(folder, signal);
+  if (size?.[1] === undefined) return notLocal;
   if (Number(size[1]) > changesLimits.sideBytes) return large;
   const read = await gitOutput(folder, ["cat-file", "blob", oid], signal, true);
   if (isHung(read)) return hung;
   const content = stdoutOf(read);
-  if (content === undefined) return missingBlob(folder, signal);
+  if (content === undefined) return gone;
   if (content.length > changesLimits.sideBytes) return large;
   return decodedText(Buffer.from(content, "latin1"));
 }

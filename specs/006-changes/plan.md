@@ -168,9 +168,9 @@ Requests, added to `bridgeRequests`.
 
 - `branch` is `git branch --show-current` in the worktree, `null` when detached. `base` is the base's short name, `origin/main` for `refs/remotes/origin/main`, `main` for `refs/heads/main`. `ahead` and `behind` follow the sidebar's rule, against the upstream, or without one `ahead` counts the commits on no remote and `behind` is `null`, both `null` without a remote.
 - `conflict` is `null` until Task 7.
-- `longPaths` counts the files whose path or former path is longer than `pathChars`, left out of `files`. `not-local` is a list git cannot build because a partial clone never downloaded its objects, `too-many` one whose git output passed the 16 MiB `runTool` reads, `hung` one whose git ran out of time or found git stuck in that folder. A file listed twice, deleted from the index and untracked on disk, is listed once as its tracked record. A file the index holds in merge stages is `U`.
+- `longPaths` counts the files whose path or former path is longer than `pathChars`, left out of `files`. `not-local` is a list git cannot build because a partial clone never downloaded its objects, known by git's own could not fetch from promisor remote message, any other failure being `failed`, `too-many` one whose git output passed the 16 MiB `runTool` reads, `hung` one whose git ran out of time or found git stuck in that folder. A file listed twice, deleted from the index and untracked on disk, is listed once as its tracked record. A file the index holds in merge stages is `U`.
 - A submodule moved only in its worktree answers `from` and `to` both `null`, since git names no commit for that side, so it reads as changed, never as removed.
-- `hung` is a side whose read did not finish in time, `not-local` a committed side a partial clone never downloaded.
+- `hung` is a side whose read did not finish in time, `not-local` a committed side whose object git cannot find, which in practice is one a partial clone never downloaded.
 - An added file's `original` and a deleted file's `modified` are `""`.
 - No new event. `window.satellite` keeps its three functions.
 

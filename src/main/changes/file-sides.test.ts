@@ -391,7 +391,7 @@ describe("readWorktreeSide on macOS", () => {
 });
 
 describe("readBlobSide", { timeout: 30_000 }, () => {
-  it("reads a committed blob and refuses a made-up object name", async () => {
+  it("reads a committed blob, refuses a made-up object name and answers not-local for a missing one", async () => {
     const base = await scratch();
     const repo = join(base, "repo");
     const config = join(base, "gitconfig");
@@ -412,7 +412,7 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
     expect(await readBlobSide(repo, await oid("HEAD:data.bin"))).toEqual({ kind: "binary" });
     expect(await readBlobSide(repo, await oid("HEAD:lines.txt"))).toEqual({ kind: "large" });
     expect(await readBlobSide(repo, await oid("HEAD"))).toEqual({ kind: "gone" });
-    expect(await readBlobSide(repo, "1".repeat(40))).toEqual({ kind: "gone" });
+    expect(await readBlobSide(repo, "1".repeat(40))).toEqual({ kind: "not-local" });
     for (const name of [
       "0".repeat(40),
       "0".repeat(64),

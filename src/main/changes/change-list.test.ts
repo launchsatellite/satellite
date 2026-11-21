@@ -481,6 +481,11 @@ describe("readChangeList", { timeout: 60_000 }, () => {
         env: upstream.env,
       });
       await expect(local).rejects.toThrow();
+      await writeFile(join(clone, ".git", "index"), "not an index");
+      expect(await readChangeList(clone, head, signal)).toEqual({
+        kind: "unavailable",
+        reason: "failed",
+      });
     },
   );
 

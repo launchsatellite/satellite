@@ -2,7 +2,6 @@ import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bri
 import { readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import {
-  isPartialClone,
   lineCount,
   noLazyFetch,
   oidPattern,
@@ -54,6 +53,7 @@ const statPrefix = /^(\d+|-)\t(\d+|-)\t/;
 const unmergedPrefix = /^[0-7]{6} (?:[0-9a-f]{40}|[0-9a-f]{64}) [1-3]\t/;
 const digits = /^\d+$/;
 const allZeros = /^0+$/;
+const promisorMissing = /^fatal: could not fetch [0-9a-f]+ from promisor remote$/m;
 const countCap = 1_000_000;
 const submoduleMode = "160000";
 const diffArgs = [
@@ -319,8 +319,8 @@ export async function readChangeList(
   const runs = [diff, others, conflicted];
   if (runs.includes("output")) return tooMany;
   if (runs.includes("time") || runs.includes("stuck")) return hung;
-  if (typeof diff === "object" && diff.exitCode !== 0 && !signal.aborted) {
-    return (await isPartialClone(folder, signal)) ? notLocal : failed;
+  if (typeof diff === "object" && diff.exitCode !== 0) {
+    return promisorMissing.test(diff.stderr) ? notLocal : failed;
   }
   const diffOut = stdoutOf(diff);
   const othersOut = stdoutOf(others);
