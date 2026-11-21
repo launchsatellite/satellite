@@ -28,6 +28,16 @@ const modified = [
   "",
 ].join("\n");
 
+const labels = { original: "Before, launch-window.ts", modified: "After, launch-window.ts" };
+
 export function SampleDiff() {
-  return <DiffView original={original} modified={modified} />;
+  return (
+    <DiffView
+      original={original}
+      modified={modified}
+      path="launch-window.ts"
+      inline={false}
+      labels={labels}
+    />
+  );
 }
