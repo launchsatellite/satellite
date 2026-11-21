@@ -1,7 +1,16 @@
 import { execFile, execFileSync } from "node:child_process";
 import type { BigIntStats } from "node:fs";
 import { renameSync, symlinkSync } from "node:fs";
-import { mkdir, mkdtemp, realpath, rename, symlink, utimes, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rename,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -861,4 +870,28 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await utimes(join(repo, "f.txt"), when, when);
     expect((await listed(repo, head)).records[0]?.stamp).not.toBe(first);
   });
+
+  it.skipIf(!hasNoLazyFetch)(
+    "answers not-local when a partial clone lacks an object and fetching is off",
+    async () => {
+      const { repo, git } = await repository();
+      await writeFile(join(repo, "a.txt"), "a\n");
+      await git("add", ".");
+      await git("commit", "-q", "-m", "one");
+      const oid = await git("rev-parse", "HEAD:a.txt");
+      await git("remote", "add", "origin", "ssh://probe.invalid/x.git");
+      await git("config", "extensions.partialClone", "origin");
+      await git("config", "remote.origin.promisor", "true");
+      await writeFile(join(repo, "a.txt"), "b\n");
+      const object = join(repo, ".git", "objects", oid.slice(0, 2), oid.slice(2));
+      await chmod(object, 0o600);
+      await rename(object, join(repo, "..", "kept-object"));
+      const read = await readChangeList(
+        repo,
+        await git("rev-parse", "HEAD"),
+        new AbortController().signal,
+      );
+      expect(read).toEqual({ kind: "unavailable", reason: "not-local" });
+    },
+  );
 });

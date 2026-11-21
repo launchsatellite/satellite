@@ -48,6 +48,8 @@ const unmergedPrefix = /^[0-7]{6} (?:[0-9a-f]{40}|[0-9a-f]{64}) [1-3]\t/;
 const digits = /^\d+$/;
 const allZeros = /^0+$/;
 const promisorMissing = /^fatal: could not fetch [0-9a-f]+ from promisor remote$/m;
+const lazyFetchOff = /^warning: lazy fetching disabled/m;
+const objectUnread = /^fatal: unable to read [0-9a-f]+$/m;
 const countCap = 1_000_000;
 const touchedFiles = 50;
 const touchedKept = 512;
@@ -378,7 +380,10 @@ export async function readChangeList(
   if (runs.includes("output")) return tooMany;
   if (runs.includes("time") || runs.includes("stuck")) return hung;
   if (typeof diff === "object" && diff.exitCode !== 0) {
-    return promisorMissing.test(diff.stderr) ? notLocal : failed;
+    const missing =
+      promisorMissing.test(diff.stderr) ||
+      (lazyFetchOff.test(diff.stderr) && objectUnread.test(diff.stderr));
+    return missing ? notLocal : failed;
   }
   const diffOut = stdoutOf(diff);
   const othersOut = stdoutOf(others);
