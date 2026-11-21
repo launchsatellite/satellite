@@ -152,6 +152,8 @@ async function fileSides(
   if (record.path.includes("�")) return { kind: "unreadable" };
   if (record.kind === "repository") return { kind: "repository" };
   if (record.kind === "binary") return { kind: "binary" };
+  if (record.shape === "link") return { kind: "link" };
+  if (record.shape === "mode") return { kind: "mode" };
   if (record.kind === "submodule") {
     const movedInWorktree = record.targetOid === null && record.letter !== "D";
     if (movedInWorktree) return { kind: "submodule", from: null, to: null };

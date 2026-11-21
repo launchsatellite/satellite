@@ -68,6 +68,10 @@ export function sideSentence(sides: SideSentenceKind): string {
       return "This file is too large to show here, over 1 MB or 20,000 lines.";
     case "repository":
       return "This folder is a repository of its own, so Satellite shows no diff for it.";
+    case "link":
+      return "This is a link, so there is no diff to show.";
+    case "mode":
+      return "Only this file's mode changed, so there is no diff to show.";
     case "unmerged":
       return "This file is in the middle of a merge. Claude Code can resolve it.";
     case "changing":

@@ -336,6 +336,8 @@ export const bridgeRequests = {
         to: shortOid.nullable(),
       }),
       z.strictObject({ kind: z.literal("repository") }),
+      z.strictObject({ kind: z.literal("link") }),
+      z.strictObject({ kind: z.literal("mode") }),
       z.strictObject({ kind: z.literal("unmerged") }),
       z.strictObject({ kind: z.literal("changing") }),
       z.strictObject({ kind: z.literal("hung") }),

@@ -13,6 +13,7 @@ export interface ChangeRecord {
   removed: number | null;
   sourceOid: string | null;
   targetOid: string | null;
+  shape?: "link" | "mode";
   stamp: string;
 }
 export type ListedChange = Omit<ChangeRecord, "stamp"> & { statDirty?: true };
@@ -56,6 +57,7 @@ const touchedKept = 512;
 const touchedVerdicts = new Map<string, boolean>();
 const touchedBytes = 33_554_432;
 const submoduleMode = "160000";
+const linkMode = "120000";
 const diffWithoutIndexWrite = [
   "-c",
   "diff.autoRefreshIndex=false",
@@ -152,6 +154,15 @@ function listedChange(raw: RawRecord, stat: StatRecord): ListedChange | null {
   const submodule = raw.sourceMode === submoduleMode || raw.targetMode === submoduleMode;
   const binary = stat.added === "-";
   const counted = !submodule && !binary && letter !== "U";
+  const link = !submodule && (raw.sourceMode === linkMode || raw.targetMode === linkMode);
+  const modeOnly =
+    !submodule &&
+    !link &&
+    !binary &&
+    letter === "M" &&
+    raw.sourceMode !== raw.targetMode &&
+    stat.added === "0" &&
+    stat.removed === "0";
   return {
     path: raw.path,
     from: raw.from,
@@ -160,6 +171,7 @@ function listedChange(raw: RawRecord, stat: StatRecord): ListedChange | null {
     kind: submodule ? "submodule" : binary ? "binary" : "text",
     added: counted ? countOf(stat.added) : null,
     removed: counted ? countOf(stat.removed) : null,
+    ...(link ? { shape: "link" as const } : modeOnly ? { shape: "mode" as const } : {}),
     sourceOid: allZeros.test(raw.sourceOid) ? null : raw.sourceOid,
     targetOid: allZeros.test(raw.targetOid) ? null : raw.targetOid,
     ...(binary && unchangedContent(raw) && allZeros.test(raw.targetOid) ? { statDirty: true } : {}),

@@ -139,6 +139,25 @@ async function listed(folder: string, compareWith: string) {
   return read;
 }
 
+describe("parseDiff shapes", () => {
+  it("marks a mode-only change and a link", () => {
+    const stdout = output(
+      raw("100644 100755", one, one, "M", "run.sh"),
+      raw("000000 120000", zero, two, "A", "ln"),
+      raw("100644 100644", one, three, "M", "edit.txt"),
+      stat("0", "0", "run.sh"),
+      stat("1", "0", "ln"),
+      stat("1", "1", "edit.txt"),
+    );
+    const found = parseDiff(stdout)?.records.map((record) => [record.path, record.shape]);
+    expect(found).toEqual([
+      ["run.sh", "mode"],
+      ["ln", "link"],
+      ["edit.txt", undefined],
+    ]);
+  });
+});
+
 describe("parseDiff", () => {
   it("reads an edit, an addition, a deletion and a rename with their letters and counts", () => {
     const stdout = output(
@@ -271,7 +290,7 @@ describe("parseDiff", () => {
         sourceOid: one,
         targetOid: one,
       }),
-      change("link", { letter: "T", added: 1, removed: 1, sourceOid: two }),
+      change("link", { letter: "T", added: 1, removed: 1, sourceOid: two, shape: "link" }),
       change("conflict.txt", { letter: "U", added: null, removed: null }),
     ]);
   });
