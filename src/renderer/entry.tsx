@@ -24,7 +24,7 @@ if (rootElement === null) throw new Error("The root element is missing from inde
 createRoot(rootElement).render(
   <StrictMode>
     <AppWindow
-      initial={loaded.ok ? loaded.value.state : defaultInterfaceState}
+      initial={loaded.ok ? loaded.value.state : { ...defaultInterfaceState, guideSeen: true }}
       notice={loaded.ok ? loaded.value.notice : loaded.error.message}
     />
   </StrictMode>,

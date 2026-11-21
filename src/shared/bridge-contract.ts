@@ -161,6 +161,7 @@ export const interfaceState = z.strictObject({
   }),
   theme: themeChoice,
   notifications: z.boolean(),
+  guideSeen: z.boolean(),
   files: z
     .array(fileTabs)
     .max(filesLimits.tabbedWorkspaces)
@@ -402,6 +403,7 @@ export const defaultInterfaceState: InterfaceState = {
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
   theme: "system",
   notifications: true,
+  guideSeen: false,
   files: [],
 };
 
