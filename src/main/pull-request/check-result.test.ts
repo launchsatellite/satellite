@@ -64,6 +64,17 @@ describe("the check table", () => {
     ]);
   });
 
+  it("a queued re-run beats an older failed attempt", () => {
+    const checks = checksOf(
+      [
+        { ...run("FAILURE"), startedAt: "2026-01-01T00:00:00Z" },
+        { ...run(null, "QUEUED"), startedAt: "0001-01-01T00:00:00Z" },
+      ],
+      place,
+    );
+    expect(checks.map(({ result }) => result)).toEqual(["pending"]);
+  });
+
   it("keeps the newest status per context", () => {
     const checks = checksOf(
       [

@@ -32,6 +32,7 @@ const rawCheck = z.object({
   startedAt: looseText,
 });
 const jobPath = /^\/actions\/runs\/([0-9]{1,20})\/job\/([0-9]{1,20})$/;
+const queuedAfterEverything = "\uffff";
 const failedConclusions = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"]);
 const rank: Record<CheckResult, number> = {
   failed: 0,
@@ -91,13 +92,14 @@ function keep(raw: z.output<typeof rawCheck>, place: PullRequestPlace): Kept {
   );
   const workflow =
     isStatus || raw.workflow === undefined || raw.workflow === null ? null : name(raw.workflow);
+  const result = isStatus ? statusResult(raw.state) : runResult(raw.status, raw.conclusion);
   return {
     key: isStatus ? `status\0${label}` : `run\0${workflow ?? ""}\0${label}`,
-    startedAt: raw.startedAt ?? "",
+    startedAt: !isStatus && result === "pending" ? queuedAfterEverything : (raw.startedAt ?? ""),
     check: {
       name: label,
       workflow,
-      result: isStatus ? statusResult(raw.state) : runResult(raw.status, raw.conclusion),
+      result,
       url: address === null ? null : (raw.url ?? null),
       run: ids?.run ?? null,
       job: ids?.job ?? null,
