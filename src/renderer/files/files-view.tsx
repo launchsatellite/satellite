@@ -13,6 +13,7 @@ import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
 import type { useFileTabs } from "./use-file-tabs.ts";
 import { useFiles } from "./use-files.ts";
+import { recallTree, rememberTree } from "./tree-memory.ts";
 import { useFolders } from "./use-folders.ts";
 
 interface FilesViewProps {
@@ -58,7 +59,10 @@ export function FilesView({
       onShown(null);
     };
   }, [shownPath, shownKind, onShown]);
-  const changes = list?.changes;
+  useEffect(() => {
+    if (list !== undefined) rememberTree(workspace, { changes: list });
+  }, [workspace, list]);
+  const changes = (list ?? recallTree(workspace).changes)?.changes;
   const changed = useMemo(() => {
     const files = changes?.kind === "files" ? changes.files : [];
     return new Map<string, ChangedFile>(files.map((file) => [file.path, file]));

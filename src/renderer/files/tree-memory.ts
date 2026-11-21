@@ -1,9 +1,10 @@
-import type { FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
+import type { ChangesList, FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
 
 interface TreeMemory {
   open: readonly string[];
   listings: ReadonlyMap<string, FolderListing>;
   scroll: number;
+  changes: ChangesList | undefined;
 }
 
 const remembered = 16;
@@ -14,7 +15,7 @@ function keyOf({ projectId, workspace }: WorkspaceRef): string {
 }
 
 export function recallTree(workspace: WorkspaceRef): TreeMemory {
-  return memories.get(keyOf(workspace)) ?? { open: [""], listings: new Map(), scroll: 0 };
+  return memories.get(keyOf(workspace)) ?? { open: [""], listings: new Map(), scroll: 0, changes: undefined };
 }
 
 export function rememberTree(workspace: WorkspaceRef, patch: Partial<TreeMemory>): void {
