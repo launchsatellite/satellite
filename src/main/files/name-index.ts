@@ -4,8 +4,7 @@ import { fuzzyScore } from "../../shared/fuzzy-match.ts";
 import { confinedFolder, isChangePath } from "../changes/file-sides.ts";
 import { noLazyFetch, readGit } from "../workspaces/git-command.ts";
 
-type NameIndex =
-  { kind: "names"; names: string[] } | { kind: "too-many" | "hung" | "failed" };
+type NameIndex = { kind: "names"; names: string[] } | { kind: "too-many" | "hung" | "failed" };
 
 const findReadMs = 15_000;
 const rankedPerTurn = 2000;

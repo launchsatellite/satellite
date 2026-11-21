@@ -15,7 +15,14 @@ function keyOf({ projectId, workspace }: WorkspaceRef): string {
 }
 
 export function recallTree(workspace: WorkspaceRef): TreeMemory {
-  return memories.get(keyOf(workspace)) ?? { open: [""], listings: new Map(), scroll: 0, changes: undefined };
+  return (
+    memories.get(keyOf(workspace)) ?? {
+      open: [""],
+      listings: new Map(),
+      scroll: 0,
+      changes: undefined,
+    }
+  );
 }
 
 export function rememberTree(workspace: WorkspaceRef, patch: Partial<TreeMemory>): void {
