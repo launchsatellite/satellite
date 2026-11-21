@@ -64,8 +64,12 @@ function revealAfterParse() {
   };
 }
 
-function isHttps(address: string | undefined): address is string {
-  return address !== undefined && URL.parse(address)?.protocol === "https:";
+function opened(address: string | undefined): string | null {
+  const url = address === undefined ? null : URL.parse(address);
+  if (url === null || url.protocol !== "https:" || url.username !== "" || url.password !== "") {
+    return null;
+  }
+  return url.href;
 }
 
 function heading(level: keyof typeof headingLook, tag: "h3" | "h4" | "h5" | "h6") {
@@ -77,15 +81,16 @@ function heading(level: keyof typeof headingLook, tag: "h3" | "h4" | "h5" | "h6"
 function components(onLink: (address: string) => void): Components {
   return {
     a({ href, children }) {
-      if (!isHttps(href)) return <>{children}</>;
+      const address = opened(href);
+      if (address === null) return <>{children}</>;
       return (
         <button
           type="button"
           data-testid="markdown-link"
-          data-address={href}
+          data-address={address}
           className={linkLook}
           onClick={() => {
-            onLink(href);
+            onLink(address);
           }}
         >
           <InsideLink.Provider value>{children}</InsideLink.Provider>
@@ -94,8 +99,9 @@ function components(onLink: (address: string) => void): Components {
     },
     img({ src, alt }) {
       const text = alt ?? "";
-      if (typeof src !== "string" || !isHttps(src)) return <>{text}</>;
-      return <ImageLink address={src} alt={text} onLink={onLink} />;
+      const address = opened(src);
+      if (address === null) return <>{text}</>;
+      return <ImageLink address={address} alt={text} onLink={onLink} />;
     },
     input({ checked }) {
       return (

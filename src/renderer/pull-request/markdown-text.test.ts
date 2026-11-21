@@ -256,4 +256,14 @@ describe("MarkdownText", () => {
     }
     expect(render("&lt;script&gt;alert(1)&lt;/script&gt;")).not.toContain("<script");
   });
+
+  it("draws a link with credentials as text and normalises the address it opens", () => {
+    const html = render(
+      "[a](https://user:pass@example.invalid/x) [b](https://EXAMPLE.invalid:443/y) ![c](https://u@example.invalid/z.png)",
+    );
+    expect(html).not.toContain("user:pass");
+    expect(html).not.toContain("u@example");
+    expect(html).toContain('data-address="https://example.invalid/y"');
+    expect(count(html, "<button")).toBe(1);
+  });
 });
