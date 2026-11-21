@@ -9,6 +9,7 @@ import { threadRequest } from "./pull-request-requests.ts";
 import {
   bodyCutSentence,
   conversationTroubleSentence,
+  decisionSentence,
   hiddenCommentSentence,
   loadingSentence,
   moreSentence,
@@ -241,13 +242,18 @@ export function ConversationList({
   const [budget, setBudget] = useState(drawnPage);
   if (detail === null) {
     return (
-      <p
+      <div
         data-testid="pull-request-conversation"
         role="status"
-        className="px-4 py-3 text-[13px] text-dim"
+        className="flex flex-col gap-1 px-4 py-3 text-[13px] text-dim"
       >
-        {loadingSentence}
-      </p>
+        {decisionSentence(found.review) !== null && (
+          <p data-testid="pull-request-conversation-decision" className="text-fg2">
+            {decisionSentence(found.review)}
+          </p>
+        )}
+        <p>{loadingSentence}</p>
+      </div>
     );
   }
   if (detail.kind === "unavailable") {

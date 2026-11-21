@@ -119,6 +119,7 @@ function Readouts({
             data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
             data-number={pullRequest.number}
             data-checks={checksState(pullRequest.counts)}
+            title={readoutLabel(pullRequest)}
             className="flex items-center gap-[5px]"
           >
             <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}

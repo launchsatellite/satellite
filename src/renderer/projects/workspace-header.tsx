@@ -84,6 +84,7 @@ export function WorkspaceHeader({
             data-number={pullRequest.number}
             data-checks={checksState(pullRequest.counts)}
             aria-label={readoutLabel(pullRequest)}
+            title={readoutLabel(pullRequest)}
             onClick={onShowPullRequest}
             className="flex h-6 min-w-0 flex-none items-center gap-[7px] rounded-[6px] px-[7px] font-pixel text-[12px] text-dim uppercase hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >

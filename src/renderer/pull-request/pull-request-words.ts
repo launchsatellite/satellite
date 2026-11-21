@@ -45,10 +45,12 @@ export const sendLabel = "Send to Claude Code";
 
 const troubles: Record<PullRequestTrouble, string> = {
   "signed-out": "The GitHub CLI is signed out. Run gh auth login in a terminal and come back.",
-  "gh-missing": "Satellite reads pull requests through the GitHub CLI, and it is not installed.",
+  "gh-missing":
+    "Satellite reads pull requests through the GitHub CLI, and it is not installed. Install it and come back.",
   "gh-old": "This GitHub CLI is too old to read pull requests. Update it to 2.18 or newer.",
   offline: "GitHub is out of reach. Satellite tries again when you are back online.",
-  "other-host": "This repository's remote is on a host the GitHub CLI is not signed in to.",
+  "other-host":
+    "This repository's remote is on a host the GitHub CLI is not signed in to. Run gh auth login for that host and come back.",
   "rate-limited":
     "GitHub asked Satellite to slow down. Pull requests refresh again in a few minutes.",
   hung: "The GitHub CLI took too long to answer. Satellite tries again shortly.",
@@ -147,6 +149,17 @@ export function blocks(found: PullRequestFound): { key: string; sentence: string
   add(found.mergeState === "blocked" && rows.length === 0, "rule", "A branch rule blocks it.");
   add(rows.length === 0, "clear", "Nothing blocks it.");
   return rows;
+}
+
+const decisions: Record<PullRequestFound["review"], string | null> = {
+  approved: "The pull request is approved.",
+  "changes-requested": "A review asks for changes.",
+  "review-required": "It still needs a review.",
+  none: null,
+};
+
+export function decisionSentence(review: PullRequestFound["review"]): string | null {
+  return decisions[review];
 }
 
 export function readoutLabel(found: PullRequestFound): string {
