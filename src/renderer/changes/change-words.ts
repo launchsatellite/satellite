@@ -110,10 +110,13 @@ export function unavailableSentence(reason: UnavailableReason, base: string | nu
   }
 }
 
-export function conflictNote(kind: "old-git" | "slow", base: string | null): string {
-  return kind === "old-git"
-    ? `Satellite needs git 2.38 or newer to check for conflicts with ${baseName(base)}.`
-    : `Checking for conflicts with ${baseName(base)} took too long, so Satellite did not.`;
+export function conflictNote(kind: "old-git" | "slow" | "unchecked", base: string | null): string {
+  if (kind === "old-git") {
+    return `Satellite needs git 2.38 or newer to check for conflicts with ${baseName(base)}.`;
+  }
+  return kind === "slow"
+    ? `Checking for conflicts with ${baseName(base)} took too long, so Satellite did not.`
+    : `Satellite can't check this repository for conflicts with ${baseName(base)}.`;
 }
 
 export function conflictCount(files: number): string {

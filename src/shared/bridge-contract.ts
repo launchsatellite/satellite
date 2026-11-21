@@ -299,6 +299,7 @@ export const bridgeRequests = {
           }),
           z.strictObject({ kind: z.literal("old-git") }),
           z.strictObject({ kind: z.literal("slow") }),
+          z.strictObject({ kind: z.literal("unchecked") }),
         ])
         .nullable(),
       changes: z.discriminatedUnion("kind", [

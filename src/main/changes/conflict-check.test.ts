@@ -217,6 +217,44 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
     expect(await checked(home, repo, head, other)).toMatchObject({ kind: "files" });
   });
 
+  it("checks a shallow clone, whose history is cut where the repository says", async () => {
+    const origin = await sandbox();
+    await origin.write("other.txt", "zero\n");
+    await origin.commit("zero");
+    await origin.write("shared.txt", twoLines("two"));
+    await origin.commit("first");
+    const url = `file://${origin.repo.split("\\").join("/")}`;
+    const clone = join(origin.base, "clone");
+    await run("git", ["clone", "-q", "--depth", "1", url, clone]);
+    const git = async (...args: string[]) =>
+      (await run("git", ["-C", clone, ...args])).stdout.trim();
+    await git("switch", "-q", "-c", "alpha");
+    await writeFile(join(clone, "shared.txt"), twoLines("alpha"));
+    await git("commit", "-q", "-am", "alpha");
+    await origin.write("shared.txt", twoLines("main"));
+    await origin.commit("main moves");
+    await git("fetch", "-q", "origin");
+    const head = await git("rev-parse", "HEAD");
+    const base = await git("rev-parse", "origin/main");
+    expect(await checked(origin.home, clone, head, base)).toMatchObject({ kind: "files" });
+  });
+
+  it.skipIf(windows)(
+    "says it cannot check a repository whose path holds the list separator",
+    async () => {
+      const box = await sandbox();
+      const { head, base } = await diverge(
+        box,
+        () => box.write("shared.txt", twoLines("two")),
+        () => box.write("shared.txt", twoLines("alpha")),
+        () => box.write("shared.txt", twoLines("main")),
+      );
+      const odd = join(box.base, "odd:name");
+      await run("git", ["clone", "-q", box.repo, odd]);
+      expect(await conflictCheck(box.home, odd, head, base)).toEqual({ kind: "unchecked" });
+    },
+  );
+
   it("answers none for a base that merges cleanly, and for a branch already merged", async () => {
     const box = await sandbox();
     const { head, base } = await diverge(

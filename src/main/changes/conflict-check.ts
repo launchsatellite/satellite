@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
+import { isMissing } from "../platform/file-system.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 import {
   gitReadMs,
@@ -10,13 +11,14 @@ import {
   runGit,
   whenGitExits,
 } from "../workspaces/git-command.ts";
-import { isObjectName } from "./file-sides.ts";
+import { isObjectName, oidPattern } from "./file-sides.ts";
 
 export type ConflictCheck =
   | { kind: "none" }
   | { kind: "files"; files: number; names: string[] }
   | { kind: "old-git" }
-  | { kind: "slow" };
+  | { kind: "slow" }
+  | { kind: "unchecked" };
 
 const conflictReadMs = 15_000;
 
@@ -30,6 +32,8 @@ export const retryOldGitMs = 600_000;
 const none: ConflictCheck = { kind: "none" };
 const oldGit: ConflictCheck = { kind: "old-git" };
 const slow: ConflictCheck = { kind: "slow" };
+const unchecked: ConflictCheck = { kind: "unchecked" };
+const shallowBytes = 1_048_576;
 const results = new Map<string, { found: ConflictCheck | null; at: number }>();
 const sweeps = new Map<string, Promise<void>>();
 let unsupportedAt: number | null = null;
@@ -69,39 +73,57 @@ function parseConflicts(stdout: string): ConflictCheck | undefined {
   };
 }
 
-async function objectsFolder(folder: string, signal?: AbortSignal): Promise<string | undefined> {
+async function gitPath(
+  folder: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
   const run = await runGit(
     folder,
-    ["rev-parse", "--path-format=absolute", "--git-path", "objects"],
+    ["rev-parse", "--path-format=absolute", "--git-path", name],
     gitReadMs,
     signal,
     { gitVariables: noLazyFetch },
   );
   if (run?.exitCode !== 0 || !run.stdout.endsWith("\n")) return undefined;
-  const path = run.stdout.slice(0, -1);
-  return isUsablePath(path) ? path : undefined;
+  return run.stdout.slice(0, -1);
 }
 
-async function makeScratchRepository(home: string, sha256: boolean): Promise<string> {
+async function shallowLines(path: string): Promise<string | null | undefined> {
+  if (!isFullyQualified(path)) return undefined;
+  const info = await stat(path).catch((error: unknown) => (isMissing(error) ? null : undefined));
+  if (info === null) return null;
+  if (info === undefined || !info.isFile() || info.size > shallowBytes) return undefined;
+  const text = await readFile(path, "utf8");
+  const lines = text.split("\n");
+  if (lines.pop() !== "" || !lines.every((line) => oidPattern.test(line))) return undefined;
+  return text;
+}
+
+async function makeScratchRepository(
+  home: string,
+  folder: string,
+  sha256: boolean,
+  shallow: string | null,
+): Promise<void> {
   const root = join(home, quarantineFolder);
   try {
     await mkdir(root, { mode: 0o700 });
   } catch (error) {
     if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
   }
-  const folder = join(root, randomUUID());
   await mkdir(folder, { mode: 0o700 });
   await mkdir(join(folder, "objects"), { mode: 0o700 });
   await mkdir(join(folder, "refs"), { mode: 0o700 });
   await writeFile(join(folder, "HEAD"), "ref: refs/heads/main\n");
   await writeFile(join(folder, noConfigFile), "");
+  if (shallow !== null) await writeFile(join(folder, "shallow"), shallow);
   if (sha256) {
     await writeFile(
       join(folder, "config"),
       "[core]\n\trepositoryformatversion = 1\n\tbare = true\n[extensions]\n\tobjectformat = sha256\n",
     );
   }
-  return folder;
 }
 
 async function trialMerge(
@@ -111,12 +133,17 @@ async function trialMerge(
   base: string,
   signal?: AbortSignal,
 ): Promise<ConflictCheck | undefined> {
-  const objects = await objectsFolder(folder, signal);
-  if (objects === undefined) return undefined;
+  const objects = await gitPath(folder, "objects", signal);
+  const shallowPath = await gitPath(folder, "shallow", signal);
+  if (objects === undefined || shallowPath === undefined) return undefined;
   signal?.throwIfAborted();
-  const scratch = await makeScratchRepository(home, head.length === 64);
+  if (!isUsablePath(objects)) return unchecked;
+  const shallow = await shallowLines(shallowPath);
+  if (shallow === undefined) return unchecked;
+  const scratch = join(home, quarantineFolder, randomUUID());
   let stuck = false;
   try {
+    await makeScratchRepository(home, scratch, head.length === 64, shallow);
     const run = await readGit(
       scratch,
       [
