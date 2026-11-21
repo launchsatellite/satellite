@@ -619,7 +619,11 @@ export const bridgeRequests = {
     ]),
   },
   "pullRequest.read": {
-    request: z.strictObject({ workspace: workspaceRef, detail: z.boolean() }),
+    request: z.strictObject({
+      workspace: workspaceRef,
+      detail: z.boolean(),
+      fresh: z.boolean().optional(),
+    }),
     response: pullRequestAnswer,
   },
   "pullRequest.log": {

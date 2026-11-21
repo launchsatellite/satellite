@@ -170,8 +170,8 @@ async function setup(options: { push?: boolean } = {}) {
       .filter((line) => line !== "")
       .map((line) => recorded.parse(JSON.parse(line)));
   };
-  const read = (workspace: WorkspaceRef, detail = false) =>
-    reads.handlers["pullRequest.read"]({ workspace, detail }, owner);
+  const read = (workspace: WorkspaceRef, detail = false, fresh = false) =>
+    reads.handlers["pullRequest.read"]({ workspace, detail, fresh }, owner);
   return {
     reads,
     repo,
@@ -285,6 +285,41 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     advance(5_000);
     expect(await read(first, true)).toMatchObject({ kind: "unavailable" });
     expect(await calls()).toHaveLength(1);
+  });
+
+  it("never answers a fresh read from a held absent answer", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { exitCode: 1, stderr: 'no pull requests found for branch "main"' });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+    advance(2_000);
+    await answer("view", { stdout: viewJson() });
+    expect(await read(first, false, false)).toEqual({ kind: "absent", reason: "none" });
+    expect(await read(first, false, true)).toMatchObject({ kind: "found", number: 12 });
+    expect(await calls()).toHaveLength(2);
+  });
+
+  it("never answers a fresh read from a held pull request", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    expect(await read(first)).toMatchObject({ counts: { failed: 1 } });
+    advance(2_000);
+    await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
+    expect(await read(first)).toMatchObject({ counts: { failed: 1 } });
+    expect(await read(first, false, true)).toMatchObject({ counts: { failed: 0 } });
+    expect(await calls()).toHaveLength(2);
+  });
+
+  it("answers a fresh read from a held signed out answer again", async () => {
+    const { answer, read, calls, advance } = await setup();
+    await answer("view", {
+      exitCode: 4,
+      stderr: "To get started with GitHub CLI, please run:  gh auth login",
+    });
+    await read(first);
+    advance(2_000);
+    await answer("view", { stdout: viewJson() });
+    expect(await read(first, false, true)).toMatchObject({ kind: "found" });
+    expect(await calls()).toHaveLength(2);
   });
 
   it("joins two reads of one workspace", async () => {

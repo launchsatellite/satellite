@@ -77,6 +77,10 @@ const gone = "That workspace's folder is gone, so Satellite can't read its pull 
 const archiving = "Satellite is archiving that workspace, so its pull request can't be read.";
 const sentences = { gone, archiving };
 
+function isSettled(answer: PullRequestAnswer): boolean {
+  return answer.kind === "unavailable" && settledTroubles.has(answer.reason);
+}
+
 function keyOf({ projectId, workspace }: WorkspaceRef): string {
   return `${projectId}/${workspace}`;
 }
@@ -245,11 +249,16 @@ export function createPullRequests({
     return { answer: { ...parsed.found, detail: read }, place: parsed.place };
   };
 
-  const answerFrom = (held: Remembered, detail: boolean): PullRequestAnswer | undefined => {
+  const answerFrom = (
+    held: Remembered,
+    detail: boolean,
+    fresh: boolean,
+  ): PullRequestAnswer | undefined => {
     const { answer } = held;
+    if (fresh) return undefined;
     const enough =
       !detail ||
-      (answer.kind === "unavailable" && settledTroubles.has(answer.reason)) ||
+      isSettled(answer) ||
       answer.kind === "absent" ||
       (answer.kind === "found" && answer.detail !== null);
     if (now() - held.at < reuseMs && enough) return answer;
@@ -316,7 +325,7 @@ export function createPullRequests({
 
   return {
     handlers: {
-      "pullRequest.read": async ({ workspace, detail }, owner) => {
+      "pullRequest.read": async ({ workspace, detail, fresh = false }, owner) => {
         const folder = await sessionFolder(home, store, workspace, sentences);
         const key = keyOf(workspace);
         let joined = running.get(key);
@@ -328,7 +337,7 @@ export function createPullRequests({
         const held = memory.get(key);
         if (held !== undefined) {
           held.owner = owner;
-          const reused = answerFrom(held, detail);
+          const reused = answerFrom(held, detail, fresh);
           if (reused !== undefined) return reused;
         }
         if (pace.paused()) return unavailable("rate-limited");

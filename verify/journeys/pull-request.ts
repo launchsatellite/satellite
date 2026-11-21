@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { noticeGapMs } from "../../src/main/inbox/notices.ts";
-import { reuseMs } from "../../src/main/pull-request/pull-request-reads.ts";
 import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
@@ -78,11 +77,6 @@ async function ghEvents(session: AppSession) {
   );
 }
 
-async function pastReuse(since: number): Promise<void> {
-  const wait = since + reuseMs + 1000 - Date.now();
-  if (wait > 0) await delay(wait);
-}
-
 async function endTurn(session: AppSession, typed: boolean): Promise<void> {
   const stops = await hooksAnswered(session, "Stop");
   await session.page.getByTestId("terminal").locator("textarea").focus();
@@ -106,8 +100,12 @@ async function rowGone(session: AppSession, when: string): Promise<void> {
   await visible(session, "inbox-empty", when);
 }
 
-async function openTab(session: AppSession): Promise<void> {
+async function showTab(session: AppSession): Promise<void> {
   await session.page.getByTestId("centre-tab-pull-request").click();
+}
+
+async function openTab(session: AppSession): Promise<void> {
+  await showTab(session);
   await visible(session, "pull-request-title", "after opening the Pull request tab");
 }
 
@@ -156,7 +154,7 @@ async function opened(session: AppSession): Promise<void> {
 
 async function appears(session: AppSession): Promise<void> {
   await select(session, "alpha");
-  await openTab(session).catch(() => undefined);
+  await showTab(session);
   await visible(session, "pull-request-sentence", "while the branch has no pull request");
   await textHolds(
     session,
@@ -174,7 +172,6 @@ async function appears(session: AppSession): Promise<void> {
 
 async function checksFailed(session: AppSession): Promise<void> {
   await inboxReads(session, "Checks failed on the pull request.", "after launch");
-  const seen = Date.now();
   await noticesAre(session, [alphaNotice], "after the checks failed,");
   const notice = shownOf(await session.notices())[0];
   assert.ok(
@@ -186,7 +183,6 @@ async function checksFailed(session: AppSession): Promise<void> {
   await session.page.getByTestId("inbox-repo-alpha").click();
   await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
   await session.mark("fixed");
-  await pastReuse(seen);
   await endTurn(session, true);
   await rowGone(session, "after the checks passed");
   await noticesAre(session, [alphaNotice, closed], "after the checks passed,");
@@ -217,9 +213,7 @@ async function changesRequested(session: AppSession): Promise<void> {
     .catch(() => undefined);
   await session.page.keyboard.press(nextThreadKey);
   await attributeIs(session, "thread-0", "aria-current", "true", "after the key");
-  const seen = Date.now();
   await session.mark("answered");
-  await pastReuse(seen);
   await endTurn(session, true);
   await rowGone(session, "after the review was answered");
 }
@@ -240,9 +234,7 @@ async function conflicts(session: AppSession): Promise<void> {
     showMs,
     "the conflict request never reached Claude Code",
   );
-  const seen = Date.now();
   await session.mark("updated");
-  await pastReuse(seen);
   await endTurn(session, false);
   await rowGone(session, "after the branch was updated");
 }
@@ -305,7 +297,7 @@ async function hostile(session: AppSession): Promise<void> {
 
 async function signedOut(session: AppSession): Promise<void> {
   await select(session, "alpha");
-  await openTab(session).catch(() => undefined);
+  await showTab(session);
   await visible(session, "pull-request-sentence", "when gh is signed out");
   await textHolds(
     session,
@@ -317,7 +309,7 @@ async function signedOut(session: AppSession): Promise<void> {
   const reads = (await ghEvents(session)).filter(
     (event) => event.call === "pull-request" && event.cwd === alphaFolder(session),
   );
-  assert.equal(reads.length, 1, `gh read alpha ${String(reads.length)} times while signed out`);
+  assert.ok(reads.length <= 2, `gh read alpha ${String(reads.length)} times while signed out`);
   await stateIs(session, "pull-request", "unavailable", "when gh is signed out");
 }
 

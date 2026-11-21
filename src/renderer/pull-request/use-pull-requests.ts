@@ -59,8 +59,12 @@ function settled(
     : next;
 }
 
-async function read(ref: WorkspaceRef, detail: boolean): Promise<PullRequestAnswer> {
-  const result = await invoke("pullRequest.read", { workspace: ref, detail });
+async function read(
+  ref: WorkspaceRef,
+  detail: boolean,
+  fresh: boolean,
+): Promise<PullRequestAnswer> {
+  const result = await invoke("pullRequest.read", { workspace: ref, detail, fresh });
   return result.ok ? result.value : failedAnswer;
 }
 
@@ -73,7 +77,8 @@ export function usePullRequests({
 }: PullRequestsInput): PullRequests {
   const [entries, setEntries] = useState<ReadonlyMap<string, PullRequestEntry>>(new Map());
   const refreshShown = useRef<() => void>(() => undefined);
-  const askOther = useRef<(place: string) => void>(() => undefined);
+  const askOther = useRef<(place: string, fresh?: boolean) => void>(() => undefined);
+  const freshNext = useRef(false);
   const detailNow = useRef(detail);
   const listedNow = useRef(listed);
   const seenDone = useRef(new Map<string, string>());
@@ -119,26 +124,32 @@ export function usePullRequests({
           };
         },
         read: async () => {
-          const answer = await read(shown, detailNow.current);
+          const fresh = freshNext.current;
+          freshNext.current = false;
+          const answer = await read(shown, detailNow.current, fresh);
           if (!stopped) store(shown, answer);
           return { files: answer.kind !== "unavailable", key: JSON.stringify(answer) };
         },
       },
       shownPace,
     );
+    const refreshNow = () => {
+      freshNext.current = true;
+      schedule.refresh();
+    };
     const onVisibility = () => {
-      if (isVisible()) schedule.refresh();
+      if (isVisible()) refreshNow();
       else schedule.hide();
     };
-    refreshShown.current = schedule.refresh;
-    window.addEventListener("focus", schedule.refresh);
+    refreshShown.current = refreshNow;
+    window.addEventListener("focus", refreshNow);
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
     return () => {
       stopped = true;
       schedule.stop();
       refreshShown.current = () => undefined;
-      window.removeEventListener("focus", schedule.refresh);
+      window.removeEventListener("focus", refreshNow);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [shown, store]);
@@ -151,29 +162,34 @@ export function usePullRequests({
     }
     const stop = new AbortController();
     const live = () => !stop.signal.aborted;
-    const waiting: WorkspaceRef[] = [];
+    const waiting: { ref: WorkspaceRef; fresh: boolean }[] = [];
     let draining = false;
     const drain = async () => {
       if (draining) return;
       draining = true;
-      for (let ref = waiting.shift(); ref !== undefined; ref = waiting.shift()) {
+      for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) {
         if (!live() || !isVisible()) break;
-        const answer = await read(ref, false);
+        const { ref, fresh } = next;
+        const answer = await read(ref, false, fresh);
         if (live()) store(ref, answer);
       }
       draining = false;
     };
-    const ask = (ref: WorkspaceRef) => {
+    const ask = (ref: WorkspaceRef, fresh = false) => {
       if (!live() || !isVisible() || placeOf(ref) === shownNow.current) return;
-      if (!waiting.some((one) => placeOf(one) === placeOf(ref))) waiting.push(ref);
+      const queued = waiting.find((one) => placeOf(one.ref) === placeOf(ref));
+      if (queued === undefined) waiting.push({ ref, fresh });
+      else queued.fresh ||= fresh;
       void drain();
     };
     const askAll = () => {
-      everyone.forEach(ask);
+      everyone.forEach((ref) => {
+        ask(ref);
+      });
     };
-    askOther.current = (place) => {
+    askOther.current = (place, fresh = false) => {
       const ref = everyone.find((one) => placeOf(one) === place);
-      if (ref !== undefined) ask(ref);
+      if (ref !== undefined) ask(ref, fresh);
     };
     askAll();
     const timer = setInterval(askAll, sweepMs);
@@ -193,7 +209,7 @@ export function usePullRequests({
   useEffect(() => {
     const before = seenShown.current;
     seenShown.current = shownPlace;
-    if (before !== null && before !== shownPlace) askOther.current(before);
+    if (before !== null && before !== shownPlace) askOther.current(before, true);
   }, [shownPlace]);
 
   const seenFinished = useRef({ place: shownPlace, finished });
@@ -216,7 +232,8 @@ export function usePullRequests({
     const before = seenDone.current;
     for (const [place, done] of finishedElsewhere) {
       const keys = new Set((before.get(place) ?? "").split(" "));
-      if (done.split(" ").some((key) => key !== "" && !keys.has(key))) askOther.current(place);
+      if (done.split(" ").some((key) => key !== "" && !keys.has(key)))
+        askOther.current(place, true);
     }
     seenDone.current = new Map(finishedElsewhere);
   }, [finishedElsewhere]);
