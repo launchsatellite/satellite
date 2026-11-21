@@ -117,6 +117,7 @@ describe("createTerminalSessions", () => {
       };
       ptys.push(fake);
       return {
+        pid: 4100 + ptys.length,
         resize: vi.fn(),
         pause: vi.fn(),
         resume: vi.fn(),

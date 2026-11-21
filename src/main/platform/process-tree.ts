@@ -1,22 +1,13 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-
-interface ProcessEntry {
-  readonly pid: number;
-  readonly parent: number;
-  readonly group: number;
-  readonly identity: string;
-}
-
-const listTimeoutMs = 1000;
-const psPaths = ["/bin/ps", "/usr/bin/ps"];
+import { type ProcessEntry, psTimeoutMs, readProcessTable, subtreeOf } from "./process-table.ts";
 
 export const forceKillGraceMs = 2000;
-export const treeKillBoundMs = forceKillGraceMs + 2 * listTimeoutMs;
+export const treeKillBoundMs = forceKillGraceMs + 2 * psTimeoutMs;
+export const subtreeStopBoundMs = forceKillGraceMs + 3 * psTimeoutMs;
 const taskkillTimeoutMs = treeKillBoundMs - forceKillGraceMs;
-const processLine = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/;
+const termCheckMs = 300;
 
 function signal(pid: number, name: NodeJS.Signals): void {
   try {
@@ -24,37 +15,6 @@ function signal(pid: number, name: NodeJS.Signals): void {
   } catch {
     return;
   }
-}
-
-function listProcesses(): Promise<ProcessEntry[]> {
-  const ps = psPaths.find((path) => existsSync(path));
-  if (ps === undefined) return Promise.resolve([]);
-  return new Promise((resolve) => {
-    execFile(
-      ps,
-      ["-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=", "-o", "lstart="],
-      { encoding: "utf8", timeout: listTimeoutMs, maxBuffer: 16 * 1024 * 1024 },
-      (error, stdout) => {
-        if (error !== null) {
-          resolve([]);
-          return;
-        }
-        const entries: ProcessEntry[] = [];
-        for (const line of stdout.split("\n")) {
-          const match = processLine.exec(line);
-          if (match === null) continue;
-          const [, pid = "", parent = "", group = "", started = ""] = match;
-          entries.push({
-            pid: Number(pid),
-            parent: Number(parent),
-            group: Number(group),
-            identity: `${pid} ${started}`,
-          });
-        }
-        resolve(entries);
-      },
-    );
-  });
 }
 
 function withDescendants(
@@ -106,7 +66,7 @@ export async function endUnixTree(
   graceMs: number,
 ): Promise<void> {
   const deadline = Date.now() + graceMs;
-  const entries = await listProcesses();
+  const entries = await readProcessTable();
   const tree = withDescendants(
     entries.filter((entry) => entry.pid === root || entry.group === root),
     entries,
@@ -123,7 +83,38 @@ export async function endUnixTree(
     if (!ended) signal(-root, "SIGKILL");
     return;
   }
-  if (survivors(known, await listProcesses()).length === 0) return;
+  if (survivors(known, await readProcessTable()).length === 0) return;
   await delay(Math.max(0, deadline - Date.now()));
-  for (const entry of survivors(known, await listProcesses())) signal(entry.pid, "SIGKILL");
+  for (const entry of survivors(known, await readProcessTable())) signal(entry.pid, "SIGKILL");
+}
+
+function mayBeSignalled(entry: ProcessEntry): boolean {
+  return entry.pid > 1 && entry.pid !== process.pid;
+}
+
+export async function endSubtree(
+  target: ProcessEntry,
+  table: readonly ProcessEntry[],
+): Promise<void> {
+  const subtree = subtreeOf(target, table).filter(mayBeSignalled);
+  if (process.platform === "win32") {
+    const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
+    const ids = subtree.flatMap((entry) => ["/PID", String(entry.pid)]);
+    if (ids.length === 0) return;
+    await new Promise<void>((resolve) => {
+      execFile(taskkill, ["/F", ...ids], { windowsHide: true, timeout: taskkillTimeoutMs }, () => {
+        resolve();
+      });
+    });
+    return;
+  }
+  const deadline = Date.now() + forceKillGraceMs;
+  const known = new Set(subtree.map((entry) => entry.identity));
+  for (const entry of subtree) signal(entry.pid, "SIGTERM");
+  await delay(termCheckMs);
+  if (survivors(known, await readProcessTable()).length === 0) return;
+  await delay(Math.max(0, deadline - Date.now()));
+  for (const entry of survivors(known, await readProcessTable()).filter(mayBeSignalled)) {
+    signal(entry.pid, "SIGKILL");
+  }
 }

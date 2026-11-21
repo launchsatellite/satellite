@@ -1,10 +1,18 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
+import { readProcessTable } from "./process-table.ts";
+import {
+  endSubtree,
+  endUnixTree,
+  endWindowsTree,
+  forceKillGraceMs,
+  subtreeStopBoundMs,
+  treeKillBoundMs,
+} from "./process-tree.ts";
 
 const ignoresHangup = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
 
@@ -55,6 +63,66 @@ describe.skipIf(process.platform === "win32")("endUnixTree", () => {
       }
     }
   });
+});
+
+function startedProcess(script: string): Promise<{ child: ChildProcess; grandchild: number }> {
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "ignore"] });
+  return new Promise((resolve) => {
+    child.stdout.once("data", (data: Buffer) => {
+      resolve({ child, grandchild: Number(data.toString().trim()) });
+    });
+  });
+}
+
+const parentWithChild = (childScript: string) =>
+  `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(childScript)}], { stdio: 'ignore' }); console.log(c.pid); setTimeout(() => {}, 60_000);`;
+
+describe.skipIf(process.platform === "win32")("endSubtree", () => {
+  it("ends a process and its child and leaves its parent and its sibling running", async () => {
+    const sleeper = "setTimeout(() => {}, 60_000);";
+    const parent = spawn(process.execPath, ["-e", sleeper], { stdio: "ignore" });
+    const sibling = spawn(process.execPath, ["-e", sleeper], { stdio: "ignore" });
+    const { child: target, grandchild } = await startedProcess(parentWithChild(sleeper));
+    const targetPid = target.pid ?? 0;
+    try {
+      const table = await readProcessTable();
+      const entry = table.find((candidate) => candidate.pid === targetPid);
+      expect(entry).toBeDefined();
+      if (entry === undefined) return;
+      await endSubtree(entry, table);
+      await delay(100);
+      expect(isAlive(targetPid)).toBe(false);
+      expect(isAlive(grandchild)).toBe(false);
+      expect(isAlive(process.pid)).toBe(true);
+      expect(isAlive(parent.pid ?? 0)).toBe(true);
+      expect(isAlive(sibling.pid ?? 0)).toBe(true);
+    } finally {
+      for (const pid of [targetPid, grandchild, parent.pid ?? 0, sibling.pid ?? 0]) {
+        if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+      }
+    }
+  });
+
+  it("kills a child that ignores SIGTERM once the grace is over", async () => {
+    const stubborn = "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60_000);";
+    const { child: target, grandchild } = await startedProcess(parentWithChild(stubborn));
+    const targetPid = target.pid ?? 0;
+    try {
+      const table = await readProcessTable();
+      const entry = table.find((candidate) => candidate.pid === targetPid);
+      expect(entry).toBeDefined();
+      if (entry === undefined) return;
+      const began = performance.now();
+      await endSubtree(entry, table);
+      await delay(100);
+      expect(isAlive(grandchild)).toBe(false);
+      expect(performance.now() - began).toBeLessThan(subtreeStopBoundMs + 500);
+    } finally {
+      for (const pid of [targetPid, grandchild]) {
+        if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+      }
+    }
+  }, 15_000);
 });
 
 describe.skipIf(process.platform === "win32")("endWindowsTree", () => {
