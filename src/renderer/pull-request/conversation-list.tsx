@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { PullRequestFound, PullRequestThread } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
@@ -16,12 +16,15 @@ import {
   openLabel,
   reviewWord,
   sendLabel,
+  showMoreLabel,
   someone,
   threadBadges,
 } from "./pull-request-words.ts";
-import { conversationItems, type ConversationItem } from "./thread-order.ts";
+import { conversationItems, drawnCount, type ConversationItem } from "./thread-order.ts";
 
 type Spoken = PullRequestThread["comments"][number];
+
+const drawnPage = 40_000;
 
 function Author({ name, at }: { name: string | null; at: string | null }) {
   return (
@@ -235,6 +238,7 @@ export function ConversationList({
   onLink: (address: string) => void;
 }) {
   const { detail } = found;
+  const [budget, setBudget] = useState(drawnPage);
   if (detail === null) {
     return (
       <p
@@ -259,6 +263,7 @@ export function ConversationList({
   }
   const items = conversationItems(detail);
   const keys = keysOf(items);
+  const drawn = drawnCount(items, budget);
   const more = detail.moreThreads + detail.moreReviews + detail.moreComments;
   return (
     <div
@@ -270,10 +275,24 @@ export function ConversationList({
         <p className="px-4 py-3 text-[13px] text-dim">{noConversationSentence}</p>
       ) : (
         <ul className="flex flex-col">
-          {items.map((item, index) => (
+          {items.slice(0, drawn).map((item, index) => (
             <Item key={keys[index]} index={index} item={item} found={found} onLink={onLink} />
           ))}
         </ul>
+      )}
+      {drawn < items.length && (
+        <div className="px-4 py-3">
+          <Button
+            variant="secondary"
+            size="small"
+            testId="pull-request-conversation-more"
+            onClick={() => {
+              setBudget((kept) => kept + drawnPage);
+            }}
+          >
+            {showMoreLabel(items.length - drawn)}
+          </Button>
+        </div>
       )}
       {more > 0 && <p className="px-4 py-2 text-[12px] text-dim">{moreSentence(more)}</p>}
     </div>

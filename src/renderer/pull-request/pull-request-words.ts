@@ -28,6 +28,10 @@ export const emptyLogSentence = "No failing lines came back. Open the check on G
 export const noLogSentence =
   "This kind of check has no log to read here. Open its details on GitHub.";
 export const logCutSentence = "The rest is on GitHub.";
+export function showMoreLabel(left: number): string {
+  return left === 1 ? "Show 1 more" : `Show ${String(left)} more`;
+}
+
 export function hiddenCommentSentence(reason: string | null): string {
   return reason === null
     ? "This comment is hidden on GitHub."

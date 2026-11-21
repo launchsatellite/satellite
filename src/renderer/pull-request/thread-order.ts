@@ -43,6 +43,21 @@ export function conversationItems(detail: Read): ConversationItem[] {
   return [...open, ...spoken, ...closed];
 }
 
+function charsOf(item: ConversationItem): number {
+  if (item.kind === "review") return item.review.body.length;
+  if (item.kind === "comment") return item.comment.body.length;
+  return item.thread.comments.reduce((total, { body }) => total + body.length, 0);
+}
+
+export function drawnCount(items: readonly ConversationItem[], budget: number): number {
+  let used = 0;
+  for (const [index, item] of items.entries()) {
+    used += charsOf(item);
+    if (used > budget) return Math.max(index, 1);
+  }
+  return items.length;
+}
+
 export function threadOrder(detail: Read): number[] {
   return detail.threads
     .flatMap((thread, index) => (thread.resolved ? [] : [{ thread, index }]))
