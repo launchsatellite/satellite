@@ -63,6 +63,21 @@ export const changesLimits = {
   conflictNames: 5,
 };
 
+export const filesLimits = {
+  folders: 16,
+  folderScan: 5000,
+  folderEntries: 1000,
+  nameChars: 255,
+  imageBytes: 5_242_880,
+  imagePixels: 50_000_000,
+  imageBase64Chars: 6_990_508,
+  findNames: 200_000,
+  findResults: 50,
+  queryChars: 200,
+  tabsPerWorkspace: 12,
+  tabbedWorkspaces: 100,
+};
+
 export const interfaceLimits = {
   left: { min: 200, max: 360, initial: 248 },
   right: { min: 360, max: 640, initial: 440 },

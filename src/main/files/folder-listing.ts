@@ -1,0 +1,147 @@
+import { lstat, opendir } from "node:fs/promises";
+import { dirname, join, posix } from "node:path";
+import { filesLimits } from "../../shared/bridge-contract.ts";
+import {
+  confinedFolder,
+  isChangePath,
+  markStuck,
+  rootsWithStuckReads,
+  sameFolder,
+  withinTime,
+} from "../changes/file-sides.ts";
+import { errorCode, isMissing } from "../platform/file-system.ts";
+import { gitReadMs } from "../workspaces/git-command.ts";
+import { checkIgnored } from "./ignore-check.ts";
+
+export interface FileEntry {
+  name: string;
+  kind: "file" | "folder" | "repository" | "link";
+  ignored: boolean;
+}
+export type FolderListing =
+  | { state: "listed"; entries: FileEntry[]; more: number }
+  | { state: "missing" | "unreadable" | "too-many" | "hung" | "failed" };
+
+const lstatsAtOnce = 32;
+const ignoreCheckMs = 2000;
+const missing: FolderListing = { state: "missing" };
+const unreadable: FolderListing = { state: "unreadable" };
+const hung: FolderListing = { state: "hung" };
+
+function depthOf(folder: string): number {
+  return folder === "." ? 0 : folder.split("/").length;
+}
+
+function isListable(name: string): boolean {
+  return name.length <= filesLimits.nameChars && isChangePath(name);
+}
+
+async function holdsGit(folder: string): Promise<boolean> {
+  return lstat(join(folder, ".git")).then(
+    () => true,
+    () => false,
+  );
+}
+
+async function classify(folder: string, name: string): Promise<FileEntry | undefined> {
+  const entry = await lstat(join(folder, name)).catch(() => undefined);
+  if (entry === undefined) return undefined;
+  if (entry.isSymbolicLink()) return { name, kind: "link", ignored: false };
+  if (entry.isFile()) return { name, kind: "file", ignored: false };
+  if (!entry.isDirectory()) return undefined;
+  const kind = (await holdsGit(join(folder, name))) ? "repository" : "folder";
+  return { name, kind, ignored: false };
+}
+
+async function scan(folder: string): Promise<string[] | undefined> {
+  const names: string[] = [];
+  let seen = 0;
+  for await (const entry of await opendir(folder)) {
+    seen += 1;
+    if (seen > filesLimits.folderScan) return undefined;
+    if (isListable(entry.name)) names.push(entry.name);
+  }
+  return names;
+}
+
+async function classified(folder: string, names: string[]): Promise<FileEntry[]> {
+  const entries: FileEntry[] = [];
+  for (let at = 0; at < names.length; at += lstatsAtOnce) {
+    const batch = await Promise.all(
+      names.slice(at, at + lstatsAtOnce).map((name) => classify(folder, name)),
+    );
+    for (const entry of batch) if (entry !== undefined) entries.push(entry);
+  }
+  return entries;
+}
+
+function order(a: FileEntry, b: FileEntry): number {
+  const group = (entry: FileEntry) =>
+    entry.kind === "folder" || entry.kind === "repository" ? 0 : 1;
+  if (group(a) !== group(b)) return group(a) - group(b);
+  if (a.name === b.name) return 0;
+  return a.name < b.name ? -1 : 1;
+}
+
+async function listConfined(
+  root: string,
+  folder: string,
+  signal?: AbortSignal,
+): Promise<FolderListing> {
+  const parent = folder === "" ? "." : posix.dirname(folder);
+  const parentReal = await confinedFolder(root, parent);
+  if (typeof parentReal !== "string") {
+    return parentReal.kind === "gone" ? missing : unreadable;
+  }
+  if (await repositoryOnTheWay(parentReal, depthOf(parent))) return unreadable;
+  if (folder !== "") {
+    const entry = await lstat(join(parentReal, posix.basename(folder))).catch(() => undefined);
+    if (entry?.isSymbolicLink() === true) return unreadable;
+    if (entry?.isDirectory() !== true) return missing;
+  }
+  const real = folder === "" ? parentReal : await confinedFolder(root, folder);
+  if (typeof real !== "string") return real.kind === "gone" ? missing : unreadable;
+  if (folder !== "" && (await holdsGit(real))) return unreadable;
+  const names = await scan(real);
+  if (names === undefined) return { state: "too-many" };
+  const entries = await classified(real, names);
+  const paths = entries.map((entry) => (folder === "" ? entry.name : `${folder}/${entry.name}`));
+  const check = await checkIgnored(root, paths, signal, ignoreCheckMs);
+  const marked = entries.map((entry, at) => ({
+    ...entry,
+    ignored: check.kind === "checked" && check.ignored.has(paths[at] ?? ""),
+  }));
+  const again = await confinedFolder(root, folder === "" ? "." : folder);
+  if (typeof again !== "string" || !sameFolder(again, real)) return unreadable;
+  marked.sort(order);
+  return {
+    state: "listed",
+    entries: marked.slice(0, filesLimits.folderEntries),
+    more: Math.max(0, marked.length - filesLimits.folderEntries),
+  };
+}
+
+async function repositoryOnTheWay(real: string, depth: number): Promise<boolean> {
+  let at = real;
+  for (let level = 0; level < depth; level += 1) {
+    if (await holdsGit(at)) return true;
+    at = dirname(at);
+  }
+  return false;
+}
+
+export async function listFolder(
+  root: string,
+  folder: string,
+  signal?: AbortSignal,
+): Promise<FolderListing> {
+  if (folder !== "" && !isChangePath(folder)) return unreadable;
+  if (rootsWithStuckReads.has(root)) return hung;
+  const work = listConfined(root, folder, signal).catch((error: unknown): FolderListing =>
+    isMissing(error) || errorCode(error) === "ENOTDIR" ? missing : unreadable,
+  );
+  const listing = await withinTime(work, gitReadMs);
+  if (listing !== undefined) return listing;
+  markStuck(root, work);
+  return hung;
+}
