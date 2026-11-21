@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { callOf } from "../../src/main/pull-request/gh-arguments.ts";
@@ -40,10 +41,21 @@ function noAnswer(): { stdout: string; stderr: string; exitCode: number } {
   return { stdout: "", stderr, exitCode: 1 };
 }
 
+function headOfFolder(): string {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+}
+
 function printed(answer: GhEntry): { stdout: string; stderr: string; exitCode: number } {
   const json = isCallEntry(answer) ? answer.json : undefined;
   return {
-    stdout: json === undefined ? (answer.stdout ?? "") : JSON.stringify(json),
+    stdout:
+      json === undefined
+        ? (answer.stdout ?? "")
+        : JSON.stringify(json).replaceAll("@head", headOfFolder()),
     stderr: answer.stderr ?? "",
     exitCode: answer.exitCode ?? 0,
   };

@@ -116,7 +116,7 @@
         "isDraft": false,
         "baseRefName": "main",
         "headRefName": "alpha",
-        "headRefOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "headRefOid": "@head",
         "isCrossRepository": false,
         "body": "## What changed\n\nThe greeting now names the person and ends with an exclamation mark.\n\n- Adds a `greeting` constant\n- Keeps the old export working\n- Updates the guide\n\n### Checklist\n\n- [x] Tests pass\n- [ ] Docs reviewed\n\n| File | Change |\n| --- | --- |\n| src/app.ts | Reworded |\n| docs/guide.md | New |\n\n```ts\nexport function greet(name: string) {\n  return `Hello, ${name}!`;\n}\n```\n\nSee the [contributing guide](https://github.com/example-org/verify-repo/blob/main/CONTRIBUTING.md) for the review rules.\n",
         "mergeable": "MERGEABLE",
@@ -126,7 +126,7 @@
         "reviews": [
           {
             "state": "CHANGES_REQUESTED",
-            "commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "commit": "@head",
             "login": "grace-example",
             "at": "2025-01-02T09:00:00Z"
           }
@@ -209,7 +209,7 @@
         "isDraft": false,
         "baseRefName": "main",
         "headRefName": "alpha",
-        "headRefOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "headRefOid": "@head",
         "isCrossRepository": false,
         "body": "## What changed\n\nThe greeting now names the person and ends with an exclamation mark.\n\n- Adds a `greeting` constant\n- Keeps the old export working\n- Updates the guide\n\n### Checklist\n\n- [x] Tests pass\n- [ ] Docs reviewed\n\n| File | Change |\n| --- | --- |\n| src/app.ts | Reworded |\n| docs/guide.md | New |\n\n```ts\nexport function greet(name: string) {\n  return `Hello, ${name}!`;\n}\n```\n\nSee the [contributing guide](https://github.com/example-org/verify-repo/blob/main/CONTRIBUTING.md) for the review rules.\n",
         "mergeable": "MERGEABLE",
@@ -219,13 +219,13 @@
         "reviews": [
           {
             "state": "CHANGES_REQUESTED",
-            "commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "commit": "@head",
             "login": "grace-example",
             "at": "2025-01-02T09:00:00Z"
           },
           {
             "state": "APPROVED",
-            "commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+            "commit": "@head",
             "login": "grace-example",
             "at": "2025-01-03T09:00:00Z"
           }
