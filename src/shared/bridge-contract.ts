@@ -672,8 +672,10 @@ export const bridgeRequests = {
     request: empty,
     response: z.strictObject({
       at: processStart,
-      rows: z.array(processRow).max(processesLimits.rows),
-      more: count,
+      rows: z.array(processRow).max(processesLimits.rows * bridgeLimits.terminals),
+      more: z
+        .array(z.strictObject({ workspace: workspaceRef, count: z.int().min(1).max(100_000) }))
+        .max(bridgeLimits.terminals),
     }),
   },
   "processes.stop": {

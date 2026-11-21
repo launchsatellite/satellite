@@ -31,7 +31,7 @@ function row(pid: number, parent: number, time: string, command: string): string
 const macos = parsePsTable(psMacos);
 
 function ids(table: ReturnType<typeof parsePsTable>, roots: readonly SessionRoot[], now: number) {
-  return listedProcesses(table, roots, now).map((listed) => listed.entry.pid);
+  return listedProcesses(table, roots, now, 200).owned.map((listed) => listed.entry.pid);
 }
 
 function startOf(pid: number): number {
@@ -46,7 +46,7 @@ describe("listedProcesses", () => {
   });
 
   it("lists only the topmost process of a chain", () => {
-    const listed = listedProcesses(macos, [root(4100)], fixtureNow);
+    const listed = listedProcesses(macos, [root(4100)], fixtureNow, 200).owned;
     expect(listed.map((item) => item.entry.pid)).not.toContain(4202);
     expect(listed[0]?.subtree.map((entry) => entry.pid)).toEqual([4201, 4202, 4203]);
   });
@@ -73,7 +73,7 @@ describe("listedProcesses", () => {
   it("drops a link to a parent that started after its child", () => {
     const windows = parseWindowsTable(tableWindows);
     const session = root(3100, { spawnedAt: 1795255200000 });
-    const listed = listedProcesses(windows, [session], 1795255501000 + 60_000);
+    const listed = listedProcesses(windows, [session], 1795255501000 + 60_000, 200).owned;
     expect(listed.map((item) => item.entry.pid)).toEqual([3201]);
     expect(listed[0]?.subtree.map((entry) => entry.pid)).toEqual([3201]);
   });
@@ -120,7 +120,8 @@ describe("listedProcesses", () => {
         }),
       ],
       fixtureNow,
-    );
+      200,
+    ).owned;
     expect(
       listed.map((item) => [item.entry.pid, item.root.session, item.root.workspace.workspace]),
     ).toEqual([
@@ -128,6 +129,31 @@ describe("listedProcesses", () => {
       [4201, "first", "main"],
       [4402, "first", "main"],
     ]);
+  });
+});
+
+describe("listedProcesses past the cap", () => {
+  it("cuts each workspace on its own and counts what it left out", () => {
+    const rows = Array.from({ length: 5 }, (_, index) =>
+      row(8100 + index, 8001, `10:03:0${String(index)}`, `worker ${String(index)}`),
+    );
+    const table = parsePsTable(
+      [
+        psMacos,
+        row(8000, 900, "10:01:00", "claude"),
+        row(8001, 8000, "10:02:00", "/bin/sh -c many"),
+        ...rows,
+      ].join("\n"),
+    );
+    const other = root(8000, {
+      session: "second",
+      spawnedAt: Date.UTC(2026, 10, 21, 10, 1, 0),
+      workspace: "5b1d1f56-3c2c-4a8f-9d51-7a3b1c2d4e5f",
+    });
+    const { owned, more } = listedProcesses(table, [root(4100), other], fixtureNow, 3);
+    expect(owned.filter((item) => item.root.session === "second")).toHaveLength(3);
+    expect(owned.filter((item) => item.root.session === "first")).toHaveLength(2);
+    expect(more).toEqual([{ workspace: other.workspace, count: 2 }]);
   });
 });
 

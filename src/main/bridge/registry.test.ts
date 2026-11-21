@@ -111,7 +111,7 @@ function spies() {
       Promise.resolve({ kind: "empty" }),
     ),
     "processes.list": vi.fn<BridgeHandler<"processes.list">>(() =>
-      Promise.resolve({ at: 1, rows: [], more: 0 }),
+      Promise.resolve({ at: 1, rows: [], more: [] }),
     ),
     "processes.stop": vi.fn<BridgeHandler<"processes.stop">>(() => Promise.resolve({})),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),

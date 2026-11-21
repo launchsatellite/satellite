@@ -1104,7 +1104,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             label={workspaceLabel(selectedProject, selectedWorkspace)}
             rows={processesHere}
             at={processes.at}
-            more={processes.more}
+            more={changesHere === null ? 0 : processes.moreOf(changesHere)}
             sessionNumber={sessionNumber}
             stopping={processes.stopping}
             onStop={processes.stop}

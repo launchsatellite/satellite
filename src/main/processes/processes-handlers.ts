@@ -1,4 +1,9 @@
-import { processesLimits, processRow, type ProcessRow } from "../../shared/bridge-contract.ts";
+import {
+  processesLimits,
+  processRow,
+  type ProcessRow,
+  type WorkspaceRef,
+} from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { type ListeningPort, readListeningPorts } from "../platform/listening-ports.ts";
 import { type ProcessEntry, readProcessTable } from "../platform/process-table.ts";
@@ -34,6 +39,11 @@ interface ProcessesOptions {
 interface Snapshot {
   readonly at: number;
   readonly rows: readonly { readonly owner: BridgeOwner; readonly row: ProcessRow }[];
+  readonly more: readonly {
+    readonly owner: BridgeOwner;
+    readonly workspace: WorkspaceRef;
+    readonly count: number;
+  }[];
 }
 
 const tableReuseMs = 2000;
@@ -93,21 +103,30 @@ export function createProcesses({
   const read = async (): Promise<Snapshot> => {
     const at = now();
     const running = roots();
-    if (running.length === 0) return { at, rows: [] };
+    if (running.length === 0) return { at, rows: [], more: [] };
     const table = await readTable();
-    const listed = listedProcesses(
+    const { owned: listed, more } = listedProcesses(
       table,
       running.map(({ root }) => root),
       at,
+      processesLimits.rows,
     );
-    if (listed.length === 0) return { at, rows: [] };
+    if (listed.length === 0) return { at, rows: [], more: [] };
     const ports = await readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid)));
     const rows = listed.flatMap((owned) => {
       const row = rowOf(owned, ports, home);
       const owner = running.find(({ root }) => root === owned.root)?.owner;
       return row === undefined || owner === undefined ? [] : [{ owner, row }];
     });
-    return { at, rows };
+    const owners = more.flatMap(({ workspace, count }) => {
+      const owner = running.find(
+        ({ root }) =>
+          root.workspace.projectId === workspace.projectId &&
+          root.workspace.workspace === workspace.workspace,
+      )?.owner;
+      return owner === undefined ? [] : [{ owner, workspace, count }];
+    });
+    return { at, rows, more: owners };
   };
 
   const snapshot = (): Promise<Snapshot> => {
@@ -136,12 +155,13 @@ export function createProcesses({
   return {
     handlers: {
       "processes.list": async (_request, owner) => {
-        const { at, rows } = await snapshot();
-        const mine = rows.filter((candidate) => candidate.owner === owner);
+        const { at, rows, more } = await snapshot();
         return {
           at,
-          rows: mine.slice(0, processesLimits.rows).map(({ row }) => row),
-          more: Math.max(0, mine.length - processesLimits.rows),
+          rows: rows.filter((candidate) => candidate.owner === owner).map(({ row }) => row),
+          more: more
+            .filter((candidate) => candidate.owner === owner)
+            .map(({ workspace, count }) => ({ workspace, count })),
         };
       },
       "processes.stop": async ({ pid, started }, owner) => {

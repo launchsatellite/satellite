@@ -14,6 +14,11 @@ export interface OwnedProcess {
   readonly subtree: readonly ProcessEntry[];
 }
 
+export interface ListedProcesses {
+  readonly owned: OwnedProcess[];
+  readonly more: { workspace: WorkspaceRef; count: number }[];
+}
+
 interface Position {
   readonly entry: ProcessEntry;
   readonly root: SessionRoot;
@@ -97,7 +102,7 @@ function ownedOf(position: Position, entries: readonly ProcessEntry[]): OwnedPro
   };
 }
 
-function order(first: OwnedProcess, second: OwnedProcess): number {
+function order(first: Position, second: Position): number {
   return (
     first.root.workspace.projectId.localeCompare(second.root.workspace.projectId) ||
     first.root.workspace.workspace.localeCompare(second.root.workspace.workspace) ||
@@ -110,11 +115,27 @@ export function listedProcesses(
   entries: readonly ProcessEntry[],
   roots: readonly SessionRoot[],
   now: number,
-): OwnedProcess[] {
-  return positionsOf(entries, roots, now)
-    .filter((position) => position.listed)
-    .map((position) => ownedOf(position, entries))
-    .sort(order);
+  perWorkspace: number,
+): ListedProcesses {
+  const taken = new Map<string, number>();
+  const owned: OwnedProcess[] = [];
+  const more = new Map<string, { workspace: WorkspaceRef; count: number }>();
+  for (const position of positionsOf(entries, roots, now)
+    .filter((candidate) => candidate.listed)
+    .sort(order)) {
+    const { workspace } = position.root;
+    const key = `${workspace.projectId} ${workspace.workspace}`;
+    const count = taken.get(key) ?? 0;
+    taken.set(key, count + 1);
+    if (count < perWorkspace) {
+      owned.push(ownedOf(position, entries));
+      continue;
+    }
+    const left = more.get(key);
+    if (left === undefined) more.set(key, { workspace, count: 1 });
+    else left.count += 1;
+  }
+  return { owned, more: [...more.values()] };
 }
 
 export function ownedProcess(

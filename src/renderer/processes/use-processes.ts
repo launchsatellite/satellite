@@ -8,7 +8,7 @@ import { ageReadout } from "./process-words.ts";
 export interface Processes {
   rowsOf: (ref: WorkspaceRef) => readonly ProcessRow[];
   at: number;
-  more: number;
+  moreOf: (ref: WorkspaceRef) => number;
   stopping: ReadonlySet<string>;
   stop: (row: ProcessRow) => void;
 }
@@ -17,15 +17,16 @@ interface ProcessesInput {
   finished: string;
   notify: Notify;
 }
+type ProcessesMore = readonly { workspace: WorkspaceRef; count: number }[];
 interface Shown {
   rows: readonly ProcessRow[];
   at: number;
-  more: number;
+  more: ProcessesMore;
   key: string;
 }
 
 const pace: Pace = { firstMs: 10_000, maxMs: 30_000, factor: 4 };
-const nothing: Shown = { rows: [], at: 0, more: 0, key: "" };
+const nothing: Shown = { rows: [], at: 0, more: [], key: "" };
 
 export function stopKey(row: ProcessRow): string {
   return `${String(row.pid)}/${String(row.started)}`;
@@ -35,7 +36,7 @@ function isVisible(): boolean {
   return document.visibilityState === "visible";
 }
 
-function shownKey(rows: readonly ProcessRow[], at: number, more: number): string {
+function shownKey(rows: readonly ProcessRow[], at: number, more: ProcessesMore): string {
   return JSON.stringify([rows, rows.map((row) => ageReadout(at - row.started)), more]);
 }
 
@@ -133,5 +134,16 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
     [notify],
   );
 
-  return { rowsOf, at: shown.at, more: running ? shown.more : 0, stopping, stop };
+  const moreOf = useCallback(
+    (ref: WorkspaceRef) =>
+      shown.more
+        .filter(
+          ({ workspace }) =>
+            workspace.projectId === ref.projectId && workspace.workspace === ref.workspace,
+        )
+        .reduce((total, { count }) => total + count, 0),
+    [shown.more],
+  );
+
+  return { rowsOf, at: shown.at, moreOf, stopping, stop };
 }

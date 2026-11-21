@@ -86,7 +86,7 @@ describe("processes.list", () => {
     const { list } = setup({ table });
     const answer = await list();
     expect(answer.at).toBe(fixtureNow);
-    expect(answer.more).toBe(0);
+    expect(answer.more).toEqual([]);
     expect(answer.rows.map((row) => row.pid)).toEqual([4201, 4402]);
     expect(answer.rows[0]).toMatchObject({
       command: "npm run dev",
@@ -119,7 +119,7 @@ describe("processes.list", () => {
 
   it("reads no table while no session runs", async () => {
     const { list, stop, readTable } = setup({ roots: [] });
-    expect(await list()).toEqual({ at: fixtureNow, rows: [], more: 0 });
+    expect(await list()).toEqual({ at: fixtureNow, rows: [], more: [] });
     await expect(stop(4201, startOf(parsePsTable(psMacos), 4201))).rejects.toMatchObject({
       code: "not-found",
     });
@@ -128,7 +128,7 @@ describe("processes.list", () => {
 
   it("reads no ports when nothing is listed", async () => {
     const { list, readPorts } = setup({ roots: [] });
-    expect(await list()).toEqual({ at: fixtureNow, rows: [], more: 0 });
+    expect(await list()).toEqual({ at: fixtureNow, rows: [], more: [] });
     expect(readPorts).not.toHaveBeenCalled();
   });
 
