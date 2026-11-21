@@ -1,5 +1,3 @@
-import { lstat } from "node:fs/promises";
-import { join } from "node:path";
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
 import { gitReadMs, readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
@@ -10,6 +8,7 @@ import {
   noLazyFetch,
   oidPattern,
   readWorktreeSide,
+  worktreeStamps,
 } from "./file-sides.ts";
 
 export interface ChangeRecord {
@@ -58,7 +57,6 @@ const digits = /^\d+$/;
 const allZeros = /^0+$/;
 const countCap = 1_000_000;
 const submoduleMode = "160000";
-const stampBatch = 32;
 const diffArgs = [
   "-c",
   "diff.autoRefreshIndex=false",
@@ -242,41 +240,20 @@ async function countLines(folder: string, untracked: ListedChange[]): Promise<vo
   }
 }
 
-async function stampOf(folder: string, change: ListedChange): Promise<string> {
-  const source = change.sourceOid ?? "new";
-  if (!isChangePath(change.path)) return `${source}:gone`;
-  try {
-    const entry = await lstat(join(folder, change.path), { bigint: true });
-    return `${source}:${String(entry.size)}:${String(entry.mtimeNs)}`;
-  } catch {
-    return `${source}:gone`;
-  }
-}
-
-async function stamped(folder: string, changes: ListedChange[]): Promise<ChangeRecord[]> {
-  const records: ChangeRecord[] = [];
-  let timer: NodeJS.Timeout | undefined;
-  const late = new Promise<undefined>((settle) => {
-    timer = setTimeout(() => {
-      settle(undefined);
-    }, gitReadMs);
-  });
-  let inTime = true;
-  try {
-    for (let start = 0; start < changes.length; start += stampBatch) {
-      const batch = changes.slice(start, start + stampBatch);
-      const stamps: string[] | undefined = inTime
-        ? await Promise.race([Promise.all(batch.map((change) => stampOf(folder, change))), late])
-        : undefined;
-      inTime = stamps !== undefined;
-      batch.forEach((change, index) => {
-        records.push({ ...change, stamp: stamps?.[index] ?? `${change.sourceOid ?? "new"}:late` });
-      });
-    }
-  } finally {
-    clearTimeout(timer);
-  }
-  return records;
+async function stamped(
+  folder: string,
+  changes: ListedChange[],
+  signal: AbortSignal,
+): Promise<ChangeRecord[]> {
+  const stamps = await worktreeStamps(
+    folder,
+    changes.map((change) => change.path),
+    signal,
+  );
+  return changes.map((change) => ({
+    ...change,
+    stamp: `${change.sourceOid ?? "new"}:${stamps.get(change.path) ?? "late"}`,
+  }));
 }
 
 export function parseDiff(stdout: string): ParsedList | undefined {
@@ -354,7 +331,7 @@ export async function readChangeList(
   const kept = named.slice(0, changesLimits.files);
   return {
     kind: "files",
-    records: await stamped(folder, kept),
+    records: await stamped(folder, kept, signal),
     more: named.length - kept.length + parsed.more,
     longPaths: merged.length - named.length,
   };

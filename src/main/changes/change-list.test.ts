@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import type { BigIntStats } from "node:fs";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rename, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import { gitReadMs } from "../workspaces/git-command.ts";
 import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
+import { readWorktreeSide } from "./file-sides.ts";
 
 const fileCalls = vi.hoisted(() => {
   const calls: { lstat?: ((path: string) => Promise<BigIntStats>) | undefined } = {};
@@ -526,6 +527,24 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     ).toEqual({ kind: "unavailable", reason: "too-many" });
   });
 
+  it("never stamps a file through a folder that is a link to outside", async () => {
+    const { repo, git } = await repository();
+    await mkdir(join(repo, "dir"));
+    await writeFile(join(repo, "dir", "hosts"), "inside\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const outside = join(repo, "..", "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "hosts"), "twenty one bytes long");
+    await rename(join(repo, "dir"), join(repo, "..", "moved"));
+    await symlink(outside, join(repo, "dir"), "junction");
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.letter, record.stamp])).toEqual([
+      ["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)],
+      ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)],
+    ]);
+  });
+
   it("answers hung when git times out or is stuck in the folder", async () => {
     const { repo, git } = await repository();
     await writeFile(join(repo, "edit.txt"), "one\n");
@@ -566,6 +585,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       expect(list.kind === "files" ? list.records.map((record) => record.stamp) : []).toEqual([
         expect.stringMatching(/^[0-9a-f]{40}:late$/),
       ]);
+      expect(await readWorktreeSide(repo, "edit.txt")).toEqual({ kind: "hung" });
     } finally {
       fileCalls.lstat = undefined;
       vi.useRealTimers();

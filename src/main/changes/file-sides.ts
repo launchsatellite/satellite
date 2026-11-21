@@ -22,6 +22,7 @@ export type SideRead =
   | { kind: "not-local" }
   | { kind: "unreadable" }
   | { kind: "refused" };
+type FolderKind = "plain" | "missing" | "other";
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
@@ -78,9 +79,33 @@ function decodedText(bytes: Uint8Array): SideRead {
   return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };
 }
 
+async function folderPathKind(
+  realRoot: string,
+  parent: string,
+  checked: Map<string, FolderKind>,
+): Promise<FolderKind> {
+  if (parent === ".") return "plain";
+  let folder = "";
+  for (const segment of parent.split("/")) {
+    folder = folder === "" ? segment : `${folder}/${segment}`;
+    const known = checked.get(folder);
+    if (known === "plain") continue;
+    if (known !== undefined) return known;
+    const kind = await lstat(join(realRoot, folder)).then(
+      (entry) => (entry.isDirectory() ? "plain" : "other"),
+      (error: unknown) => (isMissing(error) ? "missing" : "other"),
+    );
+    checked.set(folder, kind);
+    if (kind !== "plain") return kind;
+  }
+  return "plain";
+}
+
 async function confinedFolder(root: string, parent: string): Promise<string | SideRead> {
   const realRoot = await realpathOrUndefined(root);
   if (realRoot === undefined) return gone;
+  const kind = await folderPathKind(realRoot, parent, new Map());
+  if (kind !== "plain") return kind === "missing" ? gone : refused;
   const expected = join(realRoot, parent);
   const realParent = await realpathOrUndefined(expected);
   if (realParent === undefined) return gone;
@@ -113,7 +138,7 @@ async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {
   }
 }
 
-async function withinTime(work: Promise<SideRead>, ms: number): Promise<SideRead | undefined> {
+async function withinTime<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<undefined>((settle) => {
     timer = setTimeout(() => {
@@ -140,6 +165,29 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   const recheck = await confinedFolder(root, parent);
   if (typeof recheck !== "string") return recheck;
   return sameFolder(recheck, folder) ? read : refused;
+}
+
+async function fileStamp(
+  realRoot: string | undefined,
+  path: string,
+  checked: Map<string, FolderKind>,
+): Promise<string> {
+  if (realRoot === undefined || !isChangePath(path)) return "gone";
+  if ((await folderPathKind(realRoot, posix.dirname(path), checked)) !== "plain") return "gone";
+  try {
+    const entry = await lstat(join(realRoot, path), { bigint: true });
+    return `${String(entry.size)}:${String(entry.mtimeNs)}`;
+  } catch {
+    return "gone";
+  }
+}
+
+function markStuck(root: string, work: Promise<unknown>): void {
+  rootsWithStuckReads.add(root);
+  const release = () => {
+    rootsWithStuckReads.delete(root);
+  };
+  void work.then(release, release);
 }
 
 async function gitOutput(
@@ -220,12 +268,31 @@ export async function readWorktreeSide(
   );
   const read = await withinTime(work, gitReadMs);
   if (read !== undefined) return read;
-  rootsWithStuckReads.add(root);
-  const release = () => {
-    rootsWithStuckReads.delete(root);
-  };
-  void work.then(release, release);
+  markStuck(root, work);
   return hung;
+}
+
+export async function worktreeStamps(
+  root: string,
+  paths: readonly string[],
+  signal: AbortSignal,
+): Promise<Map<string, string>> {
+  const stamps = new Map<string, string>();
+  if (rootsWithStuckReads.has(root)) return stamps;
+  const work = (async () => {
+    const realRoot = await realpathOrUndefined(root);
+    const checked = new Map<string, FolderKind>();
+    for (const path of paths) {
+      if (signal.aborted) return;
+      stamps.set(path, await fileStamp(realRoot, path, checked));
+    }
+  })();
+  const finished = await withinTime(
+    work.then(() => true),
+    gitReadMs,
+  );
+  if (finished === undefined) markStuck(root, work);
+  return new Map(stamps);
 }
 
 export async function readBlobSide(

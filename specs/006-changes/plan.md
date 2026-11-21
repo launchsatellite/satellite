@@ -94,7 +94,7 @@ export const changesLimits = {
 ### Paths
 
 - A change path is git's own, relative to the worktree root with `/` separators. `isChangePath(path, platform)` accepts it only when it is 1 to `pathChars` characters, holds no NUL, does not start with `/`, is not absolute for `posix` or `win32`, has no drive prefix `^[A-Za-z]:`, holds no `\` on Windows, and every `/` segment is non-empty, not `.`, not `..` and not `.git` in any letter case.
-- The worktree side is read only when the real path of the file's parent folder equals, by `samePath`, the worktree's real path joined with the parent part of the path, so no folder on the way is a link or junction. The file itself is opened with `noFollow | nonBlocking | noTerminal`, must be a regular file whose 64-bit device and inode equal its `lstat`, and must not change size or modification time while it is read. A link as the file itself is never followed, its target text is what shows.
+- The worktree side is read, and a file stamped, only when every folder from the worktree root down to the file's parent is a plain folder by `lstat`, never a link or junction. A read also needs the real path of the file's parent folder to equal, by `samePath`, the worktree's real path joined with the parent part of the path, so no folder on the way is a link or junction. The file itself is opened with `noFollow | nonBlocking | noTerminal`, must be a regular file whose 64-bit device and inode equal its `lstat`, and must not change size or modification time while it is read. A link as the file itself is never followed, its target text is what shows.
 
 ### Contract
 
@@ -190,7 +190,7 @@ Thrown as `BridgeFailure` from `src/main/changes/changes-handlers.ts`.
 Recorded in `ARCHITECTURE.md` Changes and Bridge.
 
 - **Read files.** Only those git reports changed or untracked and not ignored in a workspace Satellite lists, inside that worktree, plus their committed version, each side at most 1 MiB. It cannot name another path, an object, a git argument or a program. A link shows its target text, a link anywhere above the file refuses the read, `.git` is refused by name, and a pipe or device is never opened. That page could already read every one of those files through `terminal.write` and Claude Code's shell.
-- **Learn metadata.** The size and modification time of listed files, folded into `stamp`.
+- **Learn metadata.** The size and modification time of listed files inside the worktree, folded into `stamp`. Stamps go through the worktree side's folder walk, so a file below a link stamps as gone.
 - **Load the machine.** Each request costs at most one bounded read in one of four shared slots, with git's time limits, and a page's newer request aborts its older ones. It can keep four git processes busy, which typing into Claude Code can exceed.
 - **Write.** Nothing in any repository. The conflict check writes only into `<home>/quarantine/<uuid>`, a name the background process makes.
 
