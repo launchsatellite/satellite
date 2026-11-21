@@ -54,7 +54,6 @@ export function applyMonacoTheme(): void {
       "diffEditor.diagonalFill": token("line"),
       "editor.selectionBackground": token("sel"),
       "editor.inactiveSelectionBackground": token("sel"),
-      "editorUnicodeHighlight.border": token("sigfg"),
       focusBorder: token("accent"),
     },
   });

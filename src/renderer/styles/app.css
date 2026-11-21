@@ -103,6 +103,7 @@ body,
 .look-alike {
   outline: 1px solid var(--sigfg);
   outline-offset: -1px;
+  box-shadow: 0 0 0 1px var(--bg);
 }
 
 .revealed {

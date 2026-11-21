@@ -35,7 +35,6 @@ export const readOnlyOptions = {
   scrollbar: { useShadows: false },
   fontFamily: '"Geist Mono Variable", monospace',
   fontSize: 13,
-  renderControlCharacters: true,
   stopRenderingLineAfter: drawnColumns,
   unicodeHighlight: {
     invisibleCharacters: false,

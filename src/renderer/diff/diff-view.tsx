@@ -80,7 +80,6 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
         revealLineCount: 20,
       },
       maxComputationTime: 5000,
-      maxFileSize: 2,
       diffAlgorithm: "advanced",
       ignoreTrimWhitespace: false,
     });
