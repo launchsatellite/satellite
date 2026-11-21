@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
-import type { ChangedFile, ChangeLetter } from "../../shared/bridge-contract.ts";
+import type { ChangedFile } from "../../shared/bridge-contract.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { longPathsSentence, moreSentence, rowName } from "./change-words.ts";
+import { letterColours, longPathsSentence, moreSentence, rowName } from "./change-words.ts";
 
 interface ChangeListProps {
   files: readonly ChangedFile[];
@@ -11,7 +11,6 @@ interface ChangeListProps {
   onSelect: (path: string) => void;
 }
 
-const letterColours: Partial<Record<ChangeLetter, string>> = { A: "text-addfg", D: "text-delfg" };
 const focusRing =
   "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
 

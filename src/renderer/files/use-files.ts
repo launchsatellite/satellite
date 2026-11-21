@@ -9,6 +9,7 @@ import type {
 import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule } from "../ui/refresh-schedule.ts";
 import { fileSentence, folderSentence } from "./file-words.ts";
+import { recallTree, rememberTree } from "./tree-memory.ts";
 
 type ShownRead = Exclude<FileRead, { kind: "same" }>;
 type KeptRead = Extract<FileRead, { kind: "text" | "link" }>;
@@ -142,7 +143,9 @@ export function useFiles(
   file: FileShown | undefined;
   error: string | null;
 } {
-  const [listings, setListings] = useState<Listings>(new Map());
+  const [listings, setListings] = useState<Listings>(() =>
+    workspace === null ? new Map() : recallTree(workspace).listings,
+  );
   const [shown, setShown] = useState<FileShown>();
   const [listProblem, setListProblem] = useState<string | null>(null);
   const [fileProblem, setFileProblem] = useState<{ path: string; text: string } | null>(null);
@@ -152,6 +155,12 @@ export function useFiles(
   const projectId = workspace?.projectId;
   const key = workspace?.workspace;
   const asked = `${folders.join("\u0000")}\u0001${active ?? ""}`;
+
+  useEffect(() => {
+    if (projectId !== undefined && key !== undefined) {
+      rememberTree({ projectId, workspace: key }, { listings });
+    }
+  }, [projectId, key, listings]);
 
   useEffect(() => {
     latest.current = { folders, active, shown, listings };

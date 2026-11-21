@@ -8,7 +8,7 @@ import type {
 import { CommandButton } from "../commands/commands-context.tsx";
 import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
 import { FilePane } from "./file-pane.tsx";
-import { FileTabs } from "./file-tabs.tsx";
+import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
 import { useFileTabs } from "./use-file-tabs.ts";
 import { useFiles } from "./use-files.ts";
@@ -35,7 +35,7 @@ export function FilesView({
 }: FilesViewProps) {
   const tabs = useFileTabs(state, update, workspace, listed);
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
-  const { open, setOpen, closeAll } = useFolders(activePath);
+  const { open, setOpen, closeAll } = useFolders(workspace);
   const { listings, file, error } = useFiles(workspace, open, activePath, finished);
   useEffect(() => {
     const gone = open.filter((path) => path !== "" && listings.get(path)?.state === "missing");
@@ -71,6 +71,7 @@ export function FilesView({
         <div className="flex h-full min-h-0 w-full flex-col @min-[640px]:flex-row">
           <div className="flex max-h-[40%] min-h-0 flex-none flex-col border-b border-line @min-[640px]:max-h-none @min-[640px]:w-[260px] @min-[640px]:border-r @min-[640px]:border-b-0">
             <FileTree
+              workspace={workspace}
               open={open}
               listings={listings}
               changed={changed}
@@ -96,7 +97,12 @@ export function FilesView({
                 {error}
               </p>
             )}
-            <div className="min-h-0 flex-1">
+            <div
+              role={tabs.active === null ? undefined : "tabpanel"}
+              id={tabs.active === null ? undefined : fileTabPanelId}
+              aria-labelledby={tabs.active === null ? undefined : fileTabId(tabs.active)}
+              className="min-h-0 flex-1"
+            >
               <FilePane file={file} path={activePath} />
             </div>
           </div>

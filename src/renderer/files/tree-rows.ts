@@ -39,17 +39,40 @@ export function isFolderKind(kind: FileEntry["kind"]): boolean {
   return kind === "folder" || kind === "repository";
 }
 
-export function ancestors(path: string): string[] {
-  const parts = path.split("/").slice(0, -1);
-  return parts.map((_, at) => parts.slice(0, at + 1).join("/"));
+export function openedFolder(open: readonly string[], path: string): string[] {
+  if (open.includes(path)) return [...open];
+  const next = [...open, path];
+  if (next.length <= filesLimits.folders) return next;
+  const leaf = open.find(
+    (folder) => folder !== "" && !next.some((other) => other.startsWith(`${folder}/`)),
+  );
+  return leaf === undefined ? [...open] : next.filter((folder) => folder !== leaf);
 }
 
-export function openedWith(open: readonly string[], more: readonly string[]): string[] {
-  const merged = [...open, ...more.filter((path) => !open.includes(path))];
-  const room = filesLimits.folders;
-  return merged.length <= room
-    ? merged
-    : ["", ...merged.filter((path) => path !== "").slice(-(room - 1))];
+export function closedFolders(open: readonly string[], paths: readonly string[]): string[] {
+  return open.filter(
+    (folder) => !paths.some((path) => folder === path || folder.startsWith(`${path}/`)),
+  );
+}
+
+export function nearestRow(
+  before: readonly string[],
+  after: readonly string[],
+  lost: string,
+): string | undefined {
+  const kept = new Set(after);
+  for (let parent = parentPath(lost); parent !== ""; parent = parentPath(parent)) {
+    if (kept.has(parent)) return parent;
+  }
+  const at = before.indexOf(lost);
+  const later = before.slice(at + 1).find((path) => kept.has(path));
+  return (
+    later ??
+    before
+      .slice(0, Math.max(at, 0))
+      .reverse()
+      .find((path) => kept.has(path))
+  );
 }
 
 function noteFor(folder: string, level: number, listing: FolderListing | undefined) {
@@ -99,7 +122,9 @@ export function treeRows(
 }
 
 export function matchTyped(items: readonly ItemRow[], from: number, typed: string): number {
-  const wanted = typed.toLowerCase();
+  const lowered = typed.toLowerCase();
+  const repeated = lowered.length > 1 && lowered.replaceAll(lowered.slice(0, 1), "") === "";
+  const wanted = repeated ? lowered.slice(0, 1) : lowered;
   const start = wanted.length === 1 ? from + 1 : from;
   for (let step = 0; step < items.length; step += 1) {
     const at = (start + step) % items.length;

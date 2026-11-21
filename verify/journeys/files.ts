@@ -29,7 +29,7 @@ const deepFolders = [
   "src/deep/er/than/usual",
 ];
 const deepFile = "src/deep/er/than/usual/needle-target.ts";
-const rowSelector = '[data-testid="files-tree"] [role="treeitem"]';
+const rowSelector = '[data-testid="files-tree"] [data-kind]';
 
 function worktree(session: AppSession): string {
   return join(session.home, "worktrees", "repo", "alpha");
@@ -49,8 +49,8 @@ async function rows(page: Page): Promise<Row[]> {
           state: row.dataset["state"] ?? "",
           kind: row.dataset["kind"] ?? "",
           ignored: row.dataset["ignored"] === "true",
-          open: row.getAttribute("aria-expanded"),
-          label: row.getAttribute("aria-label") ?? "",
+          open: row.closest("[role=treeitem]")?.getAttribute("aria-expanded") ?? null,
+          label: row.closest("[role=treeitem]")?.getAttribute("aria-label") ?? "",
           text: row.innerText,
           iconDrawn: image !== null && image.complete && image.naturalWidth > 0,
         };
@@ -300,6 +300,11 @@ async function remembersTabs(session: AppSession): Promise<void> {
     },
     waitMs,
     "the tabs did not come back as they were",
+  );
+  assert.equal(
+    (await rowOf(session, "src", "after the relaunch")).open,
+    "false",
+    "the tree opened a folder by itself",
   );
   await waitUntil(
     async () => (await editorText(session.page)).length > 0,
