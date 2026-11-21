@@ -47,14 +47,14 @@ interface Check {
   conclusion: string;
 }
 
-function viewJson(checks: Check[] = [], head = "main", crossRepository = false) {
+function viewJson(checks: Check[] = [], head = "main", crossRepository = false, base = "trunk") {
   return JSON.stringify({
     number: 12,
     url: "https://github.com/example-org/verify-repo/pull/12",
     title: "Add a thing",
     state: "OPEN",
     isDraft: false,
-    baseRefName: "main",
+    baseRefName: base,
     headRefName: head,
     headRefOid: headOid,
     isCrossRepository: crossRepository,
@@ -240,13 +240,56 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
   });
 
-  it("shows a pull request from another repository when it is the branch's upstream", async () => {
+  it("shows a pull request from another repository when its fork is the branch's upstream", async () => {
+    const { answer, read, repo } = await setup();
+    await inRepo(repo, "checkout", "-q", "-b", "fix");
+    await inRepo(repo, "config", "remote.fork.url", "git@github.com:fork-owner/verify-repo.git");
+    await inRepo(repo, "config", "branch.fix.remote", "fork");
+    await inRepo(repo, "config", "branch.fix.merge", "refs/heads/topic");
+    await answer("view", { stdout: viewJson([], "topic", true) });
+    expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+  });
+
+  it("shows no pull request from another repository when the upstream is the pull request's own repository", async () => {
+    const { answer, read, repo } = await setup();
+    await inRepo(repo, "checkout", "-q", "-b", "fix");
+    await inRepo(
+      repo,
+      "config",
+      "remote.origin.url",
+      "https://github.com/example-org/verify-repo.git",
+    );
+    await inRepo(repo, "config", "branch.fix.remote", "origin");
+    await inRepo(repo, "config", "branch.fix.merge", "refs/heads/topic");
+    await answer("view", { stdout: viewJson([], "topic", true) });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+  });
+
+  it("shows no pull request from another repository when the upstream's repository is unknown", async () => {
     const { answer, read, repo } = await setup();
     await inRepo(repo, "checkout", "-q", "-b", "fix");
     await inRepo(repo, "config", "branch.fix.remote", "origin");
     await inRepo(repo, "config", "branch.fix.merge", "refs/heads/topic");
     await answer("view", { stdout: viewJson([], "topic", true) });
-    expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+  });
+
+  it("shows no fork pull request on a branch that tracks the base repository's same-named branch", async () => {
+    const { answer, read, repo } = await setup();
+    await inRepo(
+      repo,
+      "config",
+      "remote.origin.url",
+      "https://github.com/example-org/verify-repo.git",
+    );
+    await answer("view", { stdout: viewJson([], "main", true, "main") });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+  });
+
+  it("shows no pull request on its own base branch when the default branch cannot be read", async () => {
+    const { answer, read } = await setup();
+    await answer("view", { stdout: viewJson([], "main", false, "main") });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
   });
 
   it("never shows a pull request for the repository's default branch", async () => {

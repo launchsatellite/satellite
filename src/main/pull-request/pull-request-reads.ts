@@ -111,14 +111,30 @@ async function runGh(
   }
 }
 
+function sameRepository(
+  left: { owner: string; repo: string },
+  right: { owner: string; repo: string },
+): boolean {
+  return (
+    left.owner.toLowerCase() === right.owner.toLowerCase() &&
+    left.repo.toLowerCase() === right.repo.toLowerCase()
+  );
+}
+
 function belongsTo(
-  found: { head: string | null; crossRepository: boolean },
+  found: { head: string | null; base: string | null; crossRepository: boolean },
+  place: PullRequestPlace,
   branch: string | null,
   facts: BranchFacts,
 ): boolean {
-  if (facts.isDefault) return false;
-  if (found.head !== null && found.head === facts.upstream) return true;
-  return !found.crossRepository && found.head === branch;
+  if (facts.isDefault || found.head === null) return false;
+  if (found.base !== null && found.base === branch) return false;
+  if (!found.crossRepository) return found.head === branch || found.head === facts.upstream;
+  return (
+    found.head === facts.upstream &&
+    facts.upstreamRepository !== null &&
+    !sameRepository(facts.upstreamRepository, place)
+  );
 }
 
 export function createPullRequests({
@@ -241,7 +257,7 @@ export function createPullRequests({
     }
     const parsed = parseView(viewed.run.stdout, viewed.head);
     if (parsed === null) return { answer: unavailable("failed"), place: null };
-    if (!belongsTo(parsed.found, viewed.branch, viewed.facts)) {
+    if (!belongsTo(parsed.found, parsed.place, viewed.branch, viewed.facts)) {
       return { answer: { kind: "absent", reason: "none" }, place: null };
     }
     if (!detail) return { answer: { ...parsed.found, detail: null }, place: parsed.place };
