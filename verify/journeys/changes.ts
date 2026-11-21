@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, utimes, writeFile } from "node:fs/promises";
+import { appendFile, readFile, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -15,10 +15,11 @@ interface Row {
 }
 
 const waitMs = 15_000;
-const pollMs = 2000;
 const settleMs = 5000;
 const quickMs = 2000;
-const observationLagMs = 200;
+const backoffMs = 20_000;
+const pollCapMs = 30_000;
+const turnRefreshMs = 5000;
 const branchRows: [string, string][] = [
   ["-dash.txt", "A"],
   ["README.md", "M"],
@@ -64,14 +65,25 @@ async function rows(page: Page): Promise<Row[]> {
   );
 }
 
-async function rowOf(session: AppSession, path: string, when: string): Promise<Row> {
+async function nudge(page: Page): Promise<void> {
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+}
+
+async function rowOf(
+  session: AppSession,
+  path: string,
+  when: string,
+  ask = true,
+  limitMs = waitMs,
+): Promise<Row> {
   let found: Row | undefined;
+  if (ask) await nudge(session.page);
   await waitUntil(
     async () => {
       found = (await rows(session.page)).find((row) => row.path === path);
       return found !== undefined;
     },
-    waitMs,
+    limitMs,
     `no row for ${path} appeared ${when}`,
   );
   if (found === undefined) throw new Error(`no row for ${path} ${when}`);
@@ -79,9 +91,10 @@ async function rowOf(session: AppSession, path: string, when: string): Promise<R
 }
 
 async function select(session: AppSession, path: string): Promise<void> {
-  const index = (await rows(session.page)).findIndex((row) => row.path === path);
-  assert.ok(index !== -1, `${path} is not in the list to select`);
-  await session.page.getByTestId(`changes-file-${String(index)}`).click();
+  await rowOf(session, path, "to select it", false);
+  await session.page
+    .locator(`[data-testid="changes-list"] button[data-path=${JSON.stringify(path)}]`)
+    .click();
   await waitUntil(
     async () => (await rowOf(session, path, "while selecting it")).current,
     waitMs,
@@ -139,7 +152,7 @@ async function watchMutations(page: Page): Promise<void> {
       for (const record of records) {
         const target =
           record.target instanceof Element ? record.target : record.target.parentElement;
-        if (target?.closest(".scrollbar") !== null) continue;
+        if (target === null || target.closest(".scrollbar") !== null) continue;
         seen.push(`${record.type} in ${(target.getAttribute("class") ?? "").slice(0, 60)}`);
       }
     });
@@ -247,7 +260,10 @@ async function staysStill(session: AppSession, folder: string): Promise<void> {
   await watchMutations(page);
   const later = new Date(Date.now() + 60_000);
   await utimes(join(folder, "README.md"), later, later);
-  await delay(settleMs);
+  await nudge(page);
+  await delay(settleMs / 2);
+  await nudge(page);
+  await delay(settleMs / 2);
   const seen = await mutationsSeen(page);
   assert.deepEqual(
     seen,
@@ -259,7 +275,7 @@ async function staysStill(session: AppSession, folder: string): Promise<void> {
 async function followsTheDisk(session: AppSession, folder: string): Promise<void> {
   const { page } = session;
   await writeFile(join(folder, "live.txt"), "written while you watch\n");
-  const live = await rowOf(session, "live.txt", "without any click");
+  const live = await rowOf(session, "live.txt", "without any click", false, pollCapMs + waitMs);
   assert.equal(live.state, "A", `live.txt read ${live.state}, not A`);
   await select(session, "live.txt");
   await page.locator('[data-testid="diff"][data-side="modified"]').waitFor({ timeout: waitMs });
@@ -270,6 +286,7 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
   );
 
   await setHidden(page, true);
+  await delay(quickMs / 4);
   await writeFile(join(folder, "unseen.txt"), "written while hidden\n");
   await delay(settleMs);
   const hiddenRows = await rows(page);
@@ -278,10 +295,11 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
     "the list refreshed while the window was hidden",
   );
   await setHidden(page, false);
-  await rowOf(session, "unseen.txt", "once the window was visible again");
+  await rowOf(session, "unseen.txt", "once the window was visible again", false);
 
   await select(session, "README.md");
   await appendFile(join(folder, "README.md"), "Another line.\n");
+  await nudge(page);
   await waitUntil(
     async () => (await rowOf(session, "README.md", "after the append")).text.includes("+3"),
     waitMs,
@@ -294,6 +312,7 @@ async function keepsThePlace(session: AppSession, folder: string): Promise<void>
   const { page } = session;
   const many = Array.from({ length: 200 }, (_, index) => `line ${String(index + 1)}\n`).join("");
   await appendFile(join(folder, "README.md"), many);
+  await nudge(page);
   await modifiedShows(session, "line 1", "after 200 lines were added");
   await page.locator('[data-testid="diff"] .editor.modified').hover();
   let before = 0;
@@ -306,17 +325,12 @@ async function keepsThePlace(session: AppSession, folder: string): Promise<void>
     waitMs,
     () => `the diff did not scroll, its top line stayed ${String(before)}`,
   );
-  await appendFile(join(folder, "README.md"), "one more line\n");
-  await waitUntil(
-    async () => (await rowOf(session, "README.md", "after one more line")).text.includes("+204"),
-    waitMs,
-    "README.md never counted +204",
-  );
-  await waitUntil(
-    async () => (await sideText(page, "modified")).length > 0,
-    waitMs,
-    "the diff emptied on refresh",
-  );
+  const lines = (await readFile(join(folder, "README.md"), "utf8")).split("\n");
+  const edited = before + 1;
+  lines[edited] = `${lines[edited] ?? ""} edited in view`;
+  await writeFile(join(folder, "README.md"), lines.join("\n"));
+  await nudge(page);
+  await modifiedShows(session, "edited in view", "after a visible line was edited");
   const after = await topLine(page);
   assert.equal(after, before, `the diff jumped from line ${String(before)} to ${String(after)}`);
   assert.ok(
@@ -331,15 +345,10 @@ async function refreshesWhenATurnEnds(session: AppSession, folder: string): Prom
   await page.keyboard.type("look at the changes");
   await writeFile(join(folder, "turn-a.txt"), "a\n");
   await rowOf(session, "turn-a.txt", "before the turn ended");
-  const listedAt = Date.now();
+  await delay(backoffMs);
   await writeFile(join(folder, "turn-b.txt"), "b\n");
   await page.keyboard.press("Enter");
-  await rowOf(session, "turn-b.txt", "after the turn ended");
-  const tookMs = Date.now() - listedAt;
-  assert.ok(
-    tookMs < pollMs - observationLagMs,
-    `turn-b.txt appeared ${String(tookMs)} ms after the last list, as late as the poll, so the turn ending did not refresh it`,
-  );
+  await rowOf(session, "turn-b.txt", "after the turn ended", false, turnRefreshMs);
   await stateIs(session, "session-tab-1", "done", "after the turn ended");
 }
 
