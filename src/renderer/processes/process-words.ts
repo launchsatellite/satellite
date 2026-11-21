@@ -57,3 +57,12 @@ export function portLabel(port: number, linked: boolean): string {
     ? `Open port ${String(port)} in your browser`
     : `Port ${String(port)} is bound to another address, so Satellite doesn't open it`;
 }
+
+export function heldAgain(
+  ended: ReadonlySet<string>,
+  endedAt: ReadonlyMap<string, number>,
+  listed: ReadonlySet<string>,
+  readAt: number,
+): string[] {
+  return [...ended].filter((key) => listed.has(key) && readAt > (endedAt.get(key) ?? Infinity));
+}

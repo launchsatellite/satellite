@@ -3,6 +3,7 @@ import type { ProcessRow, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule, type Pace } from "../ui/refresh-schedule.ts";
 import type { Notify } from "../ui/toast.tsx";
+import { heldAgain } from "./process-words.ts";
 
 export interface Processes {
   rowsOf: (ref: WorkspaceRef) => readonly ProcessRow[];
@@ -72,24 +73,20 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
           };
         },
         read: async () => {
-          const began = performance.now();
           const result = await invoke("processes.list", {});
           if (!result.ok) {
             if (!stopped) setReadProblem(result.error.message);
             return { files: false, key: "" };
           }
-          const { rows, more } = result.value;
+          const { rows, more, at } = result.value;
           if (!stopped) {
             setReadProblem(null);
             const listed = new Set(rows.map(stopKey));
             setEnded((current) => {
-              const back = [...current].filter(
-                (key) => listed.has(key) && (endedAt.current.get(key) ?? Infinity) < began,
-              );
-              if (back.length === 0) return current;
-              const next = new Set(current);
-              for (const key of back) next.delete(key);
-              return next;
+              const back = heldAgain(current, endedAt.current, listed, at);
+              return back.length === 0
+                ? current
+                : new Set([...current].filter((key) => !back.includes(key)));
             });
             const key = shownKey(rows, more);
             setShown((current) => (current.key === key ? current : { rows, more, key }));
@@ -144,7 +141,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
       setStopping((current) => new Set(current).add(key));
       void invoke("processes.stop", { pid: row.pid, started: row.started }).then((result) => {
         if (result.ok || result.error.code === "not-found") {
-          endedAt.current.set(key, performance.now());
+          endedAt.current.set(key, Date.now());
           setEnded((current) => new Set(current).add(key));
         } else {
           setProblem(result.error.message);

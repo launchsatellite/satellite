@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ageReadout, ageWords, countLabel, moreSentence } from "./process-words.ts";
+import { ageReadout, ageWords, countLabel, heldAgain, moreSentence } from "./process-words.ts";
 
 const second = 1000;
 const minute = 60 * second;
@@ -27,5 +27,19 @@ describe("process words", () => {
     expect(countLabel(3)).toBe("3 running processes");
     expect(moreSentence(1)).toBe("1 more process is not listed.");
     expect(moreSentence(7)).toBe("7 more processes are not listed.");
+  });
+});
+
+describe("heldAgain", () => {
+  it("brings back a hidden row only when a read taken after the stop still lists it", () => {
+    const ended = new Set(["10/1", "11/1", "12/1"]);
+    const endedAt = new Map([
+      ["10/1", 5000],
+      ["11/1", 5000],
+    ]);
+    const listed = new Set(["10/1", "12/1"]);
+    expect(heldAgain(ended, endedAt, listed, 6000)).toEqual(["10/1"]);
+    expect(heldAgain(ended, endedAt, listed, 4000)).toEqual([]);
+    expect(heldAgain(ended, endedAt, listed, 5000)).toEqual([]);
   });
 });
