@@ -67,6 +67,14 @@ When a workspace starts needing you while the window is hidden, minimised or beh
 
 The app icon carries the inbox count on macOS and on Linux launchers that support it, never for the AppImage. Windows shows no count. On macOS a notification needs an app the system accepts as signed and your permission, and the count needs that permission too. On Windows a notification needs the Start Menu shortcut the installer makes. A name written right to left displays right to left in a notification.
 
+## Changes
+
+Changes is the default tab of a workspace and shows what it changed as diffs. A switch picks the view. Branch, the one a workspace opens on, compares the working tree with the point where the branch left its base, so commits and uncommitted work sit in one list. Uncommitted compares it with the last commit. The base is the remote's default branch as git already records it, or for a project without a remote the branch of its main folder, and the main workspace of a project without a remote default has none. Files git does not track yet are listed as added in both views.
+
+Each row shows the file's Git letter, its name and how many lines it added and removed, and the diff of the selected file sits beside the list, read only, side by side or inline as you choose, with syntax shown in weight and grey, hidden characters in names and lines written out and look-alike letters outlined. The workspace header names the branch, its base and how far it is ahead of and behind its remote. A file that is binary, over 1 MB or 20,000 lines, a repository of its own or not UTF-8 text shows one sentence in place of a diff.
+
+The view refreshes by itself while Satellite is visible, and at once when a session in the workspace finishes a turn, so nothing needs a button. When the base has moved and files conflict with the branch, a calm grey banner names them and offers Send to Claude Code with a request to update from the base and resolve the conflicts. Conflicts do not enter the inbox. The check is a trial merge that touches nothing in the repository and needs git 2.38 or newer, and on an older git the banner says so instead of claiming there is no conflict. Selecting lines in a diff and pressing Send lines, or Cmd+L, or Ctrl+Shift+L on Windows and Linux with focus in the diff, types a reference to those lines into the Claude Code prompt in plain words, such as Lines 12 to 18 of src/app.ts in this workspace, and never presses enter.
+
 ## Decisions
 
 | Chosen | Rejected | Why |

@@ -8,7 +8,7 @@ Nothing can be built or proven until the app starts, the checks run and an agent
 
 ## Scope
 
-- An Electron app in TypeScript and React that opens one window with the three columns from `SATELLITE.md`, holding a tool readout, a Claude Code pane and a sample diff that prove the bridge, the terminal and the diff end to end.
+- An Electron app in TypeScript and React that opens one window with the three columns from `SATELLITE.md`, holding a tool readout and a Claude Code pane that prove the bridge and the terminal end to end.
 - A background process with full access and an interface with none, joined by one typed bridge whose every message is validated with a schema.
 - Electron hardened for local content only. Sandbox and context isolation on, no Node in the interface, a strict content security policy, navigation and new windows refused, permission requests refused, a menu built from roles with no links, and one instance per Satellite home.
 - The terminal component running the user's own `claude`, with Shift+Enter, paste, resize, output flow control, and every process it started ended on reload and quit.
