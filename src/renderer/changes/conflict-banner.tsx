@@ -12,7 +12,10 @@ interface ConflictBannerProps {
 function Names({ names, files }: { names: readonly string[]; files: number }) {
   const rest = files - names.length;
   return (
-    <span data-testid="changes-banner-files" className="min-w-0 truncate font-mono text-[12px]">
+    <span
+      data-testid="changes-banner-files"
+      className="min-w-0 shrink-[3] truncate font-mono text-[12px]"
+    >
       {names.map((name, index) => (
         <span key={name}>
           {index > 0 && ", "}
@@ -37,7 +40,7 @@ function Message({
     return <span className="min-w-0 truncate">{conflictNote(conflict.kind, base)}</span>;
   return (
     <>
-      <span className="flex-none">
+      <span className="min-w-0 truncate">
         <span dir="ltr" className="[unicode-bidi:isolate]">
           {base === null ? "The base branch" : <VisibleName text={base} />}
         </span>{" "}

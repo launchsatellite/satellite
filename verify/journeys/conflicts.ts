@@ -55,6 +55,21 @@ async function bannerReads(session: AppSession, expected: string, when: string):
   );
 }
 
+async function offersTheButtonWhenNarrow(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.setViewportSize({ width: 1024, height: 645 });
+  await bannerReads(session, bannerSentence.split(" ")[0] ?? "", "in a narrow window");
+  const box = await page.getByTestId("changes-banner-send").boundingBox();
+  const right = (box?.x ?? 0) + (box?.width ?? 0);
+  const rowRight = await page
+    .getByTestId("changes-banner")
+    .evaluate((banner) => banner.getBoundingClientRect().right);
+  assert.ok(
+    box !== null && right <= rowRight + 1,
+    `the banner's button ended at ${String(right)}, past the banner's edge at ${String(rowRight)}`,
+  );
+}
+
 async function leavesNothing(session: AppSession, when: string): Promise<void> {
   const marker = join(session.userHome, "merge-driver-ran");
   assert.ok(!(await exists(marker)), `the repository's merge driver ran ${when}`);
@@ -156,6 +171,7 @@ export const conflictsJourney: Journey = {
   scenario: "conflict-with-base",
   async run(session) {
     await namesTheConflict(session);
+    await offersTheButtonWhenNarrow(session);
     await staysPut(session);
     await sendsTheRequest(session);
     await goesWhenResolved(session);
