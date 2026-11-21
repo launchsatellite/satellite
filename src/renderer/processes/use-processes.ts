@@ -49,6 +49,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
   const [problem, setProblem] = useState<string | null>(null);
   const [readProblem, setReadProblem] = useState<string | null>(null);
   const refreshNow = useRef<() => void>(() => undefined);
+  const endedAt = useRef(new Map<string, number>());
   const previous = useRef({ live, finished });
   const running = live !== "";
 
@@ -74,6 +75,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
           };
         },
         read: async () => {
+          const began = performance.now();
           const result = await invoke("processes.list", {});
           if (!result.ok) {
             if (!stopped) setReadProblem(result.error.message);
@@ -82,6 +84,16 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
           const { rows, at, more } = result.value;
           if (!stopped) {
             setReadProblem(null);
+            const listed = new Set(rows.map(stopKey));
+            setEnded((current) => {
+              const back = [...current].filter(
+                (key) => listed.has(key) && (endedAt.current.get(key) ?? Infinity) < began,
+              );
+              if (back.length === 0) return current;
+              const next = new Set(current);
+              for (const key of back) next.delete(key);
+              return next;
+            });
             const key = shownKey(rows, at, more);
             setShown((current) => (current.key === key ? current : { rows, at, more, key }));
           }
@@ -135,6 +147,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
       setStopping((current) => new Set(current).add(key));
       void invoke("processes.stop", { pid: row.pid, started: row.started }).then((result) => {
         if (result.ok || result.error.code === "not-found") {
+          endedAt.current.set(key, performance.now());
           setEnded((current) => new Set(current).add(key));
         } else {
           setProblem(result.error.message);
