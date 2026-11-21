@@ -56,6 +56,8 @@ const allZeros = /^0+$/;
 const promisorMissing = /^fatal: could not fetch [0-9a-f]+ from promisor remote$/m;
 const countCap = 1_000_000;
 const touchedFiles = 50;
+const touchedKept = 512;
+const touchedVerdicts = new Map<string, boolean>();
 const touchedBytes = 33_554_432;
 const submoduleMode = "160000";
 const diffArgs = [
@@ -245,15 +247,27 @@ async function withoutTouched(
   const unchanged = new Set<ListedChange>();
   let left = touchedBytes;
   for (const change of candidates.slice(0, touchedFiles)) {
-    const size = sizeOfStamp(stamps.get(change.path));
-    if (size === undefined || size > left || signal.aborted || change.sourceOid === null) continue;
-    left -= size;
-    const hashed = await gitOutput(
-      folder,
-      ["hash-object", "--no-filters", "--", change.path],
-      signal,
-    );
-    if (stdoutOf(hashed)?.trim() === change.sourceOid) unchanged.add(change);
+    const stamp = stamps.get(change.path);
+    const size = sizeOfStamp(stamp);
+    if (size === undefined || signal.aborted || change.sourceOid === null) continue;
+    const key = `${folder}\0${change.path}\0${stamp ?? ""}\0${change.sourceOid}`;
+    let same = touchedVerdicts.get(key);
+    if (same === undefined) {
+      if (size > left) continue;
+      left -= size;
+      const hashed = await gitOutput(
+        folder,
+        ["hash-object", "--no-filters", "--", change.path],
+        signal,
+      );
+      same = stdoutOf(hashed)?.trim() === change.sourceOid;
+      if (signal.aborted) continue;
+      touchedVerdicts.set(key, same);
+      const oldest = touchedVerdicts.keys().next().value;
+      if (touchedVerdicts.size > touchedKept && oldest !== undefined)
+        touchedVerdicts.delete(oldest);
+    }
+    if (same) unchanged.add(change);
   }
   return changes.filter((change) => !unchanged.has(change));
 }

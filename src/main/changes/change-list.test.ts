@@ -574,6 +574,20 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     ]);
   });
 
+  it("hashes a touched binary file once while its stamp does not move", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "same.dat"), Buffer.from([97, 0, 98]));
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const later = new Date(Date.now() + 60_000);
+    await utimes(join(repo, "same.dat"), later, later);
+    const head = await git("rev-parse", "HEAD");
+    gitCalls.seen = [];
+    await listed(repo, head);
+    await listed(repo, head);
+    expect(gitCalls.seen.filter((args) => args.includes("hash-object"))).toHaveLength(1);
+  });
+
   it("asks git for nothing when the commit name is not this repository's length", async () => {
     const { repo } = await repository();
     gitCalls.seen = [];
