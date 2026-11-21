@@ -14,14 +14,14 @@ export const viewFields =
 export const viewProjection =
   "{number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews:[.reviews[]?|{state,commit:.commit.oid,login:.author.login,at:.submittedAt}],checks:[.statusCheckRollup[]?|{name,workflow:.workflowName,status,conclusion,context,state,url:(.detailsUrl//.targetUrl),startedAt}],commits:[.commits[]?|{oid,headline:.messageHeadline}]}";
 export const threadsQuery =
-  "query($owner:String!,$repo:String!,$number:Int!){rateLimit{cost}repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:50){totalCount nodes{url state submittedAt body author{login}}}comments(last:50){totalCount nodes{url createdAt body isMinimized author{login}}}reviewThreads(first:100){totalCount nodes{isResolved isOutdated path line startLine originalLine diffSide subjectType comments(first:20){totalCount nodes{url body createdAt author{login}}}}}}}}";
+  "query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviews(last:100){totalCount nodes{url state submittedAt body author{login}}}comments(last:50){totalCount nodes{url createdAt body isMinimized author{login}}}reviewThreads(first:100){totalCount nodes{isResolved isOutdated path line diffSide comments(first:20){totalCount nodes{url body createdAt author{login}}}}}}}}";
 
-const ownerPattern = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const ownerPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/;
 const repoPattern = /^[A-Za-z0-9._-]{1,100}$/;
 const numberPattern = /^[1-9][0-9]{0,9}$/;
 const jobPattern = /^[0-9]{1,20}$/;
 const addressPattern =
-  /^\/([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100})\/pull\/([1-9][0-9]{0,9})$/;
+  /^\/([A-Za-z0-9][A-Za-z0-9_-]{0,38})\/([A-Za-z0-9._-]{1,100})\/pull\/([1-9][0-9]{0,9})$/;
 
 function isCheckedPlace({ host, owner, repo, number }: PullRequestPlace): boolean {
   return (

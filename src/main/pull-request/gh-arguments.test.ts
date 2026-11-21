@@ -66,6 +66,11 @@ describe("placeOf", () => {
     });
   });
 
+  it("reads an owner with an underscore", () => {
+    expect(placeOf("https://github.com/octo_corp/repo/pull/4")?.owner).toBe("octo_corp");
+    expect(placeOf("https://github.com/_octo/repo/pull/4")).toBeNull();
+  });
+
   it("refuses http, user info, a port, a query, a hash, another path, a dot repository, a host outside the pattern and a number of zero", () => {
     for (const url of [
       "http://github.com/example-org/verify-repo/pull/12",
@@ -122,7 +127,7 @@ describe("callOf", () => {
       withValue(threads, 9, "number=0"),
       withValue(threads, 9, "number=1a"),
       withValue(threads, 11, `query=${threadsQuery}x`),
-      withValue(threads, 11, `query=${threadsQuery.replace("cost", "cosT")}`),
+      withValue(threads, 11, `query=${threadsQuery.replace("isResolved", "isResolveD")}`),
       withValue(threads, 2, "--hostnames"),
       [...log, "--extra"],
       withValue(log, 3, "20a1"),
