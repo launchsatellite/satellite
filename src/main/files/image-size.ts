@@ -9,6 +9,12 @@ export interface ImageKind {
 const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const jpegSignature = [0xff, 0xd8, 0xff];
 const noLengthMarkers = new Set([0x01, 0xd8, ...Array.from({ length: 8 }, (_, at) => 0xd0 + at)]);
+const segmentMarkers = new Set([
+  ...Array.from({ length: 16 }, (_, at) => 0xc0 + at),
+  ...Array.from({ length: 5 }, (_, at) => 0xdb + at),
+  ...Array.from({ length: 16 }, (_, at) => 0xe0 + at),
+  0xfe,
+]);
 const notFrameMarkers = new Set([0xc4, 0xc8, 0xcc]);
 const ascii = new TextDecoder("latin1");
 
@@ -47,8 +53,28 @@ function pngSize(bytes: Uint8Array): ImageKind | undefined {
 }
 
 function gifSize(bytes: Uint8Array): ImageKind | undefined {
-  if (bytes.length < 10) return undefined;
-  return sized("image/gif", little16(bytes, 6), little16(bytes, 8));
+  if (bytes.length < 13) return undefined;
+  let width = little16(bytes, 6);
+  let height = little16(bytes, 8);
+  const packed = byteAt(bytes, 10);
+  let at = 13 + ((packed & 0x80) === 0 ? 0 : 3 * 2 ** ((packed & 7) + 1));
+  while (at < bytes.length) {
+    const block = byteAt(bytes, at);
+    if (block === 0x2c) {
+      if (at + 10 > bytes.length) return undefined;
+      width = Math.max(width, little16(bytes, at + 1) + little16(bytes, at + 5));
+      height = Math.max(height, little16(bytes, at + 3) + little16(bytes, at + 7));
+      return sized("image/gif", width, height);
+    }
+    if (block !== 0x21) return undefined;
+    at += 2;
+    for (let size = byteAt(bytes, at); size !== 0; size = byteAt(bytes, at)) {
+      if (at >= bytes.length) return undefined;
+      at += 1 + size;
+    }
+    at += 1;
+  }
+  return undefined;
 }
 
 function webpSize(bytes: Uint8Array): ImageKind | undefined {
@@ -80,7 +106,7 @@ function jpegSize(bytes: Uint8Array): ImageKind | undefined {
       at += 2;
       continue;
     }
-    if (marker === 0xd9 || marker === 0xda) return undefined;
+    if (!segmentMarkers.has(marker)) return undefined;
     const length = big16(bytes, at + 2);
     if (length < 2) return undefined;
     if (marker >= 0xc0 && marker <= 0xcf && !notFrameMarkers.has(marker)) {

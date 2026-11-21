@@ -58,6 +58,27 @@ describe("readImageHeader", () => {
   });
 });
 
+describe("readImageHeader against a size a decoder would not use", () => {
+  it("takes the larger of a GIF's screen and its first frame", () => {
+    expect(readImageHeader(gif(1, 1, [23_000, 23_000]))).toEqual({
+      type: "image/gif",
+      width: 23_000,
+      height: 23_000,
+    });
+  });
+
+  it("answers nothing for a GIF with no frame in its head", () => {
+    expect(readImageHeader(gif(1, 1).subarray(0, 20))).toBeUndefined();
+  });
+
+  it("answers nothing for a JPEG with a marker it does not know before the frame", () => {
+    const decoy = [0xff, 0xc0, 0x00, 0x0b, 8, 0, 1, 0, 1, 1, 1];
+    const real = [0xff, 0xc0, 0x00, 0x0b, 8, 0x59, 0xd8, 0x59, 0xd8, 1, 1];
+    const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 0x00, 0x15, ...real, ...decoy]);
+    expect(readImageHeader(bytes)).toBeUndefined();
+  });
+});
+
 describe("hasImageSignature", () => {
   it("tells a start that claims an image from plain bytes", () => {
     expect(hasImageSignature(png(1, 1).subarray(0, 8))).toBe(true);

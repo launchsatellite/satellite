@@ -28,8 +28,32 @@ export function png(width: number, height: number): Uint8Array {
   ]);
 }
 
-export function gif(width: number, height: number): Uint8Array {
-  return Uint8Array.from([...ascii("GIF89a"), ...little(width, 2), ...little(height, 2), 0, 0, 0]);
+export function gif(width: number, height: number, frame = [width, height]): Uint8Array {
+  const [frameWidth = 0, frameHeight = 0] = frame;
+  return Uint8Array.from([
+    ...ascii("GIF89a"),
+    ...little(width, 2),
+    ...little(height, 2),
+    0,
+    0,
+    0,
+    0x21,
+    0xf9,
+    4,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0x2c,
+    0,
+    0,
+    0,
+    0,
+    ...little(frameWidth, 2),
+    ...little(frameHeight, 2),
+    0,
+  ]);
 }
 
 export function jpeg(width: number, height: number, marker = 0xc0): Uint8Array {
