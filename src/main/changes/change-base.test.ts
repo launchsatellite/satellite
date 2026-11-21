@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -42,6 +42,21 @@ async function sandbox() {
 }
 
 describe("resolveBase", { timeout: 30_000 }, () => {
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "answers failed, never another branch, when the remote's default cannot be read",
+    async () => {
+      const { base, env, git, repository } = await sandbox();
+      const upstream = await repository("upstream");
+      const clone = join(base, "clone");
+      await run("git", ["clone", "-q", upstream, clone], { env });
+      const head = join(clone, ".git", "refs", "remotes", "origin", "HEAD");
+      await chmod(head, 0o000);
+      expect(await git(clone, "branch", "--show-current")).toBe("main");
+      expect(await resolveBase(clone, clone)).toEqual({ kind: "failed" });
+      await chmod(head, 0o600);
+    },
+  );
+
   it("compares with the remote's default branch when git knows it", async () => {
     const { base, env, git, repository } = await sandbox();
     const upstream = await repository("upstream");

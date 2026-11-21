@@ -41,8 +41,9 @@ async function baseRef(
   signal?: AbortSignal,
   remotes?: Promise<ToolRun | undefined>,
 ): Promise<BaseLookup | Omit<ChangeBase, "oid">> {
-  const start = await defaultStart(projectRoot, remotes);
+  const start = await defaultStart(projectRoot, remotes, signal);
   if (start === undefined) return failed;
+  if (start.remote !== null && start.unread === true) return failed;
   if (start.remote !== null && start.branch !== null) {
     const name = `${start.remote}/${start.branch}`;
     return { ref: `refs/remotes/${name}`, name };
