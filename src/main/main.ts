@@ -188,6 +188,7 @@ function assemble(home: string): Parts {
   const pullRequests = createPullRequests({
     home,
     store: projects.store,
+    sweepEveryMs: 60_000,
     onNeeding: (needing) => {
       needingPullRequests = needing;
       notices.update([...needingSessions, ...needingPullRequests]);

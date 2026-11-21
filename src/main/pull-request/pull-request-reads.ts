@@ -35,12 +35,14 @@ export interface PullRequests {
   handlers: Pick<BridgeHandlers, "pullRequest.read" | "pullRequest.log">;
   stopInside(folder: string): Promise<void>;
   stopAll(): Promise<void>;
+  sweepStale(): Promise<void>;
 }
 
 interface Options {
   home: string;
   store: ProjectStore;
   onNeeding: (needing: readonly Needing[]) => void;
+  sweepEveryMs?: number;
   now?: () => number;
   after?: (ms: number) => Promise<void>;
 }
@@ -70,6 +72,7 @@ const viewMs = 20_000;
 const threadsMs = 20_000;
 const logMs = 30_000;
 export const reuseMs = 10_000;
+export const staleMs = 360_000;
 const settledTroubles = new Set<PullRequestTrouble>([
   "signed-out",
   "gh-missing",
@@ -153,6 +156,7 @@ export function createPullRequests({
   home,
   store,
   onNeeding,
+  sweepEveryMs,
   now = () => performance.now(),
   after = (ms) => delay(ms),
 }: Options): PullRequests {
@@ -434,7 +438,35 @@ export function createPullRequests({
     }
   };
 
+  let closing = false;
+
+  const sweepStale = async () => {
+    const stale = [...memory].filter(
+      ([key, held]) =>
+        !closing &&
+        !running.has(key) &&
+        held.kept?.state === "open" &&
+        now() - held.at >= staleMs &&
+        now() >= held.holdUntil,
+    );
+    for (const [key, held] of stale) {
+      if (closing || pace.paused()) return;
+      if (running.has(key) || memory.get(key) !== held) continue;
+      await start(key, held.workspace, held.folder, false, held.owner).answer.catch(
+        () => undefined,
+      );
+    }
+  };
+  const sweeper =
+    sweepEveryMs === undefined
+      ? undefined
+      : setInterval(() => {
+          void sweepStale();
+        }, sweepEveryMs);
+  sweeper?.unref();
+
   return {
+    sweepStale,
     handlers: {
       "pullRequest.read": async ({ workspace, detail, fresh = false }, owner) => {
         const folder = await sessionFolder(home, store, workspace, sentences);
@@ -495,6 +527,8 @@ export function createPullRequests({
       await waitForReads(stopping);
     },
     async stopAll() {
+      closing = true;
+      clearInterval(sweeper);
       const stopping = [...active];
       for (const read of stopping)
         read.controller.abort(new BridgeFailure("refused", "Satellite is closing."));

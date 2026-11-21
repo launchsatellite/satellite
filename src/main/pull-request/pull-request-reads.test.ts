@@ -511,6 +511,32 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(made.at(-1)?.args).toEqual(threadsArguments(place, "main", true));
   });
 
+  it("reads a stale open pull request by itself so a failure reaches a hidden window", async () => {
+    const { answer, read, reads, needing, calls, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
+    await read(first);
+    const before = (await calls()).length;
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    advance(359_999);
+    await reads.sweepStale();
+    expect(await calls()).toHaveLength(before);
+    expect(needing).not.toHaveBeenCalledWith([expect.anything()]);
+    advance(1);
+    await reads.sweepStale();
+    expect(await calls()).toHaveLength(before + 1);
+    expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+  });
+
+  it("does not sweep a merged pull request", async () => {
+    const { answer, read, reads, calls, advance } = await setup();
+    await answer("view", { stdout: viewJson().replace('"state":"OPEN"', '"state":"MERGED"') });
+    await read(first);
+    const before = (await calls()).length;
+    advance(400_000);
+    await reads.sweepStale();
+    expect(await calls()).toHaveLength(before);
+  });
+
   it("tells needing when checks fail and again when they pass", async () => {
     const { answer, read, needing, advance } = await setup();
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
