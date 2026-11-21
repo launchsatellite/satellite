@@ -121,7 +121,7 @@ Every sentence is fixed here, nothing else may be shown, and no text is shown th
 - Notification for one workspace with a record, title `<workspace> needs you` and body `Claude Code is waiting for you in <project>.`
 - Notification for one main workspace, title `<project> needs you` and body `Claude Code is waiting for you in the main workspace.`
 - Notification for several workspaces, title `<n> workspaces need you`, where `<n>` counts every workspace that needs you when it shows, and body `Open Satellite to answer them from the inbox.`
-- In a notification `<project>` is followed by ` in <parent>` when another project has the same name, from the same shared `shownParent` the inbox row uses, so two notifications never read the same. The parent is cleaned like a name, cut to 16 characters, and becomes `a folder` when nothing is left.
+- In a notification `<project>` is followed by ` in <parent>` when another project's name reads the same once cleaned and normalised, from the same shared `shownParent` the inbox row uses, so two notifications never read the same. The parent is cleaned like a name, cut to 16 characters, and becomes `a folder` when nothing is left. A parent that is the user's home folder reads `your home folder`, in a notification and in every row, so `app in your home folder needs you`.
 
 ### Scenarios, steps and journeys
 

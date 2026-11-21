@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { BridgeOwner } from "../bridge/registry.ts";
 import { workspaceHandlers } from "../workspaces/workspace-handlers.ts";
-import { createProjects } from "./project-list.ts";
+import { createProjects, parentName } from "./project-list.ts";
 import type { StoredProject, StoredWorkspace } from "./projects-file.ts";
 
 const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
@@ -177,6 +177,14 @@ function projectsIn(
     recorded: () => undefined,
   });
 }
+
+describe("parentName", () => {
+  it("never names the user's home folder as a project's parent", () => {
+    const home = join(tmpdir(), "home-of-someone");
+    expect(parentName(join(home, "app"), home)).toBe("your home folder");
+    expect(parentName(join(home, "work", "app"), home)).toBe("work");
+  });
+});
 
 describe("createProjects", () => {
   it("keeps healthy projects healthy while folders hang, and bounds the hung reads", async () => {

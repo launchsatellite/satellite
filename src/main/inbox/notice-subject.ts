@@ -1,12 +1,11 @@
-import { dirname } from "node:path";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import type { StoredProject } from "../projects/projects-file.ts";
-import { projectName, type ProjectStore } from "../projects/project-list.ts";
+import { parentName, projectName, type ProjectStore } from "../projects/project-list.ts";
 import type { NoticeSubject } from "./notice-text.ts";
 
 function named({ path }: StoredProject): { name: string; parent: string } {
-  return { name: projectName(path), parent: projectName(dirname(path)) };
+  return { name: projectName(path), parent: parentName(path) };
 }
 
 export async function noticeSubject(

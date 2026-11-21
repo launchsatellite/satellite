@@ -5,6 +5,7 @@ import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
+import { userHomeFolder } from "../platform/satellite-home.ts";
 import {
   blankWorkspace,
   droppedSentences,
@@ -98,7 +99,7 @@ function unread(project: StoredProject, missing: Missing | null): ProjectView {
   return {
     id: project.id,
     name: projectName(project.path),
-    parent: projectName(dirname(project.path)),
+    parent: parentName(project.path),
     missing,
     workspaces: [
       blankWorkspace("main", null),
@@ -123,6 +124,11 @@ function stillHas(name: string, count: number): string {
   return count === 1
     ? `${name} still has 1 workspace. Archive it first, then remove the project.`
     : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+}
+
+export function parentName(path: string, home = userHomeFolder()): string {
+  const parent = dirname(path);
+  return samePath(parent, home) ? "your home folder" : projectName(parent);
 }
 
 export function projectName(path: string): string {
