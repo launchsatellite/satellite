@@ -66,6 +66,56 @@ describe.skipIf(process.platform === "win32")("endUnixTree", () => {
   });
 });
 
+async function holdsLargeArguments(count: number): Promise<ChildProcess[]> {
+  const argument = "a".repeat(100_000);
+  const holders = Array.from({ length: count }, () =>
+    spawn(
+      process.execPath,
+      ["-e", "setTimeout(() => {}, 60_000);", ...Array.from({ length: 8 }, () => argument)],
+      { stdio: "ignore" },
+    ),
+  );
+  await Promise.all(
+    holders.map((holder) => new Promise<void>((resolve) => holder.once("spawn", resolve))),
+  );
+  return holders;
+}
+
+describe.skipIf(process.platform === "win32")(
+  "with processes that hold very large arguments",
+  () => {
+    it("still reads the table and ends a session's tree that left its group", async () => {
+      const holders = await holdsLargeArguments(24);
+      const escaped = spawn(
+        process.execPath,
+        [
+          "-e",
+          `const c = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(ignoresHangup)}], { detached: true, stdio: 'ignore' }); console.log(c.pid); ${ignoresHangup}`,
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] },
+      );
+      const grandchild = await new Promise<number>((resolve) => {
+        escaped.stdout.once("data", (data: Buffer) => {
+          resolve(Number(data.toString().trim()));
+        });
+      });
+      const escapedPid = escaped.pid ?? 0;
+      try {
+        const table = await readProcessTable();
+        expect(table.some((entry) => entry.pid === escapedPid)).toBe(true);
+        await endUnixTree(escapedPid, new Promise<void>(() => undefined), 500);
+        await delay(100);
+        expect(isAlive(escapedPid)).toBe(false);
+        expect(isAlive(grandchild)).toBe(false);
+      } finally {
+        for (const pid of [escapedPid, grandchild, ...holders.map((holder) => holder.pid ?? 0)]) {
+          if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+        }
+      }
+    }, 30_000);
+  },
+);
+
 function startedProcess(script: string): Promise<{ child: ChildProcess; grandchild: number }> {
   const child = spawn(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "ignore"] });
   return new Promise((resolve) => {

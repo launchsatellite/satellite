@@ -47,6 +47,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
   const [problem, setProblem] = useState<string | null>(null);
+  const [readProblem, setReadProblem] = useState<string | null>(null);
   const refreshNow = useRef<() => void>(() => undefined);
   const previous = useRef({ live, finished });
   const running = live !== "";
@@ -54,6 +55,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
   if (!running && shown !== nothing) setShown(nothing);
   if (!running && ended.size > 0) setEnded(new Set());
   if (!running && problem !== null) setProblem(null);
+  if (!running && readProblem !== null) setReadProblem(null);
 
   useEffect(() => {
     if (!running) {
@@ -73,9 +75,13 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
         },
         read: async () => {
           const result = await invoke("processes.list", {});
-          if (!result.ok) return { files: false, key: "" };
+          if (!result.ok) {
+            if (!stopped) setReadProblem(result.error.message);
+            return { files: false, key: "" };
+          }
           const { rows, at, more } = result.value;
           if (!stopped) {
+            setReadProblem(null);
             const key = shownKey(rows, at, more);
             setShown((current) => (current.key === key ? current : { rows, at, more, key }));
           }
@@ -165,7 +171,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
     at: shown.at,
     moreOf,
     stopping,
-    problem,
+    problem: problem ?? readProblem,
     refresh,
     stop,
   };

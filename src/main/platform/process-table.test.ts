@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { psBusybox, psLinux, psMacos, tableWindows } from "./process-fixtures.ts";
 import {
   type ProcessEntry,
+  parsePsCommands,
   parsePsTable,
+  parseWindowsCommands,
   parseWindowsTable,
+  readCommands,
   readProcessTable,
   subtreeOf,
 } from "./process-table.ts";
@@ -129,13 +132,42 @@ describe("readProcessTable", () => {
     });
     try {
       await new Promise<void>((resolve) => child.once("spawn", resolve));
-      const found = (await readProcessTable()).find(
-        (candidate) => candidate.parent === process.pid && candidate.command.includes(marker),
-      );
-      expect(found?.pid).toBe(child.pid);
+      const found = (await readProcessTable()).find((candidate) => candidate.pid === child.pid);
+      expect(found?.parent).toBe(process.pid);
+      expect(found?.command.includes(marker)).toBe(false);
       expect(Math.abs((found?.started ?? 0) - Date.now())).toBeLessThan(5000);
+      expect((await readCommands([child.pid ?? 0])).get(child.pid ?? 0)?.includes(marker)).toBe(
+        true,
+      );
     } finally {
       child.kill("SIGKILL");
     }
+  });
+});
+
+describe("parsePsCommands", () => {
+  it("reads each id with its command and cuts a very long one", () => {
+    const commands = parsePsCommands(
+      `  4203 node /srv/app/vite.js --port 5173\n 4402 node ${"x".repeat(5000)}\nnot a row\n`,
+    );
+    expect(commands.get(4203)).toBe("node /srv/app/vite.js --port 5173");
+    expect(commands.get(4402)?.length).toBe(2000);
+    expect(commands.size).toBe(2);
+  });
+});
+
+describe("parseWindowsCommands", () => {
+  it("keeps rows with a command and drops the rest", () => {
+    const command = String.raw`node C:\srv\app\server.js`;
+    const commands = parseWindowsCommands(
+      JSON.stringify([
+        { p: 3201, c: command },
+        { p: 3300, c: null },
+        { p: -4, c: "x" },
+        { p: "7", c: "y" },
+      ]),
+    );
+    expect([...commands]).toEqual([[3201, command]]);
+    expect(parseWindowsCommands("not json").size).toBe(0);
   });
 });

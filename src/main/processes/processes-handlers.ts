@@ -6,7 +6,7 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { type ListeningPort, readListeningPorts } from "../platform/listening-ports.ts";
-import { type ProcessEntry, readProcessTable } from "../platform/process-table.ts";
+import { type ProcessEntry, readCommands, readProcessTable } from "../platform/process-table.ts";
 import { endSubtree, UnreadableTable } from "../platform/process-tree.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
 import { shownCommand } from "./command-text.ts";
@@ -31,6 +31,7 @@ interface ProcessesOptions {
   roots: () => readonly RunningRoot[];
   readTable?: () => Promise<ProcessEntry[]>;
   readPorts?: (pids: readonly number[]) => Promise<ListeningPort[]>;
+  readCommandLines?: (pids: readonly number[]) => Promise<Map<number, string>>;
   end?: (target: ProcessEntry) => Promise<void>;
   now?: () => number;
   home?: string;
@@ -48,6 +49,8 @@ interface Snapshot {
 
 const tableReuseMs = 2000;
 const unreadableSentence = "Satellite couldn't read the running processes, so it stopped nothing.";
+const unlistedSentence =
+  "Satellite couldn't read the running processes. The list shows what it read last.";
 const unconfirmedSentence = "Satellite couldn't confirm that the process stopped. Check the list.";
 
 function portsOf(
@@ -71,10 +74,11 @@ function portsOf(
 function rowOf(
   owned: OwnedProcess,
   ports: readonly ListeningPort[],
+  commands: ReadonlyMap<number, string>,
   home: string,
 ): ProcessRow | undefined {
   const { entry, root, subtree } = owned;
-  const command = shownCommand(entry.command, home);
+  const command = shownCommand(commands.get(entry.pid) ?? entry.command, home);
   const parsed = processRow.safeParse({
     workspace: root.workspace,
     session: root.session,
@@ -91,6 +95,7 @@ export function createProcesses({
   roots,
   readTable = readProcessTable,
   readPorts = readListeningPorts,
+  readCommandLines = readCommands,
   end = endSubtree,
   now = Date.now,
   home = userHomeFolder(),
@@ -105,6 +110,7 @@ export function createProcesses({
     const running = roots();
     if (running.length === 0) return { at, rows: [], more: [] };
     const table = await readTable();
+    if (table.length === 0) throw new BridgeFailure("failed", unlistedSentence);
     const { owned: listed, more } = listedProcesses(
       table,
       running.map(({ root }) => root),
@@ -112,9 +118,12 @@ export function createProcesses({
       processesLimits.rows,
     );
     if (listed.length === 0) return { at, rows: [], more: [] };
-    const ports = await readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid)));
+    const [ports, commands] = await Promise.all([
+      readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid))),
+      readCommandLines(listed.map(({ entry }) => entry.pid)),
+    ]);
     const rows = listed.flatMap((owned) => {
-      const row = rowOf(owned, ports, home);
+      const row = rowOf(owned, ports, commands, home);
       const owner = running.find(({ root }) => root === owned.root)?.owner;
       return row === undefined || owner === undefined ? [] : [{ owner, row }];
     });

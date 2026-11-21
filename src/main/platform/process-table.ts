@@ -19,8 +19,8 @@ const windowsRow = z.object({
   pp: z.int().min(0),
   s: z.int().nullable(),
   n: z.string().nullable(),
-  c: z.string().nullable(),
 });
+const windowsCommandRow = z.object({ p: z.int().min(1), c: z.string().nullable() });
 
 export const psTimeoutMs = 1000;
 const windowsReadTimeoutMs = 5000;
@@ -40,10 +40,15 @@ const psArguments = [
   "-o",
   "lstart=",
   "-o",
-  "command=",
+  process.platform === "darwin" ? "ucomm=" : "comm=",
 ];
+const commandReadLimit = 1000;
+const commandLengthLimit = 2000;
+const psCommandRow = /^\s*(\d+) (.*)$/;
+const commandIdsVariable = "SATELLITE_PROCESS_IDS";
 const windowsTableScript =
-  "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name,CommandLine|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;pp=[int64]$_.ParentProcessId;s=$(if($_.CreationDate){([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}else{$null});n=$_.Name;c=$_.CommandLine}})";
+  "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;pp=[int64]$_.ParentProcessId;s=$(if($_.CreationDate){([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}else{$null});n=$_.Name}})";
+const windowsCommandScript = `$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$ids=@($env:${commandIdsVariable}.Split(',')|ForEach-Object{[int64]$_});ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,CommandLine|Where-Object{$ids -contains $_.ProcessId}|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;c=$(if($_.CommandLine){$_.CommandLine.Substring(0,[Math]::Min(${String(commandLengthLimit)},$_.CommandLine.Length))}else{$null})}})`;
 const psRow =
   /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}) +(\w{3}) +(\d{1,2}) +(\d\d):(\d\d):(\d\d) +(\d{4})(?: +(.*))?$/;
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -65,15 +70,22 @@ function programName(command: string): string {
 function readOutput(
   file: string,
   args: readonly string[],
-  options: { env?: NodeJS.ProcessEnv; timeout: number; windowsHide?: boolean },
+  options: {
+    env?: NodeJS.ProcessEnv;
+    timeout: number;
+    windowsHide?: boolean;
+    keepOnExitStatus?: boolean;
+  },
 ): Promise<string | null> {
+  const { keepOnExitStatus = false, ...execOptions } = options;
   return new Promise((resolve) => {
     const child = execFile(
       file,
       args,
-      { encoding: "utf8", maxBuffer: outputLimit, ...options },
+      { encoding: "utf8", maxBuffer: outputLimit, ...execOptions },
       (error, stdout) => {
-        resolve(error === null ? stdout : null);
+        const exited = keepOnExitStatus && typeof error?.code === "number" && !error.killed;
+        resolve(error === null || exited ? stdout : null);
       },
     );
     child.stdin?.end();
@@ -137,10 +149,38 @@ export function parseWindowsTable(text: string): ProcessEntry[] {
       started: row.s,
       defunct: false,
       name: (row.n ?? "").toLowerCase().replace(/\.exe$/, ""),
-      command: row.c ?? row.n ?? "",
+      command: row.n ?? "",
     });
   }
   return withoutDuplicateIds(entries);
+}
+
+export function parsePsCommands(text: string): Map<number, string> {
+  const commands = new Map<number, string>();
+  for (const line of text.split("\n")) {
+    const match = psCommandRow.exec(line);
+    const id = Number(match?.[1]);
+    if (match === null || !Number.isSafeInteger(id) || id <= 0) continue;
+    commands.set(id, (match[2] ?? "").trimEnd().slice(0, commandLengthLimit));
+  }
+  return commands;
+}
+
+export function parseWindowsCommands(text: string): Map<number, string> {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return new Map();
+  }
+  const commands = new Map<number, string>();
+  for (const candidate of Array.isArray(json) ? json : [json]) {
+    const parsed = windowsCommandRow.safeParse(candidate);
+    if (parsed.success && parsed.data.c !== null) {
+      commands.set(parsed.data.p, parsed.data.c.slice(0, commandLengthLimit));
+    }
+  }
+  return commands;
 }
 
 export function subtreeOf(root: ProcessEntry, entries: readonly ProcessEntry[]): ProcessEntry[] {
@@ -197,4 +237,30 @@ export async function readProcessTable(): Promise<ProcessEntry[]> {
     timeout: psTimeoutMs,
   });
   return text === null ? [] : parsePsTable(text);
+}
+
+export async function readCommands(pids: readonly number[]): Promise<Map<number, string>> {
+  const ids = [...new Set(pids)].filter((pid) => Number.isSafeInteger(pid) && pid > 0);
+  if (ids.length === 0 || ids.length > commandReadLimit) return new Map();
+  if (process.platform === "win32") {
+    const text = await readOutput(
+      windowsPowerShell(),
+      ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsCommandScript],
+      {
+        env: { ...process.env, [commandIdsVariable]: ids.join(",") },
+        timeout: windowsReadTimeoutMs,
+        windowsHide: true,
+      },
+    );
+    return text === null ? new Map() : parseWindowsCommands(text);
+  }
+  if (process.platform !== "darwin" && process.platform !== "linux") return new Map();
+  const ps = psPaths.find((path) => existsSync(path));
+  if (ps === undefined) return new Map();
+  const text = await readOutput(ps, ["-ww", "-o", "pid=", "-o", "command=", "-p", ids.join(",")], {
+    env: { LC_ALL: "C", TZ: "UTC" },
+    timeout: psTimeoutMs,
+    keepOnExitStatus: true,
+  });
+  return text === null ? new Map() : parsePsCommands(text);
 }

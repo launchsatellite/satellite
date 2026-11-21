@@ -38,11 +38,21 @@ function setup(
   const table = options.table ?? parsePsTable(psMacos);
   const readTable = vi.fn(() => Promise.resolve(table));
   const readPorts = vi.fn(() => Promise.resolve(parseLsof(lsofMacos)));
+  const readCommandLines = vi.fn((pids: readonly number[]) =>
+    Promise.resolve(
+      new Map(
+        table
+          .filter((entry) => pids.includes(entry.pid))
+          .map((entry) => [entry.pid, entry.command]),
+      ),
+    ),
+  );
   const end = vi.fn(options.end ?? (() => Promise.resolve()));
   const processes = createProcesses({
     roots: () => options.roots ?? [{ owner: pageOne, root: root(sessionOne, 4100) }],
     readTable,
     readPorts,
+    readCommandLines,
     end,
     now: () => clock,
     home: options.home ?? "/srv/nobody",
@@ -53,6 +63,7 @@ function setup(
       processes.handlers["processes.stop"]({ pid, started }, owner),
     readTable,
     readPorts,
+    readCommandLines,
     end,
     table,
     tick: (ms: number) => {
@@ -68,6 +79,30 @@ function startOf(table: readonly ProcessEntry[], pid: number): number {
 }
 
 describe("processes.list", () => {
+  it("shows the short name when the full command cannot be read", async () => {
+    const { list, readCommandLines } = setup({
+      table: parsePsTable(psMacos).map((entry) =>
+        entry.pid === 4402 ? { ...entry, command: "node" } : entry,
+      ),
+    });
+    readCommandLines.mockResolvedValueOnce(new Map());
+    const answer = await list();
+    expect(answer.rows.find((row) => row.pid === 4402)?.command).toBe("node");
+  });
+
+  it("asks for the full command of the listed ids only", async () => {
+    const { list, readCommandLines } = setup();
+    const answer = await list();
+    expect(readCommandLines).toHaveBeenCalledTimes(1);
+    expect(readCommandLines.mock.calls[0]?.[0]).toEqual(answer.rows.map((row) => row.pid));
+  });
+
+  it("answers failed, never an empty list, when sessions run and the table reads empty", async () => {
+    const { list, readTable } = setup();
+    readTable.mockResolvedValueOnce([]);
+    await expect(list()).rejects.toMatchObject({ code: "failed" });
+  });
+
   it("shows the home folder as a tilde before anything crosses", async () => {
     const table = parsePsTable(psMacos).map((entry) =>
       entry.pid === 4402 ? { ...entry, command: "node /srv/owner/app/worker.js" } : entry,
