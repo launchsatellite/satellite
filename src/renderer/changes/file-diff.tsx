@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useRef, useState, type Ref } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 import type {
   ChangedFile,
   ChangeLetter,
@@ -41,6 +50,8 @@ const editors = () =>
 const DiffView = lazy(() => editors().then(([module]) => ({ default: module.DiffView })));
 const SideView = lazy(() => editors().then(([, module]) => ({ default: module.SideView })));
 const cachedAnswers = 8;
+const editorFailedSentence =
+  "Satellite couldn't load the diff viewer, so there is no diff to show.";
 const cachedChars = 8_388_608;
 const answers = new Map<string, { sides: FileSides; chars: number }>();
 
@@ -73,6 +84,28 @@ function recalled(key: string): FileSides | undefined {
 
 function peeked(key: string): FileSides | undefined {
   return answers.get(key)?.sides;
+}
+
+class EditorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  override render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p
+          data-testid="changes-sentence"
+          className="max-w-[360px] text-center text-[13px] text-fg2"
+        >
+          {editorFailedSentence}
+        </p>
+      </div>
+    );
+  }
 }
 
 function Opening() {
@@ -216,9 +249,11 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
   return (
     <div className={`h-full ${stale ? "opacity-50" : ""}`} aria-busy={stale || undefined}>
       {drawn.sides?.kind === "text" ? (
-        <Suspense fallback={<Opening />}>
-          <Editors sides={drawn.sides} file={drawn.file} inline={inline} handle={handle} />
-        </Suspense>
+        <EditorBoundary>
+          <Suspense fallback={<Opening />}>
+            <Editors sides={drawn.sides} file={drawn.file} inline={inline} handle={handle} />
+          </Suspense>
+        </EditorBoundary>
       ) : (
         <div className="flex h-full items-center justify-center p-8">
           <p
