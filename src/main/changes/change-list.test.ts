@@ -26,7 +26,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 const gitCalls = vi.hoisted(() => {
-  const calls: { stop?: "time" | "stuck" | undefined } = {};
+  const calls: { stop?: "time" | "stuck" | undefined; diff?: string | undefined } = {};
   return calls;
 });
 
@@ -34,8 +34,12 @@ vi.mock("../workspaces/git-command.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../workspaces/git-command.ts")>();
   return {
     ...actual,
-    readGit: (...args: Parameters<typeof actual.readGit>) =>
-      gitCalls.stop === undefined ? actual.readGit(...args) : Promise.resolve(gitCalls.stop),
+    readGit: (...args: Parameters<typeof actual.readGit>) => {
+      if (gitCalls.diff !== undefined && args[1].includes("--raw")) {
+        return Promise.resolve({ exitCode: 0, stdout: gitCalls.diff, stderr: "" });
+      }
+      return gitCalls.stop === undefined ? actual.readGit(...args) : Promise.resolve(gitCalls.stop);
+    },
   };
 });
 
@@ -545,10 +549,39 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await rename(join(repo, "dir"), join(repo, "..", "moved"));
     await symlink(outside, join(repo, "dir"), "junction");
     const list = await listed(repo, await git("rev-parse", "HEAD"));
-    expect(list.records.map((record) => [record.path, record.letter, record.stamp])).toEqual([
-      ["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)],
-      ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)],
-    ]);
+    const deleted = ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)];
+    const rows = list.records.map((record) => [record.path, record.letter, record.stamp]);
+    if (process.platform === "win32") expect(rows).toEqual([deleted]);
+    else expect(rows).toEqual([["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)], deleted]);
+  });
+
+  it("lists a file git read through a link as deleted, with no counts from outside", async () => {
+    const { repo, git } = await repository();
+    await mkdir(join(repo, "dir"));
+    await writeFile(join(repo, "dir", "hosts"), "inside\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const outside = join(repo, "..", "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "hosts"), "one\ntwo\nthree\n");
+    await writeFile(join(outside, "fresh"), "x\n");
+    await rename(join(repo, "dir"), join(repo, "..", "moved"));
+    await symlink(outside, join(repo, "dir"), "junction");
+    const head = await git("rev-parse", "HEAD");
+    const oid = await git("rev-parse", "HEAD:dir/hosts");
+    gitCalls.diff = output(
+      raw("100644 100644", oid, zero, "M", "dir/hosts"),
+      stat("3", "1", "dir/hosts"),
+    );
+    try {
+      const list = await listed(repo, head);
+      const rows = list.records.filter((record) => record.path.startsWith("dir/"));
+      expect(
+        rows.map((record) => [record.path, record.letter, record.added, record.removed]),
+      ).toEqual([["dir/hosts", "D", null, null]]);
+    } finally {
+      gitCalls.diff = undefined;
+    }
   });
 
   it("never stamps through a folder swapped for a link while the stamps are read", async () => {

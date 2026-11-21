@@ -244,6 +244,11 @@ async function countLines(
   }
 }
 
+function notInWorktree(record: ChangeRecord): ChangeRecord {
+  const letter = record.letter === "M" || record.letter === "T" ? "D" : record.letter;
+  return { ...record, letter, added: null, removed: null };
+}
+
 async function stamped(
   folder: string,
   changes: ListedChange[],
@@ -256,10 +261,12 @@ async function stamped(
     changes.map((change) => change.path),
     signal,
   );
-  return changes.map((change) => ({
-    ...change,
-    stamp: `${change.sourceOid ?? "new"}:${stamps.get(change.path) ?? late}`,
-  }));
+  return changes.flatMap((change) => {
+    const stamp = stamps.get(change.path) ?? late;
+    const record = { ...change, stamp: `${change.sourceOid ?? "new"}:${stamp}` };
+    if (stamp !== "gone" || record.letter === "D") return [record];
+    return record.tracked ? [notInWorktree(record)] : [];
+  });
 }
 
 export function parseDiff(stdout: string): ParsedList | undefined {
