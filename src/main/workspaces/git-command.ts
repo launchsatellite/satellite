@@ -14,6 +14,7 @@ export type GitStop = StopReason | "stuck" | "failed";
 interface GitExtra {
   gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
   bytes?: boolean;
+  input?: string;
 }
 
 export const gitReadMs = gitReadTimeoutMs;

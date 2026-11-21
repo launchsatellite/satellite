@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -300,4 +301,35 @@ describe("runTool", () => {
     },
     20_000,
   );
+});
+
+describe("runTool input", () => {
+  const hashOf = (text: string) =>
+    createHash("sha1")
+      .update(`blob ${String(Buffer.byteLength(text))}\0${text}`)
+      .digest("hex");
+
+  it("hands a tool its input on standard input", async () => {
+    const run = await runTool("git", ["hash-object", "--stdin"], { input: "hi\n" });
+    expect(run?.stdout.trim()).toBe("45b983be36b73c0788dc9cbcb76cbb80fc7bb057");
+  });
+
+  it("writes an input larger than the pipe buffer whole", async () => {
+    const text = "satellite\n".repeat(300_000);
+    const run = await runTool("git", ["hash-object", "--stdin"], { input: text });
+    expect(run?.stdout.trim()).toBe(hashOf(text));
+  });
+
+  it("ignores a tool that exits before it reads its input", async () => {
+    const unhandled = vi.fn();
+    process.on("uncaughtException", unhandled);
+    try {
+      const run = await runTool("git", ["--version"], { input: "x".repeat(5_000_000) });
+      await new Promise((settle) => setTimeout(settle, 200));
+      expect(run?.exitCode).toBe(0);
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("uncaughtException", unhandled);
+    }
+  });
 });
