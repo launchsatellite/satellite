@@ -14,7 +14,7 @@ import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
-import { rankMatches } from "./fuzzy-match.ts";
+import { rankMatches } from "../../shared/fuzzy-match.ts";
 
 type PaletteMode = "commands" | "switcher";
 

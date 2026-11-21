@@ -269,7 +269,7 @@ The release workflow, `.github/workflows/release.yml`, runs the unit tests and p
 | `src/renderer/diff/` | The read-only diff view, the language a path maps to, and its Monaco worker and theme |
 | `src/renderer/window/` | The three columns, their dividers, how widths fit the window, the centre column's tab strip, the empty states and the interface state hook |
 | `src/renderer/commands/` | The command registry, the platform shortcut matcher and the provider that runs a command from its shortcut or its button |
-| `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share |
+| `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share, kept in `src/shared/` |
 | `src/renderer/setup/` | The tool check card, shown on first run and from the command menu |
 | `src/renderer/workspaces/` | The New workspace dialog, which prepares a name and a start, makes the workspace and shows each step as it runs, and the archive dialog, which shows what would be lost before it archives |
 | `src/renderer/ui/` | Shared interface parts, the button, the dialog, the key hint, the line icons, the pixel avatar, the segmented control, the status pixel and the toast |
