@@ -300,7 +300,7 @@ export function parseView(
   if (number === undefined || number === null || !Number.isInteger(number) || number < 1)
     return null;
   const place = placeOf(view.url ?? "");
-  if (place === null || place.number !== number) return null;
+  if (place?.number !== number) return null;
   const headOid =
     view.headRefOid !== undefined && view.headRefOid !== null && oidPattern.test(view.headRefOid)
       ? view.headRefOid
@@ -361,7 +361,7 @@ export interface Conversation {
 
 function candidatesOf(list: readonly unknown[] | null | undefined): Candidate[] {
   return each(list, candidateNode).flatMap((node) =>
-    node.number !== undefined && node.number !== null && Number.isInteger(node.number)
+    typeof node.number === "number" && Number.isInteger(node.number)
       ? [
           {
             number: node.number,

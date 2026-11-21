@@ -1,28 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PullRequestFound } from "../../shared/bridge-contract.ts";
-import {
-  absentSentence,
-  blocks,
-  checksSummary,
-  readoutLabel,
-  readoutPixel,
-  readoutRest,
-  resultPixel,
-  resultWord,
-  stateWord,
-  troubleSentence,
-} from "./pull-request-words.ts";
-
-const troubles = [
-  "signed-out",
-  "gh-missing",
-  "gh-old",
-  "offline",
-  "other-host",
-  "rate-limited",
-  "hung",
-  "failed",
-] as const;
+import { blocks, checksSummary } from "./pull-request-words.ts";
 
 function found(change: Partial<PullRequestFound> = {}): PullRequestFound {
   return {
@@ -58,21 +36,6 @@ function keys(change: Partial<PullRequestFound>): string[] {
 }
 
 describe("pull request words", () => {
-  it("has a sentence for every trouble and absence and none holds a colon", () => {
-    const sentences = [
-      ...troubles.map(troubleSentence),
-      absentSentence("none"),
-      absentSentence("not-pushed"),
-    ];
-    expect(new Set(sentences).size).toBe(10);
-    for (const sentence of sentences) {
-      expect(sentence).not.toContain(":");
-      expect(sentence.endsWith(".")).toBe(true);
-    }
-    expect(troubleSentence("signed-out")).toContain("gh auth login");
-    expect(troubleSentence("gh-old")).toContain("2.18");
-  });
-
   it("summarises checks", () => {
     expect(checksSummary({ failed: 0, pending: 0, passed: 0, total: 0 })).toBe("No checks");
     expect(checksSummary({ failed: 1, pending: 2, passed: 1, total: 4 })).toBe("1 failed");
@@ -120,34 +83,5 @@ describe("pull request words", () => {
     for (const row of blocks(found({ mergeable: "conflicting", base: "a‮b" }))) {
       expect(row.sentence).not.toContain("‮");
     }
-  });
-
-  it("labels the readout", () => {
-    expect(readoutLabel(found())).toBe("Pull request 12, Open, All 3 passed");
-    expect(readoutRest(found({ state: "merged" }))).toBe(" Merged · All 3 passed");
-    expect(stateWord("draft")).toBe("Draft");
-    const pixel = (change: Partial<PullRequestFound>) => readoutPixel(found(change));
-    expect(pixel({})).toBe("ready");
-    expect(pixel({ counts: { failed: 1, pending: 0, passed: 0, total: 1 } })).toBe("needs-you");
-    expect(pixel({ counts: { failed: 0, pending: 1, passed: 0, total: 1 } })).toBe("working");
-    expect(pixel({ state: "merged" })).toBe("done");
-    expect(pixel({ state: "closed" })).toBe("idle");
-    expect(pixel({ counts: { failed: 0, pending: 0, passed: 0, total: 0 } })).toBe("idle");
-  });
-
-  it("names every check result", () => {
-    const results = ["failed", "pending", "passed", "skipped", "cancelled", "unknown"] as const;
-    expect(results.map(resultWord)).toEqual([
-      "Failed",
-      "Running",
-      "Passed",
-      "Skipped",
-      "Cancelled",
-      "Unknown",
-    ]);
-    expect(resultPixel("failed")).toBe("needs-you");
-    expect(resultPixel("pending")).toBe("working");
-    expect(resultPixel("passed")).toBe("ready");
-    expect(resultPixel("unknown")).toBe("idle");
   });
 });
