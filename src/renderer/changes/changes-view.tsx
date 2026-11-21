@@ -70,13 +70,11 @@ export function ChangesView({
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [layoutShown, setLayoutShown] = useState(false);
-  const [textShown, setTextShown] = useState(false);
   const inside = useRef(false);
   const panel = useRef<HTMLDivElement>(null);
   const listHost = useRef<HTMLDivElement>(null);
   const show = useCallback(
     (shown: ShownText | null) => {
-      setTextShown(shown !== null);
       setLayoutShown(shown !== null && sideOnly(shown.letter) === null);
       onShown(shown);
     },
@@ -169,18 +167,16 @@ export function ChangesView({
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
         <CentreTabs />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
-          {textShown && (
-            <CommandButton
-              command="changes.send-lines"
-              variant="ghost"
-              size="small"
-              testId="diff-send-lines"
-            >
-              Send lines
-            </CommandButton>
-          )}
+          <CommandButton
+            command="changes.send-lines"
+            variant="ghost"
+            size="small"
+            testId="diff-send-lines"
+          >
+            Send lines
+          </CommandButton>
           <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
-          {layoutShown && (
+          <span className={layoutShown ? "" : "invisible"}>
             <Segmented
               label="Diff layout"
               value={inline ? "inline" : "side-by-side"}
@@ -189,7 +185,7 @@ export function ChangesView({
                 onInline(layout === "inline");
               }}
             />
-          )}
+          </span>
         </div>
       </div>
       {list !== undefined && <ConflictBanner base={list.base} conflict={list.conflict} />}
