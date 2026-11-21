@@ -11,7 +11,6 @@ export interface ListeningPort {
 }
 
 const windowsPort = z.object({ a: z.string(), p: z.int(), o: z.int().min(0) });
-const windowsPorts = z.union([windowsPort.transform((row) => [row]), z.array(windowsPort)]);
 
 const portsTimeoutMs = 3000;
 const portPids = 500;
@@ -110,9 +109,10 @@ export function parseWindowsPorts(text: string): ListeningPort[] {
   } catch {
     return [];
   }
-  const parsed = windowsPorts.safeParse(json);
-  if (!parsed.success) return [];
-  return parsed.data.flatMap((row) => listener(row.o, row.a, row.p) ?? []);
+  return (Array.isArray(json) ? json : [json]).flatMap((candidate) => {
+    const parsed = windowsPort.safeParse(candidate);
+    return parsed.success ? (listener(parsed.data.o, parsed.data.a, parsed.data.p) ?? []) : [];
+  });
 }
 
 async function readAll(pids: readonly number[]): Promise<ListeningPort[]> {

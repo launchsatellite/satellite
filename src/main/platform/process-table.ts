@@ -21,7 +21,6 @@ const windowsRow = z.object({
   n: z.string().nullable(),
   c: z.string().nullable(),
 });
-const windowsRows = z.union([windowsRow.transform((row) => [row]), z.array(windowsRow)]);
 
 export const psTimeoutMs = 1000;
 const windowsReadTimeoutMs = 5000;
@@ -124,10 +123,11 @@ export function parseWindowsTable(text: string): ProcessEntry[] {
   } catch {
     return [];
   }
-  const parsed = windowsRows.safeParse(json);
-  if (!parsed.success) return [];
   const entries: ProcessEntry[] = [];
-  for (const row of parsed.data) {
+  for (const candidate of Array.isArray(json) ? json : [json]) {
+    const parsed = windowsRow.safeParse(candidate);
+    if (!parsed.success) continue;
+    const row = parsed.data;
     if (row.p === 0) continue;
     entries.push({
       pid: row.p,
@@ -152,6 +152,11 @@ export function subtreeOf(root: ProcessEntry, entries: readonly ProcessEntry[]):
   }
   const found = [root];
   const seen = new Set([root.pid]);
+  const byPid = new Map(entries.map((entry) => [entry.pid, entry]));
+  for (let above = byPid.get(root.parent); above !== undefined && !seen.has(above.pid);) {
+    seen.add(above.pid);
+    above = byPid.get(above.parent);
+  }
   for (const current of found) {
     if (current.started === null) continue;
     for (const child of children.get(current.pid) ?? []) {

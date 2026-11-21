@@ -45,6 +45,11 @@ describe("parseWindowsPorts", () => {
       { pid: 7, host: "127.0.0.1", port: 80 },
     ]);
   });
+
+  it("drops one bad listener and keeps the others", () => {
+    const rows = `[{"a":null,"p":80,"o":7},{"a":"127.0.0.1","p":81,"o":7},3]`;
+    expect(parseWindowsPorts(rows)).toEqual([{ pid: 7, host: "127.0.0.1", port: 81 }]);
+  });
 });
 
 describe("unreadable output", () => {

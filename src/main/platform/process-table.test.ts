@@ -98,6 +98,11 @@ describe("parseWindowsTable", () => {
     expect(parseWindowsTable("not json")).toEqual([]);
     expect(parseWindowsTable('{"p":"1"}')).toEqual([]);
   });
+
+  it("drops one bad row and keeps the others", () => {
+    const rows = `[{"p":7,"pp":1,"s":5,"n":"a","c":"a"},{"p":8,"pp":1,"s":1.5,"n":"b","c":"b"},null,{"p":9,"pp":1,"s":6,"n":"c","c":"c"}]`;
+    expect(parseWindowsTable(rows).map((candidate) => candidate.pid)).toEqual([7, 9]);
+  });
 });
 
 describe("subtreeOf", () => {
@@ -112,7 +117,7 @@ describe("subtreeOf", () => {
     ]);
     const loop = [entry(1000, 1001, 5), entry(1001, 1000, 5)];
     const [first = entry(0, 0, 0)] = loop;
-    expect(subtreeOf(first, loop).map((candidate) => candidate.pid)).toEqual([1000, 1001]);
+    expect(subtreeOf(first, loop).map((candidate) => candidate.pid)).toEqual([1000]);
   });
 });
 
