@@ -70,6 +70,29 @@ describe("shownCommand", () => {
     expect(hide("ssh git@github.com:org/repo.git")).toBe("ssh git@github.com:org/repo.git");
   });
 
+  it("hides by whole option names, so ordinary flags keep their values", () => {
+    const hide = (command: string) => shownCommand(command).text;
+    expect(hide("run --keyboard-layout us --compass north --passWithNoTests x")).toBe(
+      "run --keyboard-layout us --compass north --passWithNoTests x",
+    );
+    expect(hide("echo basic value && echo bearer other")).toBe(
+      "echo basic value && echo bearer other",
+    );
+    expect(hide("run --client-secret a --accessToken b PGPASSWORD=c")).toBe(
+      "run --client-secret *** --accessToken *** PGPASSWORD=***",
+    );
+    expect(hide("curl http://h/?keyboard=us&api_key=abc")).toBe(
+      "curl http://h/?keyboard=us&api_key=***",
+    );
+  });
+
+  it("hides the password of a user flag only where a colon makes it a credential", () => {
+    const hide = (command: string) => shownCommand(command).text;
+    expect(hide("curl -u admin:hunter http://h/")).toBe("curl -u admin:*** http://h/");
+    expect(hide("curl --user=admin:hunter http://h/")).toBe("curl --user=admin:*** http://h/");
+    expect(hide("mysql -u root --port 3306")).toBe("mysql -u root --port 3306");
+  });
+
   it("stays bounded on hostile words", () => {
     for (const word of [
       "key=".repeat(300),

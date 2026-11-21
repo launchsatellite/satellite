@@ -1,13 +1,16 @@
 import { processesLimits } from "../../shared/bridge-contract.ts";
 
 const commandWindow = 1000;
-const secretName = "token|secret|password|passwd|pwd|pass|key|auth|credential|cookie|bearer";
+const secretSuffix =
+  /(?:token|secret|password|passwd|pwd|key|credential|cookie)s?$|auth(?:orization)?$|bearer$/;
 const addressUser = /([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi;
 const bareUser = /^([^\s:@/]+:)[^\s@/]+@/;
-const secretAssignment = new RegExp(`^(-{0,2}[^=\\s]*(?:${secretName})[^=\\s]*=)(.+)$`, "i");
-const secretQuery = new RegExp(`([?&;][^=&\\s]*(?:${secretName})[^=&\\s]*=)[^&\\s]*`, "gi");
-const secretHeader = new RegExp(`^["']?[^:=\\s]*(?:${secretName})[^:=\\s]*:`, "i");
-const secretFlag = new RegExp(`^-{1,2}[^=\\s]*(?:${secretName})[^=\\s]*$`, "i");
+const assignment = /^(-{0,2}([^=\s]+)=)(.+)$/;
+const query = /([?&;])([^=&\s]+)=[^&\s]*/g;
+const headerWord = /^["']?([^:=\s]+):/;
+const flagWord = /^-{1,2}([^=\s]+)$/;
+const userFlag = /^(?:-u|--user|--proxy-user)$/;
+const userAssignment = /^(--(?:proxy-)?user=[^:\s=]+:)(.+)$/;
 const scheme = /^(?:bearer|basic)$/i;
 const opaqueRun = /[A-Za-z0-9_+=-]{32,}/g;
 const highSurrogate = /[\uD800-\uDBFF]/;
@@ -33,6 +36,15 @@ function windowOf(raw: string): { text: string; cut: boolean } {
   return { text: head.slice(0, Math.max(0, head.search(/\s\S*$/))), cut: true };
 }
 
+function isSecretName(name: string): boolean {
+  const parts = name
+    .replace(/([a-z0-9])(?=[A-Z])/g, "$1-")
+    .split(/[-_.]/)
+    .filter((part) => part !== "");
+  const last = (parts.at(-1) ?? "").toLowerCase();
+  return last === "pass" || secretSuffix.test(last);
+}
+
 function opensQuote(value: string): string | undefined {
   const quote = value.charAt(0);
   if (quote !== '"' && quote !== "'") return undefined;
@@ -42,11 +54,17 @@ function opensQuote(value: string): string | undefined {
 function hidden(words: readonly string[]): string[] {
   const shown: string[] = [];
   let hideNext = false;
+  let userNext = false;
   let openQuote: string | undefined;
   for (const word of words) {
     if (openQuote !== undefined) {
       shown.push("***");
       if (word.endsWith(openQuote)) openQuote = undefined;
+      continue;
+    }
+    if (userNext && !word.startsWith("-")) {
+      userNext = false;
+      shown.push(word.replace(/^([^:]+:).+$/, "$1***"));
       continue;
     }
     if (hideNext && !word.startsWith("-")) {
@@ -59,14 +77,27 @@ function hidden(words: readonly string[]): string[] {
       openQuote = opensQuote(word);
       continue;
     }
-    const header = secretHeader.exec(word);
+    const headerName = headerWord.exec(word);
+    const header = headerName !== null && isSecretName(headerName[1] ?? "") ? headerName[0] : null;
+    const flagName = flagWord.exec(word);
+    userNext = userFlag.test(word);
     hideNext =
-      secretFlag.test(word) || scheme.test(word) || (header !== null && header[0] === word);
-    const assigned = secretAssignment.exec(word);
-    if (assigned !== null) openQuote = opensQuote(assigned[2] ?? "");
-    const attached = header !== null && header[0] !== word ? `${header[0]}***` : word;
-    const noUser = attached.replace(addressUser, "$1***@").replace(bareUser, "$1***@");
-    const noValue = noUser.replace(secretAssignment, "$1***").replace(secretQuery, "$1***");
+      (flagName !== null && isSecretName(flagName[1] ?? "")) ||
+      (header !== null && header === word);
+    const assigned = assignment.exec(word);
+    const secretValue =
+      assigned !== null && isSecretName(assigned[2] ?? "") ? (assigned[3] ?? "") : undefined;
+    if (secretValue !== undefined) openQuote = opensQuote(secretValue);
+    const attached = header !== null && header !== word ? `${header}***` : word;
+    const noUser = attached
+      .replace(addressUser, "$1***@")
+      .replace(bareUser, "$1***@")
+      .replace(userAssignment, "$1***");
+    const noValue = (
+      secretValue === undefined ? noUser : noUser.replace(assignment, "$1***")
+    ).replace(query, (found, separator: string, name: string) =>
+      isSecretName(name) ? `${separator}${name}=***` : found,
+    );
     shown.push(noValue.replace(opaqueRun, "***"));
   }
   return shown;
