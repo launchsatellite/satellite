@@ -456,6 +456,7 @@ async function sendsLines(session: AppSession): Promise<void> {
   await select(session, "src/app.ts");
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
   let from = (await session.standInEvents()).length;
+  await page.locator('[data-testid="diff"] .editor.modified .view-lines').click();
   await page.keyboard.press(shortcut);
   await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
   assert.equal(await standInInput(session, from), "", "lines nobody selected reached the prompt");
@@ -485,10 +486,15 @@ async function sendsLines(session: AppSession): Promise<void> {
 
   await select(session, "src/app.ts");
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
-  await session.selectDiffLines("modified", 2, 3);
   await page.getByTestId("new-session").click();
   await stateIs(session, "session-tab-2", "idle", "for the second session");
   from = (await session.standInEvents()).length;
+  await page.keyboard.press(shortcut);
+  assert.ok(
+    !(await standInInput(session, from)).includes("Lines"),
+    "the shortcut sent a reference with focus in the terminal",
+  );
+  await session.selectDiffLines("modified", 2, 3);
   await page.keyboard.press(shortcut);
   await toastReads(session, notReadySentence, "after sending lines to a session not ready");
   assert.equal(await standInInput(session, from), "", "lines reached a session not ready");

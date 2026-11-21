@@ -17,6 +17,10 @@ interface CommandButtonProps {
 const platform = keyboardPlatform();
 const CommandsContext = createContext<CommandRegistry | null>(null);
 
+function focusIsIn(selector: string): boolean {
+  return document.activeElement?.closest(selector) != null;
+}
+
 export function commandShortcut(command: Command): string | undefined {
   return command.shortcut === undefined ? undefined : shortcutLabel(command.shortcut, platform);
 }
@@ -32,6 +36,7 @@ export function CommandsProvider({
     const press = (event: KeyboardEvent) => {
       const command = registry.forKey(event, platform);
       if (!command?.available) return;
+      if (command.whenFocusIn !== undefined && !focusIsIn(command.whenFocusIn)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) command.run();

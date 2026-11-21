@@ -34,6 +34,7 @@ export interface Command {
   id: CommandId;
   title: string;
   shortcut?: Shortcut;
+  whenFocusIn?: string;
   available: boolean;
   run: () => void;
 }

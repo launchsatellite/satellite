@@ -574,6 +574,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             id: "changes.send-lines",
             title: "Send the selected lines to Claude Code",
             shortcut: { key: "l" },
+            whenFocusIn: "[data-testid='diff']",
             available: changesShown && shownText !== null,
             run: () => {
               const selection = diffSelection();
