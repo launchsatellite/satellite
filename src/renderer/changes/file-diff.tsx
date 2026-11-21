@@ -71,6 +71,16 @@ function peeked(key: string): FileSides | undefined {
   return answers.get(key)?.sides;
 }
 
+function Opening() {
+  return (
+    <div className="flex h-full items-center justify-center p-8">
+      <p data-testid="diff-loading" className="text-[13px] text-dim">
+        Opening the diff…
+      </p>
+    </div>
+  );
+}
+
 export function sideOnly(letter: ChangeLetter): DiffSide | null {
   if (letter === "A") return "modified";
   if (letter === "D") return "original";
@@ -139,13 +149,13 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
     [onShown],
   );
 
-  if (drawn === null) return <div className="h-full" />;
+  if (drawn === null) return <Opening />;
   if (drawn.sides?.kind === "text") {
     const { original, modified } = drawn.sides;
     const labels = diffLabels(drawn.file);
     const only = sideOnly(drawn.file.letter);
     return (
-      <Suspense fallback={<div className="h-full" />}>
+      <Suspense fallback={<Opening />}>
         {only === null ? (
           <DiffView
             original={original}
