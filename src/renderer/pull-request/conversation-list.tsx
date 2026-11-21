@@ -48,7 +48,7 @@ function Said({ spoken, onLink }: { spoken: Spoken; onLink: (address: string) =>
   );
 }
 
-function OpenButton({
+export function OpenButton({
   testId,
   found,
   address,
@@ -74,7 +74,7 @@ function OpenButton({
   );
 }
 
-function ThreadBody({
+export function ThreadBody({
   thread,
   onLink,
 }: {
@@ -119,7 +119,7 @@ function Frame({
   );
 }
 
-function ThreadHead({ thread }: { thread: PullRequestThread }) {
+export function ThreadHead({ thread }: { thread: PullRequestThread }) {
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-[9px] gap-y-1 text-[12px]">
       {thread.path !== null && (
@@ -214,6 +214,18 @@ function Item({
   );
 }
 
+function keysOf(items: readonly ConversationItem[]): string[] {
+  const addresses = items.map((item) => {
+    if (item.kind === "thread") return item.thread.url ?? item.thread.comments[0]?.url ?? null;
+    return (item.kind === "review" ? item.review : item.comment).url;
+  });
+  return addresses.map((address, index) =>
+    address !== null && addresses.indexOf(address) === index
+      ? address
+      : `${items[index]?.kind ?? "item"}-${String(index)}`,
+  );
+}
+
 export function ConversationList({
   found,
   onLink,
@@ -245,15 +257,20 @@ export function ConversationList({
     );
   }
   const items = conversationItems(detail);
+  const keys = keysOf(items);
   const more = detail.moreThreads + detail.moreReviews + detail.moreComments;
   return (
-    <div data-testid="pull-request-conversation" className="flex flex-col">
+    <div
+      data-testid="pull-request-conversation"
+      tabIndex={-1}
+      className="flex flex-col outline-none"
+    >
       {items.length === 0 ? (
         <p className="px-4 py-3 text-[13px] text-dim">{noConversationSentence}</p>
       ) : (
         <ul className="flex flex-col">
           {items.map((item, index) => (
-            <Item key={index} index={index} item={item} found={found} onLink={onLink} />
+            <Item key={keys[index]} index={index} item={item} found={found} onLink={onLink} />
           ))}
         </ul>
       )}
