@@ -109,8 +109,8 @@ async function confinedFolder(root: string, parent: string): Promise<string | Si
 }
 
 async function linkSide(file: string): Promise<SideRead> {
-  const target = await readlink(file);
-  return target.length > changesLimits.linkChars ? large : { kind: "text", text: target };
+  const target = await readlink(file, "buffer");
+  return target.length > changesLimits.linkChars ? large : decodedText(target);
 }
 
 async function openedSide(file: string, entry: BigIntStats): Promise<SideRead> {

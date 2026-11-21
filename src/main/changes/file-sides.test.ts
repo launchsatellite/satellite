@@ -164,6 +164,15 @@ describe("readWorktreeSide", () => {
     },
   );
 
+  it.skipIf(process.platform === "win32")(
+    "answers not-utf8 for a link whose target holds an invalid byte",
+    async () => {
+      const { root } = await worktree();
+      await symlink(Buffer.from([0x63, 0x61, 0x66, 0xe9]), join(root, "link.txt"));
+      expect(await readWorktreeSide(root, "link.txt")).toEqual({ kind: "not-utf8" });
+    },
+  );
+
   it("answers large past the byte or the line limit", async () => {
     const { root } = await worktree();
     await writeFile(join(root, "bytes.txt"), "a".repeat(65));
