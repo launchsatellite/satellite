@@ -123,7 +123,17 @@ async function trialMerge(
   try {
     const run = await readGit(
       scratch,
-      ["merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", head, base],
+      [
+        "--git-dir",
+        scratch,
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "--no-messages",
+        "-z",
+        head,
+        base,
+      ],
       conflictReadMs,
       signal,
       { gitVariables: { ...noLazyFetch, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects } },

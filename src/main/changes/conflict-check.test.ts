@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import {
+  appendFile,
   chmod,
   lstat,
   mkdir,
@@ -107,6 +108,19 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
       files: 1,
       names: ["shared.txt"],
     });
+  });
+
+  it("still checks when the user's config demands an explicit git directory for bare repositories", async () => {
+    const box = await sandbox();
+    const config = process.env["GIT_CONFIG_GLOBAL"] ?? "";
+    await appendFile(config, "[safe]\n\tbareRepository = explicit\n");
+    const { head, base } = await diverge(
+      box,
+      () => box.write("shared.txt", twoLines("two")),
+      () => box.write("shared.txt", twoLines("alpha")),
+      () => box.write("shared.txt", twoLines("main")),
+    );
+    expect(await conflictCheck(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
   });
 
   it("answers none for a base that merges cleanly, and for a branch already merged", async () => {
