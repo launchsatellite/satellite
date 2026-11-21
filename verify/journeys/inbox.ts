@@ -287,14 +287,14 @@ async function askAgainAndFold(session: AppSession): Promise<void> {
     await focusTerminal(session);
     await page.keyboard.press("Enter");
   }
+  const took = Date.now() - started;
   for (const name of ["alpha", "beta", "main"]) {
     await visible(session, `inbox-repo-${name}`, "after three workspaces asked");
   }
   await rowsAre(session, ["inbox-repo-main", "inbox-repo-beta", "inbox-repo-alpha"]);
-  const took = Date.now() - started;
   assert.ok(
     took < noticeGapMs,
-    `asking in three workspaces took ${String(took)} ms, longer than the ${String(noticeGapMs)} ms gap, so the fold cannot be read`,
+    `pressing Enter in three workspaces took ${String(took)} ms, longer than the ${String(noticeGapMs)} ms gap, so the fold cannot be read`,
   );
   await textIs(session, "inbox-count", "3", "with three workspaces asking");
   await recorded(
