@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { devNull } from "node:os";
 import { delimiter, join } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 import { gitReadMs, readGit, runGit, whenGitExits } from "../workspaces/git-command.ts";
-import { isObjectName, noLazyFetch } from "./file-sides.ts";
+import { isObjectName } from "./file-sides.ts";
 
 export type ConflictCheck =
   | { kind: "none" }
@@ -136,7 +137,13 @@ async function trialMerge(
       ],
       conflictReadMs,
       signal,
-      { gitVariables: { ...noLazyFetch, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects } },
+      {
+        gitVariables: {
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: objects,
+          GIT_CONFIG_GLOBAL: devNull,
+          GIT_CONFIG_SYSTEM: devNull,
+        },
+      },
     );
     stuck = run === "stuck";
     if (run === "time" || run === "stuck") return slow;

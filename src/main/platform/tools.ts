@@ -84,7 +84,12 @@ const gitQuiet = {
   GCM_INTERACTIVE: "false",
   SSH_ASKPASS_REQUIRE: "never",
 };
-const gitVariables = ["GIT_NO_LAZY_FETCH", "GIT_ALTERNATE_OBJECT_DIRECTORIES"] as const;
+const gitVariables = [
+  "GIT_NO_LAZY_FETCH",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_SYSTEM",
+] as const;
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
 const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
 const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];

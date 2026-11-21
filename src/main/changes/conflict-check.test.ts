@@ -32,6 +32,12 @@ vi.mock("../platform/user-environment.ts", () => ({
 const run = promisify(execFile);
 const windows = process.platform === "win32";
 
+const exists = (path: string) =>
+  stat(path).then(
+    () => true,
+    () => false,
+  );
+
 async function sandbox() {
   const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-conflict-")));
   const config = join(base, "gitconfig");
@@ -121,6 +127,26 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
       () => box.write("shared.txt", twoLines("main")),
     );
     expect(await conflictCheck(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
+  });
+
+  it("reads none of the user's config, so a global merge setting cannot abort it or run the user's driver", async () => {
+    const box = await sandbox();
+    const marker = join(box.base, "driver-ran");
+    const attributes = join(box.base, "attributes");
+    await writeFile(attributes, "* merge=mine\n");
+    const config = process.env["GIT_CONFIG_GLOBAL"] ?? "";
+    await appendFile(
+      config,
+      `[merge]\n\trenormalize = true\n[merge "mine"]\n\tdriver = touch ${marker}\n[core]\n\tattributesFile = ${attributes}\n`,
+    );
+    const { head, base } = await diverge(
+      box,
+      () => box.write("shared.txt", twoLines("two")),
+      () => box.write("shared.txt", twoLines("alpha")),
+      () => box.write("shared.txt", twoLines("main")),
+    );
+    expect(await conflictCheck(box.home, box.repo, head, base)).toMatchObject({ kind: "files" });
+    expect(await exists(marker)).toBe(false);
   });
 
   it("answers none for a base that merges cleanly, and for a branch already merged", async () => {
