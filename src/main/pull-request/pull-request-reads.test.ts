@@ -47,7 +47,7 @@ interface Check {
   conclusion: string;
 }
 
-function viewJson(checks: Check[] = []) {
+function viewJson(checks: Check[] = [], head = "main") {
   return JSON.stringify({
     number: 12,
     url: "https://github.com/example-org/verify-repo/pull/12",
@@ -55,7 +55,7 @@ function viewJson(checks: Check[] = []) {
     state: "OPEN",
     isDraft: false,
     baseRefName: "main",
-    headRefName: "topic",
+    headRefName: head,
     headRefOid: headOid,
     isCrossRepository: false,
     body: "Body",
@@ -206,6 +206,12 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     const made = await calls();
     expect(made).toHaveLength(3);
     expect(made[2]?.args).toEqual(threadsArguments(place));
+  });
+
+  it("shows no pull request whose head branch is not the workspace branch", async () => {
+    const { answer, read } = await setup();
+    await answer("view", { stdout: viewJson([], "topic") });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
   });
 
   it("never runs gh for a branch that is not pushed", async () => {

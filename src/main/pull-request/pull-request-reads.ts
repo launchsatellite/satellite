@@ -206,7 +206,7 @@ export function createPullRequests({
         if (!pushed) return { failure: "not-pushed" as const };
         const result = await runGh(viewArguments(), folder, viewMs, signal);
         if ("failure" in result) return result;
-        return { run: result.run, head: (await headOid(folder, signal)) ?? null };
+        return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch };
       },
       { signal },
     );
@@ -219,6 +219,9 @@ export function createPullRequests({
     }
     const parsed = parseView(viewed.run.stdout, viewed.head);
     if (parsed === null) return { answer: unavailable("failed"), place: null };
+    if (parsed.found.head !== viewed.branch) {
+      return { answer: { kind: "absent", reason: "none" }, place: null };
+    }
     if (!detail) return { answer: { ...parsed.found, detail: null }, place: parsed.place };
     const read = await readDetail(parsed.place, folder, signal);
     return { answer: { ...parsed.found, detail: read }, place: parsed.place };
