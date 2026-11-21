@@ -144,10 +144,30 @@ async function run(session: AppSession): Promise<void> {
   assert.equal((await textOf(session, "processes-note")).trim(), detachedSentence);
   await session.screenshot("processes");
 
+  const portId = `process-row-0-port-${String(server.port)}`;
+  const age = (await textOf(session, "process-row-0-age")).trim();
+  await waitUntil(
+    async () => (await textOf(session, "process-row-0-age")).trim() !== age,
+    promptTimeoutMs,
+    "the age did not advance while the list stayed open",
+  );
+
   await port.click();
   await visible(session, "link-dialog", "after the port was pressed");
   const address = `http://127.0.0.1:${String(server.port)}/`;
   assert.equal((await textOf(session, "link-address")).trim(), address);
+  await page.getByTestId("link-cancel").click();
+  await gone(session, "link-dialog", "after the question was cancelled");
+  await visible(session, "processes-dialog", "after the question was cancelled");
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
+    portId,
+    "focus did not return to the port after the question was cancelled",
+  );
+  assert.deepEqual(await session.openedLinks(), [], "cancelling the question opened an address");
+
+  await port.click();
+  await visible(session, "link-dialog", "after the port was pressed again");
   await page.getByTestId("link-open").click();
   await waitUntil(
     async () => (await session.openedLinks()).length > 0,
@@ -157,7 +177,7 @@ async function run(session: AppSession): Promise<void> {
   assert.deepEqual(await session.openedLinks(), [address]);
 
   await gone(session, "link-dialog", "after the address opened");
-  await openList(session);
+  await visible(session, "processes-dialog", "after the address opened");
   assert.equal(
     await bridgeCode(page, "processes.stop", {
       pid: server.pid,

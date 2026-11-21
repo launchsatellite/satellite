@@ -431,7 +431,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [allSessions],
   );
   const askProcessPort = useCallback((url: string) => {
-    setProcessesOpen(false);
     setAsking({ address: url, description: portLinkSentence });
   }, []);
   const pullRequestNeeding = useMemo(
@@ -1107,7 +1106,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             key={`${changesHere.projectId}/${changesHere.workspace}`}
             label={workspaceLabel(selectedProject, selectedWorkspace)}
             rows={processesHere}
-            at={processes.at}
             more={processes.moreOf(changesHere)}
             sessionNumber={sessionNumber}
             stopping={processes.stopping}

@@ -51,8 +51,9 @@ export function Dialog({
   useLayoutEffect(() => {
     const element = panel.current;
     if (element === null) return;
+    const covered = () => element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || covered()) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -62,6 +63,7 @@ export function Dialog({
       }
     };
     const keepFocus = (event: FocusEvent) => {
+      if (covered()) return;
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
     };
     document.addEventListener("keydown", press, { capture: true });
@@ -76,7 +78,10 @@ export function Dialog({
     const overlay = element?.parentElement;
     if (element === null || overlay === null || overlay === undefined) return;
     const focused = document.activeElement;
-    const opener = element.contains(focused) ? focusedAtRender : focused;
+    const opener =
+      focusedAtRender instanceof HTMLElement && focusedAtRender !== document.body
+        ? focusedAtRender
+        : focused;
     const behind = [...(overlay.parentElement?.children ?? [])].filter(
       (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
     );

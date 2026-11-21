@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ProcessRow } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
@@ -16,7 +16,6 @@ import {
 interface ProcessesDialogProps {
   label: string;
   rows: readonly ProcessRow[];
-  at: number;
   more: number;
   sessionNumber: (terminalId: string) => number | undefined;
   stopping: ReadonlySet<string>;
@@ -38,7 +37,7 @@ function sessionName(number: number | undefined): string {
 function Row({
   row,
   index,
-  at,
+  now,
   number,
   stopping,
   busy,
@@ -47,7 +46,7 @@ function Row({
 }: {
   row: ProcessRow;
   index: number;
-  at: number;
+  now: number;
   number: number | undefined;
   stopping: boolean;
   busy: boolean;
@@ -57,7 +56,7 @@ function Row({
   const testId = `process-row-${String(index)}`;
   const command = visibleText(row.command);
   const shown = `${command}${row.cut ? "…" : ""}`;
-  const age = at - row.started;
+  const age = now - row.started;
   return (
     <li
       data-testid={testId}
@@ -82,7 +81,7 @@ function Row({
           <span data-testid={`${testId}-session`}>{sessionName(number)}</span>
           <span data-testid={`${testId}-age`}>
             <span className="sr-only">running for {ageWords(age)}</span>
-            <span aria-hidden="true" className="font-pixel uppercase">
+            <span aria-hidden="true" className="font-pixel uppercase tabular-nums">
               {ageReadout(age)}
             </span>
           </span>
@@ -140,7 +139,6 @@ function Row({
 export function ProcessesDialog({
   label,
   rows,
-  at,
   more,
   sessionNumber,
   stopping,
@@ -150,6 +148,15 @@ export function ProcessesDialog({
   onClose,
 }: ProcessesDialogProps) {
   const body = useRef<HTMLDivElement>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
   const count = rows.length;
   useEffect(() => {
     if (document.activeElement !== document.body) return;
@@ -184,7 +191,7 @@ export function ProcessesDialog({
                 key={stopKey(row)}
                 row={row}
                 index={index}
-                at={at}
+                now={now}
                 number={sessionNumber(row.session)}
                 stopping={stopping.has(stopKey(row))}
                 busy={stopping.size > 0}

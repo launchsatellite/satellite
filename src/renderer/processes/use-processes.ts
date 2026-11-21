@@ -3,11 +3,9 @@ import type { ProcessRow, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule, type Pace } from "../ui/refresh-schedule.ts";
 import type { Notify } from "../ui/toast.tsx";
-import { ageReadout } from "./process-words.ts";
 
 export interface Processes {
   rowsOf: (ref: WorkspaceRef) => readonly ProcessRow[];
-  at: number;
   moreOf: (ref: WorkspaceRef) => number;
   stopping: ReadonlySet<string>;
   problem: string | null;
@@ -22,13 +20,12 @@ interface ProcessesInput {
 type ProcessesMore = readonly { workspace: WorkspaceRef; count: number }[];
 interface Shown {
   rows: readonly ProcessRow[];
-  at: number;
   more: ProcessesMore;
   key: string;
 }
 
 const pace: Pace = { firstMs: 10_000, maxMs: 30_000, factor: 4 };
-const nothing: Shown = { rows: [], at: 0, more: [], key: "" };
+const nothing: Shown = { rows: [], more: [], key: "" };
 
 export function stopKey(row: ProcessRow): string {
   return `${String(row.pid)}/${String(row.started)}`;
@@ -38,8 +35,8 @@ function isVisible(): boolean {
   return document.visibilityState === "visible";
 }
 
-function shownKey(rows: readonly ProcessRow[], at: number, more: ProcessesMore): string {
-  return JSON.stringify([rows, rows.map((row) => ageReadout(at - row.started)), more]);
+function shownKey(rows: readonly ProcessRow[], more: ProcessesMore): string {
+  return JSON.stringify([rows, more]);
 }
 
 export function useProcesses({ live, finished, notify }: ProcessesInput): Processes {
@@ -81,7 +78,7 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
             if (!stopped) setReadProblem(result.error.message);
             return { files: false, key: "" };
           }
-          const { rows, at, more } = result.value;
+          const { rows, more } = result.value;
           if (!stopped) {
             setReadProblem(null);
             const listed = new Set(rows.map(stopKey));
@@ -94,8 +91,8 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
               for (const key of back) next.delete(key);
               return next;
             });
-            const key = shownKey(rows, at, more);
-            setShown((current) => (current.key === key ? current : { rows, at, more, key }));
+            const key = shownKey(rows, more);
+            setShown((current) => (current.key === key ? current : { rows, more, key }));
           }
           return {
             files: true,
@@ -181,7 +178,6 @@ export function useProcesses({ live, finished, notify }: ProcessesInput): Proces
 
   return {
     rowsOf,
-    at: shown.at,
     moreOf,
     stopping,
     problem: problem ?? readProblem,
