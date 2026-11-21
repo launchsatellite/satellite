@@ -10,6 +10,7 @@ interface ConflictBannerProps {
 }
 
 function Names({ names, files }: { names: readonly string[]; files: number }) {
+  if (names.length === 0) return null;
   const rest = files - names.length;
   return (
     <span
