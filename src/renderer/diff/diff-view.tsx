@@ -6,6 +6,7 @@ import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { visibleLines } from "../../shared/visible-text.ts";
 import { diffLanguage } from "./diff-language.ts";
+import { lookAlikeColumns } from "./look-alikes.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 
 export interface DiffSelection {
@@ -34,6 +35,8 @@ const drawnColumns = 10_000;
 const boxedLimit = 1000;
 const longLineSentence =
   "A changed line here runs past 10,000 characters, so the diff shows only its start.";
+const fewBoxesSentence =
+  "This file holds over 1,000 characters beyond ASCII, so look-alike letters are marked only inside words on changed lines.";
 
 function plainModel(text: string, language: string): editor.ITextModel {
   const model = editor.createModel(visibleLines(text), language);
@@ -50,19 +53,23 @@ function fewNonAscii(text: string): boolean {
   return true;
 }
 
-function changeRunsLong(created: editor.IStandaloneDiffEditor): boolean {
-  const model = created.getModel();
-  if (model === null) return false;
-  const long = (side: editor.ITextModel, start: number, end: number) => {
-    for (let line = start; line <= end && line >= 1; line += 1) {
-      if (side.getLineMaxColumn(line) > drawnColumns) return true;
-    }
-    return false;
-  };
-  return (created.getLineChanges() ?? []).some(
-    (change) =>
-      long(model.original, change.originalStartLineNumber, change.originalEndLineNumber) ||
-      long(model.modified, change.modifiedStartLineNumber, change.modifiedEndLineNumber),
+function changedLines(created: editor.IStandaloneDiffEditor, side: DiffSide): number[] {
+  const lines: number[] = [];
+  for (const change of created.getLineChanges() ?? []) {
+    const start =
+      side === "original" ? change.originalStartLineNumber : change.modifiedStartLineNumber;
+    const end = side === "original" ? change.originalEndLineNumber : change.modifiedEndLineNumber;
+    for (let line = Math.max(start, 1); line <= end; line += 1) lines.push(line);
+  }
+  return lines;
+}
+
+function lookAlikeMarks(model: editor.ITextModel, lines: readonly number[]) {
+  return lines.flatMap((line) =>
+    lookAlikeColumns(model.getLineContent(line)).map(({ start, end }) => ({
+      range: { startLineNumber: line, startColumn: start, endLineNumber: line, endColumn: end },
+      options: { inlineClassName: "look-alike" },
+    })),
   );
 }
 
@@ -84,6 +91,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
   const focusedSide = useRef<DiffSide>("modified");
   const pendingView = useRef<editor.IDiffEditorViewState>(null);
   const [cutShort, setCutShort] = useState(false);
+  const [fewBoxes, setFewBoxes] = useState(false);
 
   useImperativeHandle(
     handle,
@@ -151,11 +159,27 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     created.getModifiedEditor().onDidFocusEditorText(() => {
       focusedSide.current = "modified";
     });
+    const sides = {
+      original: created.getOriginalEditor(),
+      modified: created.getModifiedEditor(),
+    };
+    const marks = {
+      original: sides.original.createDecorationsCollection(),
+      modified: sides.modified.createDecorationsCollection(),
+    };
     created.onDidUpdateDiff(() => {
       const viewState = pendingView.current;
       pendingView.current = null;
       if (viewState !== null) created.restoreViewState(viewState);
-      setCutShort(changeRunsLong(created));
+      let long = false;
+      for (const side of ["original", "modified"] as const) {
+        const model = sides[side].getModel();
+        if (model === null) continue;
+        const lines = changedLines(created, side);
+        long ||= lines.some((line) => model.getLineMaxColumn(line) > drawnColumns);
+        marks[side].set(lookAlikeMarks(model, lines));
+      }
+      setCutShort(long);
     });
 
     const darkScheme = matchMedia("(prefers-color-scheme: dark)");
@@ -187,6 +211,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     pendingView.current = shownPath.current === path ? created.saveViewState() : null;
     const language = diffLanguage(path);
     const boxed = fewNonAscii(original) && fewNonAscii(modified);
+    setFewBoxes(!boxed);
     for (const side of [created.getOriginalEditor(), created.getModifiedEditor()]) {
       side.updateOptions({ unicodeHighlight: { ambiguousCharacters: boxed } });
     }
@@ -201,6 +226,14 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {fewBoxes && (
+        <p
+          data-testid="diff-few-boxes"
+          className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
+        >
+          {fewBoxesSentence}
+        </p>
+      )}
       {cutShort && (
         <p
           data-testid="diff-cut-short"

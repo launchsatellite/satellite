@@ -100,6 +100,11 @@ body,
   margin: 0;
 }
 
+.look-alike {
+  outline: 1px solid var(--sigfg);
+  outline-offset: -1px;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
