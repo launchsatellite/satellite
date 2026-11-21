@@ -1,6 +1,6 @@
 # 010 First-run guide
 
-Status **In progress** · Depends on **002, 003, 004, 005, 006**
+Status **Done** · Depends on **002, 003, 004, 005, 006**
 
 ## Why
 
@@ -35,8 +35,8 @@ Tips for later features, a help centre, videos, and any tracking of what the use
 
 ## Acceptance
 
-- [ ] After the first project is added the first card appears beside the control that makes a workspace, and never before. Proof, scenario `first-run`.
-- [ ] Each step leaves when the user does the thing and on Next, and the card sits beside its control without covering it at 960 by 600 and a normal size, light and dark. Proof, the same scenario.
-- [ ] The card takes no focus, and Escape closes it only while focus is inside it. Proof, the same scenario with a running session.
-- [ ] An early close shows the toast, Done shows none, and neither shows the guide again after a restart. Proof, the same scenario.
-- [ ] Show the guide in the command menu starts it again. Proof, the same scenario.
+- [x] After the first project is added the first card appears beside the control that makes a workspace, and never before. Proof, scenario `first-run`.
+- [x] Each step leaves when the user does the thing and on Next, and the card sits beside its control without covering it at 960 by 600 and a normal size, light and dark. Proof, the same scenario.
+- [x] The card takes no focus, and Escape closes it only while focus is inside it. Proof, the same scenario with a running session.
+- [x] An early close shows the toast, Done shows none, and neither shows the guide again after a restart. Proof, the same scenario.
+- [x] Show the guide in the command menu starts it again. Proof, the same scenario.
