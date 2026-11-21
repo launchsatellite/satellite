@@ -23,7 +23,7 @@ export interface Changes {
   stopInside(folder: string): Promise<void>;
   stopAll(): Promise<void>;
 }
-interface ActiveRead {
+export interface ActiveRead {
   controller: AbortController;
   folder: string | undefined;
   done: Promise<unknown>;
@@ -77,8 +77,20 @@ function notListed(): BridgeFailure {
   return new BridgeFailure("not-found", notListedSentence);
 }
 
-function movedOn(): BridgeFailure {
+export function movedOn(): BridgeFailure {
   return new BridgeFailure("refused", movedOnSentence);
+}
+
+export async function waitForReads(stopping: readonly ActiveRead[]): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const bound = new Promise<void>((settle) => {
+    timer = setTimeout(settle, changesStopWaitMs);
+  });
+  try {
+    await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function keyOf(ref: WorkspaceRef, view: ChangesView): string {
@@ -365,15 +377,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     async stopAll() {
       const stopping = [...active];
       for (const read of stopping) read.controller.abort(movedOn());
-      let timer: NodeJS.Timeout | undefined;
-      const bound = new Promise<void>((settle) => {
-        timer = setTimeout(settle, changesStopWaitMs);
-      });
-      try {
-        await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
-      } finally {
-        clearTimeout(timer);
-      }
+      await waitForReads(stopping);
     },
     async stopInside(folder) {
       const stopping = [...active].filter(
@@ -382,15 +386,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
       for (const read of stopping) {
         read.controller.abort(new BridgeFailure("not-found", changesSentences.gone));
       }
-      let timer: NodeJS.Timeout | undefined;
-      const bound = new Promise<void>((settle) => {
-        timer = setTimeout(settle, changesStopWaitMs);
-      });
-      try {
-        await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
-      } finally {
-        clearTimeout(timer);
-      }
+      await waitForReads(stopping);
     },
   };
 }

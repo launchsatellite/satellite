@@ -1,5 +1,5 @@
 import type { FilesFind, FilesList, FileRead, WorkspaceRef } from "../../shared/bridge-contract.ts";
-import { changesStopWaitMs } from "../changes/changes-handlers.ts";
+import { movedOn, waitForReads, type ActiveRead } from "../changes/changes-handlers.ts";
 import { createReadQueue } from "../changes/read-queue.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { isInsidePath } from "../platform/paths.ts";
@@ -13,11 +13,6 @@ export interface Files {
   handlers: Pick<BridgeHandlers, "files.list" | "files.read" | "files.find">;
   stopInside(folder: string): Promise<void>;
   stopAll(): Promise<void>;
-}
-interface ActiveRead {
-  controller: AbortController;
-  folder: string | undefined;
-  done: Promise<unknown>;
 }
 interface Names {
   folder: string;
@@ -40,11 +35,6 @@ const filesSentences = {
   archiving: "Satellite is archiving that workspace, so its files can't be read.",
 };
 const queueFull = "Satellite is reading a lot of files at once. It tries again in a moment.";
-const movedOnSentence = "Satellite moved on to a newer read.";
-
-function movedOn(): BridgeFailure {
-  return new BridgeFailure("refused", movedOnSentence);
-}
 
 function replaced(
   page: PageReads,
@@ -100,18 +90,6 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
     return answer;
   };
 
-  const waitFor = async (stopping: ActiveRead[]): Promise<void> => {
-    let timer: NodeJS.Timeout | undefined;
-    const bound = new Promise<void>((settle) => {
-      timer = setTimeout(settle, changesStopWaitMs);
-    });
-    try {
-      await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
   const listed = async (
     folders: readonly string[],
     folder: string,
@@ -164,7 +142,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
     async stopAll() {
       const stopping = [...active];
       for (const read of stopping) read.controller.abort(movedOn());
-      await waitFor(stopping);
+      await waitForReads(stopping);
     },
     async stopInside(folder) {
       const stopping = [...active].filter(
@@ -173,7 +151,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
       for (const read of stopping) {
         read.controller.abort(new BridgeFailure("not-found", filesSentences.gone));
       }
-      await waitFor(stopping);
+      await waitForReads(stopping);
     },
   };
 }
