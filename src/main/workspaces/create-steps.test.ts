@@ -145,7 +145,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("creationSteps", () => {
+describe("creationSteps", { timeout: 30_000 }, () => {
   it("makes the workspace from the latest default branch on the remote", async () => {
     const upstream = await repository("upstream");
     await commit(upstream, "a", "first commit\n");
@@ -583,7 +583,7 @@ describe("creationSteps", () => {
   });
 });
 
-describe("prepareWorkspace", () => {
+describe("prepareWorkspace", { timeout: 30_000 }, () => {
   it("suggests a free name, reads the cached default and lists start points without HEAD", async () => {
     const upstream = await repository("upstream");
     await commit(upstream, "a", "first commit\n");

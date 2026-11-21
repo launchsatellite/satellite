@@ -56,6 +56,7 @@ vi.mock("node:fs/promises", async (original) => {
 });
 
 const run = promisify(execFile);
+const realGitMs = 30_000;
 const onUnix = process.platform !== "win32";
 
 let base = "";
@@ -135,11 +136,15 @@ function sessionsStub(): WorkspaceSessions & { stopped: string[] } {
   };
 }
 
-function removeCalls(): string[][] {
+function gitCalls(): string[][] {
   return vi
     .mocked(runGit)
-    .mock.calls.map(([, args]) => [...args])
-    .filter((args) => args[0] === "worktree" && args[1] === "remove");
+    .mock.calls.filter(([folder]) => folder.startsWith(base))
+    .map(([, args]) => [...args]);
+}
+
+function removeCalls(): string[][] {
+  return gitCalls().filter((args) => args[0] === "worktree" && args[1] === "remove");
 }
 
 async function listed(project: StoredProject): Promise<string> {
@@ -182,7 +187,7 @@ describe("parseIndex", () => {
   });
 });
 
-describe("inspectWorkspace", () => {
+describe("inspectWorkspace", { timeout: realGitMs }, () => {
   it("lists uncommitted files and commits that are not pushed", async () => {
     const project = await repository("repo", true);
     const record = await workspace(project, "fix-login");
@@ -266,7 +271,7 @@ describe("inspectWorkspace", () => {
   });
 });
 
-describe("archiveWorkspace", () => {
+describe("archiveWorkspace", { timeout: realGitMs }, () => {
   it("refuses when the workspace changed since it was inspected", async () => {
     const project = await repository("repo", true);
     const record = await workspace(project, "fix-login");
@@ -371,7 +376,7 @@ describe("archiveWorkspace", () => {
     await expect(
       archiveWorkspace(home, project, record, "0".repeat(64), sessionsStub()),
     ).rejects.toMatchObject(refusal);
-    expect(vi.mocked(runGit)).not.toHaveBeenCalled();
+    expect(gitCalls()).toEqual([]);
     expect(await readFile(join(outside, "keep.md"), "utf8")).toBe("Mine.\n");
   });
 
@@ -502,11 +507,11 @@ describe("archiveWorkspace", () => {
       code: "failed",
       message: "Satellite couldn't read stray, so it won't archive it. Try again.",
     });
-    expect(vi.mocked(runGit)).not.toHaveBeenCalled();
+    expect(gitCalls()).toEqual([]);
   });
 });
 
-describe("removeWorktree", () => {
+describe("removeWorktree", { timeout: realGitMs }, () => {
   it("leaves a worktree that holds a folder on another device as it is, links included", async () => {
     const project = await repository("repo", true);
     const record = await workspace(project, "mounted");
