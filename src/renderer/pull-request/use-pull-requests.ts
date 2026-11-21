@@ -78,6 +78,7 @@ export function usePullRequests({
   const listedNow = useRef(listed);
   const seenDone = useRef(new Map<string, string>());
   const shownPlace = shown === null ? null : placeOf(shown);
+  const shownNow = useRef(shownPlace);
   const listedKey = listed.map(placeOf).sort().join("\n");
 
   const store = useCallback((ref: WorkspaceRef, answer: PullRequestAnswer) => {
@@ -93,6 +94,7 @@ export function usePullRequests({
   useEffect(() => {
     detailNow.current = detail;
     listedNow.current = listed;
+    shownNow.current = shownPlace;
   });
 
   const [prunedFor, setPrunedFor] = useState(listedKey);
@@ -142,8 +144,8 @@ export function usePullRequests({
   }, [shown, store]);
 
   useEffect(() => {
-    const others = listedNow.current.filter((ref) => placeOf(ref) !== shownPlace);
-    if (others.length === 0) {
+    const everyone = listedNow.current;
+    if (everyone.length === 0) {
       askOther.current = () => undefined;
       return;
     }
@@ -162,15 +164,15 @@ export function usePullRequests({
       draining = false;
     };
     const ask = (ref: WorkspaceRef) => {
-      if (!live() || !isVisible()) return;
+      if (!live() || !isVisible() || placeOf(ref) === shownNow.current) return;
       if (!waiting.some((one) => placeOf(one) === placeOf(ref))) waiting.push(ref);
       void drain();
     };
     const askAll = () => {
-      others.forEach(ask);
+      everyone.forEach(ask);
     };
     askOther.current = (place) => {
-      const ref = others.find((one) => placeOf(one) === place);
+      const ref = everyone.find((one) => placeOf(one) === place);
       if (ref !== undefined) ask(ref);
     };
     askAll();
@@ -185,7 +187,14 @@ export function usePullRequests({
       askOther.current = () => undefined;
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [listedKey, shownPlace, store]);
+  }, [listedKey, store]);
+
+  const seenShown = useRef(shownPlace);
+  useEffect(() => {
+    const before = seenShown.current;
+    seenShown.current = shownPlace;
+    if (before !== null && before !== shownPlace) askOther.current(before);
+  }, [shownPlace]);
 
   const seenFinished = useRef({ place: shownPlace, finished });
   useEffect(() => {
