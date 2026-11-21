@@ -367,7 +367,7 @@ export const pullRequestAnswer = z.discriminatedUnion("kind", [
     moreChecks: count,
     detail: pullRequestDetail.nullable(),
   }),
-  z.strictObject({ kind: z.literal("absent"), reason: z.enum(["none", "not-pushed"]) }),
+  z.strictObject({ kind: z.literal("absent"), reason: z.enum(["none", "not-pushed", "target"]) }),
   z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
 ]);
 export type CheckResult = z.output<typeof checkResult>;

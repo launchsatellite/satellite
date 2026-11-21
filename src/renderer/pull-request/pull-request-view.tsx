@@ -181,16 +181,18 @@ export function PullRequestView({
     if (answer.kind === "absent") {
       return (
         <Sentence testId="pull-request-sentence" text={absentSentence(answer.reason)}>
-          <Button
-            variant="secondary"
-            size="small"
-            testId="pull-request-send-open"
-            onClick={() => {
-              sendToClaudeCode(openRequest());
-            }}
-          >
-            Send to Claude Code
-          </Button>
+          {answer.reason !== "target" && (
+            <Button
+              variant="secondary"
+              size="small"
+              testId="pull-request-send-open"
+              onClick={() => {
+                sendToClaudeCode(openRequest());
+              }}
+            >
+              Send to Claude Code
+            </Button>
+          )}
         </Sentence>
       );
     }

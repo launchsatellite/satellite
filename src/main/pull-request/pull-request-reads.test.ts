@@ -299,20 +299,28 @@ describe("pull request reads", { timeout: 30_000 }, () => {
       "https://github.com/example-org/verify-repo.git",
     );
     await answer("view", { stdout: viewJson([], "main", true, "main") });
-    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "target" });
   });
 
   it("shows no pull request on its own base branch when the default branch cannot be read", async () => {
     const { answer, read } = await setup();
     await answer("view", { stdout: viewJson([], "main", false, "main") });
-    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "target" });
   });
 
   it("never shows a pull request for the repository's default branch", async () => {
     const { answer, read, repo } = await setup();
     await inRepo(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
     await answer("view", { stdout: viewJson() });
-    expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "target" });
+  });
+
+  it("never runs gh on the default branch", async () => {
+    const { answer, read, calls, repo } = await setup();
+    await inRepo(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+    await answer("view", { stdout: viewJson() });
+    expect(await read(first)).toEqual({ kind: "absent", reason: "target" });
+    expect(await calls()).toEqual([]);
   });
 
   it("never runs gh for a branch that is not pushed", async () => {

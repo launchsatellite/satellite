@@ -64,7 +64,7 @@ interface Running {
   answer: Promise<PullRequestAnswer>;
 }
 
-type Failure = PullRequestTrouble | "none" | "not-pushed";
+type Failure = PullRequestTrouble | "none" | "not-pushed" | "target";
 
 const viewMs = 20_000;
 const threadsMs = 20_000;
@@ -100,7 +100,9 @@ function unavailable(reason: PullRequestTrouble): PullRequestAnswer {
 }
 
 function troubleOf(failure: Failure): PullRequestTrouble {
-  return failure === "none" || failure === "not-pushed" ? "failed" : failure;
+  return failure === "none" || failure === "not-pushed" || failure === "target"
+    ? "failed"
+    : failure;
 }
 
 async function runGh(
@@ -283,6 +285,7 @@ export function createPullRequests({
         if (!pushed) return { failure: "not-pushed" as const };
         const facts = await branchFacts(folder, branch, signal);
         if (facts === undefined) return { failure: "failed" as const };
+        if (facts.isDefault) return { failure: "target" as const };
         const result = await runGh(viewArguments(), folder, viewMs, signal);
         if ("failure" in result) return result;
         return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch, facts };
@@ -291,13 +294,20 @@ export function createPullRequests({
     );
     if ("failure" in viewed) {
       if (viewed.failure === "rate-limited") pace.pause();
-      if (viewed.failure === "none" || viewed.failure === "not-pushed") {
+      if (
+        viewed.failure === "none" ||
+        viewed.failure === "not-pushed" ||
+        viewed.failure === "target"
+      ) {
         return nothing({ kind: "absent", reason: viewed.failure });
       }
       return nothing(unavailable(viewed.failure));
     }
     let parsed = parseView(viewed.run.stdout, viewed.head);
     if (parsed === null) return nothing(unavailable("failed"));
+    if (parsed.found.base !== null && parsed.found.base === viewed.branch) {
+      return nothing({ kind: "absent", reason: "target" });
+    }
     if (
       !belongsTo(parsed.found, parsed.place, viewed.branch, viewed.facts) ||
       parsed.found.head === null
