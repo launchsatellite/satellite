@@ -10,6 +10,7 @@ import {
   pickFileSentence,
   viewerFailedSentence,
 } from "./file-words.ts";
+import { ImageView } from "./image-view.tsx";
 import type { FileShown } from "./use-files.ts";
 
 interface FilePaneProps {
@@ -91,6 +92,16 @@ function Drawn({
 }) {
   if (read.kind === "text" || read.kind === "link") {
     return <Viewer read={read} path={path} handle={handle} />;
+  }
+  if (read.kind === "image") {
+    return (
+      <ImageView
+        key={path}
+        type={read.type}
+        data={read.data}
+        name={path.slice(path.lastIndexOf("/") + 1)}
+      />
+    );
   }
   const sentence = fileSentence(read);
   return sentence === undefined ? null : <Sentence testId="file-sentence" text={sentence} />;

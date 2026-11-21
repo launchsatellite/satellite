@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
-import { appendFile, readFile, unlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { appendFile, mkdir, readFile, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
+import { crc32, deflateSync } from "node:zlib";
 import type { Page } from "playwright-core";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { withoutGitVariables } from "../repo-recipe.ts";
 import {
   promptTimeoutMs,
   standInInput,
@@ -25,6 +29,7 @@ interface Row {
   iconDrawn: boolean;
 }
 
+const execute = promisify(execFile);
 const linesShortcut = process.platform === "darwin" ? "Meta+L" : "Control+Shift+L";
 const bracketed = (text: string) => `\u001b[200~${text}\u001b[201~`;
 const noLinesSentence = "Select some lines in the file first.";
@@ -556,6 +561,183 @@ async function sendsLines(session: AppSession): Promise<void> {
   assert.equal(await standInInput(session, from), "", "a hidden name reached the prompt");
 }
 
+function chunk(kind: string, body: Buffer): Buffer {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(body.length, 0);
+  head.write(kind, 4, "ascii");
+  const tail = Buffer.alloc(4);
+  tail.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), body])), 0);
+  return Buffer.concat([head, body, tail]);
+}
+
+function pngSignature(width: number, height: number): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+  ]);
+}
+
+function drawnPng(width: number, height: number): Buffer {
+  const rows = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const at = y * (width * 4 + 1) + 1 + x * 4;
+      rows.set([40 + x * 3, 90 + y * 4, 220, Math.round((255 * x) / width)], at);
+    }
+  }
+  return Buffer.concat([
+    pngSignature(width, height),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+async function sentenceReads(session: AppSession, testId: string, expected: string): Promise<void> {
+  const { page } = session;
+  let read = "";
+  await waitUntil(
+    async () => {
+      read =
+        (await page.getByTestId(testId).count()) === 0
+          ? ""
+          : await page.getByTestId(testId).innerText();
+      return read.includes(expected);
+    },
+    followMs,
+    () => `${testId} read ${JSON.stringify(read)} instead of ${JSON.stringify(expected)}`,
+  );
+}
+
+async function openRoot(session: AppSession, name: string): Promise<void> {
+  await rowOf(session, name, "after it was written");
+  await rowLocator(session.page, name).click();
+}
+
+export async function showsSentences(
+  session: AppSession,
+  shoot: (name: string) => Promise<void> = () => Promise.resolve(),
+): Promise<void> {
+  const { page } = session;
+  const folder = worktree(session);
+  await openFolder(session, "assets");
+  await rowLocator(page, "assets/pixel.png").click();
+  const image = page.getByTestId("file-image");
+  await image.waitFor({ timeout: waitMs });
+  await waitUntil(
+    async () =>
+      (await image.evaluate(
+        (element) => element instanceof HTMLImageElement && element.naturalWidth,
+      )) === 1,
+    waitMs,
+    "pixel.png did not draw at its real size",
+  );
+  assert.ok(
+    ((await image.getAttribute("src")) ?? "").startsWith("data:image/png;base64,"),
+    "the image was not drawn from a data address",
+  );
+  assert.equal(await image.getAttribute("alt"), "pixel.png", "the image has no accessible name");
+  await sentenceReads(session, "file-image-size", "1 × 1 pixels");
+  await writeFile(join(folder, "wide.png"), drawnPng(120, 80));
+  await openRoot(session, "wide.png");
+  await waitUntil(
+    async () =>
+      (await image.evaluate(
+        (element) => element instanceof HTMLImageElement && element.naturalWidth,
+      )) === 120,
+    waitMs,
+    "wide.png did not draw",
+  );
+  await sentenceReads(session, "file-image-size", "120 × 80 pixels");
+  await shoot("image");
+
+  await writeFile(join(folder, "many-lines.txt"), "x\n".repeat(30_000));
+  await openRoot(session, "many-lines.txt");
+  await sentenceReads(session, "file-sentence", "too large");
+  const started = Date.now();
+  await page.evaluate(() => 1);
+  assert.ok(Date.now() - started < 2000, "the window stalled on a large file");
+  await shoot("too-large");
+
+  await writeFile(join(folder, "has-nul.txt"), Buffer.from([0x61, 0x00, 0x62, 0x0a]));
+  await openRoot(session, "has-nul.txt");
+  await sentenceReads(session, "file-sentence", "binary file");
+  await shoot("binary");
+
+  await writeFile(join(folder, "latin.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+  await openRoot(session, "latin.txt");
+  await sentenceReads(session, "file-sentence", "isn't UTF-8 text");
+  await shoot("not-utf8");
+
+  await writeFile(join(folder, "bomb.png"), pngSignature(10_000, 10_000));
+  await openRoot(session, "bomb.png");
+  await sentenceReads(session, "file-sentence", "too large");
+  await shoot("too-many-pixels");
+
+  await writeFile(
+    join(folder, "huge.png"),
+    Buffer.concat([pngSignature(8, 8), Buffer.alloc(5_300_000)]),
+  );
+  await openRoot(session, "huge.png");
+  await sentenceReads(session, "file-sentence", "too large");
+  await shoot("too-many-bytes");
+
+  await writeFile(join(folder, "broken.png"), pngSignature(8, 8));
+  await openRoot(session, "broken.png");
+  await sentenceReads(session, "file-sentence", "couldn't draw this image");
+  await shoot("malformed-image");
+
+  await writeFile(
+    join(folder, "shape.svg"),
+    '<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4"/></svg>\n',
+  );
+  await openRoot(session, "shape.svg");
+  await editorShows(session, "<svg", "after opening shape.svg");
+  assert.equal(await page.getByTestId("file-image").count(), 0, "an svg was drawn as an image");
+
+  await symlink("many-lines.txt", join(folder, "pointer.txt"));
+  await openRoot(session, "pointer.txt");
+  await sentenceReads(session, "file-link-note", "This is a link");
+  await shoot("link");
+
+  if (process.platform !== "win32") {
+    await writeFile(join(folder, "locked.txt"), "secret\n", { mode: 0 });
+    await openRoot(session, "locked.txt");
+    await sentenceReads(session, "file-sentence", "can't open this file");
+    await shoot("unreadable");
+  }
+
+  await writeFile(join(folder, "swap.txt"), "about to be a folder\n");
+  await openRoot(session, "swap.txt");
+  await editorShows(session, "about to be", "after opening swap.txt");
+  await unlink(join(folder, "swap.txt"));
+  await mkdir(join(folder, "swap.txt"));
+  await sentenceReads(session, "file-sentence", "isn't there anymore");
+  await shoot("gone");
+
+  const nested = join(folder, "nested-repo");
+  await mkdir(nested);
+  await execute("git", ["init", "-b", "main", nested], {
+    env: { ...withoutGitVariables(process.env), ...session.gitEnv },
+    windowsHide: true,
+  });
+  await writeFile(join(nested, "inner.txt"), "inside\n");
+  const repository = await rowOf(session, "nested-repo", "after git init");
+  assert.equal(repository.kind, "repository", "the nested repository was not a repository row");
+  assert.ok(
+    repository.label.includes("repository of its own"),
+    `the nested repository row was named ${JSON.stringify(repository.label)}`,
+  );
+  await rowLocator(page, "nested-repo").click();
+  await rowOf(session, "nested-repo/inner.txt", "after opening the repository of its own");
+  await rowLocator(page, "nested-repo/inner.txt").click();
+  await editorShows(session, "inside", "after opening a file of a repository of its own");
+  await shoot("repository");
+}
+
 export const filesJourney: Journey = {
   name: "files",
   scenario: "mixed-changes",
@@ -578,6 +760,7 @@ export const filesJourney: Journey = {
     await remembersTabs(session);
     await findsByName(session);
     await sendsLines(session);
+    await showsSentences(session);
     await session.screenshot("files");
     assert.deepEqual(session.consoleErrors, [], "the window logged errors");
   },

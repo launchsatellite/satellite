@@ -19,6 +19,8 @@ export const viewerFailedSentence =
 export const linkNoteSentence = "This is a link, so the file shows where it points.";
 
 export const typeAFileNameSentence = "Type part of a file name.";
+export const imageBrokenSentence =
+  "Satellite couldn't draw this image, so there is nothing to show.";
 export const noFileLinesSentence = "Select some lines in the file first.";
 export const notTextSentence = "This file isn't shown as text, so there are no lines to send.";
 
@@ -36,7 +38,7 @@ const fileSentences: Record<SentenceKind, string> = {
   gone: "This file isn't there anymore.",
   changing: "This file changed while Satellite read it. It shows again on the next refresh.",
   hung: "Reading this file took too long. It tries again in a moment.",
-  unreadable: "This file's name isn't one Satellite can open.",
+  unreadable: "Satellite can't open this file.",
 };
 const folderSentences: Record<FolderProblem, string> = {
   missing: "This folder is gone.",
