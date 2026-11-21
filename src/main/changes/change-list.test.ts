@@ -404,7 +404,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       added: null,
       removed: null,
     });
-    expect(list.records[0]?.stamp).toMatch(/^new:\d+:\d+$/);
+    expect(list.records[0]?.stamp).toMatch(/^new:\d+:\d+:\d+$/);
   });
 
   it("counts untracked lines only within its budget", async () => {
@@ -475,7 +475,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       ["untracked file.txt", "A", false, 1, 0],
     ]);
     expect(list.more).toBe(0);
-    expect(list.records[2]?.stamp).toMatch(/^[0-9a-f]{40}:\d+:\d+$/);
+    expect(list.records[2]?.stamp).toMatch(/^[0-9a-f]{40}:\d+:\d+:\d+$/);
     expect(await readChangeList(repo, "HEAD", new AbortController().signal)).toEqual({
       kind: "unavailable",
       reason: "failed",
@@ -611,7 +611,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     const deleted = ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)];
     const rows = list.records.map((record) => [record.path, record.letter, record.stamp]);
     if (process.platform === "win32") expect(rows).toEqual([deleted]);
-    else expect(rows).toEqual([["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)], deleted]);
+    else expect(rows).toEqual([["dir", "A", expect.stringMatching(/^new:\d+:\d+:\d+$/)], deleted]);
   });
 
   it("lists a file git read through a link as deleted, with no counts from outside", async () => {
@@ -785,5 +785,80 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       fileCalls.lstat = undefined;
       vi.useRealTimers();
     }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "keeps a file whose name the reader refuses, with its own letter and a refused stamp",
+    async () => {
+      const { repo, git } = await repository();
+      await writeFile(join(repo, "tracked\\name.txt"), "one\n");
+      await git("add", ".");
+      await git("commit", "-q", "-m", "one");
+      await writeFile(join(repo, "tracked\\name.txt"), "two\n");
+      await writeFile(join(repo, "new\\file.sh"), "x\n");
+      await writeFile(join(repo, "plain.txt"), "y\n");
+      const list = await listed(repo, await git("rev-parse", "HEAD"));
+      expect(list.records.map((record) => [record.path, record.letter])).toEqual([
+        ["new\\file.sh", "A"],
+        ["plain.txt", "A"],
+        ["tracked\\name.txt", "M"],
+      ]);
+      expect(list.records[0]?.stamp).toMatch(/:refused$/);
+      expect(list.records[2]?.stamp).toMatch(/:refused$/);
+    },
+  );
+
+  it("counts names that decode to the same text instead of collapsing them silently", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "a.txt"), "a\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    gitCalls.diff = output(
+      raw("100644 100644", one, zero, "M", "a\ufffd.txt"),
+      raw("100644 100644", one, zero, "M", "a\ufffd.txt"),
+      raw("100644 100644", one, zero, "M", "a\ufffd.txt"),
+      stat("1", "1", "a\ufffd.txt"),
+      stat("1", "1", "a\ufffd.txt"),
+      stat("1", "1", "a\ufffd.txt"),
+    );
+    try {
+      const list = await listed(repo, await git("rev-parse", "HEAD"));
+      expect(list.records.map((record) => record.path)).toEqual(["a\ufffd.txt"]);
+      expect(list.more).toBe(2);
+    } finally {
+      gitCalls.diff = undefined;
+    }
+  });
+
+  it("keeps a binary file in the middle of a merge in the list", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "b.bin"), Buffer.from([0, 1, 2, 3]));
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await git("switch", "-q", "-c", "other");
+    await writeFile(join(repo, "b.bin"), Buffer.from([0, 9, 9, 9]));
+    await git("commit", "-q", "-am", "other");
+    await git("switch", "-q", "main");
+    await writeFile(join(repo, "b.bin"), Buffer.from([0, 7, 7, 7]));
+    await git("commit", "-q", "-am", "main");
+    await expect(git("merge", "other")).rejects.toThrow();
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.letter])).toEqual([["b.bin", "U"]]);
+  });
+
+  it("gives a file a new stamp when it is rewritten to the same size with its time put back", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "f.txt"), "safe = 2\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "f.txt"), "safe = 3\n");
+    const when = new Date("2020-01-01T00:00:00Z");
+    await utimes(join(repo, "f.txt"), when, when);
+    const head = await git("rev-parse", "HEAD");
+    const first = (await listed(repo, head)).records[0]?.stamp;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeFile(join(repo, "f.txt"), "evil = 9\n");
+    await utimes(join(repo, "f.txt"), when, when);
+    expect((await listed(repo, head)).records[0]?.stamp).not.toBe(first);
   });
 });

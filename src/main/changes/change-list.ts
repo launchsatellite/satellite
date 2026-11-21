@@ -218,13 +218,18 @@ function isNamed(change: ListedChange): boolean {
   );
 }
 
-function oncePerPath(changes: ListedChange[]): ListedChange[] {
+function oncePerPath(changes: ListedChange[]): { kept: ListedChange[]; collapsed: number } {
   const seen = new Set<string>();
-  return changes.filter((change) => {
-    if (seen.has(change.path)) return false;
+  let collapsed = 0;
+  const kept = changes.filter((change) => {
+    if (seen.has(change.path)) {
+      if (change.path.includes("\ufffd")) collapsed += 1;
+      return false;
+    }
     seen.add(change.path);
     return true;
   });
+  return { kept, collapsed };
 }
 
 function sizeOfStamp(stamp: string | undefined): number | undefined {
@@ -237,7 +242,7 @@ async function withoutTouched(
   changes: ListedChange[],
   signal: AbortSignal,
 ): Promise<ListedChange[]> {
-  const candidates = changes.filter((change) => change.statDirty === true);
+  const candidates = changes.filter((change) => change.statDirty === true && change.letter !== "U");
   if (candidates.length === 0) return changes;
   const stamps = await worktreeStamps(
     folder,
@@ -391,17 +396,14 @@ export async function readChangeList(
   const untracked = fields.map(untrackedChange).sort(byPath);
   await countLines(folder, untracked, signal);
   if (signal.aborted) return failed;
-  const merged = await withoutTouched(
-    folder,
-    oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]),
-    signal,
-  );
+  const once = oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]);
+  const merged = await withoutTouched(folder, once.kept, signal);
   const named = merged.filter(isNamed).sort(byPath);
   const kept = named.slice(0, changesLimits.files);
   return {
     kind: "files",
     records: await stamped(folder, kept, signal),
-    more: named.length - kept.length + parsed.more,
+    more: named.length - kept.length + parsed.more + once.collapsed,
     longPaths: merged.length - named.length,
   };
 }

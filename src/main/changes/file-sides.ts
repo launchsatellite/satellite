@@ -163,14 +163,17 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   return sameFolder(recheck, folder) ? read : refused;
 }
 
+const refusedStamp = "refused";
+
 async function fileStamp(realRoot: string | undefined, path: string): Promise<string> {
-  if (realRoot === undefined || !isChangePath(path)) return "gone";
+  if (!isChangePath(path)) return refusedStamp;
+  if (realRoot === undefined) return "gone";
   const parent = posix.dirname(path);
   if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
   try {
     const entry = await lstat(join(realRoot, path), { bigint: true });
     if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
-    return `${String(entry.size)}:${String(entry.mtimeNs)}`;
+    return `${String(entry.size)}:${String(entry.mtimeNs)}:${String(entry.ctimeNs)}`;
   } catch {
     return "gone";
   }
