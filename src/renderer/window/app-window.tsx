@@ -729,6 +729,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               update={update}
               listed={listedWorkspace}
               list={changes.list}
+              finished={finishedHere}
               onCentre={setCentreView}
             />
           ) : (

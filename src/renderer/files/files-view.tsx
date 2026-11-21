@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type {
   ChangedFile,
   ChangesList,
@@ -11,6 +11,7 @@ import { FilePane } from "./file-pane.tsx";
 import { FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
 import { useFileTabs } from "./use-file-tabs.ts";
+import { useFiles } from "./use-files.ts";
 import { useFolders } from "./use-folders.ts";
 
 interface FilesViewProps {
@@ -19,13 +20,27 @@ interface FilesViewProps {
   update: (change: (current: InterfaceState) => InterfaceState, persist: boolean) => void;
   listed: (ref: WorkspaceRef) => boolean;
   list: ChangesList | undefined;
+  finished: string;
   onCentre: (view: CentreView) => void;
 }
 
-export function FilesView({ workspace, state, update, listed, list, onCentre }: FilesViewProps) {
+export function FilesView({
+  workspace,
+  state,
+  update,
+  listed,
+  list,
+  finished,
+  onCentre,
+}: FilesViewProps) {
   const tabs = useFileTabs(state, update, workspace, listed);
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
-  const { open, listings, setOpen } = useFolders(workspace, activePath);
+  const { open, setOpen, closeAll } = useFolders(activePath);
+  const { listings, file, error } = useFiles(workspace, open, activePath, finished);
+  useEffect(() => {
+    const gone = open.filter((path) => path !== "" && listings.get(path)?.state === "missing");
+    if (gone.length > 0) closeAll(gone);
+  }, [open, listings, closeAll]);
   const changes = list?.changes;
   const changed = useMemo(() => {
     const files = changes?.kind === "files" ? changes.files : [];
@@ -73,8 +88,16 @@ export function FilesView({ workspace, state, update, listed, list, onCentre }: 
                 onClose={tabs.close}
               />
             )}
+            {error !== null && (
+              <p
+                data-testid="files-error"
+                className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
+              >
+                {error}
+              </p>
+            )}
             <div className="min-h-0 flex-1">
-              <FilePane workspace={workspace} path={activePath} />
+              <FilePane file={file} path={activePath} />
             </div>
           </div>
         </div>
