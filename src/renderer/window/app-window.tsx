@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   interfaceLimits,
+  type ChangesView as ChangesShown,
   type InterfaceState,
   type ProjectView,
   type ThemeChoice,
@@ -8,6 +9,10 @@ import {
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
+import { ChangesView } from "../changes/changes-view.tsx";
+import type { ShownText } from "../changes/file-diff.tsx";
+import { useChanges } from "../changes/use-changes.ts";
+import type { DiffHandle } from "../diff/diff-view.tsx";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
@@ -18,7 +23,6 @@ import { Sidebar } from "../projects/sidebar.tsx";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
-import { SampleDiff } from "../proving/sample-diff.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
@@ -258,6 +262,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const folderHere = selectedProject?.missing === null;
+  const [changesView, setChangesView] = useState<ChangesShown>("branch");
+  const [diffInline, setDiffInline] = useState(false);
+  const [shownText, setShownText] = useState<ShownText | null>(null);
+  const diffHandle = useRef<DiffHandle>(null);
+  const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
+  const changes = useChanges(changesHere, changesView);
+  const changesShown = changesHere !== null;
+  const textShown = changesShown && shownText !== null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -518,6 +530,38 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: !state.notifications,
             run: notifications(true),
           },
+          {
+            id: "changes.branch",
+            title: "Show the branch's changes",
+            available: changesShown && changesView === "uncommitted",
+            run: () => {
+              setChangesView("branch");
+            },
+          },
+          {
+            id: "changes.uncommitted",
+            title: "Show uncommitted changes",
+            available: changesShown && changesView === "branch",
+            run: () => {
+              setChangesView("uncommitted");
+            },
+          },
+          {
+            id: "changes.inline",
+            title: "Show the diff inline",
+            available: textShown && !diffInline,
+            run: () => {
+              setDiffInline(true);
+            },
+          },
+          {
+            id: "changes.side-by-side",
+            title: "Show the diff side by side",
+            available: textShown && diffInline,
+            run: () => {
+              setDiffInline(false);
+            },
+          },
         ],
         notify,
         modal,
@@ -552,6 +596,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     newestTab,
     newestTerminal,
     openFromInbox,
+    changesShown,
+    changesView,
+    textShown,
+    diffInline,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -565,7 +613,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     }
     return (
       <>
-        <WorkspaceHeader project={selectedProject} workspace={selectedWorkspace} />
+        <WorkspaceHeader
+          project={selectedProject}
+          workspace={selectedWorkspace}
+          base={changes.list?.base ?? null}
+          ahead={changes.list === undefined ? selectedWorkspace.ahead : changes.list.ahead}
+          behind={changes.list === undefined ? selectedWorkspace.behind : changes.list.behind}
+        />
         {selectedProject.missing !== null ? (
           <FolderMissing
             name={selectedProject.name}
@@ -573,9 +627,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             missing={selectedProject.missing}
           />
         ) : (
-          <div className="min-h-0 flex-1">
-            <SampleDiff />
-          </div>
+          changesHere !== null && (
+            <ChangesView
+              workspace={changesHere}
+              view={changesView}
+              onView={setChangesView}
+              inline={diffInline}
+              onInline={setDiffInline}
+              list={changes.list}
+              error={changes.error}
+              diffHandle={diffHandle}
+              onShown={setShownText}
+            />
+          )
         )}
       </>
     );

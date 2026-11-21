@@ -210,7 +210,7 @@ The Changes view reads what a workspace changed. Everything runs in the backgrou
 
 ## Diff
 
-The centre column shows a read-only diff of two texts with Monaco's diff editor, `DiffView` in `src/renderer/diff/`, the viewer Changes and Pull request share. It takes the two texts, the file's path, inline or side by side and the two sides' accessible labels, and hands its owner the selected lines and their side.
+The Changes tab shows a read-only diff of two texts with Monaco's diff editor, `DiffView` in `src/renderer/diff/`, the viewer Changes and Pull request share. It is its own chunk, loaded the first time a diff shows, so the window's start never pays for the editor. It takes the two texts, the file's path, inline or side by side and the two sides' accessible labels, and hands its owner the selected lines and their side.
 
 - **Only what a read-only diff needs.** The interface imports `monaco-editor/editor/editor.api`, its codicon styles, the diff editor's own contribution, which brings the accessible diff viewer on F7 and Shift+F7, the unicode highlighter and the language registrations. No hover, link, context menu, code action, suggestion, go to, find, clipboard menu, drag and drop or command palette is imported, and the options turn links, the context menu, dragging and dropping off as well, so nothing in a file can become markup, a link, a command or a hover. The bundle carries none of those actions. Copy works through the browser's own copy of the selection.
 - **Languages load when used.** Each language registers only its name, extensions and file names, and its Monarch tokenizer is its own chunk that loads the first time a model of that language is made. A file's language is the first whose file names hold its name or whose extensions hold its lowercased extension, else plain text. No language service or language worker runs, so nothing evaluates a string, and the tokenizers build their patterns with `RegExp`, which `script-src 'self'` allows.
@@ -254,12 +254,12 @@ The release workflow, `.github/workflows/release.yml`, runs the unit tests and p
 | `src/renderer/entry.tsx` | Loads the five font families and the saved interface state, then renders the window |
 | `src/renderer/bridge/` | `invoke` and `subscribe`, the typed client that checks every answer and event |
 | `src/renderer/projects/` | The sidebar, the workspace header, the overlay shown while a folder is dragged over the window and the hook that lists, adds and removes projects and adds and drops workspaces |
-| `src/renderer/proving/` | The sample diff that proves the diff end to end. A feature that takes over the centre column replaces it |
+| `src/renderer/changes/` | The Changes tab, the hook that asks for a workspace's list, the file list, the diff of the selected file, which loads the diff view only when a diff first shows, and every sentence the tab draws |
 | `src/renderer/sessions/` | The sessions pane with its tabs, the hook that keeps every session of the page load and its status, the rule that draws a workspace's most urgent session as one pixel, the dialog that asks before a link opens, Send to Claude Code and `focus-session.ts`, the window event that puts focus in one session's terminal without typing anything |
 | `src/renderer/inbox/` | `inbox.ts` with the rows derived from the session tabs, their order, their sentence and the workspace a notification click may open, and `inbox-list.tsx`, the inbox at the top of the sidebar |
 | `src/renderer/terminal/` | The terminal view, its theme from the app tokens, its font, the keys it sends for a new line and an image paste, `held-keys.ts`, which drops a key held from before the terminal took focus, and the quoting of dropped paths |
 | `src/renderer/diff/` | The read-only diff view, the language a path maps to, and its Monaco worker and theme |
-| `src/renderer/window/` | The three columns, their dividers, how widths fit the window, the empty states and the interface state hook |
+| `src/renderer/window/` | The three columns, their dividers, how widths fit the window, the centre column's tab strip, the empty states and the interface state hook |
 | `src/renderer/commands/` | The command registry, the platform shortcut matcher and the provider that runs a command from its shortcut or its button |
 | `src/renderer/palette/` | The command menu and quick switcher, and the fuzzy ranking they share |
 | `src/renderer/setup/` | The tool check card, shown on first run and from the command menu |

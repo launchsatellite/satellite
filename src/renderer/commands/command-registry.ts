@@ -22,7 +22,11 @@ export type CommandId =
   | "theme.dark"
   | "notifications.off"
   | "notifications.on"
-  | "inbox.newest";
+  | "inbox.newest"
+  | "changes.branch"
+  | "changes.uncommitted"
+  | "changes.inline"
+  | "changes.side-by-side";
 
 export interface Command {
   id: CommandId;
