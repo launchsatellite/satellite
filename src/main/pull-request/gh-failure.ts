@@ -2,8 +2,10 @@ import type { PullRequestTrouble } from "../../shared/bridge-contract.ts";
 import type { StopReason, ToolRun } from "../platform/tools.ts";
 
 const signedOutStart = /^(?:To get started with GitHub CLI, please run:|HTTP 401[: ])/;
-const otherHostStart =
-  "none of the git remotes configured for this repository point to a known GitHub host";
+const otherHostStarts = [
+  "none of the git remotes configured for this repository point to a known GitHub host",
+  "set the GH_HOST environment variable to specify which GitHub host to use",
+];
 const rateLimitStart =
   /^(?:HTTP \d{3}: |GraphQL: )?(?:API rate limit|You have exceeded a (?:secondary )?rate limit)/i;
 const offlineStart = /^(?:error connecting to |dial tcp|(?:Get|Post|Head) "https:\/\/[^"\n]+": )/;
@@ -23,7 +25,7 @@ export function ghFailure(
   const first = stderr.split("\n", 1)[0] ?? "";
   if (exitCode === signedOutExit) return "signed-out";
   if (stderr.startsWith("no pull requests found")) return "none";
-  if (stderr.startsWith(otherHostStart)) return "other-host";
+  if (otherHostStarts.some((start) => stderr.startsWith(start))) return "other-host";
   if (stderr.startsWith("no git remotes found")) return "not-pushed";
   if (stderr.startsWith("Unknown JSON field") || stderr.startsWith("unknown flag")) return "gh-old";
   if (signedOutStart.test(stderr)) return "signed-out";
