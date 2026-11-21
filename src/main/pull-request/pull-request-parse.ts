@@ -335,17 +335,17 @@ export function parseThreads(stdout: string, place: PullRequestPlace): ReadDetai
   const pullRequest = parsed.success ? parsed.data.data?.repository?.pullRequest : undefined;
   if (pullRequest === undefined || pullRequest === null) return null;
   const budget = { left: pullRequestLimits.detailChars };
+  const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
+    0,
+    pullRequestLimits.threads,
+  );
+  const threads = threadNodes.map((thread) => threadOf(thread, place, budget));
   const reviews = reviewsOf(pullRequest.reviews, budget);
   const nodes = lastOf(each(pullRequest.comments?.nodes, commentNode), pullRequestLimits.comments);
   const comments = nodes.flatMap((node) => {
     const kept = withinBudget(commentOf(node, node.createdAt), budget);
     return kept === null ? [] : [kept];
   });
-  const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
-    0,
-    pullRequestLimits.threads,
-  );
-  const threads = threadNodes.map((thread) => threadOf(thread, place, budget));
   return {
     kind: "read",
     reviews: reviews.reviews,

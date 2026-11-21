@@ -436,10 +436,12 @@ describe("parseThreads", () => {
     const total = bodies.reduce((sum, { body }) => sum + body.length, 0);
     expect(total).toBeLessThanOrEqual(pullRequestLimits.detailChars);
     expect(total).toBe(pullRequestLimits.detailChars);
-    expect(detail?.comments).toHaveLength(20);
-    expect(detail?.moreComments).toBe(30);
-    expect(detail?.threads[0]?.comments).toHaveLength(0);
-    expect(detail?.threads[0]?.moreComments).toBe(20);
+    expect(detail?.threads[0]?.comments).toHaveLength(20);
+    expect(detail?.threads[0]?.moreComments).toBe(0);
+    expect(detail?.threads[1]?.comments).toHaveLength(0);
+    expect(detail?.threads[1]?.moreComments).toBe(20);
+    expect(detail?.comments).toHaveLength(0);
+    expect(detail?.moreComments).toBe(50);
     expect(JSON.stringify(detail).length).toBeLessThan(pullRequestLimits.detailChars + 200_000);
     const checked = pullRequestAnswer.safeParse({
       ...read(view())?.found,
