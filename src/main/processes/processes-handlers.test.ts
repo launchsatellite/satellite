@@ -7,7 +7,7 @@ import { parseLsof } from "../platform/listening-ports.ts";
 import { fixtureNow, lsofMacos, psMacos } from "../platform/process-fixtures.ts";
 import { type ProcessEntry, parsePsTable, readProcessTable } from "../platform/process-table.ts";
 import type { SessionRoot } from "./listed-processes.ts";
-import { StopRefused } from "../platform/process-tree.ts";
+import { StopNotConfirmed, StopRefused } from "../platform/process-tree.ts";
 import { createProcesses, type RunningRoot } from "./processes-handlers.ts";
 
 const project = "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6";
@@ -239,6 +239,35 @@ describe("processes.stop", () => {
     tick(1500);
     await expect(stop(9999, 1_000_000)).rejects.toMatchObject({ code: "not-found" });
     expect(readTable).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not answer not-found from a table that failed to read a moment ago", async () => {
+    const { stop, readTable, table, end, tick } = setup();
+    readTable.mockResolvedValueOnce([]);
+    await expect(stop(4402, startOf(table, 4402))).rejects.toMatchObject({ code: "failed" });
+    tick(400);
+    await stop(4402, startOf(table, 4402));
+    expect(end).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers failed with its sentence when the stop could not be confirmed", async () => {
+    const { stop, table } = setup({
+      end: () => Promise.reject(new StopNotConfirmed("still running")),
+    });
+    await expect(stop(4402, startOf(table, 4402))).rejects.toMatchObject({
+      code: "failed",
+      message: "Satellite couldn't confirm that the process stopped. Check the list.",
+    });
+  });
+
+  it("shows the short name when the second read gives an empty command", async () => {
+    const { list, readCommandLines } = setup({
+      table: parsePsTable(psMacos).map((entry) =>
+        entry.pid === 4402 ? { ...entry, command: "node" } : entry,
+      ),
+    });
+    readCommandLines.mockResolvedValueOnce(new Map([[4402, ""]]));
+    expect((await list()).rows.find((row) => row.pid === 4402)?.command).toBe("node");
   });
 
   it("refuses a second stop while one runs", async () => {

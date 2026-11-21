@@ -79,7 +79,8 @@ function rowOf(
   home: string,
 ): ProcessRow | undefined {
   const { entry, root, subtree } = owned;
-  const command = shownCommand(commands.get(entry.pid) ?? entry.command, home);
+  const full = commands.get(entry.pid);
+  const command = shownCommand(full === undefined || full === "" ? entry.command : full, home);
   const parsed = processRow.safeParse({
     workspace: root.workspace,
     session: root.session,
@@ -199,10 +200,10 @@ export function createProcesses({
         stopping = true;
         try {
           const table = await readTable();
-          recent = { table, at: now() };
           if (table.length === 0) {
             throw new BridgeFailure("failed", unreadableSentence);
           }
+          recent = { table, at: now() };
           const owned = ownedProcess(table, own, pid, started, now());
           if (owned === undefined) {
             throw new BridgeFailure("not-found", "That process already ended.");

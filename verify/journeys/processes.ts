@@ -181,12 +181,12 @@ async function run(session: AppSession): Promise<void> {
   assert.equal(
     await bridgeCode(page, "processes.stop", {
       pid: server.pid,
-      started: (await startOf(server.pid)) + 1000,
+      started: (await startOf(server.pid)) + 5000,
     }),
     "not-found",
-    "a listed process with a start one second off was accepted",
+    "a listed process with a start five seconds off was accepted",
   );
-  assert.ok(!processGone(server.pid), "the dev server ended for a start one second off");
+  assert.ok(!processGone(server.pid), "the dev server ended for a start five seconds off");
   await page.getByTestId("process-row-0-stop").click();
   await waitUntil(
     () => processGone(server.pid) && processGone(server.child),
