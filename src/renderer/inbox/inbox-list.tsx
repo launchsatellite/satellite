@@ -107,7 +107,10 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
           Nothing needs you right now.
         </p>
       ) : (
-        <ul ref={list} className="flex flex-col gap-px">
+        <ul
+          ref={list}
+          className="-m-[3px] flex max-h-[33vh] flex-col gap-px overflow-y-auto p-[3px]"
+        >
           {shown.map(({ key, row, testId, label, project, sentence }) => {
             const { projectId, workspace } = row.workspace;
             const current = selected?.projectId === projectId && selected.workspace === workspace;
@@ -135,17 +138,17 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                     <StatusPixel state="needs-you" size={6} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
-                    <span className="flex min-w-0 items-baseline gap-[6px]">
-                      <span className="min-w-0 truncate font-medium text-fg">{label}</span>
-                      <span className="max-w-1/2 min-w-0 flex-none truncate text-dim">
-                        {project}
-                      </span>
-                    </span>
                     <span
-                      data-testid={`${testId}-reason`}
-                      className="min-w-0 truncate text-[12.5px] text-fg2"
+                      data-testid={`${testId}-name`}
+                      className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
                     >
-                      {sentence}
+                      {label}
+                    </span>
+                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12.5px]">
+                      <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
+                      <span data-testid={`${testId}-reason`} className="flex-none text-fg2">
+                        {sentence}
+                      </span>
                     </span>
                   </span>
                 </button>
