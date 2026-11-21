@@ -168,4 +168,61 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     reply(tree);
     expect(await waiting).toEqual({ kind: "plain" });
   });
+
+  it("parses each of a hundred mounted bodies once and then goes idle", async () => {
+    const posts: string[] = [];
+    const parser = parserOver((handlers) => {
+      const real = spawnThread(handlers);
+      return {
+        post: (text) => {
+          posts.push(text);
+          real.post(text);
+        },
+        stop: real.stop,
+      };
+    });
+    const texts = Array.from({ length: 100 }, (_, at) => `# body ${String(at)}`);
+    await Promise.all(texts.map((text, at) => answer(parser, text, `owner-${String(at)}`)));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(posts).toHaveLength(100);
+    for (const text of texts) expect(parser.read(text)?.kind).toBe("tree");
+  });
+
+  it("draws the rest as plain text once a few bodies have missed the deadline", async () => {
+    const hostile = Array.from({ length: 10 }, (_, at) =>
+      `${"*_".repeat(9000)}${String(at)}`.slice(0, 19_000),
+    );
+    const ordinary = Array.from({ length: 5 }, (_, at) => `# fine ${String(at)}`);
+    const posts: string[] = [];
+    const parser = parserOver((handlers) => {
+      const real = spawnThread(handlers);
+      return {
+        post: (text) => {
+          posts.push(text);
+          real.post(text);
+        },
+        stop: real.stop,
+      };
+    });
+    const began = performance.now();
+    await Promise.all(
+      [...hostile, ...ordinary].map((text, at) => answer(parser, text, `owner-${String(at)}`)),
+    );
+    expect(performance.now() - began).toBeLessThan(3 * (deadlineMs + 700) + 1000);
+    expect(posts.filter((text) => hostile.includes(text)).length).toBeLessThanOrEqual(3);
+    for (const text of hostile) expect(parser.read(text)).toEqual({ kind: "plain" });
+  });
+
+  it("tries a small body that missed the deadline again when it is opened again", async () => {
+    const posts: string[] = [];
+    const parser = parserOver(() => ({
+      post: (text) => posts.push(text),
+      stop: () => undefined,
+    }));
+    expect(await answer(parser, "# one", "view")).toEqual({ kind: "plain" });
+    parser.drop("view");
+    expect(parser.read("# one")).toBeUndefined();
+    void answer(parser, "# one", "view");
+    expect(posts).toEqual(["# one", "# one"]);
+  });
 });

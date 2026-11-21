@@ -18,32 +18,49 @@ interface Running {
 }
 
 const plain: Parsed = { kind: "plain" };
-const kept = 64;
+const reserve = 64;
+const smallBody = 4000;
+const missBudget = 3;
 
 export function createMarkdownParser(
   spawn: (handlers: WorkerHandlers) => ParseWorker,
   deadlineMs: number,
 ) {
   const parsed = new Map<string, Parsed>();
+  const missed = new Map<string, Parsed>();
+  let misses = 0;
   const wants = new Map<string, string>();
   const listeners = new Set<() => void>();
   let idle: ParseWorker | null = null;
   let running: Running | null = null;
 
-  const settle = (text: string, answer: Parsed) => {
-    parsed.delete(text);
-    parsed.set(text, answer);
-    for (const oldest of parsed.keys()) {
-      if (parsed.size <= kept) break;
-      parsed.delete(oldest);
+  const settle = (text: string, answer: Parsed, retry: "no" | "miss" | "skip" = "no") => {
+    if (retry === "skip" || (retry === "miss" && text.length <= smallBody)) {
+      missed.set(text, answer);
+    } else {
+      parsed.delete(text);
+      parsed.set(text, answer);
+      const wanted = new Set(wants.values());
+      for (const oldest of parsed.keys()) {
+        if (parsed.size <= reserve) break;
+        if (!wanted.has(oldest)) parsed.delete(oldest);
+      }
     }
     for (const listener of listeners) listener();
   };
 
   const pump = (): void => {
     if (running !== null) return;
-    const text = [...wants.values()].find((want) => !parsed.has(want));
-    if (text === undefined) return;
+    const text = [...wants.values()].find((want) => !parsed.has(want) && !missed.has(want));
+    if (text === undefined) {
+      misses = 0;
+      return;
+    }
+    if (misses >= missBudget) {
+      settle(text, plain, "skip");
+      pump();
+      return;
+    }
     const worker =
       idle ??
       spawn({
@@ -63,7 +80,7 @@ export function createMarkdownParser(
           current.worker.stop();
           running = null;
           idle = null;
-          settle(current.text, plain);
+          settle(current.text, plain, "miss");
           pump();
         },
       });
@@ -71,7 +88,8 @@ export function createMarkdownParser(
     const timer = setTimeout(() => {
       worker.stop();
       running = null;
-      settle(text, plain);
+      misses += 1;
+      settle(text, plain, "miss");
       pump();
     }, deadlineMs);
     running = { text, worker, timer };
@@ -80,7 +98,7 @@ export function createMarkdownParser(
 
   return {
     read: (text: string): Parsed | undefined => {
-      return text.length > longestDrawn ? plain : parsed.get(text);
+      return text.length > longestDrawn ? plain : (parsed.get(text) ?? missed.get(text));
     },
     want: (owner: string, text: string): void => {
       wants.set(owner, text);
@@ -88,6 +106,8 @@ export function createMarkdownParser(
     },
     drop: (owner: string): void => {
       wants.delete(owner);
+      const wanted = new Set(wants.values());
+      for (const text of missed.keys()) if (!wanted.has(text)) missed.delete(text);
     },
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);

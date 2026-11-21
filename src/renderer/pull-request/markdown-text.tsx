@@ -37,8 +37,12 @@ export function MarkdownText({ text, onLink }: MarkdownTextProps) {
     };
   }, [owner, text]);
   const parsed = useSyncExternalStore(parser.subscribe, () => parser.read(text));
-  if (parsed === undefined) return <div data-testid="markdown" className="min-w-0" />;
   return (
-    <MarkdownBody text={text} tree={parsed.kind === "tree" ? parsed.tree : null} onLink={onLink} />
+    <MarkdownBody
+      text={text}
+      tree={parsed?.kind === "tree" ? parsed.tree : null}
+      waiting={parsed === undefined}
+      onLink={onLink}
+    />
   );
 }

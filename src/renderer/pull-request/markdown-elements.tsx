@@ -4,7 +4,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { revealLines } from "../../shared/visible-text.ts";
 
-export const plainSentence = "Shown as plain text because it is too large to draw safely.";
+export const plainSentence = "Shown as plain text because it could not be drawn safely in time.";
 
 const InsideLink = createContext(false);
 
@@ -132,10 +132,10 @@ function ImageLink({
   );
 }
 
-function PlainText({ text }: { text: string }) {
+function PlainText({ text, waiting }: { text: string; waiting: boolean }) {
   return (
     <>
-      <p className="text-[12px] text-dim">{plainSentence}</p>
+      {!waiting && <p className="text-[12px] text-dim">{plainSentence}</p>}
       <pre className="my-2 font-mono text-[12px] break-words whitespace-pre-wrap text-fg">
         {revealLines(text).text}
       </pre>
@@ -146,10 +146,12 @@ function PlainText({ text }: { text: string }) {
 export function MarkdownBody({
   text,
   tree,
+  waiting = false,
   onLink,
 }: {
   text: string;
   tree: Root | null;
+  waiting?: boolean;
   onLink: (address: string) => void;
 }) {
   const drawn = useMemo(
@@ -168,7 +170,7 @@ export function MarkdownBody({
   );
   return (
     <div data-testid="markdown" className="min-w-0 text-[13px] leading-[1.5] text-fg">
-      {drawn ?? <PlainText text={text} />}
+      {drawn ?? <PlainText text={text} waiting={waiting} />}
     </div>
   );
 }
