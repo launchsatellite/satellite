@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
-import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
@@ -43,14 +43,13 @@ function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]):
         (listed) => listed.key === row.workspace.workspace,
       );
       if (project === undefined || workspace === undefined) return [];
-      const parent = shownParent(project, repeated);
       return [
         {
           key: `${project.id}/${workspace.key}`,
           row,
           testId: `inbox-${project.name}-${workspace.name ?? "main"}`,
           label: rowLabel(project, workspace),
-          project: parent === undefined ? project.name : `${project.name} in ${parent}`,
+          project: shownProject(project, repeated),
           sentence: reasonSentence(row),
         },
       ];

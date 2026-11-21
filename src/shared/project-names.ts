@@ -26,3 +26,11 @@ export function shownParent(
 ): string | undefined {
   return repeated.has(readAs(project.name)) && project.parent !== "" ? project.parent : undefined;
 }
+
+export function shownProject(project: NamedProject, repeated: ReadonlySet<string>): string {
+  const name = noticeName(project.name.normalize("NFC"), "a project");
+  const parent = shownParent(project, repeated);
+  return parent === undefined
+    ? name
+    : `${name} in ${noticeName(parent.normalize("NFC"), "a folder")}`;
+}

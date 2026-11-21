@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { repeatedNames, shownParent } from "./project-names.ts";
+import { repeatedNames, shownParent, shownProject } from "./project-names.ts";
 
 function parents(names: readonly string[]): (string | undefined)[] {
   const projects = names.map((name, index) => ({ name, parent: `folder${String(index)}` }));
@@ -21,5 +21,19 @@ describe("shownParent", () => {
 
   it("shows no parent for names that read apart", () => {
     expect(parents(["app", "apps", "cafe"])).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("draws the cleaned name it compares, so a direction mark cannot pass for another name", () => {
+    const projects = [
+      { name: "\u202eppa", parent: "one" },
+      { name: "app", parent: "two" },
+      { name: "ppa", parent: "<\u2066>" },
+    ];
+    const repeated = repeatedNames(projects);
+    expect(projects.map((project) => shownProject(project, repeated))).toEqual([
+      "ppa in one",
+      "app",
+      "ppa in a folder",
+    ]);
   });
 });
