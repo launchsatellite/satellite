@@ -337,7 +337,7 @@ async function switchedOff(session: AppSession): Promise<void> {
   await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1, 0, 1, 0], "after alpha was done,");
 }
 
-async function askedAtQuit(session: AppSession): Promise<void> {
+async function offWhileShown(session: AppSession): Promise<void> {
   const { page } = session;
   await commandMenu(session);
   await page.getByTestId("command-notifications-on").click();
@@ -355,6 +355,11 @@ async function askedAtQuit(session: AppSession): Promise<void> {
   await commandMenu(session);
   await page.getByTestId("command-notifications-off").click();
   await toastReads(session, turnedOff, "after turning notifications off again,");
+  await recorded(
+    session,
+    [alphaNotice, closed, alphaNotice, closed, foldedNotice, closed, betaNotice, closed],
+    "after notifications were turned off with beta's notification shown,",
+  );
 }
 
 async function keptAfterRestart(session: AppSession): Promise<void> {
@@ -364,7 +369,7 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
   await recorderAnswers(
     session,
     before,
-    [cleared, closed, cleared],
+    [cleared, cleared],
     "after quitting with beta asking and launching again",
   );
   const saved = savedInterface.parse(
@@ -399,7 +404,7 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
   const shown = shownOf((await session.notices()).slice(before));
   assert.deepEqual(
     shown,
-    [closed],
+    [],
     `with notifications kept off and beta asking after the restart, the recorder held ${JSON.stringify(shown)}`,
   );
 }
@@ -413,7 +418,7 @@ export const inboxJourney: Journey = {
     await openAndAnswer(session, asked);
     await askAgainAndFold(session);
     await switchedOff(session);
-    await askedAtQuit(session);
+    await offWhileShown(session);
     await keptAfterRestart(session);
   },
 };

@@ -271,6 +271,18 @@ describe("createNotices", () => {
     expect(shown).toHaveLength(1);
   });
 
+  it("closes the notification it shows when notifications are turned off", async () => {
+    const { shown, notices } = setup();
+    notices.update([need("1")]);
+    await settle();
+    expect(shown[0]?.close).not.toHaveBeenCalled();
+    notices.setEnabled(false);
+    expect(shown[0]?.close).toHaveBeenCalledOnce();
+    notices.setEnabled(false);
+    notices.update([]);
+    expect(shown[0]?.close).toHaveBeenCalledOnce();
+  });
+
   it("stays off once stopped for quitting, whatever is saved afterwards", async () => {
     const { shown, badges, notices } = setup();
     notices.update([need("1")]);

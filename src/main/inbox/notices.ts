@@ -138,7 +138,9 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     },
     setEnabled(on) {
       enabled = on;
-      if (!on) forgetWaiting();
+      if (on) return;
+      forgetWaiting();
+      closeShown();
     },
     stop() {
       stopped = true;
