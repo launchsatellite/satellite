@@ -426,7 +426,6 @@ export const processRow = z.strictObject({
     .max(processesLimits.ports),
 });
 export type ProcessRow = z.output<typeof processRow>;
-export type ProcessesList = BridgeResponse<"processes.list">;
 const fingerprint = z.string().regex(/^[0-9a-f]{64}$/);
 const startBranch = z.strictObject({ ref: refName, label: z.string().min(1).max(255) });
 
