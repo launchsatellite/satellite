@@ -998,6 +998,59 @@ footer .wrap{display:flex;align-items:center;gap:16px}
 .s-prf{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--side);font:400 12.5px var(--code);color:var(--dim)}.s-prf b{font-weight:500;color:var(--fg)}.s-prf .icon{width:13px;height:13px}
 .s-toasts{position:absolute;right:16px;bottom:78px;display:flex;flex-direction:column;gap:8px;width:420px;z-index:3}.s-toasts .k-toast{max-width:none}.s-toasts .k-toast .icon{width:14px;height:14px;color:var(--ok)}
 .mock.rel{position:relative}
+/* ── First run guide. The window as built, plus one card that follows the first real actions ── */
+.s-app.gd{--rw:380px;grid-template-rows:minmax(0,1fr);position:relative}
+.gd .s-main{overflow:hidden}
+.gd .s-side{overflow:visible;position:relative;z-index:3;padding-top:8px}
+.gd .s-gi{justify-content:flex-start;gap:7px}.gd .s-gi>.k-ro{margin-left:auto;font-size:12px;letter-spacing:0}
+.s-gn{padding:4px 8px;color:var(--dim)}
+.s-gp{margin-left:auto;display:inline-grid;place-items:center;width:20px;height:20px;color:var(--dim)}.s-gp>.icon{width:13px;height:13px}
+.gd .s-hd .k-btn.ghost{color:var(--fg)}
+.gd .s-gb{height:40px;background:var(--side);overflow:visible;position:relative;z-index:2;gap:8px}
+.s-gtabs{display:inline-flex;gap:2px}
+.gd .s-gb .k-tab>.icon{width:12px;height:12px;color:var(--dim);margin-right:-3px}
+.s-gfrom{font:400 12px var(--code);color:var(--dim);white-space:nowrap}
+.gd .k-seg{height:28px;padding:1px;gap:0;align-items:center;background:var(--side);border:1px solid var(--ctl);border-radius:6px}.gd .k-seg span{height:24px;padding:0 8px;border-radius:5px;color:var(--fg2)}.gd .k-seg span.on{background:var(--sel);color:var(--fg);box-shadow:none}
+.s-gsay{align-items:center;justify-content:center}.s-gsay p{max-width:360px;text-align:center;color:var(--fg2)}
+.s-gch{flex-direction:row}
+.s-gfl{width:260px;flex:none;border-right:1px solid var(--line);overflow:hidden}
+.s-gfl div{display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;font:400 12px var(--code);white-space:nowrap}
+.s-gfl div.on{background:var(--sel)}.s-gfl i{font-style:normal;color:var(--dim);width:8px}.s-gfl i.a{color:var(--addfg)}
+.s-gfl span{color:var(--dim)}.s-gfl b{font-weight:400;color:var(--fg);margin-left:-8px}.s-gfl u{text-decoration:none;margin-left:auto;color:var(--addfg)}.s-gfl u+u{margin-left:0;color:var(--delfg)}
+.gd .s-diff{flex:1;min-width:0;padding-top:4px}.gd .s-diff .kw{color:var(--fg);font-weight:600}.gd .s-diff .str{color:var(--fg2)}
+.gd .s-cc{background:var(--bg)}.gd .s-cc-h.s-gb{padding:0 8px}
+.s-gmo{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;color:var(--fg2)}
+.s-gt{position:relative}
+/* the anchor is the control's own box, the grey ring sits 4px outside it, the card 28px outside the ring */
+.s-ga{position:absolute;inset:0;pointer-events:none}.s-gp .s-ga{inset:-2px}.k-btn>.s-ga{inset:-1px}.s-gi .s-ga{inset:8px 0 -2px}
+.s-ga::after{content:"";position:absolute;inset:-4px;border:1px solid var(--fg2);border-radius:8px}
+.s-g{position:absolute;z-index:6;width:300px;padding:12px 12px 16px 16px;display:flex;flex-direction:column;gap:8px;background:var(--raised);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);font:400 13px/20px var(--sans);color:var(--fg);white-space:normal;text-transform:none;letter-spacing:0;text-align:left;cursor:default}
+.s-g.at-r{left:calc(100% + 32px);top:calc(50% - 28px)}.s-g.at-l{right:calc(100% + 32px);top:calc(50% - 28px)}.s-g.at-b{top:calc(100% + 32px);left:calc(50% - 28px)}
+/* the tail, three pixels on the grid from the card to the ring, aimed at the middle of the control */
+.s-g::before{content:"";position:absolute;width:4px;height:4px;background:var(--fg2)}
+.s-g.at-r::before{left:-9px;top:25px;box-shadow:-8px 0 var(--fg2),-16px 0 var(--fg2)}.s-g.at-l::before{right:-9px;top:25px;box-shadow:8px 0 var(--fg2),16px 0 var(--fg2)}
+.s-g.at-b::before{top:-9px;left:25px;box-shadow:0 -8px var(--fg2),0 -16px var(--fg2)}
+.s-g-h{display:flex;align-items:center;justify-content:space-between;height:24px}.s-g-h .k-ro{font-size:12px}.s-g .k-btn .icon{width:14px;height:14px}
+.s-g h4{font:700 20px/24px var(--display);letter-spacing:-.04em;margin-right:4px}
+.s-g p{color:var(--fg2);margin-right:4px}
+.s-g-lg{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:8px 12px;margin-right:4px;border:1px solid var(--line);border-radius:8px;color:var(--fg2);font-size:12px}
+.s-g-lg span{display:flex;align-items:center;gap:8px}.s-g-lg .k-pix{width:6px;height:6px}.mock.light .s-g-lg .k-pix.lil{box-shadow:inset 0 0 0 1.5px #8066D6}
+.s-g-f{display:flex;justify-content:flex-end;margin:8px 4px 0 0}
+.s-gtoast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:max-content;max-width:420px;z-index:6}
+/* the roads not taken stay as they were drawn */
+.s-galt .gd .s-gb .k-tab{height:24px;font-size:13px;color:var(--fg2)}.s-galt .gd .s-gb .k-tab.on{color:var(--fg);font-weight:600}
+.s-galt .gd .k-seg{padding:2px;gap:2px}.s-galt .gd .k-seg span{height:22px;padding:0 10px;font-size:13px;border-radius:4px}
+.s-gw{position:relative}.gd .s-gw .s-card h2{margin-top:0}
+.gd .s-onb{grid-column:2/4;height:auto}.gd .s-card h2{margin-top:4px}
+.s-galt{position:relative;height:480px;border-radius:12px;overflow:hidden;display:grid;place-items:center;padding:24px}
+.s-galt>.mock{position:absolute;left:0;top:0;width:calc(100%/.6);height:calc(100%/.6);transform:scale(.6);transform-origin:top left}
+.s-galt.dim::before{content:"";position:absolute;inset:0;background:rgba(8,8,10,.55);z-index:1}.s-galt.dim.lt::before{background:rgba(244,244,241,.6)}
+.s-gspot{position:absolute;left:0;top:0;bottom:0;width:149px;box-shadow:0 0 0 2000px rgba(8,8,10,.6);z-index:1;border-right:1px solid var(--g5)}
+.s-galt>.tok{position:relative;z-index:2;width:100%}
+.s-gmap{display:grid;grid-template-columns:1fr 1.3fr 1.1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.s-gmap div{padding:12px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-height:132px}.s-gmap div:first-child{border-left:0;background:var(--side)}
+.s-gmap b{font-weight:600}.s-gmap p{color:var(--fg2);font-size:12px}.s-gmap .k-ro{font-size:12px}
+.s-gwhy{color:var(--g5);font-size:14px;max-width:56ch}
 .s-pv{border:1px solid var(--line);border-radius:8px;padding:12px}.s-pv b{font-weight:600}.s-pv p{color:var(--fg2);margin-top:4px;font-size:12.5px}.k-dlg-h h4{display:flex;align-items:center;gap:9px}
 </style>
 </head>
@@ -1579,6 +1632,55 @@ certs/localhost.pem</pre>
   <div class="s-cap"><span class="lbl">Settings · Notifications and Claude Code</span><div><h3>quiet unless you're the blocker</h3><p>Banners only for moments that need you, never for an agent that is simply working. The Claude Code page shows what Satellite uses from your setup, which is everything, untouched.</p></div></div>
   <div class="mock" style="height:600px" data-scr="settingsNotify"></div>
   <div class="mock light" style="height:560px;margin-top:16px" data-scr="settingsClaude"></div>
+  <div class="s-cap"><span class="lbl">First run · Guide</span><div><h3>four steps, then it's yours</h3><p>One small card follows the first real actions in the real window. It says one thing per step, points at the control that does it, never takes the keyboard and closes for good. The guide begins once the first project lands.</p></div></div>
+  <div class="mock" style="height:640px" data-scr="gd0"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Before the guide · the welcome as the app draws it, three checks and one action · adding the first project starts the guide</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd1"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 01 · beside the project's plus · leaves when a workspace exists, or on Next</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd2"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 02 · beside Start Claude Code · leaves as soon as the session starts, or on Next</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd3"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 03 · under the tabs, while the agent works · leaves on Next</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd4"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 04 · beside the inbox · Done ends the guide</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd5"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Closed early, by the close control or by Escape in the card · one toast says where the guide lives · it never opens by itself again</span></div>
+  <div class="mock" style="height:640px;margin-top:16px" data-scr="gd6"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">After Done · the card leaves, no toast, nothing remains on screen</span></div>
+  <div class="s-dlgs">
+    <div><div class="s-scrim"><div class="mock" data-scr="gdWin"></div><div class="tok" style="position:relative;z-index:2;width:100%;max-width:560px" data-scr="gdPal"></div></div><span class="lbl">Reopened · Show the guide in the command menu starts it at step 01</span></div>
+    <div><div class="s-scrim lt"><div class="mock light" data-scr="gdWin"></div><div class="tok lt" style="position:relative;z-index:2;width:100%;max-width:560px" data-scr="gdPal"></div></div><span class="lbl">The same command in light</span></div>
+  </div>
+  <div class="mock-notes">
+    <p><b>Never in the way</b>The card floats beside the control it points at and never covers it. It takes no focus, so the terminal keeps every key and the window works as usual behind it.</p>
+    <p><b>It follows you</b>A step leaves when you do the thing it names, or on Next. Step 02 leaves as soon as the session starts. Nothing waits for you to finish reading.</p>
+    <p><b>Escape stays with the terminal</b>Escape closes the guide only while focus is in the card, because Escape in the terminal interrupts Claude Code.</p>
+    <p><b>Closed for good</b>The close control and Escape end it early, and one toast says where it lives. Done ends it and leaves nothing on screen. Only Show the guide brings it back.</p>
+    <p><b>One rule for position</b>A grey ring sits 4 pixels outside the control. The card sits 28 pixels from the ring, beside the control or under the tabs, and its tail aims at the middle of the control, 28 pixels from the card's corner.</p>
+    <p><b>One thing per card</b>The readout, the close control, a lowercase title, one sentence and one action. Next is the secondary button, so it never competes with the control the card points at, and Done is the primary one, since nothing else is left to do. There is no way back, since Show the guide starts it again.</p>
+    <p><b>Grey, then one orange</b>The ring and the tail stay grey in both themes. Signal orange appears once, on the needs you pixel of the legend.</p>
+    <p><b>Read by everyone</b>Each step is announced politely with its number. Show the guide moves focus into the card, closing returns it, and nothing animates.</p>
+  </div>
+  <div class="s-cap"><span class="lbl">First run · Guide · Light</span><div><h3>the same guide in light</h3><p>One markup, the light tokens. The ring and the tail stay grey, since colour only means state.</p></div></div>
+  <div class="mock light" style="height:640px" data-scr="gd0"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Before the guide</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd1"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 01</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd2"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 02</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd3"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 03</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd4"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Step 04</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd5"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">Closed early</span></div>
+  <div class="mock light" style="height:640px;margin-top:16px" data-scr="gd6"></div>
+  <div class="s-csl" style="grid-template-columns:1fr"><span class="lbl">After Done</span></div>
+  <div class="s-cap"><span class="lbl">First run · Guide · Weighed</span><div><h3>two roads not taken</h3><p>Both were drawn far enough to judge. Either can still be chosen.</p></div></div>
+  <div class="s-dlgs">
+    <div><div class="s-galt"><div class="mock" data-scr="gdWin"></div><i class="s-gspot"></i><div class="tok" data-scr="gdTour"></div></div><span class="lbl">Spotlight tour · six stops over a sample project</span><p class="s-gwhy">It lost because it explains a made-up project before you have your own, and it holds the whole window until you finish or skip.</p></div>
+    <div><div class="s-galt dim lt"><div class="mock light" data-scr="gdMapWin"></div><div class="tok lt" data-scr="gdMap"></div></div><span class="lbl">Welcome map · one dialog, read once</span><p class="s-gwhy">It lost because it describes three columns while all three are still empty, so it is forgotten before the first workspace exists.</p></div>
+  </div>
   <div class="mock-notes">
     <p><b>Your Claude Code, untouched</b>Satellite runs the real claude in a terminal per worktree. Your settings, plugins, hooks and permissions all just work.</p>
     <p><b>Git and GitHub first</b>Branch, ahead and behind, pull request, checks and reviews are always one glance away, in the row and in the header.</p>
@@ -2183,6 +2285,87 @@ Progress: resolved 1214, reused 1180, downloaded 34, added 902
   </div>`}
 });
 
+/* ── First run guide. The window as built, one card that follows what the user really does ── */
+const GLEG=`<div class="s-g-lg"><span>${PX('')}idle</span><span>${PX('uv')}working</span><span>${PX('sig')}needs you</span><span>${PX('lil')}done</span></div>`;
+const GCARD=(n,side,title,text,extra='')=>`<div class="s-ga"><div class="s-g at-${side}"><div class="s-g-h"><span class="k-ro">0${n} / 04</span><span class="k-btn ghost ic sm">${XI}</span></div><h4>${title}</h4><p>${text}</p>${extra}<div class="s-g-f"><span class="k-btn ${n<4?'sec':'pri'}">${n<4?'Next':'Done'}</span></div></div></div>`;
+const GSTEP=[,
+ GCARD(1,'r','make a workspace','A workspace is a git worktree and a branch made in one step, so agents work side by side and never in each other’s files.'),
+ GCARD(2,'l','start Claude Code','This is your own Claude Code in a real terminal, with your settings and skills, and its prompt is the only place you type.'),
+ GCARD(3,'b','read what it did','Changes, Files and Pull request show the work in this workspace, read only, because your agent does the writing.'),
+ GCARD(4,'r','orange means you','A square pixel shows the state of each session, and signal orange means one cannot go on without you, so it waits in the inbox.',GLEG)];
+const GAT=(step,n)=>step===n?GSTEP[n]:'';
+const GSIDE=({ws,sel,step})=>`<aside class="s-side"><div class="s-row">${I('keys')}Commands<span class="k-kbd">⌘K</span></div>
+  <div class="s-row">${I('search')}Go to a workspace<span class="k-kbd">⌘P</span></div>
+  <div class="s-sec s-gi ${step===4?'s-gt':''}">${I('bell')}<span>Inbox</span><span class="k-ro">0</span>${GAT(step,4)}</div>
+  <p class="s-gn">Nothing needs you right now.</p>
+  <div class="s-sec">Projects${I('plus')}</div>
+  ${ws?`<div class="s-proj">${AV('atlas-api','#C7B9FF')}atlas-api<span class="s-gp ${step===1?'s-gt':''}">${I('plus')}${GAT(step,1)}</span></div>`+ws.map(([n,px,mt=''])=>`<div class="s-ws ${sel===n?'on':''}">${PX(px,px==='uv'?'blink':'')}<b>${n}</b><span class="mt">${mt}</span></div>`).join(''):'<p class="s-gn">No projects yet.</p>'}</aside>`;
+const GHEAD=sel=>`<div class="s-hd"><h5>${sel==='main'?'atlas-api':sel}</h5>${sel==='main'?'':'<span class="crumb">atlas-api</span>'}<span class="s-git">${I('branch')}${sel==='main'?'main':sel+' from origin/main'}</span><span class="r">${sel==='main'?'':`<span class="k-btn ghost sm">${I('archive')}Archive</span>`}<span class="k-btn ghost sm">Remove this project</span></span></div>`;
+const GBAR=(step,lines)=>`<div class="s-tabs s-gb"><span class="s-gtabs ${step===3?'s-gt':''}"><span class="k-tab on">Changes</span><span class="k-tab">Files</span><span class="k-tab">Pull request</span>${GAT(step,3)}</span><span class="s-gfrom">from origin/main</span><span class="r"><span class="k-btn ghost sm ${lines?'':'ds'}">Send lines<span class="k-kbd">⌘L</span></span><span class="k-seg"><span class="on">Branch</span><span>Uncommitted</span></span></span></div>`;
+const GSAY=`<div class="s-body s-gsay"><p>Nothing changed against origin/main.</p></div>`;
+const GCHG=`<div class="s-body s-gch"><div class="s-gfl"><div><i>M</i>README.md<u>+1</u></div><div class="on"><i>M</i><span>src/auth/</span><b>redirect.ts</b><u>+3</u><u>−2</u></div><div><i class="a">A</i><span>src/auth/</span><b>redirect.test.ts</b><u>+18</u></div></div>
+<div class="s-diff">
+<div><span>11</span><span></span><span><span class="kw">export function</span> redirectAfterLogin(req, res) {</span></div>
+<div><span>12</span><span></span><span>  <span class="kw">const</span> next = safePath(req.query.next)</span></div>
+<div class="d"><span>13</span><span>−</span><span>  res.cookie(<span class="str">'session'</span>, req.session.id)</span></div>
+<div class="d"><span>14</span><span>−</span><span>  <span class="kw">return</span> res.redirect(next)</span></div>
+<div class="a"><span>13</span><span>+</span><span>  <span class="kw">const</span> cookie = { path: <span class="str">'/'</span>, sameSite: <span class="str">'lax'</span> }</span></div>
+<div class="a"><span>14</span><span>+</span><span>  res.cookie(<span class="str">'session'</span>, req.session.id, cookie)</span></div>
+<div class="a"><span>15</span><span>+</span><span>  <span class="kw">return</span> res.redirect(303, next)</span></div>
+<div><span>16</span><span></span><span>}</span></div>
+</div></div>`;
+const GNONE=step=>`<div class="s-gmo"><p>No Claude Code session here yet.</p><span class="k-btn pri ${step===2?'s-gt':''}">Start Claude Code${GAT(step,2)}</span></div>`;
+const GTUI=`<div class="s-cc-h s-gb"><span class="k-tab on">${PX('uv','blink')}Session 1${XI}</span><span class="k-tab">${I('plus')}</span></div><div class="s-tui"><span class="d">atlas-api/first-look</span>
+
+<b>&gt; Fix the login redirect loop on Safari.</b>
+
+<span class="g">⏺</span> <b>Read</b>(src/auth/redirect.ts)
+  <span class="d">⎿  Read 42 lines</span>
+
+<span class="g">⏺</span> <b>Update</b>(src/auth/redirect.ts)
+  <span class="d">⎿  Updated with <span class="a">3 additions</span> and <span class="r">2 removals</span></span>
+
+<span class="g">⏺</span> <b>Write</b>(src/auth/redirect.test.ts)
+  <span class="d">⎿  Wrote 18 lines</span>
+
+<span class="c">✻ Running the tests…</span> <span class="d">(12s · esc to interrupt)</span>
+<span class="bx"><span class="d">&gt;</span> </span><span class="d">  ⏵⏵ accept edits on (shift+tab to cycle)</span></div>`;
+const GWS=[['main',''],['first-look','uv',I('files')+'<span>3</span>']];
+const GAPP=(side,main,cc,extra='',cls='')=>`<div class="s-app gd">${GSIDE(side)}<main class="s-main ${cls}">${main}</main><section class="s-cc">${cc}</section>${extra}</div>`;
+const GWORK=(step,extra)=>GAPP({ws:GWS,sel:'first-look',step},GHEAD('first-look')+GBAR(step,true)+GCHG,GTUI,extra);
+Object.assign(SCR,{
+ gd0:()=>GAPP({},`<div class="s-card">
+  <h2>welcome to satellite</h2><p>Three checks, then add your first project.</p>
+  <div class="s-chk"><div>${PX('volt')}<b>Git</b><span>2.47 found</span><span class="k-ro">✓</span></div>
+  <div>${PX('volt')}<b>GitHub CLI</b><span>Signed in as octo-dev</span><span class="k-ro">✓</span></div>
+  <div>${PX('volt')}<b>Claude Code</b><span>2.1 found</span><span class="k-ro">✓</span></div></div>
+  <div class="f"><span class="k-ro">03 / 03</span><span class="k-btn ghost">${I('refresh')}Check again</span><span class="k-btn pri">Add your first project<span class="k-kbd">⌘O</span></span></div></div>`,`<div class="s-gmo"><p>Pick a workspace to start Claude Code there.</p></div>`,'','s-gw'),
+ gdMapWin:()=>`<div class="s-app gd">${GSIDE({})}<div class="s-onb"><canvas data-mz="light" data-cell="14"></canvas><div class="s-card mz-clear">
+  <svg height="34" width="41" style="color:var(--fg)"><use href="#mk-twin"/></svg><h2>welcome to satellite</h2><p>Three checks, then add your first project.</p>
+  <div class="s-chk"><div>${PX('volt')}<b>Git</b><span>2.47 found</span><span class="k-ro">✓</span></div>
+  <div>${PX('volt')}<b>GitHub CLI</b><span>Signed in as octo-dev</span><span class="k-ro">✓</span></div>
+  <div>${PX('volt')}<b>Claude Code</b><span>2.1 found</span><span class="k-ro">✓</span></div></div>
+  <div class="f"><span class="k-ro">03 / 03</span><span class="k-btn ghost">${I('refresh')}Check again</span><span class="k-btn pri">Add your first project</span></div></div></div></div>`,
+ gd1:()=>GAPP({ws:[['main','']],sel:'main',step:1},GHEAD('main')+GBAR(1)+GSAY,GNONE(1)),
+ gd2:()=>GAPP({ws:[['main',''],['first-look','']],sel:'first-look',step:2},GHEAD('first-look')+GBAR(2)+GSAY,GNONE(2)),
+ gd3:()=>GWORK(3),
+ gd4:()=>GWORK(4),
+ gd5:()=>GWORK(0,`<div class="k-toast s-gtoast"><span>The guide is closed. Show the guide in the command menu opens it again.</span><span class="k-btn ghost ic sm">${XI}</span></div>`),
+ gd6:()=>GWORK(0),
+ gdWin:()=>GWORK(0),
+ gdPal:()=>`<div class="k-pal" style="max-width:560px">
+  <div class="k-in fc" style="box-shadow:none">${I('search')}guide<span class="car"></span><span class="k-kbd" style="margin-left:auto">Esc</span></div>
+  <div class="k-pal-l"><div class="k-grp">Commands</div>
+  <div class="k-ws sel">${I('keys')}<b>Show the guide</b><span class="k-kbd" style="margin-left:auto">↵</span></div>
+  <div class="k-ws">${I('check')}<b>Check git, gh and Claude Code</b></div></div>
+  <div class="k-pal-f"><span><span class="k-kbd">↑↓</span>Move</span><span><span class="k-kbd">↵</span>Run</span></div></div>`,
+ gdTour:()=>`<div class="k-dlg" style="max-width:300px;margin-left:120px"><div class="k-dlg-h"><h4>the sidebar</h4><span class="k-ro" style="margin-left:auto;font-size:12px">1 / 6</span></div>
+  <div class="k-dlg-b" style="padding-top:6px"><p style="color:var(--fg2)">Projects, their workspaces and the inbox live on the left. Every row tells its state with one pixel.</p></div>
+  <div class="k-dlg-f"><span class="k-btn ghost" style="margin-right:auto">Skip the tour</span><span class="k-btn pri">Next</span></div></div>`,
+ gdMap:()=>`<div class="k-dlg" style="max-width:520px;margin:0 auto"><div class="k-dlg-h"><h4>Three columns that never move</h4><span class="k-btn ghost ic sm">${XI}</span></div>
+  <div class="k-dlg-b"><div class="s-gmap"><div><span class="k-ro">Left</span><b>where</b><p>Projects, their workspaces and the inbox.</p></div><div><span class="k-ro">Centre</span><b>what happened</b><p>Changes, Files and Pull request for the selected workspace.</p></div><div><span class="k-ro">Right</span><b>who's working</b><p>Your own Claude Code in a terminal.</p></div></div></div>
+  <div class="k-dlg-f"><span class="k-lab"><span class="k-kbd">Esc</span>to close</span><span class="k-btn pri">Add your first project</span></div></div>`
+});
 document.querySelectorAll('[data-mock]').forEach(m=>m.innerHTML=SCR.work());
 document.querySelectorAll('[data-scr]').forEach(m=>m.innerHTML=SCR[m.dataset.scr]());
 
