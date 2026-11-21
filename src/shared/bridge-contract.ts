@@ -28,6 +28,7 @@ export type GhState = z.output<typeof ghState>;
 export type ToolCheck = z.output<typeof toolCheck>;
 export type GhTokenVariable = z.output<typeof ghTokenVariable>;
 export type InstallFix = z.output<typeof installFix>;
+export type ChangeLetter = z.output<typeof changeLetter>;
 export type BridgeResult<T> =
   { ok: true; value: T } | { ok: false; error: { code: BridgeErrorCode; message: string } };
 
@@ -67,6 +68,7 @@ export const themeChoice = z.enum(["system", "light", "dark"]);
 export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
 export const sessionEnding = z.enum(["ended", "unexpected", "resume-failed"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
+export const changeLetter = z.enum(["A", "M", "D", "R", "C", "T", "U"]);
 export const workspaceRef = z.strictObject({ projectId: z.uuid(), workspace: workspaceKey });
 export const workspaceName = z
   .string()

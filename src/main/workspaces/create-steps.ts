@@ -62,7 +62,7 @@ interface Shared {
   folder: MadeFolder | null;
   worktreeLeft: boolean;
 }
-type DefaultStart = { remote: null } | { remote: string; branch: string | null };
+export type DefaultStart = { remote: null } | { remote: string; branch: string | null };
 
 const includeFilesMs = 120_000;
 
@@ -163,7 +163,7 @@ async function cachedDefault(root: string, remote: string): Promise<string | nul
   return isBranchName(branch) ? branch : null;
 }
 
-async function defaultStart(root: string): Promise<DefaultStart | undefined> {
+export async function defaultStart(root: string): Promise<DefaultStart | undefined> {
   const run = await runGit(root, ["remote"], gitReadMs);
   if (run?.exitCode !== 0) return undefined;
   const remote = pickRemote(run.stdout);
