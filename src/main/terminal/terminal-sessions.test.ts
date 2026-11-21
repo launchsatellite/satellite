@@ -23,7 +23,6 @@ vi.mock("../platform/tools.ts", async (importOriginal) => {
   };
 });
 
-const realWaitMs = 10_000;
 const projectId = "0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
 const otherWorkspace = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
 const recorded = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a";
@@ -600,17 +599,14 @@ describe("createTerminalSessions", () => {
     try {
       ptys[0]?.kill.mockImplementation(() => delay(treeKillBoundMs));
       const quit = { closed: false };
-      void sessions.closeAll().then(() => {
+      const closing = sessions.closeAll().then(() => {
         quit.closed = true;
       });
       const endChainMs = treeKillBoundMs + exitGraceMs;
       await vi.advanceTimersByTimeAsync(endChainMs - 1);
       expect(quit.closed).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
-      const realDeadline = Date.now() + realWaitMs;
-      while (!quit.closed && Date.now() < realDeadline) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
+      await closing;
       expect(quit.closed).toBe(true);
       expect(endChainMs).toBeLessThan(quitBoundMs);
     } finally {
