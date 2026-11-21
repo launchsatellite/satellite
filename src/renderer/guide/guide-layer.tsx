@@ -21,6 +21,7 @@ interface GuideLayerProps {
   onClose: () => void;
 }
 
+const fallbackFocus = "[data-testid='add-first-project'], [data-testid='column-projects'] button";
 const tailStyles: Record<GuideSide, (tail: number) => CSSProperties> = {
   right: (tail) => ({ left: -25, top: tail - 3 }),
   left: (tail) => ({ right: -25, top: tail - 3 }),
@@ -49,24 +50,36 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   const cameFrom = useRef<HTMLElement | null>(null);
   const held = useRef<Placement | null>(null);
   const asked = useRef(0);
+  const wantFocus = useRef(false);
+  const inside = useRef(false);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  const [announced, setAnnounced] = useState<GuideStep | null>(null);
   const titleId = useId();
   const textId = useId();
 
-  const returnFocus = useCallback(() => {
-    const element = card.current;
-    if (element?.contains(document.activeElement) !== true) return;
+  if (step === null ? announced !== null : placement !== null && announced !== step) {
+    setAnnounced(step);
+  }
+
+  const moveFocusOut = useCallback(() => {
     const from = cameFrom.current;
+    cameFrom.current = null;
     if (from?.isConnected === true) {
       from.focus({ preventScroll: true });
       return;
     }
     const control = step === null ? null : controlOf(step);
     const button = control?.querySelector<HTMLElement>("button:not([tabindex='-1'])");
-    (button ?? control?.parentElement?.closest<HTMLElement>("[tabindex]"))?.focus({
-      preventScroll: true,
-    });
+    const place =
+      button ??
+      control?.parentElement?.closest<HTMLElement>("[tabindex]") ??
+      document.querySelector<HTMLElement>(fallbackFocus);
+    place?.focus({ preventScroll: true });
   }, [step]);
+
+  const returnFocus = useCallback(() => {
+    if (card.current?.contains(document.activeElement) === true) moveFocusOut();
+  }, [moveFocusOut]);
 
   const measure = useCallback(() => {
     const element = card.current;
@@ -80,7 +93,10 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
             { width: window.innerWidth, height: window.innerHeight },
             guideSteps[step].side,
           );
-    if (next === null) returnFocus();
+    if (next === null) {
+      wantFocus.current = false;
+      returnFocus();
+    }
     if (samePlacement(held.current, next)) return;
     held.current = next;
     setPlacement(next);
@@ -101,11 +117,22 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
     };
   }, [step, measure]);
 
-  useEffect(() => {
-    if (focusAsk <= asked.current || placement === null) return;
-    asked.current = focusAsk;
-    card.current?.focus({ preventScroll: true });
+  useLayoutEffect(() => {
+    if (focusAsk > asked.current) {
+      asked.current = focusAsk;
+      wantFocus.current = held.current !== null;
+    }
+    if (wantFocus.current && placement !== null) {
+      wantFocus.current = false;
+      card.current?.focus({ preventScroll: true });
+    }
   }, [focusAsk, placement]);
+
+  useLayoutEffect(() => {
+    if (step !== null || !inside.current) return;
+    inside.current = false;
+    moveFocusOut();
+  }, [step, moveFocusOut]);
 
   const ending = (end: () => void) => () => {
     returnFocus();
@@ -113,9 +140,14 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   };
   const remember = (event: FocusEvent<HTMLDivElement>) => {
     const from = event.relatedTarget;
-    if (from instanceof HTMLElement && !event.currentTarget.contains(from)) {
-      cameFrom.current = from;
+    inside.current = true;
+    if (!event.currentTarget.contains(from instanceof Node ? from : null)) {
+      cameFrom.current = from instanceof HTMLElement ? from : null;
     }
+  };
+  const leave = (event: FocusEvent<HTMLDivElement>) => {
+    const to = event.relatedTarget;
+    if (!event.currentTarget.contains(to instanceof Node ? to : null)) inside.current = false;
   };
   const escape = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
@@ -127,7 +159,7 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   return (
     <div data-testid="guide" className="fixed top-0 left-0 z-40">
       <p role="status" data-testid="guide-status" className="sr-only">
-        {step !== null && placement !== null
+        {step !== null && announced === step
           ? `${stepSpoken(step)}. ${guideSteps[step].title}. ${guideSteps[step].text}`
           : ""}
       </p>
@@ -154,6 +186,7 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
               event.preventDefault();
             }}
             onFocus={remember}
+            onBlur={leave}
             onKeyDown={escape}
             className={`fixed flex w-[300px] flex-col gap-2 rounded-[10px] border border-line bg-raised pt-3 pr-3 pb-4 pl-4 text-[13px] leading-5 font-normal text-fg shadow-raised outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${placement === null ? "invisible" : ""}`}
             style={placement?.card ?? { left: 0, top: 0 }}
