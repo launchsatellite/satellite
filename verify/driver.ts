@@ -672,6 +672,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
           .filter({ hasText: new RegExp(`^${String(line)}$`) });
       await number(start).click();
       await number(end).click({ modifiers: ["Shift"] });
+      await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
     },
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");

@@ -248,6 +248,7 @@ async function showsDiffReadOnly(session: AppSession): Promise<void> {
   await modifiedShows(session, "greeting", "for src/app.ts");
   const before = await sideText(page, "modified");
   await page.locator('[data-testid="diff"] .editor.modified .view-lines').click();
+  await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.type("zz");
   await page.keyboard.press("Enter");
   assert.equal(await sideText(page, "modified"), before, "typing into the diff changed it");
@@ -457,6 +458,7 @@ async function sendsLines(session: AppSession): Promise<void> {
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
   let from = (await session.standInEvents()).length;
   await page.locator('[data-testid="diff"] .editor.modified .view-lines').click();
+  await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.press(shortcut);
   await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
   assert.equal(await standInInput(session, from), "", "lines nobody selected reached the prompt");
