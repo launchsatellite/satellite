@@ -73,9 +73,9 @@ describe("readNames", () => {
 });
 
 describe("rankFiles", () => {
-  it("ranks a file name match above a path match and shorter first", () => {
+  it("ranks a file name match above a path match and shorter first", async () => {
     expect(
-      rankFiles("needle", [
+      await rankFiles("needle", [
         "needle/readme.md",
         "src/deep/needle-target.ts",
         "needle-long-name.ts",
@@ -89,8 +89,19 @@ describe("rankFiles", () => {
     ]);
   });
 
-  it("stops at the result limit", () => {
-    const names = Array.from({ length: 200 }, (_, at) => `file${String(at)}.ts`);
-    expect(rankFiles("file", names)).toHaveLength(filesLimits.findResults);
+  it("stops at the result limit and keeps the best of many in order", async () => {
+    const names = Array.from({ length: 5000 }, (_, at) => `d${String(at)}/file${String(at)}.ts`);
+    const best = ["file.ts", "a/file.ts"];
+    const ranked = await rankFiles("file", [...names, ...best.toReversed()]);
+    expect(ranked).toHaveLength(filesLimits.findResults);
+    expect(ranked.slice(0, 2)).toEqual(best);
+  });
+
+  it("stops between turns when its request is replaced", async () => {
+    const names = Array.from({ length: 10_000 }, (_, at) => `file${String(at)}.ts`);
+    const controller = new AbortController();
+    const ranking = rankFiles("file", names, controller.signal);
+    controller.abort(new Error("moved on"));
+    await expect(ranking).rejects.toThrow("moved on");
   });
 });

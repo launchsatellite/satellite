@@ -7,6 +7,7 @@ export type NameIndex =
   { kind: "names"; names: string[] } | { kind: "too-many" | "hung" | "failed" };
 
 export const findReadMs = 15_000;
+const rankedPerTurn = 2000;
 
 interface Ranked {
   name: string;
@@ -44,19 +45,42 @@ export async function readNames(
   return { kind: "names", names: [...names] };
 }
 
-export function rankFiles(query: string, names: readonly string[]): string[] {
+function keep(list: Ranked[], entry: Ranked): void {
+  const last = list.at(-1);
+  if (list.length >= filesLimits.findResults && last !== undefined && byRank(entry, last) >= 0) {
+    return;
+  }
+  const at = list.findIndex((other) => byRank(entry, other) < 0);
+  list.splice(at === -1 ? list.length : at, 0, entry);
+  if (list.length > filesLimits.findResults) list.pop();
+}
+
+function nextTurn(): Promise<void> {
+  return new Promise((settle) => {
+    setImmediate(settle);
+  });
+}
+
+export async function rankFiles(
+  query: string,
+  names: readonly string[],
+  signal?: AbortSignal,
+): Promise<string[]> {
   const byName: Ranked[] = [];
   const byPath: Ranked[] = [];
-  for (const name of names) {
-    const fileScore = fuzzyScore(query, name.slice(name.lastIndexOf("/") + 1));
-    if (fileScore !== undefined) {
-      byName.push({ name, score: fileScore });
-      continue;
+  for (let from = 0; from < names.length; from += rankedPerTurn) {
+    signal?.throwIfAborted();
+    for (const name of names.slice(from, from + rankedPerTurn)) {
+      const fileScore = fuzzyScore(query, name.slice(name.lastIndexOf("/") + 1));
+      if (fileScore !== undefined) {
+        keep(byName, { name, score: fileScore });
+        continue;
+      }
+      const pathScore = fuzzyScore(query, name);
+      if (pathScore !== undefined) keep(byPath, { name, score: pathScore });
     }
-    const pathScore = fuzzyScore(query, name);
-    if (pathScore !== undefined) byPath.push({ name, score: pathScore });
+    await nextTurn();
   }
-  return [...byName.sort(byRank), ...byPath.sort(byRank)]
-    .slice(0, filesLimits.findResults)
-    .map((entry) => entry.name);
+  signal?.throwIfAborted();
+  return [...byName, ...byPath].slice(0, filesLimits.findResults).map((entry) => entry.name);
 }

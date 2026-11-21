@@ -133,7 +133,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
   ): Promise<FilesFind> => {
     const cached = page.names;
     if (cached?.folder === folder && Date.now() - cached.at < nameIndexMs) {
-      return { kind: "found", paths: rankFiles(query, cached.names) };
+      return { kind: "found", paths: await rankFiles(query, cached.names, signal) };
     }
     const index = await readNames(folder, signal);
     signal.throwIfAborted();
@@ -142,7 +142,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
       return { kind: index.kind };
     }
     page.names = { folder, at: Date.now(), names: index.names };
-    return { kind: "found", paths: rankFiles(query, index.names) };
+    return { kind: "found", paths: await rankFiles(query, index.names, signal) };
   };
 
   return {
