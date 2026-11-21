@@ -7,17 +7,22 @@ import {
   type WorkspaceRef,
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
+import { subscribe } from "../bridge/bridge-client.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
+import { InboxList } from "../inbox/inbox-list.tsx";
+import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
-import { repeatedNames, useProjects, workspaceLabel } from "../projects/use-projects.ts";
+import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { SampleDiff } from "../proving/sample-diff.tsx";
+import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
-import { useSessions } from "../sessions/use-sessions.ts";
+import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
@@ -42,6 +47,8 @@ interface ShownToast {
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
 const toastQueueLimit = 32;
+const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
+const notificationsOn = "Notifications are on for every workspace that needs you.";
 
 function forgotSentence(name: string, workspaces: number): string {
   if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
@@ -217,9 +224,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           label: workspaceLabel(project, workspace),
           testKey: workspace.name ?? "main",
           project: project.name,
-          ...(repeated.has(project.name) && project.parent !== ""
-            ? { parent: project.parent }
-            : {}),
+          parent: shownParent(project, repeated),
         })),
       );
   }, [projects]);
@@ -229,12 +234,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
   const removableId = removable?.id;
+  const removableParent =
+    removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
-    removable === undefined
-      ? undefined
-      : repeatedNames(projects ?? []).has(removable.name) && removable.parent !== ""
-        ? `${removable.name} in ${removable.parent}`
-        : removable.name;
+    removable === undefined || removableParent === undefined
+      ? removable?.name
+      : `${removable.name} in ${removableParent}`;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
@@ -262,6 +267,43 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const modal = dialogProject !== undefined || archiving !== null || asking !== null;
+  const inbox = useMemo(
+    () =>
+      inboxRows(inboxReasons(allSessions), ({ projectId, workspace }) =>
+        (projects ?? []).some(
+          (project) =>
+            project.id === projectId &&
+            project.workspaces.some((listed) => listed.key === workspace),
+        ),
+      ),
+    [allSessions, projects],
+  );
+  const newest = inbox[0]?.reasons[0];
+  const newestWorkspace = newest?.workspace;
+  const newestTab = newest?.tab;
+  const newestTerminal = newest?.terminalId;
+  const openFromInbox = useCallback(
+    ({ workspace, tab, terminalId }: InboxTarget) => {
+      if (modal) return;
+      select(workspace);
+      activateSession(tab);
+      focusSession(terminalId);
+    },
+    [modal, select, activateSession],
+  );
+  const fromNotice = useRef({ inbox, openFromInbox });
+  useEffect(() => {
+    fromNotice.current = { inbox, openFromInbox };
+  }, [inbox, openFromInbox]);
+  useEffect(
+    () =>
+      subscribe("notices.open", ({ workspace }) => {
+        const { inbox: rows, openFromInbox: openRow } = fromNotice.current;
+        const target = noticeTarget(rows, workspace);
+        if (target !== undefined) openRow(target);
+      }),
+    [],
+  );
   const closeNewWorkspace = useCallback(() => {
     setCreatingIn(null);
   }, []);
@@ -317,6 +359,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const registry = useMemo(() => {
     const theme = (choice: ThemeChoice) => () => {
       update((current) => ({ ...current, theme: choice }), true);
+    };
+    const notifications = (on: boolean) => () => {
+      update((current) => ({ ...current, notifications: on }), true);
+      notify(on ? notificationsOn : notificationsOff, "info");
     };
     return createCommandRegistry(
       guarded(
@@ -387,7 +433,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             shortcut: { key: "t" },
             available: sessionHere !== undefined && folderHere,
             run: () => {
-              if (sessionHere !== undefined) openSession(sessionHere, false);
+              if (sessionHere !== undefined && !openSession(sessionHere, false)) {
+                notify(tabLimitSentence, "error");
+              }
             },
           },
           {
@@ -415,6 +463,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "inbox.newest",
+            title: "Go to the newest workspace that needs you",
+            available: newestTab !== undefined,
+            run: () => {
+              if (
+                newestWorkspace === undefined ||
+                newestTab === undefined ||
+                newestTerminal === undefined
+              ) {
+                return;
+              }
+              openFromInbox({
+                workspace: newestWorkspace,
+                tab: newestTab,
+                terminalId: newestTerminal,
+              });
+            },
+          },
+          {
             id: "palette.switcher",
             title: "Go to a workspace",
             shortcut: { key: "p" },
@@ -439,6 +506,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           },
           { id: "theme.light", title: "Use the light theme", available: true, run: theme("light") },
           { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
+          {
+            id: "notifications.off",
+            title: "Turn notifications off",
+            available: state.notifications,
+            run: notifications(false),
+          },
+          {
+            id: "notifications.on",
+            title: "Turn notifications on",
+            available: !state.notifications,
+            run: notifications(true),
+          },
         ],
         notify,
         modal,
@@ -446,6 +525,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     );
   }, [
     modal,
+    state.notifications,
     newWorkspaceIn,
     archivable,
     archivableWorkspace,
@@ -468,6 +548,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     forgetProject,
+    newestWorkspace,
+    newestTab,
+    newestTerminal,
+    openFromInbox,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -518,6 +602,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
             pixelFor={sessions.pixelFor}
+            inbox={
+              projects === undefined ? null : (
+                <InboxList
+                  rows={inbox}
+                  projects={projects}
+                  selected={state.selected}
+                  onOpen={openFromInbox}
+                />
+              )
+            }
           />
           <ColumnDivider
             side="left"

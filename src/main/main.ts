@@ -1,9 +1,19 @@
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { BrowserWindow, app, session } from "electron";
+import { app, session } from "electron";
+import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
+import { noticeSubject } from "./inbox/notice-subject.ts";
+import { createNotices, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
 import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import {
+  prepareSystemNotices,
+  recordedLines,
+  setAppBadge,
+  showNotice,
+  windowCountsInFront,
+  windowTookFocus,
+} from "./platform/system-notices.ts";
 import { createProjects, type Projects } from "./projects/project-list.ts";
 import { startHookListener, type HookListener } from "./sessions/hook-listener.ts";
 import { createLastSessions, type LastSessions } from "./sessions/last-sessions.ts";
@@ -28,9 +38,10 @@ import {
 } from "./window/app-protocol.ts";
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
-import { createMainWindow, mainWindow } from "./window/main-window.ts";
+import { bringToFront, createMainWindow, mainWindow, windowInFront } from "./window/main-window.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
+import { settleForQuit } from "./window/quit-settle.ts";
 import { prepareVerification } from "./window/verification.ts";
 import { applyThemeChoice } from "./window/theme.ts";
 
@@ -38,19 +49,13 @@ function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
 }
 
-function focusMainWindow(): void {
-  const [window] = BrowserWindow.getAllWindows();
-  if (window === undefined) return;
-  if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
-}
-
 interface Parts {
   interfaceFile: InterfaceFile;
   last: LastSessions;
   listening: Promise<HookListener | undefined>;
+  notices: Notices;
   projects: Projects;
+  recorder: { flush(): Promise<void> };
   terminals: TerminalSessions;
   workspaces: Workspaces;
 }
@@ -58,13 +63,19 @@ interface Parts {
 async function start({
   interfaceFile,
   listening,
+  notices,
   projects,
   terminals,
   workspaces,
 }: Parts): Promise<void> {
   await app.whenReady();
+  prepareSystemNotices();
   await listening;
-  applyThemeChoice((await interfaceFile.load()).state.theme);
+  const applyInterface = (state: InterfaceState) => {
+    applyThemeChoice(state.theme);
+    notices.setEnabled(state.notifications);
+  };
+  applyInterface((await interfaceFile.load()).state);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
   hardenSession(session.defaultSession);
@@ -73,7 +84,7 @@ async function start({
   registerBridge(
     {
       "tools.check": checkTools,
-      ...interfaceHandlers(interfaceFile, applyThemeChoice),
+      ...interfaceHandlers(interfaceFile, applyInterface),
       ...projects.handlers,
       ...workspaces.handlers,
       ...terminals.handlers,
@@ -81,7 +92,12 @@ async function start({
     },
     allowedOrigin(entryUrl),
   );
-  await createMainWindow(entryUrl);
+  const window = await createMainWindow(entryUrl);
+  window.on("focus", () => {
+    windowTookFocus(() => {
+      notices.seen();
+    });
+  });
 }
 
 function failStart(error: unknown): void {
@@ -126,17 +142,32 @@ function assemble(home: string): Parts {
       );
     },
   });
+  const notices = createNotices({
+    inFront: () => windowCountsInFront(windowInFront),
+    subject: (ref) => noticeSubject(projects.store, ref),
+    show: showNotice,
+    setBadge: setAppBadge,
+    open: ({ workspace, owner }) => {
+      bringToFront();
+      owner.emit("notices.open", { workspace });
+    },
+  });
   const terminals = createTerminalSessions({
     home,
     folder: (ref) => sessionFolder(home, projects.store, ref),
     listener: listening,
     last,
+    onNeeding: (needing) => {
+      notices.update(needing);
+    },
   });
   return {
     interfaceFile: createInterfaceFile(home),
     last,
     listening,
+    notices,
     projects,
+    recorder: { flush: recordedLines },
     terminals,
     workspaces: workspaceHandlers({
       home,
@@ -151,7 +182,7 @@ const home = prepareHome();
 const parts = home === undefined ? undefined : assemble(home);
 if (parts !== undefined && app.requestSingleInstanceLock()) {
   registerAppScheme();
-  app.on("second-instance", focusMainWindow);
+  app.on("second-instance", bringToFront);
   start(parts).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
@@ -160,21 +191,7 @@ if (parts !== undefined && app.requestSingleInstanceLock()) {
 app.on(
   "before-quit",
   createQuitGate(
-    () => {
-      const bounded = (work: Promise<unknown>) => Promise.race([work, delay(quitBoundMs)]);
-      return Promise.all([
-        bounded(
-          Promise.all([
-            parts?.terminals.closeAll(),
-            parts?.last.flush(),
-            parts?.interfaceFile.flush(),
-          ]),
-        ),
-        (parts?.workspaces.stopAll() ?? Promise.resolve()).then(() =>
-          bounded(parts?.projects.flush() ?? Promise.resolve()),
-        ),
-      ]);
-    },
+    () => settleForQuit(parts, quitBoundMs),
     () => {
       app.quit();
     },

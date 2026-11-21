@@ -10,6 +10,7 @@ import { spawnPty } from "../platform/pty.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
+import type { Needing } from "../inbox/notices.ts";
 import { createTerminalSessions, exitGraceMs, quitBoundMs } from "./terminal-sessions.ts";
 
 vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn(), windowsPty: () => null }));
@@ -78,7 +79,13 @@ describe("createTerminalSessions", () => {
   let home: string;
   let folders: Map<string, string>;
 
-  const create = (options: { listener?: HookListener; last?: LastSessions } = {}) =>
+  const create = (
+    options: {
+      listener?: HookListener;
+      last?: LastSessions;
+      onNeeding?: (needing: readonly Needing[]) => void;
+    } = {},
+  ) =>
     createTerminalSessions({
       home,
       folder: (ref) => {
@@ -89,6 +96,7 @@ describe("createTerminalSessions", () => {
       },
       listener: Promise.resolve(options.listener),
       last: options.last ?? fakeLast(),
+      onNeeding: options.onNeeding ?? vi.fn(),
     });
 
   beforeEach(async () => {
@@ -316,6 +324,30 @@ describe("createTerminalSessions", () => {
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" }, null);
     expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
     expect(last.set).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells who needs you as hooks arrive", async () => {
+    const listener = fakeListener();
+    const onNeeding = vi.fn<(needing: readonly Needing[]) => void>();
+    const sessions = create({ listener, onNeeding });
+    const { mine } = owners();
+    await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    await sessions.handlers["terminal.start"](
+      { id: terminalId(2), ...size, workspace: other },
+      mine,
+    );
+    const [first, second] = listener.open.mock.calls.map(([launchId]) => launchId);
+    sessions.hookEvent(first ?? "", { name: "PermissionRequest", agent: "" }, null);
+    expect(onNeeding).toHaveBeenLastCalledWith([{ workspace: main, owner: mine }]);
+    sessions.hookEvent(first ?? "", { name: "PostToolUse", agent: "" }, null);
+    expect(onNeeding).toHaveBeenLastCalledWith([]);
+    sessions.hookEvent(second ?? "", { name: "PermissionRequest", agent: "" }, null);
+    expect(onNeeding).toHaveBeenLastCalledWith([{ workspace: other, owner: mine }]);
+    await sessions.handlers["terminal.close"]({ id: terminalId(2) }, mine);
+    expect(onNeeding).toHaveBeenLastCalledWith([]);
+    sessions.hookEvent(first ?? "", { name: "PermissionRequest", agent: "" }, null);
+    ptys[0]?.exit(0);
+    expect(onNeeding).toHaveBeenLastCalledWith([]);
   });
 
   it("records the session id the latest hook carried, so a cleared session resumes as shown", async () => {

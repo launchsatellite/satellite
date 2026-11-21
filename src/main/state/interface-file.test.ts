@@ -42,4 +42,40 @@ describe("createInterfaceFile", () => {
       expect(await readFile(file, "utf8")).toBe("{");
     },
   );
+
+  it("reads a layout saved before notifications as notifications on", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    await writeFile(
+      join(home, "interface.json"),
+      '{"version":1,"selected":null,"columns":{"left":300,"right":500},"theme":"dark"}',
+    );
+    const { state, notice } = await createInterfaceFile(home).load();
+    expect(state).toEqual({
+      selected: null,
+      columns: { left: 300, right: 500 },
+      theme: "dark",
+      notifications: true,
+    });
+    expect(notice).toBeNull();
+  });
+
+  it("sets aside a version 1 layout that carries notifications", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    await writeFile(
+      join(home, "interface.json"),
+      '{"version":1,"selected":null,"columns":{"left":300,"right":500},"theme":"dark","notifications":false}',
+    );
+    const { state, notice } = await createInterfaceFile(home).load();
+    expect(state).toEqual(defaultInterfaceState);
+    expect(notice).toMatch(/set that file aside and started fresh\.$/);
+  });
+
+  it("writes the layout as version 2", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const interfaceFile = createInterfaceFile(home);
+    await interfaceFile.save({ ...saved, notifications: false });
+    await interfaceFile.flush();
+    const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
+    expect(written).toMatchObject({ version: 2, notifications: false });
+  });
 });

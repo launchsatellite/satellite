@@ -8,6 +8,7 @@ import {
   type AppTarget,
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
+import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
 import { projectsJourney } from "./journeys/projects.ts";
@@ -32,6 +33,7 @@ const journeys: Journey[] = [
   projectsJourney,
   workspacesJourney,
   sessionsJourney,
+  inboxJourney,
   missingJourney,
   settingsJourney,
   quitJourney,
@@ -69,6 +71,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     dropFolder: (path) => session.dropFolder(path),
     dropFiles: (testId, paths) => session.dropFiles(testId, paths),
     openedLinks: () => session.openedLinks(),
+    notices: () => session.notices(),
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: (whileClosed) => session.relaunch(whileClosed),

@@ -19,7 +19,10 @@ export type CommandId =
   | "tools.check"
   | "theme.system"
   | "theme.light"
-  | "theme.dark";
+  | "theme.dark"
+  | "notifications.off"
+  | "notifications.on"
+  | "inbox.newest";
 
 export interface Command {
   id: CommandId;

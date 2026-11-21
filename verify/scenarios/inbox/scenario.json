@@ -1,0 +1,59 @@
+{
+  "description": "A repo with a committed README, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that takes a prompt, then asks for permission three times, the first time with a permission notice and a helper agent asking at once, and finishes. Satellite is set to the light theme.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "workspaces": [
+    { "name": "alpha", "steps": [] },
+    { "name": "beta", "steps": [] }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      { "print": "\u001b[?2004h" },
+      { "print": "> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" },
+      { "print": "\r\nWorking on it.\r\n" },
+      { "await": "\r" },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
+      { "hook": "Notification", "fields": { "notification_type": "permission_prompt" } },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash", "agent_id": "helper" } },
+      { "print": "Allow Bash for both? Press y to allow.\r\n" },
+      { "await": "y" },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash", "agent_id": "helper" } },
+      { "print": "Allowed.\r\n" },
+      { "await": "\r" },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
+      { "print": "Allow Bash again? Press y to allow.\r\n" },
+      { "await": "y" },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
+      { "print": "Allowed again.\r\n" },
+      { "await": "\r" },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
+      { "print": "Allow Bash once more? Press y to allow.\r\n" },
+      { "await": "y" },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
+      { "hook": "Stop" },
+      { "print": "Done.\r\n> " }
+    ]
+  }
+}

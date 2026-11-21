@@ -6,6 +6,7 @@ import {
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
+import { needsSince } from "../inbox/inbox.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { mostUrgent } from "./session-pixel.ts";
@@ -18,12 +19,13 @@ export interface SessionTab {
   resume: boolean;
   status: SessionStatus;
   ready: boolean;
+  needsSince: number | null;
 }
 export interface Sessions {
   tabsOf: (ref: WorkspaceRef) => SessionTab[];
   all: SessionTab[];
   activeOf: (ref: WorkspaceRef) => string | undefined;
-  open: (ref: WorkspaceRef, resume: boolean) => void;
+  open: (ref: WorkspaceRef, resume: boolean) => boolean;
   restart: (key: string) => void;
   close: (key: string) => void;
   activate: (key: string) => void;
@@ -37,8 +39,8 @@ interface State {
   active: ReadonlyMap<string, string>;
 }
 
-const tabLimit = bridgeLimits.terminals;
-const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
+export const tabLimit = bridgeLimits.terminals;
+export const tabLimitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
 
 function stoppedSentence(names: readonly string[]): string {
   if (names.length === 1)
@@ -83,6 +85,7 @@ export function useSessions(notify: Notify): Sessions {
   const [state, setState] = useState<State>({ tabs: [], active: new Map() });
   const numbers = useRef(new Map<string, number>());
   const count = useRef(0);
+  const asked = useRef(0);
   useEffect(() => {
     count.current = state.tabs.length;
   }, [state.tabs.length]);
@@ -96,7 +99,14 @@ export function useSessions(notify: Notify): Sessions {
             ? {
                 ...current,
                 tabs: current.tabs.map((tab) =>
-                  tab.terminalId === id ? { ...tab, status, ready } : tab,
+                  tab.terminalId === id
+                    ? {
+                        ...tab,
+                        status,
+                        ready,
+                        needsSince: needsSince(tab, status, () => (asked.current += 1)),
+                      }
+                    : tab,
                 ),
               }
             : current,
@@ -104,38 +114,43 @@ export function useSessions(notify: Notify): Sessions {
       }),
     [],
   );
-  const open = useCallback(
-    (ref: WorkspaceRef, resume: boolean) => {
-      if (count.current >= tabLimit) {
-        notify(tabLimitSentence, "error");
-        return;
-      }
-      count.current += 1;
-      const place = placeOf(ref);
-      const number = (numbers.current.get(place) ?? 0) + 1;
-      numbers.current.set(place, number);
-      const tab: SessionTab = {
-        key: crypto.randomUUID(),
-        terminalId: crypto.randomUUID(),
-        number,
-        workspace: { projectId: ref.projectId, workspace: ref.workspace },
-        resume,
-        status: "idle",
-        ready: false,
-      };
-      setState((current) => ({
-        tabs: [...current.tabs, tab],
-        active: new Map(current.active).set(place, tab.key),
-      }));
-    },
-    [notify],
-  );
+  const open = useCallback((ref: WorkspaceRef, resume: boolean) => {
+    if (count.current >= tabLimit) return false;
+    count.current += 1;
+    const place = placeOf(ref);
+    const number = (numbers.current.get(place) ?? 0) + 1;
+    numbers.current.set(place, number);
+    const tab: SessionTab = {
+      key: crypto.randomUUID(),
+      terminalId: crypto.randomUUID(),
+      number,
+      workspace: { projectId: ref.projectId, workspace: ref.workspace },
+      resume,
+      status: "idle",
+      ready: false,
+      needsSince: null,
+    };
+    setState((current) => ({
+      tabs: [...current.tabs, tab],
+      active: new Map(current.active).set(place, tab.key),
+    }));
+    return true;
+  }, []);
   const restart = useCallback((key: string) => {
     const terminalId = crypto.randomUUID();
     setState((current) => ({
       ...current,
       tabs: current.tabs.map((tab) =>
-        tab.key === key ? { ...tab, terminalId, resume: false, status: "idle", ready: false } : tab,
+        tab.key === key
+          ? {
+              ...tab,
+              terminalId,
+              resume: false,
+              status: "idle",
+              ready: false,
+              needsSince: null,
+            }
+          : tab,
       ),
     }));
   }, []);

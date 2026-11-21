@@ -66,7 +66,7 @@ describe("parseTrack", () => {
   });
 });
 
-describe("readTracking", () => {
+describe("readTracking", { timeout: 30_000 }, () => {
   it("reads only the branches it was asked for", async () => {
     const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-tracking-")));
     const repo = join(base, "repo");

@@ -4,7 +4,6 @@ import {
   defaultInterfaceState,
   interfaceState,
   type InterfaceState,
-  type ThemeChoice,
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "./json-file.ts";
@@ -20,7 +19,12 @@ interface LoadedInterface {
   writable: boolean;
 }
 
-const fileSchema = interfaceState.extend({ version: z.literal(1) });
+const version2 = interfaceState.extend({ version: z.literal(2) });
+const version1 = interfaceState
+  .omit({ notifications: true })
+  .extend({ version: z.literal(1) })
+  .transform((file): z.output<typeof version2> => ({ ...file, version: 2, notifications: true }));
+const fileSchema = z.union([version1, version2]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -37,10 +41,15 @@ const saveFailure =
 async function readInterfaceFile(file: string): Promise<LoadedInterface> {
   const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
-    version: 1,
+    version: 2,
   });
   return {
-    state: { selected: value.selected, columns: value.columns, theme: value.theme },
+    state: {
+      selected: value.selected,
+      columns: value.columns,
+      theme: value.theme,
+      notifications: value.notifications,
+    },
     notice: notices[outcome.kind],
     writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
   };
@@ -62,7 +71,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
     async save(state) {
       const loaded = await load();
       cached = Promise.resolve({ ...loaded, state });
-      if (loaded.writable) await writer.write({ version: 1, ...state });
+      if (loaded.writable) await writer.write({ version: 2, ...state });
     },
     flush: () => writer.flush(),
   };
@@ -70,7 +79,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
 
 export function interfaceHandlers(
   file: InterfaceFile,
-  applyTheme: (theme: ThemeChoice) => void,
+  apply: (state: InterfaceState) => void,
 ): Pick<BridgeHandlers, "interface.load" | "interface.save"> {
   let noticeGiven = false;
   return {
@@ -81,7 +90,7 @@ export function interfaceHandlers(
       return answer;
     },
     "interface.save": async ({ state }) => {
-      applyTheme(state.theme);
+      apply(state);
       try {
         await file.save(state);
       } catch (error) {

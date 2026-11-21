@@ -42,7 +42,7 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 | 002 | [Shell and projects](002-shell-and-projects/spec.md) | Done |
 | 003 | [Workspaces](003-workspaces/spec.md) | Done |
 | 004 | [Claude Code sessions](004-claude-code-sessions/spec.md) | Done |
-| 005 | [Inbox and notifications](005-inbox-and-notifications/spec.md) | Approved |
+| 005 | [Inbox and notifications](005-inbox-and-notifications/spec.md) | Done |
 | 006 | [Changes](006-changes/spec.md) | Approved |
 | 007 | [Files](007-files/spec.md) | Approved |
 | 008 | [Pull request](008-pull-request/spec.md) | Approved |

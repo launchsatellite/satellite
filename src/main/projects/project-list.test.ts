@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { BridgeOwner } from "../bridge/registry.ts";
 import { workspaceHandlers } from "../workspaces/workspace-handlers.ts";
-import { createProjects } from "./project-list.ts";
+import { createProjects, parentName, shownProjectName } from "./project-list.ts";
 import type { StoredProject, StoredWorkspace } from "./projects-file.ts";
 
 const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
@@ -177,6 +177,33 @@ function projectsIn(
     recorded: () => undefined,
   });
 }
+
+describe("parentName and shownProjectName", () => {
+  it("never names the user's home folder as a project's parent", () => {
+    const home = join(tmpdir(), "home-of-someone");
+    expect(parentName(join(home, "app"), home)).toBe("your home folder");
+    expect(parentName(join(home, "work", "app"), home)).toBe("work");
+  });
+
+  it("knows the home folder through a link, in any case where case is ignored, and as a project", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-home-")));
+    const real = join(base, "someone");
+    await mkdir(join(real, "work"), { recursive: true });
+    const linked = join(base, "linked-someone");
+    await symlink(real, linked, "junction");
+    expect(parentName(join(real, "app"), linked)).toBe("your home folder");
+    expect(parentName(join(real, "work", "app"), linked)).toBe("work");
+    expect(shownProjectName(real, linked)).toBe("your home folder");
+    expect(shownProjectName(join(real, "work"), linked)).toBe("work");
+    if (process.platform !== "linux") {
+      expect(parentName(join(real.toUpperCase(), "app"), linked)).toBe("your home folder");
+    }
+    const gone = join(base, "nobody");
+    expect(parentName(join(gone, "app"), gone)).toBe("your home folder");
+    expect(shownProjectName(join(base, "elsewhere"), gone)).toBe("elsewhere");
+    await rm(base, { recursive: true, force: true });
+  });
+});
 
 describe("createProjects", () => {
   it("keeps healthy projects healthy while folders hang, and bounds the hung reads", async () => {

@@ -59,6 +59,7 @@ function fakeStore(projects: StoredProject[]): ProjectStore {
         () => false,
       ),
     creating: new Set(),
+    list: () => Promise.resolve(projects),
     project(projectId) {
       const found = projects.find((project) => project.id === projectId);
       if (found === undefined) {
@@ -105,7 +106,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("workspaceHandlers", () => {
+describe("workspaceHandlers", { timeout: 30_000 }, () => {
   it("runs one creation per project and four at once, even when asked together", async () => {
     const projects = await Promise.all(
       ["one", "two", "three", "four", "five"].map((name) => repository(name)),

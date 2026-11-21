@@ -57,12 +57,23 @@ Send to Claude Code types a prepared request into the selected session's prompt 
 
 On Windows Satellite runs the native install of Claude Code, since an npm install starts through a batch file. Claude Code picks its colours when a session starts, so a running session keeps them through a theme change.
 
+## Inbox
+
+The inbox sits at the top of the sidebar, under the command menu and the switcher and above the projects. It lists every workspace with a session that needs you, across all projects, newest first by when the workspace started needing you, and its count turns signal orange while anything is listed. Each row names the workspace and its project, with the parent folder when two project names read the same, which reads your home folder for a project kept directly in it, as the home folder itself does when it is a project, and says why in one sentence, such as Claude Code needs you, Session 2 needs you or 3 sessions need you.
+
+Selecting a row, or Go to the newest workspace that needs you in the command menu, opens that workspace on the session that has waited longest and puts focus in its terminal, without typing anything. A key already held when the terminal takes focus is dropped until the next fresh press, so a held Enter never answers a permission question. A row leaves by itself once no session there needs you, whether it was answered, ended or closed, or its workspace was archived or its project removed. Nothing about the inbox is saved, since every reason ends with its session.
+
+When a workspace starts needing you while the window is hidden, minimised or behind another app, Satellite shows one system notification. Notifications are only for needing you, never for finished work. More sessions asking in the same workspace add none until it has left the inbox and needs you again. At most one notification shows every 5 seconds, and the workspaces that ask in between arrive together as one that counts every workspace waiting. A notification names one workspace only while no other waits, so it always states everything waiting. A notification holds only Satellite's own words with the workspace and project names, never anything a session said or ran, and a click on it brings the window forward and opens the one workspace it named while that one still needs you, or else the newest one waiting, the way its row does. Turn notifications off or on in the command menu. Turning them off closes the one showing, the switch is remembered, and the inbox and the count keep working while it is off.
+
+The app icon carries the inbox count on macOS and on Linux launchers that support it, never for the AppImage. Windows shows no count. On macOS a notification needs an app the system accepts as signed and your permission, and the count needs that permission too. On Windows a notification needs the Start Menu shortcut the installer makes. A name written right to left displays right to left in a notification.
+
 ## Decisions
 
 | Chosen | Rejected | Why |
 | --- | --- | --- |
 | The user's own `claude` in a terminal | A custom agent interface | Nothing to maintain, every Claude Code feature works at once, and the user's sign-in, settings, hooks and skills apply untouched. |
 | Session status from hooks passed at launch | Editing the user's Claude Code settings, or reading terminal output | The hooks sit in a short-lived file in Satellite's own home, last for one process and merge with the user's own. Nothing is written to the user's Claude Code settings or the repository. |
+| Notifications only when a workspace needs you | Notifications when work finishes | Signal stays rare, so a notification always means you are the blocker. |
 | Read-only files and diffs | A code editor | Agents change the code. An editor invites a second way of working and a second product to maintain. |
 | Prepared requests typed into the prompt | An editor link that shares selection and proposed edits | The link's protocol is undocumented, and pairing several sessions with the right workspace is its weakest part. The prompt is already ours. |
 | A native read-only pull request view fed by `gh` | An embedded browser signed in to GitHub | A browser needs its own sign-in, stores a full-power session on disk and must be patched as fast as a browser. `gh` is already signed in and scoped. |

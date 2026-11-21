@@ -201,7 +201,7 @@ describe("parseWorktreeList", () => {
   }, 30_000);
 });
 
-describe("listWorktrees", () => {
+describe("listWorktrees", { timeout: 30_000 }, () => {
   it("reads the list real git prints", async () => {
     const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-worktrees-")));
     const config = join(base, "gitconfig");
@@ -226,7 +226,7 @@ describe("listWorktrees", () => {
   });
 });
 
-describe("listWorktrees on a git older than 2.36", () => {
+describe("listWorktrees on a git older than 2.36", { timeout: 30_000 }, () => {
   it("asks once with -z, then reads newline records for the rest of the run", async () => {
     older.on = true;
     try {

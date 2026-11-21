@@ -5,6 +5,7 @@ import { invoke } from "../bridge/bridge-client.ts";
 import { TerminalView } from "../terminal/terminal-view.tsx";
 import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
+import { focusSessionEvent, focusedTerminal } from "./focus-session.ts";
 import {
   leavesFocusAlone,
   sendToClaudeCodeEvent,
@@ -12,7 +13,7 @@ import {
   type PromptTarget,
 } from "./send-to-claude-code.ts";
 import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
-import type { Sessions } from "./use-sessions.ts";
+import { tabLimit, tabLimitSentence, type Sessions } from "./use-sessions.ts";
 
 interface SessionsPaneProps {
   sessions: Sessions;
@@ -60,14 +61,20 @@ function InstallStep() {
 function EmptyWorkspace({
   workspace,
   missing,
+  atLimit,
   onOpen,
 }: {
   workspace: WorkspaceRef;
   missing: string | undefined;
-  onOpen: (resume: boolean) => void;
+  atLimit: boolean;
+  onOpen: (resume: boolean) => boolean;
 }) {
   const { projectId, workspace: key } = workspace;
   const [resumable, setResumable] = useState<boolean>();
+  const [full, setFull] = useState(false);
+  const start = (resume: boolean) => {
+    setFull(!onOpen(resume));
+  };
   const actions = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let current = true;
@@ -91,6 +98,7 @@ function EmptyWorkspace({
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
       <p role="status" data-testid="sessions-empty" className="text-[13px] text-fg2">
         {missing ??
+          (full && atLimit ? tabLimitSentence : undefined) ??
           (resumable
             ? "Your last session here can pick up where it left off."
             : "No Claude Code session here yet.")}
@@ -102,7 +110,7 @@ function EmptyWorkspace({
             <Button
               testId="resume-session"
               onClick={() => {
-                onOpen(true);
+                start(true);
               }}
             >
               Resume session
@@ -111,7 +119,7 @@ function EmptyWorkspace({
               variant="secondary"
               testId="start-claude"
               onClick={() => {
-                onOpen(false);
+                start(false);
               }}
             >
               Start a new session
@@ -121,7 +129,7 @@ function EmptyWorkspace({
           <Button
             testId="start-claude"
             onClick={() => {
-              onOpen(false);
+              start(false);
             }}
           >
             Start Claude Code
@@ -174,6 +182,19 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
       window.removeEventListener(sendToClaudeCodeEvent, receive);
     };
   }, []);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const terminalId = focusedTerminal(event);
+      if (terminalId === undefined) return;
+      setTimeout(() => {
+        targets.current.get(terminalId)?.focus();
+      });
+    };
+    window.addEventListener(focusSessionEvent, receive);
+    return () => {
+      window.removeEventListener(focusSessionEvent, receive);
+    };
+  }, []);
   const offerTarget = useCallback((id: string, target: PromptTarget) => {
     targets.current.set(id, target);
     return () => {
@@ -196,9 +217,8 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
           key={`${selected.projectId}/${selected.workspace}`}
           workspace={selected}
           missing={missing}
-          onOpen={(resume) => {
-            sessions.open(selected, resume);
-          }}
+          atLimit={sessions.all.length >= tabLimit}
+          onOpen={(resume) => sessions.open(selected, resume)}
         />
       );
     }

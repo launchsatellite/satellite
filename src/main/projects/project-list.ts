@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { lstat, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
+import { userHomeFolder } from "../platform/satellite-home.ts";
 import {
   blankWorkspace,
   droppedSentences,
@@ -41,6 +43,7 @@ interface ProjectRead {
   answer: Promise<ProjectAnswer>;
 }
 export interface ProjectStore {
+  list(): Promise<StoredProject[]>;
   project(projectId: string): Promise<StoredProject>;
   available(project: StoredProject): Promise<boolean>;
   addWorkspace(projectId: string, workspace: StoredWorkspace): Promise<void>;
@@ -68,6 +71,9 @@ const droppedLimit = 20;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
 const workspaceSaveFailure = "Satellite couldn't save the workspace list. Nothing changed.";
 const notInSatellite = "That project is not in Satellite.";
+const homeFolderWords = "your home folder";
+
+let realHome: { home: string; forms: readonly string[] } | undefined;
 const deviceDrop =
   "That's a Windows device path, not a folder. Drop the repository's folder instead.";
 const networkDrop =
@@ -96,8 +102,8 @@ async function folderChecks(project: StoredProject, inSlot: Slot): Promise<Missi
 function unread(project: StoredProject, missing: Missing | null): ProjectView {
   return {
     id: project.id,
-    name: projectName(project.path),
-    parent: projectName(dirname(project.path)),
+    name: shownProjectName(project.path),
+    parent: parentName(project.path),
     missing,
     workspaces: [
       blankWorkspace("main", null),
@@ -122,6 +128,34 @@ function stillHas(name: string, count: number): string {
   return count === 1
     ? `${name} still has 1 workspace. Archive it first, then remove the project.`
     : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+}
+
+function realOrSame(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
+function homeForms(home: string): readonly string[] {
+  if (realHome?.home !== home) {
+    realHome = { home, forms: [home, realOrSame(home)] };
+  }
+  return realHome.forms;
+}
+
+function isHomeFolder(path: string, home: string): boolean {
+  return homeForms(home).some((form) => samePath(path, form));
+}
+
+export function shownProjectName(path: string, home = userHomeFolder()): string {
+  return isHomeFolder(path, home) ? homeFolderWords : projectName(path);
+}
+
+export function parentName(path: string, home = userHomeFolder()): string {
+  const parent = dirname(path);
+  return isHomeFolder(parent, home) ? homeFolderWords : projectName(parent);
 }
 
 export function projectName(path: string): string {
@@ -325,6 +359,7 @@ export function createProjects({
     creating,
     available: async (project) => (await checkedWithin(project)).checked === null,
     writable: async () => (await file.load()).writable,
+    list: current,
     async project(projectId) {
       const found = (await current()).find((project) => project.id === projectId);
       if (found === undefined) throw new BridgeFailure("not-found", notInSatellite);

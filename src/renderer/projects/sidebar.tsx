@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ProjectView,
   WorkspaceKey,
@@ -13,7 +14,8 @@ import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
-import { repeatedNames, workspaceLabel } from "./use-projects.ts";
+import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
@@ -22,6 +24,7 @@ interface SidebarProps {
   onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
+  inbox: ReactNode;
 }
 interface ProjectRow {
   project: ProjectView;
@@ -123,7 +126,7 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
     workspaceTestIds: workspaceIds
       .filter((workspace) => workspace.projectId === row.project.id)
       .map((workspace) => workspace.testId),
-    showParent: repeated.has(row.project.name) && row.project.parent !== "",
+    showParent: shownParent(row.project, repeated) !== undefined,
   }));
 }
 
@@ -151,7 +154,9 @@ function ProjectRows({
         <PixelAvatar seed={project.id} />
         <span className="min-w-0 truncate">{project.name}</span>
         {showParent && (
-          <span className="min-w-0 truncate font-medium text-dim">{project.parent}</span>
+          <span className="min-w-0 flex-[1_1_0%] truncate font-medium text-dim">
+            {project.parent}
+          </span>
         )}
         {project.missing !== null ? (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
@@ -214,6 +219,7 @@ export function Sidebar({
   onNewWorkspace,
   focusProjectId,
   pixelFor,
+  inbox,
 }: SidebarProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
@@ -229,6 +235,7 @@ export function Sidebar({
         text="Go to a workspace"
         testId="open-switcher"
       />
+      {inbox}
       <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
         Projects
         <CommandButton

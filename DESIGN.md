@@ -118,6 +118,7 @@ The agent pane always shows the real Claude Code, untouched. Satellite draws onl
 
 - Sessions are tabs in a 40px bar on `side` above the terminal, each named Session and its number, with its status pixel and a close button shown on the selected tab and on hover, so a tab cut off at the strip's edge never shows a lone one, and a plus at the end that starts another. The arrow keys, Home and End move between tabs and Delete closes one.
 - A session's pixel is ultraviolet while it works, signal while it needs you, lilac when it is done and grey while it is idle or stopped. A workspace row shows the most urgent of its sessions, needs you before working before done.
+- The inbox sits at the top of the sidebar under the command rows. Its header is the dim uppercase label Inbox with a bell icon, and on its right the count as a Geist Pixel readout, in `sigfg` while something needs you and in `dim` at 0. Each row is a 6px signal pixel beside the workspace name in `fg` on its own line, wrapping in full however long it is, so two rows never read the same. Below it the project in `dim`, drawn as the cleaned name a notification shows so no direction mark can disguise it, truncated when it runs out of room, then one sentence in `fg2`, Claude Code needs you., Session 2 needs you. or 3 sessions need you., which moves to its own line when the project leaves it no room. The project gains its parent folder when two project names read the same, your home folder when that parent, or the project itself, is the home folder. The rows sit in a list of at most a third of the window's height that scrolls on its own, so the projects stay in view, and a row that takes keyboard focus scrolls into view. The row's tooltip and accessible name read the workspace, the project and the sentence. With nothing listed the inbox says Nothing needs you right now. in `dim`.
 - A link from the terminal opens a small dialog first, Open this link, with the site above the full address in Geist Mono, Cancel on the left with focus and Open in browser on the right.
 - A moment Satellite draws is one sentence in the pane on `bg`, in `fg2`, above the button that starts a fresh session. The resume offer pairs Resume session with a secondary Start a new session. When Claude Code is missing no tab or terminal is drawn, and the install step sits between the sentence and Start Claude Code.
 
@@ -129,11 +130,11 @@ Broadcast moves in steps on the pixel grid, never with easing. In the app motion
 
 ## Voice
 
-Smart, friendly, futuristic. Short sentences, plain words, no colons in prose. Buttons start with a verb and name the thing, like Send to Claude Code. Errors say what happened and what is safe. Nothing shouts.
+Smart, friendly, futuristic. Short sentences, plain words, no colons in prose. Buttons start with a verb and name the thing, like Send to Claude Code. Errors say what happened and what is safe. A notification holds only Satellite's own words and names, never what a session said or ran. Nothing shouts.
 
 | Say | Not |
 | --- | --- |
-| pr-tab needs you. Claude Code asks to run git push | Action required! |
+| pr-tab needs you. Claude Code is waiting for you in satellite | Action required! |
 | main moved, 2 files conflict | Merge conflict detected |
 | Claude Code stopped unexpectedly. The worktree and its changes are safe | Error: process exited with code 1 |
 | 2 commits aren't pushed · Archive anyway | Are you sure? This cannot be undone |
