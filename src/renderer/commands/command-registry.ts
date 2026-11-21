@@ -31,7 +31,9 @@ export type CommandId =
   | "changes.inline"
   | "changes.side-by-side"
   | "changes.update-from-base"
-  | "changes.send-lines";
+  | "changes.send-lines"
+  | "pull-request.show"
+  | "pull-request.open";
 
 export interface Command {
   id: CommandId;

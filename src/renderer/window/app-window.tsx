@@ -28,6 +28,10 @@ import { useFileTabs } from "../files/use-file-tabs.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
+import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
+import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
+import { linkSentence } from "../pull-request/pull-request-words.ts";
+import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
@@ -141,6 +145,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
   const askTerminalLink = useCallback((address: string) => {
     setAsking({ address, description: terminalLinkSentence });
+  }, []);
+  const askPullRequestLink = useCallback((address: string) => {
+    setAsking({ address, description: linkSentence });
   }, []);
   const closeLink = useCallback(() => {
     setAsking(null);
@@ -286,8 +293,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
+  const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
   const changesShown = shownHere && centreView === "changes";
   const filesShown = shownHere && centreView === "files";
+  const pullRequestShown = shownHere && centreView === "pull-request";
   const layoutShown =
     changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
@@ -301,6 +310,40 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     filesShown ? "uncommitted" : changesView,
     finishedHere,
     shownText?.path,
+  );
+  const listedRefs = useMemo(
+    () =>
+      (projects ?? [])
+        .filter((project) => project.missing === null)
+        .flatMap((project) =>
+          project.workspaces.map((workspace) => ({
+            projectId: project.id,
+            workspace: workspace.key,
+          })),
+        ),
+    [projects],
+  );
+  const finishedElsewhere = useMemo(() => {
+    const done = new Map<string, string[]>();
+    for (const tab of allSessions) {
+      if (tab.status !== "done") continue;
+      const place = `${tab.workspace.projectId}/${tab.workspace.workspace}`;
+      done.set(place, [...(done.get(place) ?? []), tab.key]);
+    }
+    return new Map([...done].map(([place, keys]) => [place, keys.join(" ")]));
+  }, [allSessions]);
+  const pullRequests = usePullRequests({
+    listed: listedRefs,
+    shown: changesHere,
+    detail: pullRequestShown,
+    finished: finishedHere,
+    finishedElsewhere,
+  });
+  const shownEntry = changesHere === null ? undefined : pullRequests.of(changesHere);
+  const shownPullRequest = foundOf(shownEntry);
+  const pullRequestFor = useCallback(
+    (ref: WorkspaceRef) => foundOf(pullRequests.of(ref)),
+    [pullRequests],
   );
   const listedWorkspace = useCallback(
     ({ projectId, workspace }: WorkspaceRef) =>
@@ -320,6 +363,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     },
     [openFileTab],
   );
+  const shownPullRequestUrl = shownPullRequest?.url ?? null;
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -583,7 +627,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "files.show",
             title: "Show the files",
-            available: shownHere && centreView === "changes",
+            available: shownHere && centreView !== "files",
             run: () => {
               setCentreView("files");
             },
@@ -591,9 +635,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "changes.show",
             title: "Show the changes",
-            available: filesShown,
+            available: shownHere && centreView !== "changes",
             run: () => {
               setCentreView("changes");
+            },
+          },
+          {
+            id: "pull-request.show",
+            title: "Show the pull request",
+            available: shownHere && centreView !== "pull-request",
+            run: () => {
+              setCentreView("pull-request");
+            },
+          },
+          {
+            id: "pull-request.open",
+            title: "Open the pull request on GitHub",
+            available: shownHere && shownPullRequestUrl !== null,
+            run: () => {
+              if (shownPullRequestUrl !== null) askPullRequestLink(shownPullRequestUrl);
             },
           },
           {
@@ -734,6 +794,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownText,
     fileShown,
     diffSelection,
+    shownPullRequestUrl,
+    askPullRequestLink,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -753,6 +815,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           base={changes.header?.base ?? null}
           ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
           behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
+          pullRequest={shownPullRequest}
+          onShowPullRequest={() => {
+            setCentreView("pull-request");
+          }}
         />
         {selectedProject.missing !== null ? (
           <FolderMissing
@@ -762,7 +828,20 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           />
         ) : (
           changesHere !== null &&
-          (centreView === "files" ? (
+          (centreView === "pull-request" ? (
+            <PullRequestView
+              entry={shownEntry}
+              pullRequest={shownPullRequest?.number ?? null}
+              section={pullRequestSection}
+              onSection={setPullRequestSection}
+              onCentre={setCentreView}
+              onLink={askPullRequestLink}
+            >
+              {shownPullRequest !== null && (
+                <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
+              )}
+            </PullRequestView>
+          ) : centreView === "files" ? (
             <FilesView
               key={`${changesHere.projectId}/${changesHere.workspace}`}
               workspace={changesHere}
@@ -770,6 +849,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               list={changes.list}
               finished={finishedHere}
               onCentre={setCentreView}
+              pullRequest={shownPullRequest?.number ?? null}
               handle={diffHandle}
               onShown={setFileShown}
             />
@@ -786,6 +866,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               onShown={setShownText}
               onNarrow={setDiffNarrow}
               onCentre={setCentreView}
+              pullRequest={shownPullRequest?.number ?? null}
               picked={picked}
               onPick={setPicked}
             />
@@ -816,6 +897,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onNewWorkspace={setCreatingIn}
             focusProjectId={added}
             pixelFor={sessions.pixelFor}
+            pullRequestFor={pullRequestFor}
             inbox={
               projects === undefined ? null : (
                 <InboxList

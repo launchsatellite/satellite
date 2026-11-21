@@ -166,3 +166,5 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 007 Files, the tree with icons, dimmed ignored entries and Git letters, folders loaded when opened, tabs remembered across a relaunch, the viewer following the disk and typing into it changing nothing | `mixed-changes` | `files` |
 | 007 Files, open by name finding a deep file, selected lines typed into the prompt, images, the sentences for files that cannot be shown | `mixed-changes` | `files` |
 | 007 Files, listing, reading and finding refused outside the workspace folder, through a link and for a made-up workspace | `default` | `boundary` |
+| 008 Pull request, an open pull request with its overview, blocks, commits and a Markdown description, the tab label and the readouts in the row and the header | `pr-open` | |
+| 008 Pull request, the signed out sentence, and the sentence with its prepared request for a branch with no pull request | `not-signed-in`, `mixed-changes` | |

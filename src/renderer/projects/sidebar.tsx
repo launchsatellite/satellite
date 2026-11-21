@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type {
   ProjectView,
+  PullRequestFound,
   WorkspaceKey,
   WorkspaceRef,
   WorkspaceView,
@@ -15,6 +16,7 @@ import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
 
 interface SidebarProps {
@@ -24,6 +26,7 @@ interface SidebarProps {
   onNewWorkspace: (projectId: string) => void;
   focusProjectId: string | undefined;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
+  pullRequestFor: (ref: WorkspaceRef) => PullRequestFound | null;
   inbox: ReactNode;
 }
 interface ProjectRow {
@@ -76,7 +79,15 @@ function counted(count: number | null): string | undefined {
   return count >= countCap ? `${String(countCap)}+` : String(count);
 }
 
-function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: string | undefined }) {
+function Readouts({
+  workspace,
+  pullRequest,
+  testId,
+}: {
+  workspace: WorkspaceView;
+  pullRequest: PullRequestFound | null;
+  testId: string | undefined;
+}) {
   const ahead = counted(workspace.ahead);
   const behind = counted(workspace.behind);
   const changed = counted(workspace.changed);
@@ -84,6 +95,7 @@ function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: str
     ahead === undefined ? undefined : `${ahead} ahead`,
     behind === undefined ? undefined : `${behind} behind`,
     changed === undefined ? undefined : `${changed} changed files`,
+    pullRequest === null ? undefined : readoutLabel(pullRequest),
   ].filter((part) => part !== undefined);
   if (parts.length === 0) return null;
   return (
@@ -100,6 +112,16 @@ function Readouts({ workspace, testId }: { workspace: WorkspaceView; testId: str
           <span className="flex items-center gap-[3px]">
             <Icon name="folder" size={12} />
             {changed}
+          </span>
+        )}
+        {pullRequest !== null && (
+          <span
+            data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
+            data-number={pullRequest.number}
+            data-checks={checksState(pullRequest.counts)}
+            className="flex items-center gap-[5px]"
+          >
+            <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
           </span>
         )}
       </span>
@@ -137,6 +159,7 @@ function ProjectRows({
   onNewWorkspace,
   focus,
   pixelFor,
+  pullRequestFor,
 }: {
   row: ProjectRow;
   selected: WorkspaceRef | null;
@@ -144,6 +167,7 @@ function ProjectRows({
   onNewWorkspace: (projectId: string) => void;
   focus: boolean;
   pixelFor: SidebarProps["pixelFor"];
+  pullRequestFor: SidebarProps["pullRequestFor"];
 }) {
   return (
     <>
@@ -202,7 +226,11 @@ function ProjectRows({
                 <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
                   {workspaceLabel(project, workspace)}
                 </span>
-                <Readouts workspace={workspace} testId={testId} />
+                <Readouts
+                  workspace={workspace}
+                  pullRequest={pullRequestFor({ projectId: project.id, workspace: workspace.key })}
+                  testId={testId}
+                />
               </button>
             </li>
           );
@@ -219,6 +247,7 @@ export function Sidebar({
   onNewWorkspace,
   focusProjectId,
   pixelFor,
+  pullRequestFor,
   inbox,
 }: SidebarProps) {
   return (
@@ -263,6 +292,7 @@ export function Sidebar({
               onNewWorkspace={onNewWorkspace}
               focus={row.project.id === focusProjectId}
               pixelFor={pixelFor}
+              pullRequestFor={pullRequestFor}
             />
           ))}
         </nav>

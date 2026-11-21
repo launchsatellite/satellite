@@ -28,6 +28,7 @@ interface ChangesViewProps {
   onShown: (shown: ShownText | null) => void;
   onNarrow: (narrow: boolean) => void;
   onCentre: (view: CentreView) => void;
+  pullRequest: number | null;
   picked: Picked | null;
   onPick: (picked: Picked) => void;
 }
@@ -76,6 +77,7 @@ export function ChangesView({
   onShown,
   onNarrow,
   onCentre,
+  pullRequest,
   picked,
   onPick: setPicked,
 }: ChangesViewProps) {
@@ -193,7 +195,7 @@ export function ChangesView({
       }}
     >
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs value="changes" onChange={onCentre} />
+        <CentreTabs value="changes" pullRequest={pullRequest} onChange={onCentre} />
         {list?.base != null && (
           <span
             data-testid="changes-base"

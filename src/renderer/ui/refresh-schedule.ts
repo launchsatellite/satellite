@@ -16,20 +16,24 @@ interface Schedule {
   hide: () => void;
 }
 
-const refreshMs = 2000;
-const refreshMaxMs = 30_000;
-const refreshFactor = 4;
+export interface Pace {
+  firstMs: number;
+  maxMs: number;
+  factor: number;
+}
 
-export function pollDelay(elapsedMs: number, steps: number): number {
-  const backoff = refreshMs * 2 ** steps;
-  return Math.min(refreshMaxMs, Math.max(backoff, refreshFactor * elapsedMs));
+const defaultPace: Pace = { firstMs: 2000, maxMs: 30_000, factor: 4 };
+
+export function pollDelay(elapsedMs: number, steps: number, pace: Pace = defaultPace): number {
+  const backoff = pace.firstMs * 2 ** steps;
+  return Math.min(pace.maxMs, Math.max(backoff, pace.factor * elapsedMs));
 }
 
 export function nextSteps(steps: number, answeredFiles: boolean, changed: boolean): number {
   return answeredFiles && changed ? 0 : steps + 1;
 }
 
-export function createSchedule(hooks: ScheduleHooks): Schedule {
+export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): Schedule {
   let stopped = false;
   let running = false;
   let again = false;
@@ -58,7 +62,7 @@ export function createSchedule(hooks: ScheduleHooks): Schedule {
         again = false;
         ask();
       } else if (hooks.visible()) {
-        cancel = hooks.after(pollDelay(hooks.now() - began, steps), ask);
+        cancel = hooks.after(pollDelay(hooks.now() - began, steps, pace), ask);
       }
     });
   };
@@ -76,7 +80,7 @@ export function createSchedule(hooks: ScheduleHooks): Schedule {
       steps = -1;
       if (cancel === undefined) return;
       clear();
-      cancel = hooks.after(refreshMs, ask);
+      cancel = hooks.after(pace.firstMs, ask);
     },
     hide: clear,
   };

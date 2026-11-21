@@ -1,10 +1,95 @@
 {
-  "description": "A fresh repo where gh is installed and signed out.",
+  "description": "A clone of a local upstream with one pushed workspace, alpha, where gh is installed and signed out.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        {
+          "write": {
+            "path": "README.md",
+            "content": "# Verify repo\n"
+          }
+        },
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  return \"Hello \" + name;\n}\n"
+          }
+        },
+        {
+          "write": {
+            "path": "old.txt",
+            "content": "This file goes away.\n"
+          }
+        },
+        {
+          "write": {
+            "path": "notes.md",
+            "content": "# Notes\n\nKeep this.\n"
+          }
+        },
+        {
+          "write": {
+            "path": ".gitignore",
+            "content": "*.log\nbuild/\n"
+          }
+        },
+        {
+          "write": {
+            "path": "Cargo.toml",
+            "content": "[package]\nname = \"verify\"\n"
+          }
+        },
+        {
+          "write": {
+            "path": "src/deep/er/than/usual/needle-target.ts",
+            "content": "export const needle = \"found\";\n"
+          }
+        },
+        {
+          "write": {
+            "path": "assets/pixel.png",
+            "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        },
+        {
+          "git": ["init", "-b", "main"]
+        },
+        {
+          "git": ["add", "."]
+        },
+        {
+          "git": ["commit", "-m", "first commit"]
+        }
+      ]
+    }
+  ],
   "repo": [
-    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
-    { "git": ["init", "-b", "main"] },
-    { "git": ["add", "."] },
-    { "git": ["commit", "-m", "first commit"] }
+    {
+      "git": ["clone", "../folders/upstream", "."]
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": [
+        {
+          "write": {
+            "path": "src/app.ts",
+            "content": "export function greet(name: string) {\n  const greeting = \"Hello\";\n  return `${greeting}, ${name}!`;\n}\n"
+          }
+        },
+        {
+          "git": ["add", "-A"]
+        },
+        {
+          "git": ["commit", "-m", "work on alpha"]
+        },
+        {
+          "git": ["push", "-u", "origin", "HEAD"]
+        }
+      ]
+    }
   ],
   "home": [
     {
@@ -13,15 +98,30 @@
     }
   ],
   "gh": [
-    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
     {
       "args": ["auth", "status", "--active"],
       "stderr": "You are not logged into any GitHub hosts. To log in, run: gh auth login\n",
       "exitCode": 1
+    },
+    {
+      "call": "pull-request",
+      "stderr": "To get started with GitHub CLI, please run:  gh auth login\n",
+      "exitCode": 4
     }
   ],
   "claude": {
     "version": "2.0.0 (Claude Code stand-in)",
-    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "> "
+      }
+    ]
   }
 }

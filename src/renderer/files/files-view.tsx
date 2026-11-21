@@ -22,6 +22,7 @@ interface FilesViewProps {
   list: ChangesList | undefined;
   finished: string;
   onCentre: (view: CentreView) => void;
+  pullRequest: number | null;
   handle: RefObject<DiffHandle | null>;
   onShown: (shown: ShownFile | null) => void;
 }
@@ -37,6 +38,7 @@ export function FilesView({
   list,
   finished,
   onCentre,
+  pullRequest,
   handle,
   onShown,
 }: FilesViewProps) {
@@ -70,7 +72,7 @@ export function FilesView({
   return (
     <div data-testid="files" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs value="files" onChange={onCentre} />
+        <CentreTabs value="files" pullRequest={pullRequest} onChange={onCentre} />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           <CommandButton
             command="changes.send-lines"
