@@ -60,7 +60,7 @@ const touchedKept = 512;
 const touchedVerdicts = new Map<string, boolean>();
 const touchedBytes = 33_554_432;
 const submoduleMode = "160000";
-const diffArgs = [
+const diffWithoutIndexWrite = [
   "-c",
   "diff.autoRefreshIndex=false",
   "diff",
@@ -260,8 +260,9 @@ async function withoutTouched(
         ["hash-object", "--no-filters", "--", change.path],
         signal,
       );
-      same = stdoutOf(hashed)?.trim() === change.sourceOid;
-      if (signal.aborted) continue;
+      const hash = stdoutOf(hashed)?.trim();
+      if (hash === undefined) continue;
+      same = hash === change.sourceOid;
       touchedVerdicts.set(key, same);
       const oldest = touchedVerdicts.keys().next().value;
       if (touchedVerdicts.size > touchedKept && oldest !== undefined)
@@ -370,7 +371,7 @@ export async function readChangeList(
 ): Promise<ChangeListRead> {
   if (!(await isObjectName(folder, compareWith, signal))) return failed;
   const [diff, others, conflicted] = await Promise.all([
-    gitOutput(folder, [...diffArgs, compareWith, "--"], signal),
+    gitOutput(folder, [...diffWithoutIndexWrite, compareWith, "--"], signal),
     gitOutput(folder, untrackedArgs, signal),
     gitOutput(folder, unmergedArgs, signal),
   ]);
