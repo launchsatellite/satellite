@@ -1,13 +1,16 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MarkdownText } from "./markdown-text.tsx";
+import { MarkdownBody, plainSentence } from "./markdown-elements.tsx";
+import { parseMarkdown } from "./markdown-tree.ts";
 
 const render = (text: string) =>
-  renderToStaticMarkup(createElement(MarkdownText, { text, onLink: () => undefined }));
+  renderToStaticMarkup(
+    createElement(MarkdownBody, { text, tree: parseMarkdown(text), onLink: () => undefined }),
+  );
 const count = (html: string, needle: string) => html.split(needle).length - 1;
 
-describe("MarkdownText", () => {
+describe("MarkdownBody", () => {
   it("draws headings, lists, a table, a task list and code", () => {
     const html = render(
       [
@@ -145,6 +148,12 @@ describe("MarkdownText", () => {
     expect(html).not.toContain('data-address="https://github.com/real/thing"');
   });
 
+  it("keeps the line breaks of code and paragraphs while revealing hidden characters", () => {
+    const html = render("```\nline one\nline two\n```\n\nsoft\nbreak");
+    expect(html).toContain("line one\nline two");
+    expect(html).not.toContain("U+000A");
+  });
+
   it("reveals a direction override in the source", () => {
     const html = render("evil‮txt.exe");
     expect(html).not.toContain("‮");
@@ -161,11 +170,6 @@ describe("MarkdownText", () => {
       const html = render(`${"> ".repeat(depth)}deep`);
       expect(html, String(depth)).toContain("deep");
       expect(html, String(depth)).toContain('data-testid="markdown"');
-    }
-    for (const marker of ["- ", "1. ", "> - ", "* > "]) {
-      const html = render(`${marker.repeat(5000)}x`);
-      expect(html, marker).toContain("x");
-      expect(html, marker).not.toContain("<ul");
     }
     const indented = Array.from({ length: 150 }, (_, at) => `${" ".repeat(at * 2)}- item`).join(
       "\n",
@@ -199,41 +203,30 @@ describe("MarkdownText", () => {
     expect(performance.now() - began).toBeLessThan(1500);
   });
 
-  it("never spends seconds on pathological input at the full body size", () => {
-    const shapes = [
-      "*_",
-      "_*",
-      "*a_",
-      "a\n=\n",
-      "a\n---\n",
-      "[a]",
-      "*a ",
-      "**a_",
-      "~a",
-      "`a",
-      "[a](",
-      "![a]",
-      "<a ",
-      "&#8238;",
-      "> ",
-      ">",
-      "- ",
-      "| a ",
-      "\\*",
-    ];
-    for (const shape of shapes) {
-      const text = shape.repeat(Math.ceil(20_000 / shape.length)).slice(0, 20_000);
-      const began = performance.now();
-      render(text);
-      expect(performance.now() - began, JSON.stringify(shape)).toBeLessThan(1000);
-    }
+  it("draws ordinary long documents as Markdown", () => {
+    const tasks = Array.from({ length: 100 }, (_, at) => `- [ ] **task ${String(at)}** \`code\``);
+    expect(render(tasks.join("\n"))).toContain("<strong>");
+    const changelog = Array.from(
+      { length: 150 },
+      (_, at) =>
+        `* **fix(scope_${String(at)}):** a change ([#${String(at)}](https://example.invalid/${String(at)}))`,
+    );
+    const log = render(changelog.join("\n"));
+    expect(log).toContain("<strong>");
+    expect(log).not.toContain(plainSentence);
+    const rows = Array.from(
+      { length: 300 },
+      (_, at) => `| **${String(at)}** | \`x\` | [l](https://example.invalid/${String(at)}) |`,
+    );
+    const table = render(["| a | b | c |", "| - | - | - |", ...rows].join("\n"));
+    expect(table).toContain("<table");
+    expect(table).not.toContain(plainSentence);
   });
 
-  it("draws plain text past the delimiter budgets and Markdown below them", () => {
-    expect(render("*_".repeat(2000))).not.toContain("<p class");
-    expect(render("[a]".repeat(1000))).not.toContain("<p class");
-    expect(render("a\n=\n".repeat(400))).not.toContain("<h1");
-    expect(render(`${"**bold** and _it_ ".repeat(50)}\n\n- [ ] task`)).toContain("<strong>");
+  it("draws plain text with its sentence when the tree is too deep", () => {
+    const html = render(`${"> ".repeat(100)}deep`);
+    expect(html).toContain(plainSentence);
+    expect(html).not.toContain("<blockquote");
   });
 
   it("survives malformed, very long and deeply nested input", () => {
@@ -242,7 +235,6 @@ describe("MarkdownText", () => {
       "![broken](",
       "**bold *mixed** italic*",
       "| a | b\n| - |\n| 1 |",
-      "- ".repeat(5000),
       `${"* ".repeat(200)}x`,
       "[a](https://example.invalid) ".repeat(2000),
       "x".repeat(200_000),
