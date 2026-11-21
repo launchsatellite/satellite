@@ -17,13 +17,18 @@ const referenceLimit = 800;
 const hiddenSentence =
   "This file's name holds hidden characters, so Satellite can't point Claude Code at it. Ask in your own words.";
 export const noLinesSentence = "Select some lines in the diff first.";
+const mentionSentence =
+  "This file's name could read as a file mention, so Satellite can't point Claude Code at it. Ask in your own words.";
 const longSentence = "This file's path is too long to send. Ask in your own words.";
 
 const plainName = /^[^\s"'`]+$/;
+const mention = /(?:^|[\s"'`])@/u;
 const fallbackName = "the base branch";
 
 export function cleanBase(base: string | null): string {
-  if (base === null || holdsRevealedText(base) || !plainName.test(base)) return fallbackName;
+  if (base === null || holdsRevealedText(base) || !plainName.test(base) || mention.test(base)) {
+    return fallbackName;
+  }
   return base;
 }
 
@@ -41,6 +46,7 @@ function whereIs({ side, view, base }: LineReferenceInput): string {
 export function lineReference(input: LineReferenceInput): LineReference {
   const { path, start, end } = input;
   if (path === "" || holdsRevealedText(path)) return { ok: false, sentence: hiddenSentence };
+  if (mention.test(path)) return { ok: false, sentence: mentionSentence };
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) {
     return { ok: false, sentence: noLinesSentence };
   }
