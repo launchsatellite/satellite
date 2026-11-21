@@ -9,7 +9,7 @@ import {
   type WorkspaceView,
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
-import { ChangesView } from "../changes/changes-view.tsx";
+import { ChangesView, type Picked } from "../changes/changes-view.tsx";
 import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
 import { conflictRequest, lineReference, noLinesSentence } from "../changes/prompt-requests.ts";
 import { useChanges } from "../changes/use-changes.ts";
@@ -21,7 +21,7 @@ import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { fileLinesRequest } from "../files/file-lines.ts";
-import { notTextSentence } from "../files/file-words.ts";
+import { noFileLinesSentence, notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
@@ -273,6 +273,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const folderHere = selectedProject?.missing === null;
   const [centreView, setCentreView] = useState<CentreView>("changes");
   const [changesView, setChangesView] = useState<ChangesShown>("branch");
+  const [picked, setPicked] = useState<Picked | null>(null);
   const [diffInline, setDiffInline] = useState(false);
   const [diffNarrow, setDiffNarrow] = useState(true);
   const [shownText, setShownText] = useState<ShownText | null>(null);
@@ -643,12 +644,17 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (filesShown) {
                 if (fileShown === null) return;
                 if (fileShown.kind !== "text") {
-                  notify(notTextSentence, "error");
+                  notify(notTextSentence, "info");
                   return;
                 }
                 const request = fileLinesRequest(fileShown.path, diffSelection());
                 if (request.ok) sendToClaudeCode(request.text);
-                else notify(request.sentence, "error");
+                else {
+                  notify(
+                    request.sentence,
+                    request.sentence === noFileLinesSentence ? "info" : "error",
+                  );
+                }
                 return;
               }
               const selection = diffSelection();
@@ -775,6 +781,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               onShown={setShownText}
               onNarrow={setDiffNarrow}
               onCentre={setCentreView}
+              picked={picked}
+              onPick={setPicked}
             />
           ))
         )}

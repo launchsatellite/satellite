@@ -28,9 +28,11 @@ interface ChangesViewProps {
   onShown: (shown: ShownText | null) => void;
   onNarrow: (narrow: boolean) => void;
   onCentre: (view: CentreView) => void;
+  picked: Picked | null;
+  onPick: (picked: Picked) => void;
 }
 
-interface Picked {
+export interface Picked {
   place: string;
   path: string;
   index: number;
@@ -74,9 +76,10 @@ export function ChangesView({
   onShown,
   onNarrow,
   onCentre,
+  picked,
+  onPick: setPicked,
 }: ChangesViewProps) {
   const place = changesPlace(workspace, view);
-  const [picked, setPicked] = useState<Picked | null>(null);
   const [layoutShown, setLayoutShown] = useState(false);
   const [pane, setPane] = useState<HTMLDivElement | null>(null);
   const [narrow, setNarrow] = useState(true);

@@ -394,6 +394,27 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
   await waitUntil(async () => (await tabPaths(page)).titles.length === 2, waitMs, "close failed");
 }
 
+async function keepsChangesPlace(session: AppSession): Promise<void> {
+  const { page } = session;
+  const options = page.getByTestId("changes-list").getByRole("option");
+  await waitUntil(async () => (await options.count()) > 1, waitMs, "the changes list did not show");
+  await options.last().click();
+  const picked = await options.last().getAttribute("data-path");
+  await page.getByTestId("centre-tab-files").click();
+  await page.getByTestId("files").waitFor();
+  await page.getByTestId("centre-tab-changes").click();
+  await waitUntil(
+    async () =>
+      (await page
+        .getByTestId("changes-list")
+        .locator("[aria-selected='true']")
+        .getAttribute("data-path")
+        .catch(() => null)) === picked,
+    waitMs,
+    "the Changes tab lost its picked file after a visit to Files",
+  );
+}
+
 async function managesTabs(session: AppSession): Promise<void> {
   const { page } = session;
   await rowLocator(page, "README.md").click();
@@ -746,6 +767,7 @@ export const filesJourney: Journey = {
         violations.push(event.violatedDirective);
       });
     });
+    await keepsChangesPlace(session);
     await listsTheDisk(session);
     await opensReadOnly(session, folder);
     await staysStill(session);

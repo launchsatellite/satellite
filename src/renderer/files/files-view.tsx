@@ -98,7 +98,9 @@ export function FilesView({
         className="@container min-h-0 flex-1"
       >
         <div className="flex h-full min-h-0 w-full flex-col @min-[640px]:flex-row">
-          <div className="flex max-h-[40%] min-h-0 flex-none flex-col border-b border-line @min-[640px]:max-h-none @min-[640px]:w-[260px] @min-[640px]:border-r @min-[640px]:border-b-0">
+          <div
+            className={`flex min-h-0 flex-col border-b border-line @min-[640px]:max-h-none @min-[640px]:w-[260px] @min-[640px]:flex-none @min-[640px]:border-r @min-[640px]:border-b-0 ${tabs.paths.length > 0 ? "max-h-[40%] flex-none" : "flex-1"}`}
+          >
             <FileTree
               workspace={workspace}
               open={open}
@@ -109,7 +111,9 @@ export function FilesView({
               onOpenFile={tabs.open}
             />
           </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            className={`min-h-0 min-w-0 flex-1 flex-col ${tabs.paths.length > 0 ? "flex" : "hidden @min-[640px]:flex"}`}
+          >
             {tabs.paths.length > 0 && (
               <FileTabs
                 paths={tabs.paths}

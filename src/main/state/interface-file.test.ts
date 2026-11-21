@@ -196,6 +196,36 @@ describe("saved tabs hold only what could be loaded again", () => {
     });
   });
 
+  it("lists the projects again only when the saved tabs changed", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const handlers = interfaceHandlers(
+      createInterfaceFile(home),
+      () => undefined,
+      () => {
+        listed += 1;
+        return Promise.resolve(known);
+      },
+    );
+    let listed = 0;
+    const tabs = [{ projectId, workspace: "main" as const, paths: ["ok.ts"], active: 0 }];
+    await handlers["interface.save"]({ state: { ...saved, files: tabs } }, owner);
+    await handlers["interface.save"](
+      { state: { ...saved, files: tabs, columns: { left: 300, right: 500 } } },
+      owner,
+    );
+    expect(listed).toBe(1);
+    await handlers["interface.save"](
+      {
+        state: {
+          ...saved,
+          files: [{ projectId, workspace: "main" as const, paths: ["ok.ts", "b.ts"], active: 0 }],
+        },
+      },
+      owner,
+    );
+    expect(listed).toBe(2);
+  });
+
   it("lets overlapping saves land in the order they arrived, the last one on disk", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const file = createInterfaceFile(home);

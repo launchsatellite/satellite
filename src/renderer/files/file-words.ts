@@ -18,7 +18,7 @@ export const viewerFailedSentence =
   "Satellite couldn't load the file viewer, so there is nothing to show.";
 export const linkNoteSentence = "This is a link, so the file shows where it points.";
 
-export const typeAFileNameSentence = "Type part of a file name.";
+export const typeAFileNameSentence = "Folders count too. Files git ignores are left out.";
 export const imageBrokenSentence =
   "Satellite couldn't draw this image, so there is nothing to show.";
 export const noFileLinesSentence = "Select some lines in the file first.";

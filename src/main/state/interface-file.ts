@@ -124,8 +124,17 @@ export function interfaceHandlers(
 ): Pick<BridgeHandlers, "interface.load" | "interface.save"> {
   let noticeGiven = false;
   let saving: Promise<unknown> = Promise.resolve();
+  let lastTabs: { asked: string; kept: FileTabs[] } | undefined;
+  const filesOf = async (tabs: FileTabs[]): Promise<FileTabs[]> => {
+    const asked = JSON.stringify(tabs);
+    if (lastTabs?.asked === asked) return lastTabs.kept;
+    const known = await recordedOrUnknown(recorded);
+    const kept = keptTabs(tabs, known);
+    if (known !== null) lastTabs = { asked, kept };
+    return kept;
+  };
   const saved = async (state: InterfaceState) => {
-    const kept = { ...state, files: keptTabs(state.files, await recordedOrUnknown(recorded)) };
+    const kept = { ...state, files: await filesOf(state.files) };
     apply(kept);
     try {
       await file.save(kept);
