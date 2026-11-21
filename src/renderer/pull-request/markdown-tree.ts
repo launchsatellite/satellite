@@ -26,7 +26,7 @@ function revealAfterParse() {
 
 const processor = unified().use(remarkParse).use(remarkGfm).use(revealAfterParse).use(remarkRehype);
 
-function withoutPositions(root: Root): boolean {
+export function boundedTree(root: Root): boolean {
   const waiting: { node: HastNodes; depth: number }[] = [{ node: root, depth: 1 }];
   let seen = 0;
   for (let next = waiting.pop(); next !== undefined; next = waiting.pop()) {
@@ -38,10 +38,6 @@ function withoutPositions(root: Root): boolean {
     }
   }
   return true;
-}
-
-export function boundedTree(root: Root): boolean {
-  return withoutPositions(root);
 }
 
 export function parseMarkdown(text: string): Root | null {

@@ -15,7 +15,6 @@ export interface PullRequestEntry {
 }
 export interface PullRequests {
   of: (ref: WorkspaceRef) => PullRequestEntry | undefined;
-  refresh: (ref: WorkspaceRef) => void;
 }
 interface PullRequestsInput {
   listed: readonly WorkspaceRef[];
@@ -223,12 +222,5 @@ export function usePullRequests({
   }, [finishedElsewhere]);
 
   const of = useCallback((ref: WorkspaceRef) => entries.get(placeOf(ref)), [entries]);
-  const refresh = useCallback(
-    (ref: WorkspaceRef) => {
-      if (placeOf(ref) === shownPlace) refreshShown.current();
-      else askOther.current(placeOf(ref));
-    },
-    [shownPlace],
-  );
-  return { of, refresh };
+  return { of };
 }
