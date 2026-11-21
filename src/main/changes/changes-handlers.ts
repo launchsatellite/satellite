@@ -42,6 +42,7 @@ type Unavailable = Extract<ChangesList["changes"], { kind: "unavailable" }>["rea
 type Header = Omit<ChangesList, "changes">;
 
 export const changesReadSlots = 4;
+export const changesStopWaitMs = 5000;
 
 const changesQueued = 16;
 const cachedLists = 8;
@@ -296,7 +297,15 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
       for (const read of stopping) {
         read.controller.abort(new BridgeFailure("not-found", changesSentences.gone));
       }
-      await Promise.all(stopping.map((read) => read.done));
+      let timer: NodeJS.Timeout | undefined;
+      const bound = new Promise<void>((settle) => {
+        timer = setTimeout(settle, changesStopWaitMs);
+      });
+      try {
+        await Promise.race([Promise.all(stopping.map((read) => read.done)), bound]);
+      } finally {
+        clearTimeout(timer);
+      }
     },
   };
 }

@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import type { BridgeOwner } from "../bridge/registry.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
-import { createChanges } from "./changes-handlers.ts";
+import { changesStopWaitMs, createChanges } from "./changes-handlers.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -158,6 +158,43 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     expect(
       await changes.handlers["changes.file"]({ workspace, view, path: "module" }, page),
     ).toEqual({ kind: "submodule", from: null, to: null });
+  });
+
+  it("waits a bounded time for a read inside a folder that is going away", async () => {
+    const { repo, home } = await repository();
+    const { promise: reached, resolve: reach } = Promise.withResolvers<undefined>();
+    const recorded = storeOf(repo, () => undefined);
+    let asked = 0;
+    const store: ProjectStore = {
+      ...recorded,
+      project: (id) => {
+        asked += 1;
+        if (asked < 3) return recorded.project(id);
+        reach(undefined);
+        return new Promise(() => undefined);
+      },
+    };
+    const changes = createChanges({ home, store });
+    const reading = changes.handlers["changes.list"](
+      { workspace, view: "uncommitted" },
+      ownerOf(1),
+    );
+    reading.catch(() => undefined);
+    await reached;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let stopped = false;
+      const stopping = changes.stopInside(repo).then(() => {
+        stopped = true;
+      });
+      await vi.advanceTimersByTimeAsync(changesStopWaitMs - 1);
+      expect(stopped).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await stopping;
+      expect(stopped).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stops every read inside a folder that is going away", async () => {
