@@ -38,7 +38,7 @@
         { "write": { "path": "README.md", "content": "# Verify repo\n\nEdited by the agent.\n" } },
         { "write": { "path": "it's new.txt", "content": "fresh\n" } },
         { "write": { "path": "-dash.txt", "content": "leading dash\n" } },
-        { "write": { "path": "report‮txt.md", "content": "hidden direction\n" } },
+        { "write": { "path": "report\u202etxt.md", "content": "hidden direction\n" } },
         { "write": { "path": "logo.bin", "content": "\u0000\u0001PNG" } }
       ]
     }
