@@ -28,7 +28,11 @@ export const emptyLogSentence = "No failing lines came back. Open the check on G
 export const noLogSentence =
   "This kind of check has no log to read here. Open its details on GitHub.";
 export const logCutSentence = "The rest is on GitHub.";
-export const hiddenCommentSentence = "This comment is hidden on GitHub.";
+export function hiddenCommentSentence(reason: string | null): string {
+  return reason === null
+    ? "This comment is hidden on GitHub."
+    : `This comment is hidden on GitHub as ${reason}.`;
+}
 export const noConversationSentence = "Nobody has reviewed or commented yet.";
 export const conversationTroubleSentence =
   "The conversation could not be read. The overview above is current.";

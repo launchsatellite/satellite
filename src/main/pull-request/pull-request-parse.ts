@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  hiddenReason,
   pullRequestLimits,
   type PullRequestDetail,
   type PullRequestFound,
@@ -59,6 +60,7 @@ const commentNode = z.object({
   createdAt: looseText,
   submittedAt: looseText,
   isMinimized: looseFlag,
+  minimizedReason: looseText,
   author,
 });
 const connection = z.object({
@@ -186,6 +188,9 @@ function commentOf(
     body: body.text,
     bodyCut: body.cut,
     hidden,
+    hiddenReason: hidden
+      ? (hiddenReason.safeParse(dashed(node.minimizedReason)).data ?? null)
+      : null,
     url: addressOf(node.url, host),
   };
 }

@@ -565,6 +565,46 @@ describe("parseThreads", () => {
     expect(detail?.comments[0]).toMatchObject({ hidden: true, body: "", bodyCut: false });
   });
 
+  it("hides a minimised review and a minimised thread comment with their reason", () => {
+    const detail = parseThreads(
+      threadsAnswer({
+        ...full(),
+        reviews: {
+          totalCount: 1,
+          nodes: [
+            { state: "COMMENTED", body: "buy now", isMinimized: true, minimizedReason: "SPAM" },
+          ],
+        },
+        comments: {
+          totalCount: 2,
+          nodes: [
+            comment({ isMinimized: true, minimizedReason: "OFF_TOPIC", body: "x" }),
+            comment({ isMinimized: true, minimizedReason: "<b>made up</b>", body: "y" }),
+          ],
+        },
+        reviewThreads: {
+          totalCount: 1,
+          nodes: [
+            thread({
+              comments: {
+                totalCount: 1,
+                nodes: [comment({ isMinimized: true, minimizedReason: "ABUSE", body: "z" })],
+              },
+            }),
+          ],
+        },
+      }),
+      place,
+    );
+    expect(detail?.reviews[0]).toMatchObject({ hidden: true, hiddenReason: "spam", body: "" });
+    expect(detail?.comments.map((one) => one.hiddenReason)).toEqual(["off-topic", null]);
+    expect(detail?.threads[0]?.comments[0]).toMatchObject({
+      hidden: true,
+      hiddenReason: "abuse",
+      body: "",
+    });
+  });
+
   it("answers null for a missing pull request node", () => {
     expect(parseThreads(threadsAnswer(null), place)).toBeNull();
     expect(parseThreads(JSON.stringify({ data: { repository: null } }), place)).toBeNull();

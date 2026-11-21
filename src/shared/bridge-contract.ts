@@ -277,12 +277,21 @@ const pullRequestCheck = z.strictObject({
   run: digits.nullable(),
   job: digits.nullable(),
 });
+export const hiddenReason = z.enum([
+  "abuse",
+  "duplicate",
+  "off-topic",
+  "outdated",
+  "resolved",
+  "spam",
+]);
 const pullRequestComment = z.strictObject({
   author: shortName.nullable(),
   at: moment,
   body: pullRequestBody,
   bodyCut: z.boolean(),
   hidden: z.boolean(),
+  hiddenReason: hiddenReason.nullable(),
   url: pullRequestAddress.nullable(),
 });
 const pullRequestReview = pullRequestComment.extend({

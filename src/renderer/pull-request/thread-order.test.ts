@@ -5,7 +5,15 @@ import { conversationItems, threadOrder } from "./thread-order.ts";
 type Read = Extract<PullRequestDetail, { kind: "read" }>;
 
 function comment(at: string | null, body = "x") {
-  return { author: "ada-example", at, body, bodyCut: false, hidden: false, url: null };
+  return {
+    author: "ada-example",
+    at,
+    body,
+    bodyCut: false,
+    hidden: false,
+    hiddenReason: null,
+    url: null,
+  };
 }
 
 function thread(

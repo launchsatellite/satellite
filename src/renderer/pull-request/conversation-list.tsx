@@ -35,7 +35,8 @@ function Author({ name, at }: { name: string | null; at: string | null }) {
 }
 
 function Said({ spoken, onLink }: { spoken: Spoken; onLink: (address: string) => void }) {
-  if (spoken.hidden) return <p className="text-[12px] text-dim">{hiddenCommentSentence}</p>;
+  if (spoken.hidden)
+    return <p className="text-[12px] text-dim">{hiddenCommentSentence(spoken.hiddenReason)}</p>;
   return (
     <>
       {spoken.body.trim() !== "" && (
