@@ -174,8 +174,15 @@ export function resultPixel(result: CheckResult): PixelState {
   return resultPixels[result];
 }
 
-export const notAtHeadSentence =
-  "This workspace is not at the pull request's last commit, so lines may be off.";
+export function unmarkedSentence(atHead: boolean | null, clean: boolean): string | null {
+  if (atHead === true && clean) return null;
+  if (atHead === true)
+    return "This workspace has uncommitted changes, so threads are not marked on lines.";
+  if (atHead === false) {
+    return "This workspace is not at the pull request's last commit, so threads are not marked on lines.";
+  }
+  return "Satellite cannot tell whether this workspace is at the pull request's last commit, so threads are not marked on lines.";
+}
 export const threadsHeading = "Threads in this file";
 export const offLineHeading = "Not on a line here";
 export const noFileThreadsSentence = "No threads in this file.";

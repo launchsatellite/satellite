@@ -941,6 +941,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                       workspace={changesHere}
                       found={shownPullRequest}
                       list={changes.list}
+                      clean={selectedWorkspace.changed === 0}
                       error={changes.error}
                       handle={diffHandle}
                       current={threadTarget?.place === placeHere ? threadTarget : null}

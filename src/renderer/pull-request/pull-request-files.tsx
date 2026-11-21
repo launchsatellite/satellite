@@ -12,8 +12,8 @@ import { baseRequest } from "./pull-request-requests.ts";
 import {
   loadingSentence,
   noBaseSentence,
-  notAtHeadSentence,
   sendLabel,
+  unmarkedSentence,
 } from "./pull-request-words.ts";
 import { ThreadPanel } from "./thread-panel.tsx";
 import { threadPlaces } from "./thread-places.ts";
@@ -27,6 +27,7 @@ interface PullRequestFilesProps {
   workspace: WorkspaceRef;
   found: PullRequestFound;
   list: ChangesList | undefined;
+  clean: boolean;
   error: string | null;
   handle: RefObject<DiffHandle | null>;
   current: ThreadTarget | null;
@@ -40,6 +41,7 @@ export function PullRequestFiles({
   workspace,
   found,
   list,
+  clean,
   error,
   handle,
   current,
@@ -52,6 +54,7 @@ export function PullRequestFiles({
   const revealed = useRef(0);
   const changes = list?.changes;
   const files = useMemo(() => (changes?.kind === "files" ? changes.files : []), [changes]);
+  const unmarked = unmarkedSentence(found.atHead, clean);
   const detail = found.detail?.kind === "read" ? found.detail : null;
   const target = current === null ? undefined : detail?.threads[current.index];
   if (current !== null && current.seq !== handled && list !== undefined) {
@@ -63,8 +66,11 @@ export function PullRequestFiles({
   }
   const file = files.find((listed) => listed.path === pickedPath) ?? files[0];
   const places = useMemo(
-    () => (detail === null || file === undefined ? null : threadPlaces(detail, file.path)),
-    [detail, file],
+    () =>
+      detail === null || file === undefined
+        ? null
+        : threadPlaces(detail, file.path, unmarked === null),
+    [detail, file, unmarked],
   );
   const marks = useMemo(
     () => (places?.marks ?? []).map(({ line, unresolved }) => ({ line, unresolved })),
@@ -211,7 +217,7 @@ export function PullRequestFiles({
           </span>
           .
         </p>
-        {found.atHead === false && <p>{notAtHeadSentence}</p>}
+        {unmarked !== null && <p data-testid="pull-request-unmarked">{unmarked}</p>}
       </div>
       <div className="min-h-0 flex-1">{body()}</div>
     </div>

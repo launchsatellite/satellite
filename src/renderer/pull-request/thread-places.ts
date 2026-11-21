@@ -13,13 +13,15 @@ export interface ThreadPlaces {
   listed: number[];
 }
 
-export function threadPlaces(detail: Read, path: string): ThreadPlaces {
+export function threadPlaces(detail: Read, path: string, onLines = true): ThreadPlaces {
   const lines = new Map<number, ThreadMark>();
   const listed: number[] = [];
   detail.threads.forEach((thread, index) => {
     if (thread.path !== path) return;
     const placed =
-      !thread.outdated && thread.side === "right" && thread.line !== null ? thread.line : null;
+      onLines && !thread.outdated && thread.side === "right" && thread.line !== null
+        ? thread.line
+        : null;
     if (placed === null) {
       listed.push(index);
       return;

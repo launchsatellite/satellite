@@ -29,6 +29,15 @@ function detailOf(threads: PullRequestThread[]) {
 }
 
 describe("threadPlaces", () => {
+  it("lists every thread of the file and marks none when lines cannot be trusted", () => {
+    const places = threadPlaces(
+      detailOf([thread({ line: 7 }), thread({ line: 9 })]),
+      "src/app.ts",
+      false,
+    );
+    expect(places).toEqual({ marks: [], listed: [0, 1] });
+  });
+
   it("marks a right side thread on its line", () => {
     const places = threadPlaces(detailOf([thread({ line: 7 })]), "src/app.ts");
     expect(places).toEqual({ marks: [{ line: 7, threads: [0], unresolved: true }], listed: [] });
