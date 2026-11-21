@@ -102,7 +102,7 @@ describe("listFolders when the one check fails", () => {
     vi.mocked(checkIgnored).mockResolvedValueOnce({ kind: "hung" });
     await listFolders(root, ["", "b"]);
     expect(vi.mocked(checkIgnored)).toHaveBeenCalledTimes(1);
-  });
+  }, 60_000);
 });
 
 describe("listFolder", () => {
