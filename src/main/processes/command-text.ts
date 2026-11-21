@@ -22,8 +22,9 @@ function escaped(text: string): string {
 function tildeHome(raw: string, home: string): string {
   const folder = home.replace(/[\\/]+$/, "");
   if (folder === "") return raw;
+  const forms = [...new Set([folder, folder.replaceAll("\\", "/")])].map(escaped).join("|");
   const boundary = new RegExp(
-    `(^|[^\\w./\\\\~-])${escaped(folder)}(?=[\\\\/\\s"']|$)`,
+    `(^|[^\\w./\\\\~-]|file://)(?:${forms})(?=[\\\\/\\s"'):;,\\]}]|$)`,
     process.platform === "win32" ? "gi" : "g",
   );
   return raw.replace(boundary, "$1~");

@@ -19,6 +19,11 @@ describe("shownCommand", () => {
       "node /srv/me2/x.js /opt/srv/me/x.js /srv/mex",
     );
     expect(show("run '/srv/me/a' /srv/me/b:/srv/me/c")).toBe("run '~/a' ~/b:~/c");
+    expect(show("open file:///srv/me/app/index.html")).toBe("open file://~/app/index.html");
+    expect(show("-cp /srv/me/a.jar:/srv/me:/x (/srv/me) /srv/me, x=/srv/me;y")).toBe(
+      "-cp ~/a.jar:~:/x (~) ~, x=~;y",
+    );
+    expect(shownCommand("node C:/srv/me/x.js", String.raw`C:\srv\me`).text).toBe("node ~/x.js");
     expect(shownCommand("node /srv/me/x.js", "/srv/me/").text).toBe("node ~/x.js");
     expect(shownCommand("node /srv/me/x.js").text).toBe("node /srv/me/x.js");
   });
