@@ -1,4 +1,4 @@
-import { keptJoins } from "./visible-text.ts";
+import { keptJoins, visibleText } from "./visible-text.ts";
 
 const promptTextLimit = 800;
 const readLimit = promptTextLimit * 16;
@@ -15,6 +15,10 @@ function withoutHidden(text: string): string {
 
 export function holdsHiddenText(text: string): boolean {
   return text.search(hidden) !== -1;
+}
+
+export function holdsRevealedText(text: string): boolean {
+  return visibleText(text) !== text;
 }
 
 export function promptText(raw: string): string {

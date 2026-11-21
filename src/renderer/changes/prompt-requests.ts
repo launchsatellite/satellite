@@ -1,5 +1,5 @@
 import type { ChangesView } from "../../shared/bridge-contract.ts";
-import { holdsHiddenText } from "../../shared/prompt-text.ts";
+import { holdsRevealedText } from "../../shared/prompt-text.ts";
 import { quotedPath } from "../terminal/dropped-paths.ts";
 
 export type LineReference = { ok: true; text: string } | { ok: false; sentence: string };
@@ -23,7 +23,7 @@ const plainName = /^[^\s"'`]+$/;
 const fallbackName = "the base branch";
 
 export function cleanBase(base: string | null): string {
-  if (base === null || holdsHiddenText(base) || !plainName.test(base)) return fallbackName;
+  if (base === null || holdsRevealedText(base) || !plainName.test(base)) return fallbackName;
   return base;
 }
 
@@ -40,7 +40,7 @@ function whereIs({ side, view, base }: LineReferenceInput): string {
 
 export function lineReference(input: LineReferenceInput): LineReference {
   const { path, start, end } = input;
-  if (path === "" || holdsHiddenText(path)) return { ok: false, sentence: hiddenSentence };
+  if (path === "" || holdsRevealedText(path)) return { ok: false, sentence: hiddenSentence };
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) {
     return { ok: false, sentence: noLinesSentence };
   }

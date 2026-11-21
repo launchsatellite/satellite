@@ -7,7 +7,17 @@ describe("conflictRequest", () => {
     expect(conflictRequest("origin/main")).toBe(
       "Update this branch from origin/main and resolve the conflicts.",
     );
-    for (const base of ["a\u{202e}b", "two words", 'quo"te', "back`tick", "it's", "", null]) {
+    for (const base of [
+      "a\u{202e}b",
+      "two words",
+      'quo"te',
+      "back`tick",
+      "it's",
+      "",
+      null,
+      "main\u{3164}",
+      "a\u{fe00}b",
+    ]) {
       expect(cleanBase(base)).toBe("the base branch");
     }
   });
@@ -70,6 +80,10 @@ describe("lineReference", () => {
       "a\u{200b}b",
       "a\u{e0041}b",
       "a\u0085b",
+      "report\u{3164}.md",
+      "a\u{fe0f}b",
+      "a\u{2800}b",
+      "[U+202E]x",
     ]) {
       const found = reference(path, "modified", "branch");
       expect(found.ok).toBe(false);
