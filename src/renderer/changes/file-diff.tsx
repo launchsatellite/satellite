@@ -18,7 +18,7 @@ import type {
 import { invoke } from "../bridge/bridge-client.ts";
 import type { DiffHandle, DiffSide } from "../diff/read-only-editor.tsx";
 import { diffLabels, sideSentence } from "./change-words.ts";
-import { pollDelay } from "./list-schedule.ts";
+import { pollDelay } from "../ui/refresh-schedule.ts";
 import { changesPlace } from "./use-changes.ts";
 
 export interface ShownText {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSchedule, nextSteps, pollDelay, type ScheduleAnswer } from "./list-schedule.ts";
+import { createSchedule, nextSteps, pollDelay, type ScheduleAnswer } from "./refresh-schedule.ts";
 
 describe("change list poll", () => {
   it("waits 2 seconds after a quick list", () => {
