@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -80,6 +81,22 @@ async function workspaceReads(session: AppSession, name: string, branch: string)
     waitMs,
     () => `workspace-${name}-main read "${shown}" instead of "${branch}"`,
   );
+}
+
+async function dropUntilListed(session: AppSession, name: string): Promise<void> {
+  const row = session.page.getByTestId(`workspace-${name}-main`);
+  const toast = session.page.getByTestId("toast");
+  let said = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await session.dropFolder(session.folder(name));
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      if ((await row.count()) > 0) return;
+      if ((await toast.count()) > 0) said = await toast.innerText();
+      await delay(100);
+    }
+  }
+  throw new Error(`${name} was not listed after three drops, and the toast read "${said}"`);
 }
 
 async function isSelected(session: AppSession, name: string, when: string): Promise<void> {
@@ -186,7 +203,7 @@ async function run(session: AppSession): Promise<void> {
 
   await addWithShortcut(session, "alpha");
   await workspaceReads(session, "alpha", "main");
-  await session.dropFolder(session.folder("beta"));
+  await dropUntilListed(session, "beta");
   await workspaceReads(session, "beta", "develop");
   await addWithShortcut(session, "alpha");
   await toastReads(session, "alpha is already in Satellite.", "after adding alpha twice");

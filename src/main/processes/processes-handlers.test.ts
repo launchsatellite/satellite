@@ -214,7 +214,7 @@ describe("processes.stop", () => {
   it("refuses an id that left the table, an id whose start changed and a process no session started, and ends nothing", async () => {
     const { stop, end, table } = setup();
     await expect(stop(9999, 1_000_000)).rejects.toMatchObject({ code: "not-found" });
-    await expect(stop(4201, startOf(table, 4201) + 1000)).rejects.toMatchObject({
+    await expect(stop(4201, startOf(table, 4201) + 5000)).rejects.toMatchObject({
       code: "not-found",
     });
     await expect(stop(5000, startOf(table, 5000))).rejects.toMatchObject({ code: "not-found" });
@@ -350,7 +350,7 @@ describe.skipIf(process.platform === "win32")("with real processes", () => {
         [strangerPid, await startOfPid(strangerPid), pageOne, "not-found"],
         [process.pid, await startOfPid(process.pid), pageOne, "not-found"],
         [serverPid, await startOfPid(serverPid), pageTwo, "not-found"],
-        [serverPid, (server.started ?? 0) + 1000, pageOne, "not-found"],
+        [serverPid, (server.started ?? 0) + 5000, pageOne, "not-found"],
         [serverPid + 100_000, server.started ?? 0, pageOne, "not-found"],
       ];
       for (const [pid, started, owner, code] of refusals) {

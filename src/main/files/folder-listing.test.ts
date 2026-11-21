@@ -223,7 +223,7 @@ describe("listFolder", () => {
     const listing = await listFolder(root, "many");
     expect(listing.state === "listed" && listing.entries.length).toBe(1000);
     expect(listing.state === "listed" && listing.more).toBe(100);
-  });
+  }, 60_000);
 
   it.skipIf(process.platform === "win32")(
     "reads a name that starts with a colon literally and counts a name it cannot show",

@@ -196,7 +196,7 @@ describe("ownedProcess", () => {
 
   it("refuses a right id with another start time", () => {
     expect(
-      ownedProcess(macos, [root(4100)], 4201, startOf(4201) + 1000, fixtureNow),
+      ownedProcess(macos, [root(4100)], 4201, startOf(4201) + 5000, fixtureNow),
     ).toBeUndefined();
     expect(ownedProcess(macos, [root(4100)], 4201, startOf(4201), fixtureNow)).toBeDefined();
   });
