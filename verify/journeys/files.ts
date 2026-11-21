@@ -702,7 +702,7 @@ async function showsSentences(session: AppSession): Promise<void> {
   await openRoot(session, "pointer.txt");
   await sentenceReads(session, "file-link-note", "This is a link");
 
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32" && process.getuid?.() !== 0) {
     await writeFile(join(folder, "locked.txt"), "secret\n", { mode: 0 });
     await openRoot(session, "locked.txt");
     await sentenceReads(session, "file-sentence", "can't open this file");
