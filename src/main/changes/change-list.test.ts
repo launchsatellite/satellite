@@ -1,10 +1,27 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import type { BigIntStats } from "node:fs";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
+import { changesLimits } from "../../shared/bridge-contract.ts";
+import { gitReadMs } from "../workspaces/git-command.ts";
 import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
+
+const fileCalls = vi.hoisted(() => {
+  const calls: { lstat?: ((path: string) => Promise<BigIntStats>) | undefined } = {};
+  return calls;
+});
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    lstat: (path: string, options: { bigint: true }) =>
+      fileCalls.lstat?.(path) ?? actual.lstat(path, options),
+  };
+});
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -73,7 +90,13 @@ async function repository() {
   await run("git", ["init", "-q", "-b", "main", repo], { env });
   const git = async (...args: string[]) =>
     (await run("git", ["-C", repo, ...args], { env })).stdout.trim();
-  return { repo, git, env };
+  const index = (lines: string[]) => {
+    execFileSync("git", ["-C", repo, "update-index", "--index-info"], {
+      env,
+      input: lines.join("\n"),
+    });
+  };
+  return { repo, git, env, index };
 }
 
 async function listed(folder: string, compareWith: string) {
@@ -445,4 +468,74 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       await expect(local).rejects.toThrow();
     },
   );
+
+  it("lists a file once when git names it as deleted and as untracked", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "kept.txt"), "kept\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await git("rm", "-q", "--cached", "kept.txt");
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.letter, record.tracked])).toEqual([
+      ["kept.txt", "D", true],
+    ]);
+  });
+
+  it("counts a path too long to name instead of failing the list", async () => {
+    const { repo, git, index } = await repository();
+    await writeFile(join(repo, "short.txt"), "short\n");
+    await git("add", ".");
+    const blob = await git("rev-parse", ":short.txt");
+    const long = `${"d/".repeat(changesLimits.pathChars / 2)}x.txt`;
+    index([`100644 ${blob}\t${long}`]);
+    await git("commit", "-q", "-m", "one");
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => record.path)).toEqual([]);
+    expect(list.longPaths).toBe(1);
+  });
+
+  it("answers too-many for a list longer than Satellite reads", async () => {
+    const { repo, git, index } = await repository();
+    await writeFile(join(repo, "short.txt"), "short\n");
+    await git("add", ".");
+    const blob = await git("rev-parse", ":short.txt");
+    const folder = "f/".repeat(1990);
+    index(
+      Array.from(
+        { length: 2100 },
+        (_, at) => `100644 ${blob}\t${folder}${String(at).padStart(5, "0")}.txt`,
+      ),
+    );
+    await git("commit", "-q", "-m", "many");
+    expect(
+      await readChangeList(repo, await git("rev-parse", "HEAD"), new AbortController().signal),
+    ).toEqual({ kind: "unavailable", reason: "too-many" });
+  });
+
+  it("stamps within its time and marks the stamps it could not read as late", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "edit.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "edit.txt"), "two\n");
+    const head = await git("rev-parse", "HEAD");
+    const { promise: reached, resolve: reach } = Promise.withResolvers<undefined>();
+    fileCalls.lstat = () => {
+      reach(undefined);
+      return new Promise<BigIntStats>(() => undefined);
+    };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const reading = readChangeList(repo, head, new AbortController().signal);
+      await reached;
+      await vi.advanceTimersByTimeAsync(gitReadMs);
+      const list = await reading;
+      expect(list.kind === "files" ? list.records.map((record) => record.stamp) : []).toEqual([
+        expect.stringMatching(/^[0-9a-f]{40}:late$/),
+      ]);
+    } finally {
+      fileCalls.lstat = undefined;
+      vi.useRealTimers();
+    }
+  });
 });

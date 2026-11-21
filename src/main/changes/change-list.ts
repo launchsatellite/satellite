@@ -1,7 +1,8 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
-import { runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, readGit, type GitStop } from "../workspaces/git-command.ts";
+import type { ToolRun } from "../platform/tools.ts";
 import {
   isChangePath,
   isPartialClone,
@@ -25,8 +26,8 @@ export interface ChangeRecord {
 }
 export type ListedChange = Omit<ChangeRecord, "stamp">;
 export type ChangeListRead =
-  | { kind: "files"; records: ChangeRecord[]; more: number }
-  | { kind: "unavailable"; reason: "not-local" | "failed" };
+  | { kind: "files"; records: ChangeRecord[]; more: number; longPaths: number }
+  | { kind: "unavailable"; reason: "not-local" | "too-many" | "failed" };
 export interface ParsedList {
   records: ListedChange[];
   more: number;
@@ -78,6 +79,7 @@ const unmergedArgs = ["ls-files", "--unmerged", "-z"];
 const letters = new Set<string>(changeLetter.options);
 const failed: ChangeListRead = { kind: "unavailable", reason: "failed" };
 const notLocal: ChangeListRead = { kind: "unavailable", reason: "not-local" };
+const tooMany: ChangeListRead = { kind: "unavailable", reason: "too-many" };
 
 function isLetter(letter: string): letter is ChangeLetter {
   return letters.has(letter);
@@ -198,7 +200,27 @@ function withUnmerged(changes: ListedChange[], unmerged: readonly string[]): Lis
 }
 
 async function gitOutput(folder: string, args: string[], signal: AbortSignal) {
-  return runGit(folder, args, changesReadMs, signal, { gitVariables: noLazyFetch });
+  return readGit(folder, args, changesReadMs, signal, { gitVariables: noLazyFetch });
+}
+
+function stdoutOf(run: ToolRun | GitStop): string | undefined {
+  return typeof run === "object" && run.exitCode === 0 ? run.stdout : undefined;
+}
+
+function isNamed(change: ListedChange): boolean {
+  return (
+    change.path.length <= changesLimits.pathChars &&
+    (change.from?.length ?? 0) <= changesLimits.pathChars
+  );
+}
+
+function oncePerPath(changes: ListedChange[]): ListedChange[] {
+  const seen = new Set<string>();
+  return changes.filter((change) => {
+    if (seen.has(change.path)) return false;
+    seen.add(change.path);
+    return true;
+  });
 }
 
 async function countLines(folder: string, untracked: ListedChange[]): Promise<void> {
@@ -232,12 +254,26 @@ async function stampOf(folder: string, change: ListedChange): Promise<string> {
 
 async function stamped(folder: string, changes: ListedChange[]): Promise<ChangeRecord[]> {
   const records: ChangeRecord[] = [];
-  for (let start = 0; start < changes.length; start += stampBatch) {
-    const batch = changes.slice(start, start + stampBatch);
-    const stamps = await Promise.all(batch.map((change) => stampOf(folder, change)));
-    batch.forEach((change, index) => {
-      records.push({ ...change, stamp: stamps[index] ?? `${change.sourceOid ?? "new"}:gone` });
-    });
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<undefined>((settle) => {
+    timer = setTimeout(() => {
+      settle(undefined);
+    }, gitReadMs);
+  });
+  let inTime = true;
+  try {
+    for (let start = 0; start < changes.length; start += stampBatch) {
+      const batch = changes.slice(start, start + stampBatch);
+      const stamps: string[] | undefined = inTime
+        ? await Promise.race([Promise.all(batch.map((change) => stampOf(folder, change))), late])
+        : undefined;
+      inTime = stamps !== undefined;
+      batch.forEach((change, index) => {
+        records.push({ ...change, stamp: stamps?.[index] ?? `${change.sourceOid ?? "new"}:late` });
+      });
+    }
+  } finally {
+    clearTimeout(timer);
   }
   return records;
 }
@@ -296,21 +332,27 @@ export async function readChangeList(
     gitOutput(folder, untrackedArgs, signal),
     gitOutput(folder, unmergedArgs, signal),
   ]);
-  if (diff !== undefined && diff.exitCode !== 0 && !signal.aborted) {
+  if ([diff, others, conflicted].includes("output")) return tooMany;
+  if (typeof diff === "object" && diff.exitCode !== 0 && !signal.aborted) {
     return (await isPartialClone(folder, signal)) ? notLocal : failed;
   }
-  const parsed = diff?.exitCode === 0 ? parseDiff(diff.stdout) : undefined;
-  const fields = others?.exitCode === 0 ? parseUntracked(others.stdout) : undefined;
-  const unmerged = conflicted?.exitCode === 0 ? parseUnmerged(conflicted.stdout) : undefined;
+  const diffOut = stdoutOf(diff);
+  const othersOut = stdoutOf(others);
+  const conflictedOut = stdoutOf(conflicted);
+  const parsed = diffOut === undefined ? undefined : parseDiff(diffOut);
+  const fields = othersOut === undefined ? undefined : parseUntracked(othersOut);
+  const unmerged = conflictedOut === undefined ? undefined : parseUnmerged(conflictedOut);
   if (parsed === undefined || fields === undefined || unmerged === undefined) return failed;
   const untracked = fields.map(untrackedChange).sort(byPath);
   await countLines(folder, untracked);
   if (signal.aborted) return failed;
-  const merged = [...withUnmerged(parsed.records, unmerged), ...untracked].sort(byPath);
-  const kept = merged.slice(0, changesLimits.files);
+  const merged = oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]);
+  const named = merged.filter(isNamed).sort(byPath);
+  const kept = named.slice(0, changesLimits.files);
   return {
     kind: "files",
     records: await stamped(folder, kept),
-    more: merged.length - kept.length + parsed.more,
+    more: named.length - kept.length + parsed.more,
+    longPaths: merged.length - named.length,
   };
 }
