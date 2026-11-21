@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { visibleLines, visibleText } from "./visible-text.ts";
+import { revealLines, visibleText } from "./visible-text.ts";
 
 describe("visibleText", () => {
   it("reveals direction and invisible characters in a name", () => {
@@ -46,17 +46,29 @@ describe("visibleText", () => {
   });
 });
 
-describe("visibleLines", () => {
+describe("revealLines", () => {
   it("keeps git's lines while showing carriage returns and a byte order mark", () => {
-    const shown = visibleLines("\u{feff}#!/bin/sh\r\nlone\rreturn\nplain\n");
+    const shown = revealLines("\u{feff}#!/bin/sh\r\nlone\rreturn\nplain\n").text;
     expect(shown).toBe("[U+FEFF]#!/bin/sh\u{240d}\nlone\u{240d}return\nplain\n");
     expect(shown.split("\n")).toHaveLength(4);
   });
 
   it("reveals hidden characters however many harmless letters the text holds", () => {
     const text = `${"\u{436}".repeat(1000)}\nconst a\u{200b}b = 1;\t// \u{2028}\n`;
-    expect(visibleLines(text)).toBe(
+    expect(revealLines(text).text).toBe(
       `${"\u{436}".repeat(1000)}\nconst a[U+200B]b = 1;\t// [U+2028]\n`,
     );
+  });
+
+  it("tells a revealed character from the same text written in the file", () => {
+    const real = revealLines("x = '\u{200b}\u{200b}'\na\r\n");
+    const literal = revealLines("x = '[U+200B][U+200B]'\na\u{240d}\n");
+    expect(real.text).toBe("x = '[U+200B][U+200B]'\na\u{240d}\n");
+    expect(literal.text).toBe("x = '[U+200B][U+200B]'\na[U+240D]\n");
+    expect(real.revealed).toEqual([
+      { line: 1, start: 6, end: 22 },
+      { line: 2, start: 2, end: 3 },
+    ]);
+    expect(literal.revealed).toEqual([{ line: 2, start: 2, end: 10 }]);
   });
 });

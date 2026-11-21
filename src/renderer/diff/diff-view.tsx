@@ -3,12 +3,13 @@ import "monaco-editor/features/codicon/register";
 import "monaco-editor/features/diffEditor/register";
 import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import type { RevealedRange } from "../../shared/visible-text.ts";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
   drawnColumns,
   CutShort,
-  lookAlikeMarks,
+  lineMarks,
   plainModel,
   readOnlyOptions,
   selectedLines,
@@ -42,6 +43,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
   const shownPath = useRef<string>(null);
   const focusedSide = useRef<DiffSide>("modified");
   const pendingView = useRef<editor.IDiffEditorViewState>(null);
+  const revealed = useRef<Record<DiffSide, RevealedRange[]>>({ original: [], modified: [] });
   const [cutShort, setCutShort] = useState(false);
 
   useImperativeHandle(
@@ -107,7 +109,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
         if (model === null) continue;
         const lines = changedLines(created, side);
         long ||= lines.some((line) => model.getLineMaxColumn(line) > drawnColumns);
-        marks[side].set(lookAlikeMarks(model, lines));
+        marks[side].set(lineMarks(model, lines, revealed.current[side]));
       }
       setCutShort(long);
     });
@@ -140,10 +142,12 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     const previous = created.getModel();
     pendingView.current = shownPath.current === path ? created.saveViewState() : null;
     const language = diffLanguage(path);
-    created.setModel({
+    const shown = {
       original: plainModel(original, language),
       modified: plainModel(modified, language),
-    });
+    };
+    revealed.current = { original: shown.original.revealed, modified: shown.modified.revealed };
+    created.setModel({ original: shown.original.model, modified: shown.modified.model });
     shownPath.current = path;
     previous?.original.dispose();
     previous?.modified.dispose();

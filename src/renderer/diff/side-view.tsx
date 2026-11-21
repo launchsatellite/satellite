@@ -8,7 +8,7 @@ import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
   drawnColumns,
   CutShort,
-  lookAlikeMarks,
+  lineMarks,
   plainModel,
   readOnlyOptions,
   selectedLines,
@@ -83,7 +83,7 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
     if (made === null) return;
     const previous = made.getModel();
     const viewState = shownPath.current === path ? made.saveViewState() : null;
-    const model = plainModel(text, diffLanguage(path));
+    const { model, revealed } = plainModel(text, diffLanguage(path));
     made.setModel(model);
     if (viewState !== null) made.restoreViewState(viewState);
     shownPath.current = path;
@@ -96,7 +96,7 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
     };
     made.createDecorationsCollection([
       ...(last === 0 ? [] : [sideMark]),
-      ...lookAlikeMarks(model, lines),
+      ...lineMarks(model, lines, revealed),
     ]);
     setCutShort(lines.some((line) => model.getLineMaxColumn(line) > drawnColumns));
   }, [text, side, path]);

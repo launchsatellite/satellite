@@ -1,5 +1,5 @@
 import { editor } from "monaco-editor/editor/editor.api";
-import { visibleLines } from "../../shared/visible-text.ts";
+import { revealLines, type RevealedRange } from "../../shared/visible-text.ts";
 import { AmbiguousCharacters } from "monaco-editor/base/common/strings";
 import { confusableColumns, lookAlikeColumns, type ColumnRange } from "./look-alikes.ts";
 
@@ -19,6 +19,7 @@ const noBracketColours = { enabled: false, independentColorPoolPerBracketType: f
 const longLineSentence =
   "A changed line here runs past 10,000 characters, so the diff shows only its start.";
 const confusables = AmbiguousCharacters.getInstance(new Set());
+const revealedMarks = 10_000;
 
 export const drawnColumns = 10_000;
 
@@ -48,10 +49,11 @@ export const readOnlyOptions = {
   links: false,
 } satisfies editor.IEditorOptions;
 
-export function plainModel(text: string, language: string): editor.ITextModel {
-  const model = editor.createModel(visibleLines(text), language);
+export function plainModel(text: string, language: string) {
+  const { text: shown, revealed } = revealLines(text);
+  const model = editor.createModel(shown, language);
   model.updateOptions({ bracketColorizationOptions: noBracketColours });
-  return model;
+  return { model, revealed };
 }
 
 function markedColumns(line: string): ColumnRange[] {
@@ -64,13 +66,27 @@ function markedColumns(line: string): ColumnRange[] {
   return [...marked.values()];
 }
 
-export function lookAlikeMarks(model: editor.ITextModel, lines: readonly number[]) {
-  return lines.flatMap((line) =>
-    markedColumns(model.getLineContent(line)).map(({ start, end }) => ({
-      range: { startLineNumber: line, startColumn: start, endLineNumber: line, endColumn: end },
-      options: { inlineClassName: "look-alike" },
-    })),
+function columnMark(line: number, { start, end }: ColumnRange, inlineClassName: string) {
+  return {
+    range: { startLineNumber: line, startColumn: start, endLineNumber: line, endColumn: end },
+    options: { inlineClassName },
+  };
+}
+
+export function lineMarks(
+  model: editor.ITextModel,
+  lines: readonly number[],
+  revealed: readonly RevealedRange[],
+) {
+  const marked = new Set(lines);
+  const shownRevealed = revealed
+    .filter((range) => marked.has(range.line))
+    .slice(0, revealedMarks)
+    .map((range) => columnMark(range.line, range, "revealed"));
+  const lookAlikes = lines.flatMap((line) =>
+    markedColumns(model.getLineContent(line)).map((range) => columnMark(line, range, "look-alike")),
   );
+  return [...shownRevealed, ...lookAlikes];
 }
 
 export function selectedLines(sideEditor: editor.ICodeEditor, side: DiffSide) {

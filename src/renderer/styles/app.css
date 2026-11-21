@@ -105,6 +105,12 @@ body,
   outline-offset: -1px;
 }
 
+.revealed {
+  color: var(--dim);
+  outline: 1px dashed var(--dim);
+  outline-offset: -1px;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
