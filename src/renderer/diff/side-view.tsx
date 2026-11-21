@@ -1,15 +1,13 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import "monaco-editor/features/codicon/register";
 import "monaco-editor/features/diffEditor/register";
-import "monaco-editor/features/unicodeHighlighter/register";
 import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
   drawnColumns,
-  EditorNotes,
-  fewNonAscii,
+  CutShort,
   lookAlikeMarks,
   plainModel,
   readOnlyOptions,
@@ -49,7 +47,6 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
   const created = useRef<editor.IStandaloneCodeEditor>(null);
   const shownPath = useRef<string>(null);
   const [cutShort, setCutShort] = useState(false);
-  const [fewBoxes, setFewBoxes] = useState(false);
 
   useImperativeHandle(
     handle,
@@ -86,9 +83,6 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
     if (made === null) return;
     const previous = made.getModel();
     const viewState = shownPath.current === path ? made.saveViewState() : null;
-    const boxed = fewNonAscii(text);
-    setFewBoxes(!boxed);
-    made.updateOptions({ unicodeHighlight: { ambiguousCharacters: boxed } });
     const model = plainModel(text, diffLanguage(path));
     made.setModel(model);
     if (viewState !== null) made.restoreViewState(viewState);
@@ -109,7 +103,7 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorNotes fewBoxes={fewBoxes} cutShort={cutShort} />
+      <CutShort shown={cutShort} />
       <div ref={host} data-testid="diff" data-side={side} className="min-h-0 flex-1" />
     </div>
   );

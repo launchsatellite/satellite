@@ -1,15 +1,13 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import "monaco-editor/features/codicon/register";
 import "monaco-editor/features/diffEditor/register";
-import "monaco-editor/features/unicodeHighlighter/register";
 import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
   drawnColumns,
-  EditorNotes,
-  fewNonAscii,
+  CutShort,
   lookAlikeMarks,
   plainModel,
   readOnlyOptions,
@@ -45,7 +43,6 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
   const focusedSide = useRef<DiffSide>("modified");
   const pendingView = useRef<editor.IDiffEditorViewState>(null);
   const [cutShort, setCutShort] = useState(false);
-  const [fewBoxes, setFewBoxes] = useState(false);
 
   useImperativeHandle(
     handle,
@@ -143,11 +140,6 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     const previous = created.getModel();
     pendingView.current = shownPath.current === path ? created.saveViewState() : null;
     const language = diffLanguage(path);
-    const boxed = fewNonAscii(original) && fewNonAscii(modified);
-    setFewBoxes(!boxed);
-    for (const side of [created.getOriginalEditor(), created.getModifiedEditor()]) {
-      side.updateOptions({ unicodeHighlight: { ambiguousCharacters: boxed } });
-    }
     created.setModel({
       original: plainModel(original, language),
       modified: plainModel(modified, language),
@@ -159,7 +151,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorNotes fewBoxes={fewBoxes} cutShort={cutShort} />
+      <CutShort shown={cutShort} />
       <div ref={host} data-testid="diff" className="min-h-0 flex-1" />
     </div>
   );
