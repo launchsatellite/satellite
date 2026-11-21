@@ -100,6 +100,13 @@ describe("listedProcesses", () => {
     ]);
   });
 
+  it("ignores a root that started long before Satellite spawned the session", () => {
+    expect(ids(macos, [root(4100, { spawnedAt: rootStart + 86_400_000 })], fixtureNow)).toEqual([]);
+    expect(ids(macos, [root(4100, { spawnedAt: rootStart + 2999 })], fixtureNow)).toEqual([
+      4201, 4402,
+    ]);
+  });
+
   it("names the session and workspace of each process, with two sessions", () => {
     const second = parsePsTable(
       [

@@ -30,6 +30,7 @@ interface Position {
 
 export const minimumAgeMs = 10_000;
 export const rootSlackMs = 2000;
+const wholeSecondMs = 1000;
 const shellNames = new Set([
   "sh",
   "bash",
@@ -57,7 +58,13 @@ function positionsUnder(
   seen: Set<number>,
 ): Position[] {
   const rootEntry = entries.find((entry) => entry.pid === root.pid);
-  if (rootEntry?.started == null || rootEntry.started > root.spawnedAt + rootSlackMs) return [];
+  if (
+    rootEntry?.started == null ||
+    rootEntry.started > root.spawnedAt + rootSlackMs ||
+    rootEntry.started < root.spawnedAt - rootSlackMs - wholeSecondMs
+  ) {
+    return [];
+  }
   const found = new Map<number, Position>([
     [
       rootEntry.pid,
