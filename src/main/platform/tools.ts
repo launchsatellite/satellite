@@ -70,20 +70,37 @@ const gitDroppedKeys = new Set([
   "GIT_ASKPASS",
   "SSH_ASKPASS",
 ]);
-const ghUnsafeKeys = new Set(["GH_DEBUG", "DEBUG", "GH_FORCE_TTY", "CLICOLOR_FORCE"]);
+const ghSteeringKeys = [
+  "GH_DEBUG",
+  "DEBUG",
+  "GH_FORCE_TTY",
+  "CLICOLOR_FORCE",
+  "GH_HOST",
+  "GH_REPO",
+  "GH_PAGER",
+  "PAGER",
+  "GH_BROWSER",
+  "BROWSER",
+  "GH_EDITOR",
+];
+const gitPromptless = {
+  GIT_TERMINAL_PROMPT: "0",
+  GCM_INTERACTIVE: "false",
+  SSH_ASKPASS_REQUIRE: "never",
+};
 const ghQuiet = {
   GH_PROMPT_DISABLED: "1",
   GH_NO_UPDATE_NOTIFIER: "1",
   GH_NO_EXTENSION_UPDATE_NOTIFIER: "1",
   GH_TELEMETRY: "false",
   NO_COLOR: "1",
+  ...gitPromptless,
+  GIT_OPTIONAL_LOCKS: "0",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.fsmonitor",
+  GIT_CONFIG_VALUE_0: "",
 };
-const gitQuiet = {
-  LC_ALL: "C",
-  GIT_TERMINAL_PROMPT: "0",
-  GCM_INTERACTIVE: "false",
-  SSH_ASKPASS_REQUIRE: "never",
-};
+const gitQuiet = { LC_ALL: "C", ...gitPromptless };
 const gitVariables = [
   "GIT_NO_LAZY_FETCH",
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -91,7 +108,7 @@ const gitVariables = [
   "GIT_CONFIG_SYSTEM",
 ] as const;
 const gitReplacedKeys = new Set([...gitDroppedKeys, ...Object.keys(gitQuiet)]);
-const ghReplacedKeys = new Set([...ghUnsafeKeys, ...Object.keys(ghQuiet)]);
+const ghReplacedKeys = new Set([...ghSteeringKeys, ...gitDroppedKeys, ...Object.keys(ghQuiet)]);
 const proxyKeys = ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"];
 const noProxyKeys = ["NO_PROXY", "no_proxy"];
 const claudeHostKeys = new Set([
@@ -243,6 +260,7 @@ export async function runTool(
     gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
     bytes?: boolean;
     input?: string;
+    cwd?: string;
   } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
@@ -255,6 +273,7 @@ export async function runTool(
   return new Promise((resolve, reject) => {
     const launch = {
       env,
+      cwd: options.cwd,
       shell: false,
       windowsHide: true,
       detached: process.platform !== "win32",
