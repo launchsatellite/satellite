@@ -7,6 +7,7 @@ import { VisibleName } from "../ui/visible-name.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
 import { foundOf, type PullRequestEntry } from "./use-pull-requests.ts";
+import { Sentence } from "./pull-request-sentence.tsx";
 import { openRequest } from "./pull-request-requests.ts";
 import {
   absentSentence,
@@ -44,29 +45,6 @@ function sectionTabId(section: PullRequestSection): string {
 
 function isHttps(address: string): boolean {
   return URL.parse(address)?.protocol === "https:";
-}
-
-function Sentence({
-  testId,
-  text,
-  children,
-}: {
-  testId: string;
-  text: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
-      <p
-        data-testid={testId}
-        role="status"
-        className="max-w-[360px] text-center text-[13px] text-fg2"
-      >
-        {text}
-      </p>
-      {children}
-    </div>
-  );
 }
 
 function Sections({

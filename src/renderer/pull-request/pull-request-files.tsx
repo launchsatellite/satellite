@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { ChangesList, PullRequestFound, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { ChangeList } from "../changes/change-list.tsx";
 import { emptySentence, unavailableSentence } from "../changes/change-words.ts";
@@ -15,6 +7,7 @@ import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
+import { Sentence } from "./pull-request-sentence.tsx";
 import { baseRequest } from "./pull-request-requests.ts";
 import {
   loadingSentence,
@@ -42,29 +35,6 @@ interface PullRequestFilesProps {
 }
 
 const revealFrames = 90;
-
-function Sentence({
-  testId,
-  text,
-  children,
-}: {
-  testId: string;
-  text: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-8">
-      <p
-        data-testid={testId}
-        role="status"
-        className="max-w-[360px] text-center text-[13px] text-fg2"
-      >
-        {text}
-      </p>
-      {children}
-    </div>
-  );
-}
 
 export function PullRequestFiles({
   workspace,
