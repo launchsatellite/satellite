@@ -19,12 +19,13 @@ const scriptJoin = `(?<=${scriptLetter})[\\u{200c}\\u{200d}]${scriptLetter}`;
 const drawnAsNothing =
   "\\p{Cc}\\p{Cf}\\p{Cs}\\p{Zl}\\p{Zp}\\p{Zs}\\p{Default_Ignorable_Code_Point}\\u{2800}\\u{1cbb}\\u{1cbc}\\u{fffc}\\u{133fc}";
 const shownAlike = "\\u{240d}";
+const escapeOpening = "\\[(?=U\\+[0-9A-Fa-f]{4,6}\\])";
 const hiddenCharacter = new RegExp(
-  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin}| )[${drawnAsNothing}]`,
+  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin}| )[${drawnAsNothing}]|${escapeOpening}`,
   "gu",
 );
 const hiddenInLines = new RegExp(
-  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin}| )[${drawnAsNothing}${shownAlike}]`,
+  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin}| )[${drawnAsNothing}${shownAlike}]|${escapeOpening}`,
   "gu",
 );
 

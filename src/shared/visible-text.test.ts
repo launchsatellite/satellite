@@ -46,7 +46,9 @@ describe("visibleText", () => {
       { text: "txt.md", revealed: false },
     ]);
     expect(visibleParts("report[U+202E]txt.md")).toEqual([
-      { text: "report[U+202E]txt.md", revealed: false },
+      { text: "report", revealed: false },
+      { text: "[U+005B]", revealed: true },
+      { text: "U+202E]txt.md", revealed: false },
     ]);
     expect(visibleParts("")).toEqual([]);
   });
@@ -76,11 +78,42 @@ describe("revealLines", () => {
     const real = revealLines("x = '\u{200b}\u{200b}'\na\r\n");
     const literal = revealLines("x = '[U+200B][U+200B]'\na\u{240d}\n");
     expect(real.text).toBe("x = '[U+200B][U+200B]'\na\u{240d}\n");
-    expect(literal.text).toBe("x = '[U+200B][U+200B]'\na[U+240D]\n");
+    expect(literal.text).toBe("x = '[U+005B]U+200B][U+005B]U+200B]'\na[U+240D]\n");
     expect(real.revealed).toEqual([
       { line: 1, start: 6, end: 22 },
       { line: 2, start: 2, end: 3 },
     ]);
-    expect(literal.revealed).toEqual([{ line: 2, start: 2, end: 10 }]);
+    expect(literal.revealed).toEqual([
+      { line: 1, start: 6, end: 14 },
+      { line: 1, start: 21, end: 29 },
+      { line: 2, start: 2, end: 10 },
+    ]);
+  });
+
+  it("never reads two different texts as the same", () => {
+    const pieces = ["[U+", "200B", "]", "[", "\u{200b}", "\r", "\u{240d}", "U+", "5B", "a"];
+    const seen = new Map<string, string>();
+    const names = new Map<string, string>();
+    const texts = pieces.map((piece) => [piece]);
+    let level = texts;
+    for (let length = 1; length <= 5; length += 1) {
+      for (const parts of level) {
+        const raw = parts.join("");
+        const shown = revealLines(raw).text;
+        expect(seen.get(shown) ?? raw).toBe(raw);
+        seen.set(shown, raw);
+        const named = visibleText(raw);
+        expect(names.get(named) ?? raw).toBe(raw);
+        names.set(named, raw);
+      }
+      level = level.flatMap((parts) => pieces.map((piece) => [...parts, piece]));
+      if (length === 4) level = level.slice(0, 20_000);
+    }
+  });
+
+  it("writes a literal bracket that opens an escape as an escape of its own", () => {
+    expect(revealLines("[U+200B]").text).toBe("[U+005B]U+200B]");
+    expect(revealLines("[U+200B]").text).not.toBe(revealLines("\u{200b}").text);
+    expect(visibleText("[U+200B]")).toBe("[U+005B]U+200B]");
   });
 });
