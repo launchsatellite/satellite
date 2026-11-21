@@ -129,8 +129,8 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
           listed(folders, folder, signal),
         ),
       "files.read": ({ workspace, path, known }, owner): Promise<FileRead> =>
-        owned(pageOf(owner), "read", workspace, (folder) =>
-          readFileForViewing(folder, path, known),
+        owned(pageOf(owner), "read", workspace, (folder, signal) =>
+          readFileForViewing(folder, path, known, signal),
         ),
       "files.find": ({ workspace, query }, owner) => {
         const page = pageOf(owner);

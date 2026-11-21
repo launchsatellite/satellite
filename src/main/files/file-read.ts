@@ -43,7 +43,12 @@ function viewed(read: SideRead, stamp: string): FileRead {
   }
 }
 
-async function readEntry(file: string, entry: BigIntStats, stamp: string): Promise<FileRead> {
+async function readEntry(
+  file: string,
+  entry: BigIntStats,
+  stamp: string,
+  signal?: AbortSignal,
+): Promise<FileRead> {
   if (entry.isSymbolicLink()) {
     const link = await linkSide(file);
     return link.kind === "text" ? { kind: "link", text: link.text, stamp } : viewed(link, stamp);
@@ -51,6 +56,7 @@ async function readEntry(file: string, entry: BigIntStats, stamp: string): Promi
   if (entry.isDirectory()) return gone;
   if (!entry.isFile()) return { kind: "binary", stamp };
   if (entry.size > BigInt(filesLimits.imageBytes)) return { kind: "large", stamp };
+  signal?.throwIfAborted();
   const sniffed: { image: ImageKind | undefined; signed: boolean } = {
     image: undefined,
     signed: false,
@@ -78,7 +84,12 @@ async function readEntry(file: string, entry: BigIntStats, stamp: string): Promi
   return sniffed.signed ? { kind: "binary", stamp } : viewed(decodedText(read), stamp);
 }
 
-async function readConfined(root: string, path: string, known: string | null): Promise<FileRead> {
+async function readConfined(
+  root: string,
+  path: string,
+  known: string | null,
+  signal?: AbortSignal,
+): Promise<FileRead> {
   const parent = posix.dirname(path);
   const folder = await confinedFolder(root, parent);
   if (typeof folder !== "string") {
@@ -88,7 +99,8 @@ async function readConfined(root: string, path: string, known: string | null): P
   const entry = await lstat(file, { bigint: true });
   const stamp = stampOf(entry);
   if (known === stamp) return { kind: "same" };
-  const read = await readEntry(file, entry, stamp);
+  signal?.throwIfAborted();
+  const read = await readEntry(file, entry, stamp, signal);
   const recheck = await confinedFolder(root, parent);
   return typeof recheck === "string" && sameFolder(recheck, folder) ? read : unreadable;
 }
@@ -97,10 +109,11 @@ export async function readFileForViewing(
   root: string,
   path: string,
   known: string | null,
+  signal?: AbortSignal,
 ): Promise<FileRead> {
   if (!isChangePath(path)) return unreadable;
   if (rootsWithStuckReads.has(root)) return hung;
-  const work = readConfined(root, path, known).catch((error: unknown): FileRead =>
+  const work = readConfined(root, path, known, signal).catch((error: unknown): FileRead =>
     isMissing(error) ? gone : unreadable,
   );
   const read = await withinTime(work, gitReadMs);

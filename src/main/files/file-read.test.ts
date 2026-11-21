@@ -52,6 +52,28 @@ describe("the Satellite home", () => {
   });
 });
 
+describe("readFileForViewing when it is replaced", () => {
+  it("stops before it reads a file once its signal is aborted", async () => {
+    const root = await makeRepository();
+    await put(root, { "a.txt": "a\n" });
+    const controller = new AbortController();
+    controller.abort();
+    expect(await readFileForViewing(root, "a.txt", null, controller.signal)).toEqual({
+      kind: "unreadable",
+    });
+  });
+
+  it("answers same for an image whose stamp is unchanged", async () => {
+    const root = await makeRepository();
+    await mkdir(join(root, "i"));
+    await writeFile(join(root, "i/a.png"), png(2, 2));
+    const first = await readFileForViewing(root, "i/a.png", null);
+    expect(first.kind).toBe("image");
+    const stamp = "stamp" in first ? first.stamp : null;
+    expect(await readFileForViewing(root, "i/a.png", stamp)).toEqual({ kind: "same" });
+  });
+});
+
 describe("readFileForViewing", () => {
   it("refuses a file reached through a linked folder, .git, an absolute path and a path that climbs out", async () => {
     const root = await makeRepository();
