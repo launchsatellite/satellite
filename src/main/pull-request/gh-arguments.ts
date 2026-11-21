@@ -64,7 +64,7 @@ export function threadsArguments(
 }
 
 export function logArguments({ host, owner, repo }: PullRequestPlace, job: string): string[] {
-  return ["run", "view", "--job", job, "--log-failed", "-R", `${host}/${owner}/${repo}`];
+  return ["api", "--hostname", host, `repos/${owner}/${repo}/actions/jobs/${job}/logs`];
 }
 
 export function placeOf(url: string): PullRequestPlace | null {

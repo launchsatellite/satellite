@@ -48,10 +48,13 @@ function threadsCall(args: readonly string[]): boolean {
 }
 
 function logCall(args: readonly string[]): boolean {
-  const job = valueAfter(args, 2, "--job");
-  const repository = valueAfter(args, 5, "-R")?.split("/");
-  if (job === undefined || !jobPattern.test(job) || repository?.length !== 3) return false;
-  const [host = "", owner = "", repo = ""] = repository;
+  const host = valueAfter(args, 1, "--hostname");
+  const [, owner = "", repo = "", actions = "", jobs = "", job = "", logs = "", extra] =
+    args[3]?.split("/") ?? [];
+  if (host === undefined || actions !== "actions" || jobs !== "jobs" || logs !== "logs") {
+    return false;
+  }
+  if (extra !== undefined || !jobPattern.test(job)) return false;
   const place = { host, owner, repo, number: 1 };
   return isCheckedPlace(place) && sameArguments(args, logArguments(place, job));
 }
@@ -63,6 +66,6 @@ export function callOf(args: readonly string[]): GhCall | null {
     return "pull-request";
   }
   if (args[0] === "api" && threadsCall(args)) return "threads";
-  if (args[0] === "run" && logCall(args)) return "failed-log";
+  if (args[0] === "api" && logCall(args)) return "failed-log";
   return null;
 }

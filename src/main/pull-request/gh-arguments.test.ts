@@ -57,15 +57,12 @@ describe("the arguments", () => {
     ]);
   });
 
-  it("the log arguments name the job and the repository with its host", () => {
+  it("the log arguments name one job of the repository with its host and use no cache", () => {
     expect(logArguments(place, "2001")).toEqual([
-      "run",
-      "view",
-      "--job",
-      "2001",
-      "--log-failed",
-      "-R",
-      "github.com/example-org/verify-repo",
+      "api",
+      "--hostname",
+      "github.com",
+      "repos/example-org/verify-repo/actions/jobs/2001/logs",
     ]);
   });
 });

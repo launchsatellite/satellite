@@ -412,9 +412,7 @@ export function parseConversation(
 }
 
 function lineOf(raw: string): string {
-  const parts = raw.split("\t");
-  const text = parts.length >= 3 ? parts.slice(2).join("\t") : raw;
-  return visibleText(text.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " "));
+  return visibleText(raw.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " "));
 }
 
 export function failedLines(stdout: string): { lines: string[]; more: boolean } {

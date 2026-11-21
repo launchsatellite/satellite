@@ -573,7 +573,7 @@ describe("parseThreads", () => {
   });
 });
 
-const prefix = (text: string) => `build\tTest step\t2026-01-01T00:00:0${text}`;
+const prefix = (text: string) => `2026-01-01T00:00:0${text}`;
 
 describe("failedLines", () => {
   it("reduces a log to its error lines", () => {
@@ -602,13 +602,13 @@ describe("failedLines", () => {
     expect(failedLines("")).toEqual({ lines: [], more: false });
   });
 
-  it("strips the prefix, the timestamp and terminal escapes", () => {
+  it("strips the timestamp and terminal escapes and keeps a line's own tabs as spaces", () => {
     const log = [
-      `build\tTest step\t\uFEFF2026-01-01T00:00:00.1234567Z \u001b[31;1mred\u001b[0m text`,
+      `\uFEFF2026-01-01T00:00:00.1234567Z \u001b[31;1mred\u001b[0m text`,
       `no prefix \u001b]0;title\u0007kept`,
-      "build\tstep\t2026-01-01T00:00:00Z a\tb",
+      "2026-01-01T00:00:00Z a\tb\tc\td",
     ].join("\n");
-    expect(failedLines(log).lines).toEqual(["red text", "no prefix kept", "a b"]);
+    expect(failedLines(log).lines).toEqual(["red text", "no prefix kept", "a b c d"]);
   });
 
   it("hides characters that draw as nothing", () => {

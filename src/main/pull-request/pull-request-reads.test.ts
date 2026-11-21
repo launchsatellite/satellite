@@ -9,7 +9,7 @@ import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeOwner } from "../bridge/registry.ts";
 import type { Needing } from "../inbox/notices.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
-import { threadsArguments, viewArguments } from "./gh-arguments.ts";
+import { logArguments, threadsArguments, viewArguments } from "./gh-arguments.ts";
 import { createPullRequests } from "./pull-request-reads.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -36,7 +36,7 @@ const dir = process.argv[2];
 const args = process.argv.slice(3);
 appendFileSync(join(dir, "calls.jsonl"), JSON.stringify({ args, cwd: process.cwd() }) + "\\n");
 const numbered = args[0] === "pr" && /^[0-9]+$/.test(args[2]);
-const name = numbered ? "view-" + args[2] : { pr: "view", api: "threads", run: "log" }[args[0]];
+const name = numbered ? "view-" + args[2] : { pr: "view", api: args[1] === "graphql" ? "threads" : "log" }[args[0]];
 const file = join(dir, name + ".json");
 const answer = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { exitCode: 1, stderr: "boom" };
 process.stdout.write(answer.stdout ?? "");
@@ -545,7 +545,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
     await read(first);
     await answer("log", {
-      stdout: "build\tstep\t2026-01-01T00:00:00.0000000Z ##[error]It broke\n",
+      stdout: "2026-01-01T00:00:00.0000000Z ##[error]It broke\n",
     });
     expect(await log({ workspace: first, job: "2001" }, owner)).toEqual({
       kind: "lines",
@@ -560,16 +560,28 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     });
   });
 
+  it("reads one job's log with a plain api request that writes nothing", async () => {
+    const { answer, read, reads, calls } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await answer("log", { stdout: "2026-01-01T00:00:00.0000000Z ##[error]Oops\n" });
+    await reads.handlers["pullRequest.log"]({ workspace: first, job: "2001" }, owner);
+    const made = await calls();
+    expect(made.at(-1)?.args).toEqual(logArguments(place, "2001"));
+    expect(made.some(({ args }) => args[0] === "run")).toBe(false);
+  });
+
   it("joins identical log requests and reuses the answer for ten seconds", async () => {
     const { answer, read, reads, calls, advance } = await setup();
     const log = () => reads.handlers["pullRequest.log"]({ workspace: first, job: "2001" }, owner);
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
     await read(first);
-    await answer("log", { stdout: "build\tstep\t2026-01-01T00:00:00.0000000Z ##[error]Oops\n" });
+    await answer("log", { stdout: "2026-01-01T00:00:00.0000000Z ##[error]Oops\n" });
     const flood = await Promise.all(Array.from({ length: 50 }, log));
     expect(new Set(flood.map((got) => JSON.stringify(got))).size).toBe(1);
     await log();
-    const logRuns = async () => (await calls()).filter(({ args }) => args[0] === "run").length;
+    const logRuns = async () =>
+      (await calls()).filter(({ args }) => args[0] === "api" && args[1] !== "graphql").length;
     expect(await logRuns()).toBe(1);
     advance(11_000);
     await log();
