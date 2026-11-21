@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { readProcessTable } from "../../src/main/platform/process-table.ts";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
@@ -48,24 +50,40 @@ async function textOf(session: AppSession, testId: string): Promise<string> {
   return (await session.page.getByTestId(testId).textContent()) ?? "";
 }
 
+async function startOf(pid: number): Promise<number> {
+  const started = (await readProcessTable()).find((entry) => entry.pid === pid)?.started;
+  if (started === undefined || started === null) throw new Error(`no start for ${String(pid)}`);
+  return started;
+}
+
 async function openList(session: AppSession): Promise<void> {
   await session.page.getByTestId("header-processes").click();
   await visible(session, "processes-dialog", "after the header count was pressed");
 }
 
-async function forged(session: AppSession, claudePid: number): Promise<void> {
+async function forged(
+  session: AppSession,
+  claudePid: number,
+  stranger: { pid: number },
+): Promise<void> {
   const { page } = session;
   const refusals: [string, string, unknown, string][] = [
     [
       "processes.stop",
-      "the driver's own id with a start of 1",
-      { pid: process.pid, started: 1 },
+      "the driver's own id with its true start",
+      { pid: process.pid, started: await startOf(process.pid) },
       "not-found",
     ],
     [
       "processes.stop",
-      "the session's own id with a start of 1",
-      { pid: claudePid, started: 1 },
+      "the session's own id with its true start",
+      { pid: claudePid, started: await startOf(claudePid) },
+      "not-found",
+    ],
+    [
+      "processes.stop",
+      "a process the journey started, outside every session, with its true start",
+      { pid: stranger.pid, started: await startOf(stranger.pid) },
       "not-found",
     ],
     ["processes.stop", "an id of 1", { pid: 1, started: 1 }, "invalid-request"],
@@ -86,6 +104,7 @@ async function forged(session: AppSession, claudePid: number): Promise<void> {
   for (const [channel, what, payload, expected] of refusals) {
     assert.equal(await bridgeCode(page, channel, payload), expected, `${channel} with ${what}`);
   }
+  assert.ok(!processGone(stranger.pid), "the unrelated process was ended by a forged request");
   assert.ok(!processGone(process.pid), "the driver was gone after the forged requests");
   assert.ok(!processGone(claudePid), "the stand-in was gone after the forged requests");
 }
@@ -139,6 +158,15 @@ async function run(session: AppSession): Promise<void> {
 
   await gone(session, "link-dialog", "after the address opened");
   await openList(session);
+  assert.equal(
+    await bridgeCode(page, "processes.stop", {
+      pid: server.pid,
+      started: (await startOf(server.pid)) + 1000,
+    }),
+    "not-found",
+    "a listed process with a start one second off was accepted",
+  );
+  assert.ok(!processGone(server.pid), "the dev server ended for a start one second off");
   await page.getByTestId("process-row-0-stop").click();
   await waitUntil(
     () => processGone(server.pid) && processGone(server.child),
@@ -150,8 +178,30 @@ async function run(session: AppSession): Promise<void> {
   await visible(session, "processes-empty", "after Stop", stopWaitMs);
   await page.getByTestId("processes-close").click();
   await gone(session, "header-processes", "after the process ended");
+  await waitUntil(
+    () =>
+      page.evaluate(
+        () => document.activeElement?.getAttribute("data-testid") === "workspace-header",
+      ),
+    promptTimeoutMs,
+    "focus did not return to the workspace header once the list closed and its opener was gone",
+  );
 
-  await forged(session, claudePid);
+  const stranger = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
+    stdio: "ignore",
+  });
+  try {
+    await waitUntil(
+      async () =>
+        stranger.pid !== undefined &&
+        (await readProcessTable()).some((entry) => entry.pid === stranger.pid),
+      promptTimeoutMs,
+      "the unrelated process never showed in the table",
+    );
+    await forged(session, claudePid, { pid: stranger.pid ?? 0 });
+  } finally {
+    stranger.kill();
+  }
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
 

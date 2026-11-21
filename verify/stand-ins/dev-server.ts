@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { appendStandInEvent } from "./stand-in-log.ts";
 
-const idleChild = "setInterval(() => {}, 1000);";
+const idleChild =
+  "const parent = process.ppid; setInterval(() => { try { process.kill(parent, 0); } catch { process.exit(0); } }, 1000);";
 
 const server = createServer();
 server.listen(0, "127.0.0.1", () => {
