@@ -4,15 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readProcessTable } from "./process-table.ts";
+import { type ProcessEntry, readProcessTable } from "./process-table.ts";
 import {
   endSubtree,
+  parseStartTicks,
+  prepareLinux,
+  windowsStopChunks,
   endUnixTree,
   endWindowsTree,
   forceKillGraceMs,
   subtreeStopBoundMs,
   treeKillBoundMs,
-  UnreadableTable,
+  StopNotConfirmed,
+  StopRefused,
 } from "./process-tree.ts";
 
 const ignoresHangup = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
@@ -163,7 +167,11 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
       expect(found).toBeDefined();
       if (found === undefined) return;
-      await endSubtree({ ...found, identity: `${String(pid)} an earlier start` });
+      await endSubtree({
+        ...found,
+        started: (found.started ?? 0) - 5000,
+        identity: `${String(pid)} an earlier start`,
+      });
       await delay(100);
       expect(isAlive(pid)).toBe(true);
     } finally {
@@ -181,7 +189,7 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       expect(found).toBeDefined();
       if (found === undefined) return;
       await expect(endSubtree(found, () => Promise.resolve([]))).rejects.toBeInstanceOf(
-        UnreadableTable,
+        StopRefused,
       );
       await delay(100);
       expect(isAlive(pid)).toBe(true);
@@ -204,11 +212,29 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
         reads += 1;
         return reads === 1 ? readProcessTable() : [];
       };
-      await expect(endSubtree(found, failing)).rejects.toBeInstanceOf(UnreadableTable);
+      await expect(endSubtree(found, failing)).rejects.toBeInstanceOf(StopNotConfirmed);
     } finally {
       if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
     }
   });
+
+  it("fails when something of the subtree is still running after the signals", async () => {
+    const stranger = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000);"], {
+      stdio: "ignore",
+    });
+    const pid = stranger.pid ?? 0;
+    try {
+      const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
+      expect(found).toBeDefined();
+      if (found === undefined) return;
+      const sendsNothing = () => Promise.resolve({ ready: true, send: () => Promise.resolve() });
+      await expect(endSubtree(found, readProcessTable, sendsNothing)).rejects.toBeInstanceOf(
+        StopNotConfirmed,
+      );
+    } finally {
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  }, 15_000);
 
   it("kills a child that ignores SIGTERM once the grace is over", async () => {
     const stubborn = "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60_000);";
@@ -248,4 +274,88 @@ describe.skipIf(process.platform === "win32")("endWindowsTree", () => {
     await endWindowsTree(process.pid);
     expect(performance.now() - began).toBeLessThan(treeKillBoundMs - forceKillGraceMs + 500);
   }, 40_000);
+});
+
+describe("parseStartTicks", () => {
+  it("takes the start ticks after a name that holds spaces and brackets", () => {
+    const rest = "S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 123456 20 21";
+    expect(parseStartTicks(`4242 (Web (Content) x) ${rest}`)).toBe("123456");
+    expect(parseStartTicks("garbage")).toBeNull();
+    expect(parseStartTicks("1 (a) S 1")).toBeNull();
+  });
+});
+
+describe.skipIf(process.platform === "win32")("prepareLinux", () => {
+  async function sleeperEntry(): Promise<{ child: ChildProcess; entry: ProcessEntry }> {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000);"], {
+      stdio: "ignore",
+    });
+    const entry = (await readProcessTable()).find((candidate) => candidate.pid === child.pid);
+    if (entry === undefined) throw new Error("no entry");
+    return { child, entry };
+  }
+
+  it("signals only while the start ticks still match the ones recorded", async () => {
+    const { child, entry } = await sleeperEntry();
+    try {
+      let reads = 0;
+      const changing = () => {
+        reads += 1;
+        return Promise.resolve(reads === 1 ? "100" : "101");
+      };
+      const delivery = await prepareLinux([entry], changing);
+      expect(delivery.ready).toBe(true);
+      await delivery.send("SIGKILL");
+      await delay(100);
+      expect(isAlive(entry.pid)).toBe(true);
+      const steady = await prepareLinux([entry], () => Promise.resolve("100"));
+      await steady.send("SIGKILL");
+      await delay(200);
+      expect(isAlive(entry.pid)).toBe(false);
+    } finally {
+      if (isAlive(entry.pid)) child.kill("SIGKILL");
+    }
+  });
+
+  it("is not ready, and signals nothing, where the start ticks cannot be read", async () => {
+    const { child, entry } = await sleeperEntry();
+    try {
+      const delivery = await prepareLinux([entry], () => Promise.resolve(null));
+      expect(delivery.ready).toBe(false);
+      await delivery.send("SIGKILL");
+      await delay(100);
+      expect(isAlive(entry.pid)).toBe(true);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  });
+});
+
+describe("windowsStopChunks", () => {
+  function member(pid: number, started: number | null): ProcessEntry {
+    return {
+      pid,
+      parent: 0,
+      group: 0,
+      identity: "",
+      started,
+      defunct: false,
+      name: "",
+      command: "",
+    };
+  }
+
+  it("passes numbers only, drops rows it cannot prove and bounds each run", () => {
+    const members = [
+      member(10, 1_000),
+      member(11, null),
+      member(Number.NaN, 5),
+      member(12, 2.5),
+      ...Array.from({ length: 450 }, (_, index) => member(100 + index, 9_000)),
+    ];
+    const chunks = windowsStopChunks(members);
+    expect(chunks.map((chunk) => chunk.split(",").length)).toEqual([200, 200, 51]);
+    expect(chunks.join(",")).toMatch(/^(\d+:\d+)(,\d+:\d+)*$/);
+    expect(chunks[0]?.startsWith("10:1000,100:9000")).toBe(true);
+  });
 });

@@ -9,6 +9,7 @@ import {
   parseWindowsTable,
   readCommands,
   readProcessTable,
+  startsMatch,
   subtreeOf,
 } from "./process-table.ts";
 
@@ -169,5 +170,15 @@ describe("parseWindowsCommands", () => {
     );
     expect([...commands]).toEqual([[3201, command]]);
     expect(parseWindowsCommands("not json").size).toBe(0);
+  });
+});
+
+describe("startsMatch", () => {
+  it("accepts the tolerance it is given and nothing without a start", () => {
+    expect(startsMatch(10_000, 10_900, 1000)).toBe(true);
+    expect(startsMatch(10_000, 11_001, 1000)).toBe(false);
+    expect(startsMatch(10_000, 10_001, 0)).toBe(false);
+    expect(startsMatch(10_000, 10_000, 0)).toBe(true);
+    expect(startsMatch(null, 10_000, 1000)).toBe(false);
   });
 });

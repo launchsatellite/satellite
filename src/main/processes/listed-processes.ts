@@ -1,5 +1,5 @@
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
-import { type ProcessEntry, subtreeOf } from "../platform/process-table.ts";
+import { type ProcessEntry, startsMatch, subtreeOf } from "../platform/process-table.ts";
 
 export interface SessionRoot {
   readonly session: string;
@@ -150,7 +150,7 @@ export function ownedProcess(
       candidate.owned &&
       (candidate.listed || candidate.shadowed) &&
       candidate.entry.pid === pid &&
-      candidate.entry.started === started,
+      startsMatch(started, candidate.entry.started),
   );
   return position === undefined ? undefined : ownedOf(position, entries);
 }

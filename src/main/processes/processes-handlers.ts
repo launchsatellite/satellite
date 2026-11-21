@@ -7,7 +7,7 @@ import {
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { type ListeningPort, readListeningPorts } from "../platform/listening-ports.ts";
 import { type ProcessEntry, readCommands, readProcessTable } from "../platform/process-table.ts";
-import { endSubtree, UnreadableTable } from "../platform/process-tree.ts";
+import { endSubtree, StopNotConfirmed, StopRefused } from "../platform/process-tree.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
 import { shownCommand } from "./command-text.ts";
 import {
@@ -197,7 +197,10 @@ export function createProcesses({
           try {
             await end(owned.entry);
           } catch (error) {
-            if (error instanceof UnreadableTable) {
+            if (error instanceof StopRefused) {
+              throw new BridgeFailure("failed", unreadableSentence);
+            }
+            if (error instanceof StopNotConfirmed) {
               throw new BridgeFailure("failed", unconfirmedSentence);
             }
             throw error;

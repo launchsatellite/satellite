@@ -183,6 +183,23 @@ export function parseWindowsCommands(text: string): Map<number, string> {
   return commands;
 }
 
+const startToleranceMs = process.platform === "linux" ? 1000 : 0;
+
+export function startsMatch(
+  listed: number | null,
+  read: number | null,
+  toleranceMs: number = startToleranceMs,
+): boolean {
+  return listed !== null && read !== null && Math.abs(listed - read) <= toleranceMs;
+}
+
+export function sameProcess(first: ProcessEntry, second: ProcessEntry): boolean {
+  return (
+    first.pid === second.pid &&
+    (first.identity === second.identity || startsMatch(first.started, second.started))
+  );
+}
+
 export function subtreeOf(root: ProcessEntry, entries: readonly ProcessEntry[]): ProcessEntry[] {
   const children = new Map<number, ProcessEntry[]>();
   for (const entry of entries) {

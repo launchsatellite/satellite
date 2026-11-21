@@ -7,7 +7,7 @@ import { parseLsof } from "../platform/listening-ports.ts";
 import { fixtureNow, lsofMacos, psMacos } from "../platform/process-fixtures.ts";
 import { type ProcessEntry, parsePsTable, readProcessTable } from "../platform/process-table.ts";
 import type { SessionRoot } from "./listed-processes.ts";
-import { UnreadableTable } from "../platform/process-tree.ts";
+import { StopRefused } from "../platform/process-tree.ts";
 import { createProcesses, type RunningRoot } from "./processes-handlers.ts";
 
 const project = "6f1c2a7e-3b4d-4c5e-9f60-718293a4b5c6";
@@ -246,7 +246,7 @@ describe("processes.stop", () => {
   });
 
   it("answers failed, not success, when ending reports an unreadable table", async () => {
-    const { stop, table } = setup({ end: () => Promise.reject(new UnreadableTable("no table")) });
+    const { stop, table } = setup({ end: () => Promise.reject(new StopRefused("no table")) });
     await expect(stop(4201, startOf(table, 4201))).rejects.toMatchObject({ code: "failed" });
   });
 });
