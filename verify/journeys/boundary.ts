@@ -479,7 +479,7 @@ async function checkNestedRepository(page: Page, projectId: string): Promise<voi
   const [opened, hidden] = inside.folders;
   assert.equal(opened?.listing.state, "listed", "a nested repository did not open like a folder");
   assert.equal(
-    JSON.stringify(opened?.listing).includes(".git"),
+    JSON.stringify(opened).includes(".git"),
     false,
     "files.list listed a nested repository's .git",
   );

@@ -90,7 +90,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
   };
 }
 
-const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/u;
+const controlCharacter = /\p{Cc}/u;
 
 function keptPath(path: string): boolean {
   return (

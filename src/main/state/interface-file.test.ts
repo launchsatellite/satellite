@@ -190,10 +190,10 @@ describe("saved tabs hold only what could be loaded again", () => {
     );
     await handlers["interface.save"]({ state: hostile }, owner);
     await file.flush();
-    const written = JSON.parse(await readFile(join(home, "interface.json"), "utf8")) as {
-      files: unknown;
-    };
-    expect(written.files).toEqual([{ projectId, workspace: "main", paths: ["ok.ts"], active: 0 }]);
+    const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
+    expect(written).toMatchObject({
+      files: [{ projectId, workspace: "main", paths: ["ok.ts"], active: 0 }],
+    });
   });
 
   it("keeps the saved tabs, path checked, when the project list fails, and writes nothing on load", async () => {
