@@ -1,6 +1,6 @@
 # 010 First-run guide
 
-Status **Approved** · Depends on **002, 003, 004, 005, 006**
+Status **In progress** · Depends on **002, 003, 004, 005, 006**
 
 ## Why
 
