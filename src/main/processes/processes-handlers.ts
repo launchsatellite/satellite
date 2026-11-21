@@ -48,6 +48,7 @@ interface Snapshot {
 }
 
 const tableReuseMs = 2000;
+const refusalReuseMs = 1000;
 const unreadableSentence = "Satellite couldn't read the running processes, so it stopped nothing.";
 const unlistedSentence =
   "Satellite couldn't read the running processes. The list shows what it read last.";
@@ -104,6 +105,7 @@ export function createProcesses({
   let finished: { readonly snapshot: Snapshot; readonly at: number } | undefined;
   let generation = 0;
   let stopping = false;
+  let recent: { readonly table: readonly ProcessEntry[]; readonly at: number } | undefined;
 
   const read = async (): Promise<Snapshot> => {
     const at = now();
@@ -133,7 +135,9 @@ export function createProcesses({
           root.workspace.projectId === workspace.projectId &&
           root.workspace.workspace === workspace.workspace,
       )?.owner;
-      return owner === undefined ? [] : [{ owner, workspace, count }];
+      return owner === undefined
+        ? []
+        : [{ owner, workspace, count: Math.min(count, processesLimits.more) }];
     });
     return { at, rows, more: owners };
   };
@@ -150,7 +154,7 @@ export function createProcesses({
         return result;
       })
       .finally(() => {
-        reading = undefined;
+        if (reading === current) reading = undefined;
       });
     reading = current;
     return current;
@@ -159,6 +163,7 @@ export function createProcesses({
   const dropRead = () => {
     generation += 1;
     finished = undefined;
+    reading = undefined;
   };
 
   return {
@@ -184,16 +189,24 @@ export function createProcesses({
           .filter((running) => running.owner === owner)
           .map(({ root }) => root);
         if (own.length === 0) throw new BridgeFailure("not-found", "That process already ended.");
+        if (
+          recent !== undefined &&
+          now() - recent.at < refusalReuseMs &&
+          ownedProcess(recent.table, own, pid, started, now()) === undefined
+        ) {
+          throw new BridgeFailure("not-found", "That process already ended.");
+        }
         stopping = true;
-        dropRead();
         try {
           const table = await readTable();
+          recent = { table, at: now() };
           if (table.length === 0) {
             throw new BridgeFailure("failed", unreadableSentence);
           }
           const owned = ownedProcess(table, own, pid, started, now());
-          if (owned === undefined)
+          if (owned === undefined) {
             throw new BridgeFailure("not-found", "That process already ended.");
+          }
           try {
             await end(owned.entry);
           } catch (error) {
@@ -204,11 +217,12 @@ export function createProcesses({
               throw new BridgeFailure("failed", unconfirmedSentence);
             }
             throw error;
+          } finally {
+            dropRead();
           }
           return {};
         } finally {
           stopping = false;
-          dropRead();
         }
       },
     },

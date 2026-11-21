@@ -227,6 +227,20 @@ describe("processes.stop", () => {
     expect(end).not.toHaveBeenCalled();
   });
 
+  it("reads the table once for a flood of refused stops and leaves a list's reuse alone", async () => {
+    const { list, stop, readTable, tick } = setup();
+    await list();
+    expect(readTable).toHaveBeenCalledTimes(1);
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await expect(stop(9999 + attempt, 1_000_000)).rejects.toMatchObject({ code: "not-found" });
+      await list();
+    }
+    expect(readTable).toHaveBeenCalledTimes(2);
+    tick(1500);
+    await expect(stop(9999, 1_000_000)).rejects.toMatchObject({ code: "not-found" });
+    expect(readTable).toHaveBeenCalledTimes(3);
+  });
+
   it("refuses a second stop while one runs", async () => {
     const release = Promise.withResolvers<undefined>();
     const { stop, end, table } = setup({ end: () => release.promise });

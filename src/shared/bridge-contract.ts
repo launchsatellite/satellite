@@ -227,7 +227,7 @@ const windowsPty = z.strictObject({
   buildNumber: z.number().int().positive(),
 });
 export type WindowsPty = z.output<typeof windowsPty>;
-export const processesLimits = { rows: 200, ports: 4, commandChars: 200 };
+export const processesLimits = { rows: 200, ports: 4, commandChars: 200, more: 100_000 };
 export const pullRequestLimits = {
   titleChars: 256,
   bodyChars: 20_000,
@@ -674,7 +674,12 @@ export const bridgeRequests = {
       at: processStart,
       rows: z.array(processRow).max(processesLimits.rows * bridgeLimits.terminals),
       more: z
-        .array(z.strictObject({ workspace: workspaceRef, count: z.int().min(1).max(100_000) }))
+        .array(
+          z.strictObject({
+            workspace: workspaceRef,
+            count: z.int().min(1).max(processesLimits.more),
+          }),
+        )
         .max(bridgeLimits.terminals),
     }),
   },
