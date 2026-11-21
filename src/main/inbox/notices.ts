@@ -82,11 +82,12 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
     const [first, ...rest] = named;
     const target = named.at(-1);
     if (first === undefined || target === undefined) return false;
-    const keys = named.map(({ entry }) => placeKey(entry.workspace));
+    const single = rest.length === 0 && needing.size === 1;
+    const keys = single ? [placeKey(first.entry.workspace)] : [...needing.keys()];
     closeShown();
     const words = noticeText([first.subject, ...rest.map(({ subject }) => subject)], needing.size);
     const notice = show(words, () => {
-      const alone = rest.length === 0 ? needing.get(keys[0] ?? "") : undefined;
+      const alone = single ? needing.get(keys[0] ?? "") : undefined;
       open(alone ?? [...needing.values()].at(-1) ?? target.entry);
     });
     if (notice !== undefined) shown = { notice, keys };
@@ -94,7 +95,9 @@ export function createNotices({ inFront, subject, show, setBadge, open }: Notice
   };
   const flush = () => {
     clearTimer();
-    const entries = [...pending.values()];
+    const entries = [...pending.values()].filter(
+      ({ workspace }) => shown?.keys.includes(placeKey(workspace)) !== true,
+    );
     pending.clear();
     if (entries.length === 0 || quiet()) return;
     const before = shownAt;

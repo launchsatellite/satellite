@@ -128,7 +128,7 @@ describe("createNotices", () => {
     expect(opened).toEqual([burst[4]]);
   });
 
-  it("waits out the gap before the next notification", async () => {
+  it("waits out the gap, then states everything still waiting and opens the newest", async () => {
     const { shown, opened, notices } = setup();
     notices.update([need("1")]);
     await settle(2000);
@@ -140,10 +140,12 @@ describe("createNotices", () => {
     await settle(noticeGapMs - 4001);
     expect(shown).toHaveLength(1);
     await settle(1);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w2 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "2 workspaces need you"]);
     expect(shown[0]?.close).toHaveBeenCalledTimes(1);
     shown[1]?.click();
-    expect(opened.map(({ workspace }) => nameOf(workspace))).toEqual(["2"]);
+    notices.update([need("1")]);
+    shown[1]?.click();
+    expect(opened.map(({ workspace }) => nameOf(workspace))).toEqual(["2", "1"]);
   });
 
   it("does not hold back the next notification for a wait that was answered", async () => {
@@ -156,7 +158,7 @@ describe("createNotices", () => {
     await settle(noticeGapMs);
     notices.update([need("1"), need("3")]);
     await settle();
-    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w3 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "2 workspaces need you"]);
   });
 
   it("closes a notification once everything it named was answered", async () => {
@@ -217,7 +219,7 @@ describe("createNotices", () => {
     expect(shown).toEqual([]);
     notices.update([need("1"), need("2")]);
     await settle();
-    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
   });
 
   it("skips a workspace that is gone by the time it shows", async () => {
@@ -229,7 +231,7 @@ describe("createNotices", () => {
     state.gone = new Set(["1"]);
     notices.update([need("1"), need("2"), need("3")]);
     await settle(noticeGapMs * 2);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w3 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["3 workspaces need you"]);
   });
 
   it("never names a workspace answered while its name was looked up", async () => {
@@ -340,18 +342,14 @@ describe("createNotices", () => {
     error.mockRestore();
   });
 
-  it("keeps the gap while a name lookup is slow", async () => {
+  it("counts a need that arrived during a slow lookup once", async () => {
     const { state, shown, notices } = setup();
     state.slow.set("1", 100);
     notices.update([need("1")]);
     await settle(50);
     notices.update([need("1"), need("2")]);
-    await settle(100);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you"]);
-    await settle(noticeGapMs - 151);
-    expect(shown).toHaveLength(1);
-    await settle(1);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w2 needs you"]);
+    await settle(noticeGapMs * 2);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
   });
 
   it("never lets a slow lookup close or replace a newer notification", async () => {
@@ -361,7 +359,7 @@ describe("createNotices", () => {
     await settle(1);
     notices.update([need("1"), need("2")]);
     await settle(noticeGapMs * 3);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
     expect(shown[0]?.close).not.toHaveBeenCalled();
   });
 
@@ -398,7 +396,7 @@ describe("createNotices", () => {
     expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you"]);
     notices.update([need("1"), need("2"), need("3")]);
     await settle();
-    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "w3 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["w1 needs you", "3 workspaces need you"]);
   });
 
   it("does not use up the gap when nothing could be named", async () => {
@@ -408,7 +406,7 @@ describe("createNotices", () => {
     await settle(100);
     notices.update([need("1"), need("2")]);
     await settle();
-    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
   });
 
   it("tries a lookup that failed once more on the next change, never on its own", async () => {
@@ -432,7 +430,7 @@ describe("createNotices", () => {
     error.mockRestore();
   });
 
-  it("announces later what a stale lookup held, once", async () => {
+  it("never announces again what a gathered notification already counted", async () => {
     const { state, shown, notices } = setup();
     state.slow.set("1", noticeGapMs * 2);
     notices.update([need("1")]);
@@ -444,6 +442,6 @@ describe("createNotices", () => {
     await settle(noticeGapMs);
     notices.update([need("1"), need("2")]);
     await settle(noticeGapMs * 2);
-    expect(shown.map(({ text }) => text.title)).toEqual(["w2 needs you", "w1 needs you"]);
+    expect(shown.map(({ text }) => text.title)).toEqual(["2 workspaces need you"]);
   });
 });

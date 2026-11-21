@@ -16,7 +16,7 @@ export function noticeText(
   subjects: readonly [NoticeSubject, ...NoticeSubject[]],
   waiting: number,
 ): NoticeText {
-  if (subjects.length > 1) {
+  if (subjects.length > 1 || waiting > 1) {
     return {
       title: `${String(Math.max(waiting, subjects.length))} workspaces need you`,
       body: "Open Satellite to answer them from the inbox.",

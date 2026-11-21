@@ -308,8 +308,8 @@ async function askAgainAndFold(session: AppSession): Promise<void> {
   await answer(session, "main", "Allowed.");
   await recorded(
     session,
-    [alphaNotice, closed, alphaNotice, closed, foldedNotice, closed],
-    "after beta and main were answered,",
+    [alphaNotice, closed, alphaNotice, closed, foldedNotice],
+    "after beta and main were answered with alpha still asking,",
   );
   await countsAre(session, [0, 1, 0, 1, 2, 3, 2, 1], "with only alpha asking,");
 }
@@ -320,6 +320,7 @@ async function switchedOff(session: AppSession): Promise<void> {
   await commandMenu(session);
   await page.getByTestId("command-notifications-off").click();
   await toastReads(session, turnedOff, "after turning notifications off,");
+  await recorded(session, before, "after turning notifications off with alpha asking,");
   await select(session, "alpha");
   await terminalShows(session, "Allow Bash again", "with alpha already shown");
   await answer(session, "alpha", "Allowed again.");

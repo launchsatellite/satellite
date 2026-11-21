@@ -35,6 +35,10 @@ describe("noticeText", () => {
       title: "5 workspaces need you",
       body: "Open Satellite to answer them from the inbox.",
     });
+    expect(noticeText([{ project: "repo", parent: null, workspace: "alpha" }], 2)).toEqual({
+      title: "2 workspaces need you",
+      body: "Open Satellite to answer them from the inbox.",
+    });
   });
 
   it("keeps markup, control and direction characters out of a name", () => {
