@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSchedule, nextSteps, pollDelay, type ScheduleAnswer } from "./refresh-schedule.ts";
 
-describe("change list poll", () => {
+describe("refresh delay", () => {
   it("waits 2 seconds after a quick list", () => {
     expect(pollDelay(0, 0)).toBe(2000);
     expect(pollDelay(120, 0)).toBe(2000);
@@ -72,7 +72,7 @@ function harness() {
   return { state, schedule, answer, next, wait };
 }
 
-describe("list schedule", () => {
+describe("refresh schedule", () => {
   it("doubles after lists that come back the same and starts over on a change", async () => {
     const { state, schedule, answer, next } = harness();
     schedule.start();

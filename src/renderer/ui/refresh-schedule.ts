@@ -16,13 +16,13 @@ interface Schedule {
   hide: () => void;
 }
 
-const changesPollMs = 2000;
-const changesPollMaxMs = 30_000;
-const changesPollFactor = 4;
+const refreshMs = 2000;
+const refreshMaxMs = 30_000;
+const refreshFactor = 4;
 
 export function pollDelay(elapsedMs: number, steps: number): number {
-  const backoff = changesPollMs * 2 ** steps;
-  return Math.min(changesPollMaxMs, Math.max(backoff, changesPollFactor * elapsedMs));
+  const backoff = refreshMs * 2 ** steps;
+  return Math.min(refreshMaxMs, Math.max(backoff, refreshFactor * elapsedMs));
 }
 
 export function nextSteps(steps: number, answeredFiles: boolean, changed: boolean): number {
@@ -76,7 +76,7 @@ export function createSchedule(hooks: ScheduleHooks): Schedule {
       steps = -1;
       if (cancel === undefined) return;
       clear();
-      cancel = hooks.after(changesPollMs, ask);
+      cancel = hooks.after(refreshMs, ask);
     },
     hide: clear,
   };

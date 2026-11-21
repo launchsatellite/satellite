@@ -76,6 +76,7 @@ export function FilesView({ workspace, tabs, list, finished, onCentre }: FilesVi
             {error !== null && (
               <p
                 data-testid="files-error"
+                role="status"
                 className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
               >
                 {error}
