@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { processRow } from "../../shared/bridge-contract.ts";
 import { checkedLink } from "../terminal/link-check.ts";
 import { portUrl } from "./port-address.ts";
 
@@ -27,6 +28,18 @@ describe("portUrl", () => {
     expect(portUrl([], 3000)).toBeNull();
     expect(portUrl(["127.0.0.1"], 0)).toBeNull();
     expect(portUrl(["127.0.0.1"], 70000)).toBeNull();
+  });
+
+  it("builds an address links.open accepts for every kind of port, loopback only", () => {
+    for (const host of ["127.0.0.1", "::1"]) {
+      for (const port of [1, 80, 443, 5173, 65535]) {
+        const url = portUrl([host], port);
+        expect(url).not.toBeNull();
+        expect(checkedLink(url ?? "")?.href).toBe(url);
+        expect(["127.0.0.1", "[::1]"]).toContain(URL.parse(url ?? "")?.hostname);
+        expect(processRow.shape.ports.element.shape.url.safeParse(url).success).toBe(true);
+      }
+    }
   });
 
   it("builds an address links.open accepts as it is", () => {

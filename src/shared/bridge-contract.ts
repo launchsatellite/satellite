@@ -411,7 +411,9 @@ const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
 const processId = z.int().min(2).max(4_294_967_295);
 const processStart = z.int().min(1).max(8_640_000_000_000_000);
-const loopbackAddress = z.string().regex(/^http:\/\/(?:127\.0\.0\.1|\[::1\]):[1-9][0-9]{0,4}\/$/);
+const loopbackAddress = z
+  .string()
+  .regex(/^http:\/\/(?:127\.0\.0\.1|\[::1\])(?::[1-9][0-9]{0,4})?\/$/);
 export const processRow = z.strictObject({
   workspace: workspaceRef,
   session: terminalId,
