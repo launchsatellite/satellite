@@ -5,10 +5,10 @@ const emojiJoin =
 const emojiStyle = "(?<=\\p{Extended_Pictographic})\\u{fe0f}";
 const scriptLetter = `(?=[\\p{L}\\p{M}])[${joinedScript}]`;
 const scriptJoin = `(?<=${scriptLetter})[\\u{200c}\\u{200d}]${scriptLetter}`;
-const blankCharacters =
-  "\\u{180b}-\\u{180f}\\u{fe00}-\\u{fe0f}\\u{115f}\\u{3164}\\u{1160}\\u{ffa0}\\u{2800}\\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{202f}\\u{205f}\\u{3000}";
+const drawnAsNothing =
+  "\\p{Cc}\\p{Cf}\\p{Cs}\\p{Zl}\\p{Zp}\\p{Zs}\\p{Default_Ignorable_Code_Point}\\u{2800}\\u{1cbb}\\u{1cbc}\\u{fffc}\\u{133fc}";
 const hiddenCharacter = new RegExp(
-  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin})(?:[\\p{Cc}\\p{Cf}\\p{Cs}\\p{Zl}\\p{Zp}\\u{e0100}-\\u{e01ef}${blankCharacters}]|\\u{34f})`,
+  `(?!${emojiJoin}|${emojiStyle}|${scriptJoin}| )[${drawnAsNothing}]`,
   "gu",
 );
 

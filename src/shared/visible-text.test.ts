@@ -23,6 +23,22 @@ describe("visibleText", () => {
     expect(visibleText("a\u{200c}b\u{fe0f}")).toBe("a[U+200C]b[U+FE0F]");
   });
 
+  it("reveals every code point a browser can draw as nothing", () => {
+    const hidden =
+      /[\p{Default_Ignorable_Code_Point}\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Zs}\u{2800}\u{1cbb}\u{1cbc}\u{fffc}\u{133fc}]/u;
+    const missed: string[] = [];
+    for (let point = 0; point <= 0x10ffff; point += 1) {
+      const character = String.fromCodePoint(point);
+      if (point === 0x20 || !hidden.test(character)) continue;
+      const hex = point.toString(16).toUpperCase().padStart(4, "0");
+      if (visibleText(character) !== `[U+${hex}]`) missed.push(hex);
+    }
+    expect(missed).toEqual([]);
+    expect(
+      visibleText("admin\u{17b4}\u{17b5}\u{2065}\u{fff0}\u{fff8}\u{e0000}\u{e0002}\u{e0fff}"),
+    ).toBe("admin[U+17B4][U+17B5][U+2065][U+FFF0][U+FFF8][U+E0000][U+E0002][U+E0FFF]");
+  });
+
   it("keeps plain unicode names as they are", () => {
     for (const name of ["caf\u{e9} notes.md", "\u{65e5}\u{672c}\u{8a9e}.txt", "it's new.txt"]) {
       expect(visibleText(name)).toBe(name);

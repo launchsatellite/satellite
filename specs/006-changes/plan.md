@@ -58,7 +58,7 @@ Each was checked against current documentation or the installed source while pla
 | Views and layout are page-load state, Branch and side by side first | No data format change, and Branch shows the whole work of a workspace | The choice resets on reload |
 | The line reference is Satellite's own sentence, `Lines 12 to 18 of src/app.ts in this workspace. ` and its committed-side variants, with the path quoted as dropped paths are | Claude Code documents no line range syntax, `@` would attach the wrong version for the committed side, and the words start no input mode | Claude Code reads the file with a tool instead of having it attached |
 | A path holding a character Send to Claude Code removes, or a reference over 800 characters, is refused with a toast | Cleaning would silently point at another path | Such files need words typed by hand |
-| Every name Satellite draws, file, branch and base, goes through `visibleText`, which writes each control, format, separator, surrogate and variation selector character as `[U+XXXX]` | A direction mark or zero-width character can never disguise a name in the list, the header or the banner | A name with an emoji joiner shows `[U+200D]` |
+| Every name Satellite draws, file, branch and base, goes through `visibleText`, which writes every default ignorable, control, format, separator, surrogate and unusual space character, and the few others the editor draws as nothing, as `[U+XXXX]` | A direction mark or zero-width character can never disguise a name in the list, the header or the banner | A name with an emoji joiner shows `[U+200D]` |
 | One centre tab strip with the single tab Changes | The spec calls it a tab, and specs 007 and 008 add theirs beside it | A strip with one tab |
 
 ## Global Constraints
@@ -408,7 +408,7 @@ Monaco's diff grows into the viewer Changes and spec 008 share, inline or side b
 
 **Interfaces:**
 - Produces:
-  - `visibleText(raw: string): string` in `src/shared/visible-text.ts`, replacing every character matching `/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u{fe00}-\u{fe0f}\u{e0100}-\u{e01ef}]/gu` with `[U+XXXX]`, uppercase hex of at least four digits.
+  - `visibleText(raw: string): string` in `src/shared/visible-text.ts`, replacing every character matching `/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Zs}\p{Default_Ignorable_Code_Point}\u{2800}\u{1cbb}\u{1cbc}\u{fffc}\u{133fc}]/gu` but the space with `[U+XXXX]`, uppercase hex of at least four digits.
   - `diffLanguage(path: string): string` in `diff-language.ts`, the id of the first entry of `languages.getLanguages()` whose `filenames` hold the path's last segment or whose `extensions` hold its lowercased extension from the last `.`, else `plaintext`.
   - In `diff-view.tsx`,
     ```ts
