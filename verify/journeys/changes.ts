@@ -247,7 +247,10 @@ async function showsDiffReadOnly(session: AppSession): Promise<void> {
   await page.locator('[data-testid="diff"] .editor.original').waitFor({ timeout: waitMs });
   await modifiedShows(session, "greeting", "for src/app.ts");
   const before = await sideText(page, "modified");
-  await page.locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines').first().click();
+  await page
+    .locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines')
+    .first()
+    .click();
   await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.type("zz");
   await page.keyboard.press("Enter");
@@ -457,7 +460,10 @@ async function sendsLines(session: AppSession): Promise<void> {
   await select(session, "src/app.ts");
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
   let from = (await session.standInEvents()).length;
-  await page.locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines').first().click();
+  await page
+    .locator('[data-testid="diff"] .editor.modified .lines-content > .view-lines')
+    .first()
+    .click();
   await page.waitForFunction(() => document.activeElement?.closest("[data-testid='diff']"));
   await page.keyboard.press(shortcut);
   await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
