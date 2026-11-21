@@ -266,11 +266,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const folderHere = selectedProject?.missing === null;
   const [changesView, setChangesView] = useState<ChangesShown>("branch");
   const [diffInline, setDiffInline] = useState(false);
+  const [diffNarrow, setDiffNarrow] = useState(true);
   const [shownText, setShownText] = useState<ShownText | null>(null);
   const { handle: diffHandle, read: diffSelection } = useDiffSelection();
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const changesShown = changesHere !== null;
-  const layoutShown = changesShown && shownText !== null && sideOnly(shownText.letter) === null;
+  const layoutShown =
+    changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
   const finishedHere = tabsHere
@@ -683,6 +685,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               error={changes.error}
               diffHandle={diffHandle}
               onShown={setShownText}
+              onNarrow={setDiffNarrow}
             />
           )
         )}

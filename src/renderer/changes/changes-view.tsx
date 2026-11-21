@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type {
   ChangesList,
   ChangesView as View,
@@ -6,7 +6,9 @@ import type {
 } from "../../shared/bridge-contract.ts";
 import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { CommandButton } from "../commands/commands-context.tsx";
+import { visibleText } from "../../shared/visible-text.ts";
 import { Segmented } from "../ui/segmented.tsx";
+import { VisibleName } from "../ui/visible-name.tsx";
 import { CentreTabs, centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
 import { ConflictBanner } from "./conflict-banner.tsx";
@@ -24,6 +26,7 @@ interface ChangesViewProps {
   error: string | null;
   diffHandle: RefObject<DiffHandle | null>;
   onShown: (shown: ShownText | null) => void;
+  onNarrow: (narrow: boolean) => void;
 }
 
 interface Picked {
@@ -51,6 +54,8 @@ function Sentence({ testId, text }: { testId: string; text: string }) {
   );
 }
 
+const splitMinWidth = 700;
+
 function isLost(): boolean {
   const focused = document.activeElement;
   return focused === null || focused === document.body || !focused.isConnected;
@@ -66,10 +71,13 @@ export function ChangesView({
   error,
   diffHandle,
   onShown,
+  onNarrow,
 }: ChangesViewProps) {
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [layoutShown, setLayoutShown] = useState(false);
+  const [pane, setPane] = useState<HTMLDivElement | null>(null);
+  const [narrow, setNarrow] = useState(true);
   const inside = useRef(false);
   const panel = useRef<HTMLDivElement>(null);
   const listHost = useRef<HTMLDivElement>(null);
@@ -80,6 +88,21 @@ export function ChangesView({
     },
     [onShown],
   );
+  useLayoutEffect(() => {
+    if (pane === null) return;
+    const measure = () => {
+      setNarrow(pane.clientWidth < splitMinWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(pane);
+    return () => {
+      observer.disconnect();
+    };
+  }, [pane]);
+  useEffect(() => {
+    onNarrow(narrow);
+  }, [narrow, onNarrow]);
   const changes = list?.changes;
   const files = changes?.kind === "files" ? changes.files : [];
   const kept = picked?.place === place ? picked : null;
@@ -134,14 +157,14 @@ export function ChangesView({
               </p>
             )}
           </div>
-          <div className="min-h-0 min-w-0 flex-1">
+          <div ref={setPane} className="min-h-0 min-w-0 flex-1">
             {file !== undefined && (
               <FileDiff
                 workspace={workspace}
                 view={view}
                 file={file}
                 base={list.base}
-                inline={inline}
+                inline={inline || narrow}
                 handle={diffHandle}
                 onShown={show}
               />
@@ -166,6 +189,16 @@ export function ChangesView({
     >
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
         <CentreTabs />
+        {view === "branch" && list?.base != null && (
+          <span
+            data-testid="changes-base"
+            dir="ltr"
+            title={`from ${visibleText(list.base)}`}
+            className="min-w-[14ch] flex-1 truncate font-mono text-[12px] text-dim [unicode-bidi:isolate]"
+          >
+            from <VisibleName text={list.base} />
+          </span>
+        )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           <CommandButton
             command="changes.send-lines"
@@ -176,7 +209,7 @@ export function ChangesView({
             Send lines
           </CommandButton>
           <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
-          <span className={layoutShown ? "" : "invisible"}>
+          {layoutShown && !narrow && (
             <Segmented
               label="Diff layout"
               value={inline ? "inline" : "side-by-side"}
@@ -185,7 +218,7 @@ export function ChangesView({
                 onInline(layout === "inline");
               }}
             />
-          </span>
+          )}
         </div>
       </div>
       {list !== undefined && <ConflictBanner base={list.base} conflict={list.conflict} />}
