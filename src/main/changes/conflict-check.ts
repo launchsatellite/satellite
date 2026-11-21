@@ -18,7 +18,7 @@ const quarantineFolder = "quarantine";
 const minimumGit = { major: 2, minor: 38 };
 const unsupportedExit = 129;
 const countCap = 1_000_000;
-const cachedChecks = 64;
+const cachedChecks = 512;
 const versionOutput = /^git version (\d+)\.(\d+)/;
 const none: ConflictCheck = { kind: "none" };
 const oldGit: ConflictCheck = { kind: "old-git" };
@@ -163,13 +163,21 @@ async function oneAtATime<T>(signal: AbortSignal | undefined, work: () => Promis
   return running;
 }
 
+function remembered(key: string): ConflictCheck | null | undefined {
+  const known = results.get(key);
+  if (known === undefined) return undefined;
+  results.delete(key);
+  results.set(key, known);
+  return known;
+}
+
 export function knownConflict(
   folder: string,
   head: string,
   base: string,
 ): ConflictCheck | null | undefined {
   if (unsupported) return oldGit;
-  return results.get(`${folder}\0${head}\0${base}`);
+  return remembered(`${folder}\0${head}\0${base}`);
 }
 
 export async function conflictCheck(
@@ -182,7 +190,7 @@ export async function conflictCheck(
   await sweep(home);
   if (unsupported) return oldGit;
   const key = `${folder}\0${head}\0${base}`;
-  const known = results.get(key);
+  const known = remembered(key);
   if (known !== undefined) return known;
   const named =
     (await isObjectName(folder, head, signal)) && (await isObjectName(folder, base, signal));
