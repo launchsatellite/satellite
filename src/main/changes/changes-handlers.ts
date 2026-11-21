@@ -130,6 +130,8 @@ async function fileSides(
   if (record.kind === "repository") return { kind: "repository" };
   if (record.kind === "binary") return { kind: "binary" };
   if (record.kind === "submodule") {
+    const movedInWorktree = record.targetOid === null && record.letter !== "D";
+    if (movedInWorktree) return { kind: "submodule", from: null, to: null };
     return { kind: "submodule", from: shortOid(record.sourceOid), to: shortOid(record.targetOid) };
   }
   if (record.letter === "U") return { kind: "unmerged" };

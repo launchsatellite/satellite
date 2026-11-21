@@ -83,7 +83,7 @@ async function repository() {
     asked.count += 1;
     asked.then();
   });
-  return { repo, home, asked, changes: createChanges({ home, store }) };
+  return { repo, git, env, home, asked, changes: createChanges({ home, store }) };
 }
 
 describe("changes handlers", { timeout: 30_000 }, () => {
@@ -140,6 +140,24 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     ];
     const [one, two] = await Promise.all(same);
     expect(one).toBe(two);
+  });
+
+  it("reads a submodule moved only in its worktree as changed, not removed", async () => {
+    const { repo, git, env, changes } = await repository();
+    const module = join(repo, "module");
+    const inModule = (...args: string[]) => run("git", ["-C", module, ...args], { env });
+    await run("git", ["init", "-q", "-b", "main", module], { env });
+    await inModule("commit", "-q", "--allow-empty", "-m", "one");
+    const { stdout } = await inModule("rev-parse", "HEAD");
+    await git("update-index", "--add", "--cacheinfo", `160000,${stdout.trim()},module`);
+    await git("commit", "-q", "-m", "module");
+    await inModule("commit", "-q", "--allow-empty", "-m", "two");
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    await changes.handlers["changes.list"]({ workspace, view }, page);
+    expect(
+      await changes.handlers["changes.file"]({ workspace, view, path: "module" }, page),
+    ).toEqual({ kind: "submodule", from: null, to: null });
   });
 
   it("stops every read inside a folder that is going away", async () => {
