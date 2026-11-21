@@ -1,13 +1,7 @@
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
-import { readGit, type GitStop } from "../workspaces/git-command.ts";
+import { noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
-import {
-  isObjectName,
-  lineCount,
-  noLazyFetch,
-  readWorktreeSide,
-  worktreeStamps,
-} from "./file-sides.ts";
+import { isObjectName, lineCount, readWorktreeSide, worktreeStamps } from "./file-sides.ts";
 
 export interface ChangeRecord {
   path: string;

@@ -17,6 +17,7 @@ interface GitExtra {
 }
 
 export const gitReadMs = gitReadTimeoutMs;
+export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
 export const lsRemoteMs = 10_000;
 export const fetchMs = 15_000;
 export const branchMs = 5000;

@@ -10,7 +10,7 @@ import {
   noTerminal,
 } from "../platform/file-system.ts";
 import { realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { gitReadMs, readGit, type GitStop } from "../workspaces/git-command.ts";
+import { gitReadMs, noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
   | { kind: "text"; text: string }
@@ -26,7 +26,6 @@ export type SideRead =
 type FolderKind = "plain" | "missing" | "other";
 
 export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
 
 const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const drivePrefix = /^[A-Za-z]:/;

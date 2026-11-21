@@ -22,6 +22,7 @@ import {
   gitReadMs,
   ignoredListMs,
   lsRemoteMs,
+  noLazyFetch,
   runGit,
   worktreeAddMs,
 } from "./git-command.ts";
@@ -162,6 +163,7 @@ async function cachedDefault(
     ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`],
     gitReadMs,
     signal,
+    { gitVariables: noLazyFetch },
   );
   if (run === undefined || (run.exitCode !== 0 && run.exitCode !== 1)) return undefined;
   const prefix = `refs/remotes/${remote}/`;
@@ -172,7 +174,9 @@ async function cachedDefault(
 
 export async function defaultStart(
   root: string,
-  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs, undefined, {
+    gitVariables: noLazyFetch,
+  }),
   signal?: AbortSignal,
 ): Promise<DefaultStart | undefined> {
   const run = await listed;

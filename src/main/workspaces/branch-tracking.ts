@@ -1,5 +1,5 @@
 import type { ToolRun } from "../platform/tools.ts";
-import { gitReadMs, runGit } from "./git-command.ts";
+import { gitReadMs, noLazyFetch, runGit } from "./git-command.ts";
 
 interface Tracking {
   ahead: number;
@@ -21,7 +21,9 @@ export function parseCount(stdout: string): number | null {
 
 export async function hasRemote(
   root: string,
-  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs, undefined, {
+    gitVariables: noLazyFetch,
+  }),
 ): Promise<boolean | undefined> {
   const run = await listed;
   return run?.exitCode === 0 ? run.stdout.trim() !== "" : undefined;
@@ -32,6 +34,8 @@ export async function countUnpushed(root: string, branch: string): Promise<numbe
     root,
     ["rev-list", "--count", `refs/heads/${branch}`, "--not", "--remotes", "--"],
     gitReadMs,
+    undefined,
+    { gitVariables: noLazyFetch },
   );
   return run?.exitCode === 0 ? parseCount(run.stdout) : null;
 }
@@ -63,6 +67,8 @@ export async function readTracking(
       ...refs.keys(),
     ],
     gitReadMs,
+    undefined,
+    { gitVariables: noLazyFetch },
   );
   if (run?.exitCode !== 0) return tracking;
   for (const line of run.stdout.split("\n")) {

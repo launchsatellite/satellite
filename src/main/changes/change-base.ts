@@ -2,8 +2,8 @@ import { isBranchName } from "../../shared/workspace-name.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import { samePath } from "../platform/paths.ts";
 import { defaultStart } from "../workspaces/create-steps.ts";
-import { gitReadMs, runGit } from "../workspaces/git-command.ts";
-import { isObjectName, noLazyFetch } from "./file-sides.ts";
+import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
+import { isObjectName } from "./file-sides.ts";
 
 export interface ChangeBase {
   ref: string;

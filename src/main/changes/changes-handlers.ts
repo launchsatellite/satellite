@@ -7,7 +7,7 @@ import type {
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import type { ToolRun } from "../platform/tools.ts";
-import { gitReadMs, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
 import { isInsidePath, samePath } from "../platform/paths.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import { sessionFolder } from "../sessions/session-folder.ts";
@@ -252,7 +252,9 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     signal.throwIfAborted();
     const project = await store.project(ref.projectId);
     signal.throwIfAborted();
-    const remotes = runGit(project.path, ["remote"], gitReadMs);
+    const remotes = runGit(project.path, ["remote"], gitReadMs, undefined, {
+      gitVariables: noLazyFetch,
+    });
     const [head, branch, lookup] = await Promise.all([
       headOid(folder, signal),
       currentBranch(folder, signal),

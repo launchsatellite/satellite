@@ -3,7 +3,13 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
-import { gitReadMs, readGit, runGit, whenGitExits } from "../workspaces/git-command.ts";
+import {
+  gitReadMs,
+  noLazyFetch,
+  readGit,
+  runGit,
+  whenGitExits,
+} from "../workspaces/git-command.ts";
 import { isObjectName } from "./file-sides.ts";
 
 export type ConflictCheck =
@@ -69,6 +75,7 @@ async function objectsFolder(folder: string, signal?: AbortSignal): Promise<stri
     ["rev-parse", "--path-format=absolute", "--git-path", "objects"],
     gitReadMs,
     signal,
+    { gitVariables: noLazyFetch },
   );
   if (run?.exitCode !== 0 || !run.stdout.endsWith("\n")) return undefined;
   const path = run.stdout.slice(0, -1);
