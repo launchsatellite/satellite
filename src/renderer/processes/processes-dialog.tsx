@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import type { ProcessRow } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
@@ -26,6 +26,7 @@ interface ProcessesDialogProps {
 }
 
 const note = "text-[12px] text-dim";
+const separatorEnd = /(?<=[^\s/\\][/\\])(?=[^/\\])/;
 const ringed =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -52,6 +53,7 @@ function Row({
 }) {
   const testId = `process-row-${String(index)}`;
   const command = visibleText(row.command);
+  const shown = `${command}${row.cut ? "…" : ""}`;
   const age = at - row.started;
   return (
     <li
@@ -60,8 +62,17 @@ function Row({
       className="flex items-start gap-3 border-b border-line py-2 first:pt-0 last:border-b-0 last:pb-0"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p data-testid={`${testId}-command`} className="font-mono text-[12px] break-all text-fg">
-          {command}
+        <p
+          data-testid={`${testId}-command`}
+          title={shown}
+          className="font-mono text-[12px] [overflow-wrap:anywhere] text-fg"
+        >
+          {command.split(separatorEnd).map((part, position) => (
+            <Fragment key={position}>
+              {position > 0 && <wbr />}
+              {part}
+            </Fragment>
+          ))}
           {row.cut ? "…" : ""}
         </p>
         <p className={`flex flex-wrap items-center gap-x-[10px] gap-y-1 ${note}`}>
@@ -81,7 +92,7 @@ function Row({
                 title={portLabel(port, false)}
               >
                 <span className="sr-only">{portLabel(port, false)}</span>
-                <span aria-hidden="true" className="font-pixel">
+                <span aria-hidden="true" className="font-pixel text-dim">
                   :{port}
                 </span>
               </span>
@@ -96,7 +107,7 @@ function Row({
                 onClick={() => {
                   onPort(url);
                 }}
-                className={`-mx-[5px] rounded-[6px] px-[5px] font-pixel hover:bg-hover ${ringed}`}
+                className={`-mx-[5px] rounded-[6px] px-[5px] font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
               >
                 :{port}
               </button>
