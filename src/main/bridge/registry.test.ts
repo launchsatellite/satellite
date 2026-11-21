@@ -110,6 +110,10 @@ function spies() {
     "pullRequest.log": vi.fn<BridgeHandler<"pullRequest.log">>(() =>
       Promise.resolve({ kind: "empty" }),
     ),
+    "processes.list": vi.fn<BridgeHandler<"processes.list">>(() =>
+      Promise.resolve({ at: 1, rows: [], more: [] }),
+    ),
+    "processes.stop": vi.fn<BridgeHandler<"processes.stop">>(() => Promise.resolve({})),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
       Promise.resolve({ windowsPty: null }),
@@ -510,6 +514,46 @@ describe("createBridgeRouter", () => {
     expect(await route("pullRequest.log", { workspace, job: "1".repeat(20) }, owner)).toMatchObject(
       { ok: true },
     );
+  });
+
+  it("refuses processes.stop with a process id of 1, a fraction, a missing start or a field of the page's own", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const stops = [
+      { pid: 1, started: 1_000 },
+      { pid: 0, started: 1_000 },
+      { pid: -5, started: 1_000 },
+      { pid: 4201.5, started: 1_000 },
+      { pid: 4_294_967_296, started: 1_000 },
+      { pid: "4201", started: 1_000 },
+      { pid: 4201 },
+      { pid: 4201, started: 0 },
+      { pid: 4201, started: 1_000.5 },
+      { pid: 4201, started: 1_000, signal: "SIGKILL" },
+      { pid: 4201, started: 1_000, group: true },
+      { started: 1_000 },
+      {},
+    ];
+    for (const payload of stops) {
+      const result = await route("processes.stop", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("processes.stop", { pid: 2, started: 1_000 }, owner)).toEqual({
+      ok: true,
+      value: {},
+    });
+  });
+
+  it("refuses processes.list with any field", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    for (const payload of [{ workspace: "main" }, { all: true }, [], "list"]) {
+      const result = await route("processes.list", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    expect(await route("processes.list", {}, owner)).toMatchObject({ ok: true });
   });
 
   it("refuses a files request that names more, longer or other than the contract allows", async () => {

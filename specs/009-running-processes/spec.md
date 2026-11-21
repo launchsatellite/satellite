@@ -1,6 +1,6 @@
 # 009 Running processes
 
-Status **Approved** · Depends on **004**
+Status **Done** · Depends on **004**
 
 ## Why
 
@@ -28,8 +28,8 @@ Starting processes. Agents start them.
 
 ## Acceptance
 
-- [ ] A process started by a session appears with its command and age, and leaves when it ends. Proof, scenario `dev-server`.
-- [ ] A listening process shows its port and the link opens the loopback address. Proof, the same scenario.
-- [ ] Stop ends the process and its children. Proof, the same scenario.
-- [ ] A process id that does not descend from a session is refused. Proof, unit tests.
-- [ ] The process table parses on macOS, Windows and Linux. Proof, unit tests on recorded output.
+- [x] A process started by a session appears with its command and age, and leaves when it ends. Proof, scenario `dev-server`.
+- [x] A listening process shows its port and the link opens the loopback address. Proof, the same scenario.
+- [x] Stop ends the process and its children. Proof, the same scenario.
+- [x] A process id that does not descend from a session is refused. Proof, unit tests.
+- [x] The process table parses on macOS, Windows and Linux. Proof, unit tests on recorded output.

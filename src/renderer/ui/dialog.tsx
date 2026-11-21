@@ -8,6 +8,7 @@ interface DialogProps {
   closable: boolean;
   children: ReactNode;
   footer: ReactNode;
+  returnFocusTo?: string;
 }
 
 const focusable =
@@ -40,6 +41,7 @@ export function Dialog({
   closable,
   children,
   footer,
+  returnFocusTo,
 }: DialogProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -49,8 +51,9 @@ export function Dialog({
   useLayoutEffect(() => {
     const element = panel.current;
     if (element === null) return;
+    const covered = () => element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || covered()) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -60,6 +63,10 @@ export function Dialog({
       }
     };
     const keepFocus = (event: FocusEvent) => {
+      if (covered()) return;
+      if (event.target instanceof Element && event.target.closest("[role='dialog']") !== null) {
+        return;
+      }
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
     };
     document.addEventListener("keydown", press, { capture: true });
@@ -74,7 +81,11 @@ export function Dialog({
     const overlay = element?.parentElement;
     if (element === null || overlay === null || overlay === undefined) return;
     const focused = document.activeElement;
-    const opener = element.contains(focused) ? focusedAtRender : focused;
+    const priorFocus =
+      focusedAtRender instanceof HTMLElement && focusedAtRender !== document.body
+        ? focusedAtRender
+        : focused;
+    const opener = priorFocus === document.body || element.contains(priorFocus) ? null : priorFocus;
     const behind = [...(overlay.parentElement?.children ?? [])].filter(
       (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
     );
@@ -82,9 +93,15 @@ export function Dialog({
     if (!element.contains(focused)) element.focus();
     return () => {
       for (const sibling of behind) sibling.removeAttribute("inert");
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      if (opener instanceof HTMLElement && opener.isConnected) {
+        opener.focus();
+        return;
+      }
+      if (returnFocusTo !== undefined) {
+        document.querySelector<HTMLElement>(`[data-testid="${returnFocusTo}"]`)?.focus();
+      }
     };
-  }, [focusedAtRender]);
+  }, [focusedAtRender, returnFocusTo]);
 
   return (
     <div className="fixed inset-0 z-50">

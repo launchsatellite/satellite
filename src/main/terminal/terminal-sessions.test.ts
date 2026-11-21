@@ -117,6 +117,7 @@ describe("createTerminalSessions", () => {
       };
       ptys.push(fake);
       return {
+        pid: 4100 + ptys.length,
         resize: vi.fn(),
         pause: vi.fn(),
         resume: vi.fn(),
@@ -545,6 +546,26 @@ describe("createTerminalSessions", () => {
     ptys[0]?.exit(0);
     await handlers["terminal.start"]({ id, ...size }, mine);
     expect(ptys).toHaveLength(2);
+  });
+
+  it("answers a root with its owner only while the session runs", async () => {
+    const sessions = create();
+    const { mine } = owners();
+    const before = Date.now();
+    const starting = sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    expect(sessions.roots()).toEqual([]);
+    await starting;
+    const [running] = sessions.roots();
+    expect(sessions.roots()).toHaveLength(1);
+    expect(running?.owner).toBe(mine);
+    expect(running?.root).toMatchObject({ session: terminalId(1), workspace: main, pid: 4101 });
+    expect(running?.root.spawnedAt).toBeGreaterThanOrEqual(before);
+    ptys[0]?.exit(0);
+    expect(sessions.roots()).toEqual([]);
+    await sessions.handlers["terminal.start"]({ id: terminalId(2), ...size }, mine);
+    expect(sessions.roots()).toHaveLength(1);
+    await sessions.handlers["terminal.close"]({ id: terminalId(2) }, mine);
+    expect(sessions.roots()).toEqual([]);
   });
 
   it("answers a spawn failure with a sentence the user can act on and frees the id", async () => {

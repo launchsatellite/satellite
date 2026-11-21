@@ -41,8 +41,8 @@ Three columns that never move.
 
 | Column | Holds |
 | --- | --- |
-| Left | Projects, their workspaces and the inbox. Every row tells its state with one status pixel. |
-| Centre | The repository, never a chat. Changes, Files and Pull request for the selected workspace. |
+| Left | Projects, their workspaces and the inbox. Every row tells its state with one status pixel, and with a count of running processes when it has any. |
+| Centre | The repository, never a chat. Changes, Files and Pull request for the selected workspace, under a header that names its branch and carries the pull request and running process readouts. |
 | Right | The real Claude Code sessions of the selected workspace. |
 
 Selecting a workspace switches the centre and the right column together. Sessions in other workspaces keep running.
@@ -90,6 +90,14 @@ Pull request is the third tab of a workspace and shows the pull request of its b
 Overview shows the title, state, branches, what blocks it from merging, the description and the commits. Checks lists every check with its result, and a failed check shows its failing lines when you open it and offers Send to Claude Code with a pointer to its run. Conversation shows reviews and comments in order with the unresolved threads first. Files shows the pull request's files in the diff Changes uses, against the pull request's base branch, with each review thread marked on its line when the workspace is at the pull request's last commit and that file has nothing uncommitted, and listed beside the diff otherwise, each with Send to Claude Code with a pointer to the thread. Cmd+J, or Ctrl+Shift+J on Windows and Linux, goes to the next unresolved thread. Open on GitHub opens the pull request, a check or a comment in the system browser, after showing the full address.
 
 A failed check, a review from an owner, a member or a collaborator that asks for changes on the latest commit and conflicts with the base make the workspace need you and list it in the inbox, for an open pull request that is not a draft. A merged or closed pull request keeps the tab and never needs you. Everything a pull request says is untrusted. A description or comment is drawn as Markdown with no scripts, no HTML elements and no remote images, raw HTML, an HTML comment included, shows as the literal text it is, a comment that GitHub hides shows only that it is hidden, an image is a link, and every link asks before it opens. Prepared requests carry only pointers, the number, a run or a thread address, since the agent has `gh` and reads the text itself. Nothing about a pull request is saved, and Satellite does not create, reply to, review or merge pull requests, which agents and GitHub do.
+
+## Running processes
+
+Agents start dev servers, watchers and builds, and then you lose track of what is still running and on which port. A workspace with something running shows a count on its row and in its header, and the header count or the command Show running processes opens the list. Each row shows the command the agent ran, the session that started it, how long it has run and any port it listens on. The command is shortened, shows your home folder as a tilde and hides what looks like a secret as far as it can, so it is a hint and never a promise.
+
+A port that listens on this machine only, or on every address, is a link. It asks before it opens, naming the address, and only ever opens an address on your own machine. A port bound to another address shows as plain text. Stop ends the process and everything it started, with a polite request first and a forced end after two seconds, or a forced end at once on Windows, and tells you when something still runs. Satellite only ever stops processes that descend from its own sessions.
+
+The list holds the processes that last at least 10 seconds, started by the workspace's running sessions, and it follows them while Satellite is visible, when a session finishes a turn and when you open it, and an age counts up while the list is open. When Satellite cannot read the processes it says so and keeps the last list. Running processes starts nothing and shows no output, since Claude Code already shows what it runs. A process that detached from the session that started it keeps running and is not listed, and the list says so. Nothing about processes is saved.
 
 ## Decisions
 

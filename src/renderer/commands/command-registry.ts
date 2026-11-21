@@ -34,7 +34,8 @@ export type CommandId =
   | "changes.send-lines"
   | "pull-request.show"
   | "pull-request.open"
-  | "pull-request.next-thread";
+  | "pull-request.next-thread"
+  | "processes.show";
 
 export interface Command {
   id: CommandId;

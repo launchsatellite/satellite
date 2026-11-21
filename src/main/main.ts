@@ -17,6 +17,7 @@ import {
   windowCountsInFront,
   windowTookFocus,
 } from "./platform/system-notices.ts";
+import { createProcesses, type Processes } from "./processes/processes-handlers.ts";
 import { createProjects, type Projects } from "./projects/project-list.ts";
 import { createPullRequests, type PullRequests } from "./pull-request/pull-request-reads.ts";
 import { startHookListener, type HookListener } from "./sessions/hook-listener.ts";
@@ -60,6 +61,7 @@ interface Parts {
   last: LastSessions;
   listening: Promise<HookListener | undefined>;
   notices: Notices;
+  processes: Processes;
   projects: Projects;
   pullRequests: PullRequests;
   recorder: { flush(): Promise<void> };
@@ -73,6 +75,7 @@ async function start({
   interfaceFile,
   listening,
   notices,
+  processes,
   projects,
   pullRequests,
   terminals,
@@ -109,6 +112,7 @@ async function start({
       ...changes.handlers,
       ...files.handlers,
       ...pullRequests.handlers,
+      ...processes.handlers,
       ...linkHandlers(),
     },
     allowedOrigin(entryUrl),
@@ -195,6 +199,7 @@ function assemble(home: string): Parts {
     },
   });
   protectHome(home);
+  const processes = createProcesses({ roots: () => terminals.roots() });
   const changes = createChanges({ home, store: projects.store });
   const files = createFiles({ home, store: projects.store });
   const sessionsInside = {
@@ -215,6 +220,7 @@ function assemble(home: string): Parts {
     last,
     listening,
     notices,
+    processes,
     projects,
     pullRequests,
     recorder: { flush: recordedLines },

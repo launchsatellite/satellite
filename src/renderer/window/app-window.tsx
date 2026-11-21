@@ -26,6 +26,9 @@ import { noFileLinesSentence, notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
+import { ProcessesDialog } from "../processes/processes-dialog.tsx";
+import { portLinkSentence } from "../processes/process-words.ts";
+import { useProcesses } from "../processes/use-processes.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
@@ -147,12 +150,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     workspace: WorkspaceView;
   } | null>(null);
   const [added, setAdded] = useState<string>();
+  const [processesOpen, setProcessesOpen] = useState(false);
   const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
   const askTerminalLink = useCallback((address: string) => {
     setAsking({ address, description: terminalLinkSentence });
   }, []);
   const askPullRequestLink = useCallback((address: string) => {
     setAsking({ address, description: linkSentence });
+  }, []);
+  const closeProcesses = useCallback(() => {
+    setProcessesOpen(false);
   }, []);
   const closeLink = useCallback(() => {
     setAsking(null);
@@ -217,6 +224,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const select = useCallback(
     (ref: WorkspaceRef) => {
       setChecking(false);
+      setProcessesOpen(false);
       update((current) => ({ ...current, selected: ref }), true);
     },
     [update],
@@ -397,7 +405,34 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const nextSession = neighbour(1);
   const previousSession = neighbour(-1);
   const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const modal = dialogProject !== undefined || archiving !== null || asking !== null;
+  const showingProcesses = processesOpen && changesHere !== null;
+  const modal =
+    dialogProject !== undefined || archiving !== null || asking !== null || showingProcesses;
+  const liveTerminals = allSessions
+    .filter((tab) => tab.status !== "stopped")
+    .map((tab) => tab.terminalId)
+    .join(" ");
+  const finishedTabs = allSessions
+    .filter((tab) => tab.status === "done")
+    .map((tab) => tab.key)
+    .join(" ");
+  const processes = useProcesses({ live: liveTerminals, finished: finishedTabs, notify });
+  const refreshProcesses = processes.refresh;
+  useEffect(() => {
+    if (processesOpen) refreshProcesses();
+  }, [processesOpen, refreshProcesses]);
+  const processesHere = changesHere === null ? [] : processes.rowsOf(changesHere);
+  const processesFor = useCallback(
+    (ref: WorkspaceRef) => processes.rowsOf(ref).length,
+    [processes],
+  );
+  const sessionNumber = useCallback(
+    (terminalId: string) => allSessions.find((tab) => tab.terminalId === terminalId)?.number,
+    [allSessions],
+  );
+  const askProcessPort = useCallback((url: string) => {
+    setAsking({ address: url, description: portLinkSentence });
+  }, []);
   const pullRequestNeeding = useMemo(
     () =>
       listedRefs.flatMap((workspace) => {
@@ -682,6 +717,15 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "processes.show",
+            title: "Show running processes",
+            available: shownHere,
+            run: () => {
+              setPalette(null);
+              setProcessesOpen(true);
+            },
+          },
+          {
             id: "pull-request.open",
             title: "Open the pull request on GitHub",
             available: shownHere && shownPullRequestUrl !== null,
@@ -860,6 +904,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
           behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
           pullRequest={shownPullRequest}
+          processes={processesHere.length}
+          onShowProcesses={() => {
+            setProcessesOpen(true);
+          }}
           onShowPullRequest={() => {
             setCentreView("pull-request");
           }}
@@ -971,6 +1019,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             focusProjectId={added}
             pixelFor={pixelFor}
             pullRequestFor={pullRequestFor}
+            processesFor={processesFor}
             inbox={
               projects === undefined ? null : (
                 <InboxList
@@ -1050,6 +1099,20 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             workspace={archiving.workspace}
             onClose={closeArchive}
             onArchived={archived}
+          />
+        )}
+        {showingProcesses && selectedProject !== undefined && selectedWorkspace !== undefined && (
+          <ProcessesDialog
+            key={`${changesHere.projectId}/${changesHere.workspace}`}
+            label={workspaceLabel(selectedProject, selectedWorkspace)}
+            rows={processesHere}
+            more={processes.moreOf(changesHere)}
+            sessionNumber={sessionNumber}
+            stopping={processes.stopping}
+            problem={processes.problem}
+            onStop={processes.stop}
+            onPort={askProcessPort}
+            onClose={closeProcesses}
           />
         )}
         {asking !== null && (

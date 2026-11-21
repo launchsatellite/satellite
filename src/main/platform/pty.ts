@@ -6,6 +6,7 @@ import { endUnixTree, endWindowsTree, forceKillGraceMs } from "./process-tree.ts
 import type { ResolvedCommand } from "./tools.ts";
 
 export interface PtyProcess {
+  readonly pid: number;
   write(data: string): void;
   resize(cols: number, rows: number): void;
   pause(): void;
@@ -53,6 +54,7 @@ export function spawnPty(
     if (!ended) pty.kill();
   };
   return {
+    pid: pty.pid,
     write(data) {
       if (!ended) pty.write(data);
     },
