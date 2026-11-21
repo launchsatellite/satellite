@@ -6,6 +6,8 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
+import type { ToolRun } from "../platform/tools.ts";
+import { gitReadMs, runGit } from "../workspaces/git-command.ts";
 import { isInsidePath, samePath } from "../platform/paths.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import { sessionFolder } from "../sessions/session-folder.ts";
@@ -103,14 +105,19 @@ function remember(page: PageReads, key: string, list: CachedList): void {
   }
 }
 
-async function tracking(root: string, branch: string | null, signal: AbortSignal) {
+async function tracking(
+  root: string,
+  branch: string | null,
+  remotes: Promise<ToolRun | undefined>,
+  signal: AbortSignal,
+) {
   const none = { ahead: null, behind: null };
   if (branch === null) return none;
   signal.throwIfAborted();
   const track = (await readTracking(root, [branch])).get(branch);
   if (track !== null) return { ahead: track?.ahead ?? null, behind: track?.behind ?? null };
   signal.throwIfAborted();
-  if ((await hasRemote(root)) !== true) return none;
+  if ((await hasRemote(root, remotes)) !== true) return none;
   signal.throwIfAborted();
   return { ahead: await countUnpushed(root, branch), behind: null };
 }
@@ -198,17 +205,18 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     signal.throwIfAborted();
     const project = await store.project(ref.projectId);
     signal.throwIfAborted();
+    const remotes = runGit(project.path, ["remote"], gitReadMs);
     const [head, branch, lookup] = await Promise.all([
       headOid(folder, signal),
       currentBranch(folder, signal),
-      resolveBase(project.path, folder, signal),
+      resolveBase(project.path, folder, signal, remotes),
     ]);
     signal.throwIfAborted();
     const base = lookup.kind === "base" ? lookup.base : null;
     const header: Header = {
       branch: shortName(branch),
       base: shortName(base?.name),
-      ...(await tracking(project.path, branch ?? null, signal)),
+      ...(await tracking(project.path, branch ?? null, remotes, signal)),
       conflict: null,
     };
     const unavailable = (reason: Unavailable): { answer: ChangesList } => ({

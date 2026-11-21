@@ -66,6 +66,10 @@ export function pollDelay(elapsedMs: number, failures: number): number {
   return Math.min(changesPollMaxMs, Math.max(backoff, changesPollFactor * elapsedMs));
 }
 
+export function nextSteps(steps: number, answeredFiles: boolean, changed: boolean): number {
+  return answeredFiles && changed ? 0 : steps + 1;
+}
+
 export function changesPlace(workspace: WorkspaceRef, view: ChangesView): string {
   return `${workspace.projectId}/${workspace.workspace}/${view}`;
 }
@@ -74,10 +78,12 @@ export function useChanges(
   workspace: WorkspaceRef | null,
   view: ChangesView,
   finished: string,
+  selected: string | undefined,
 ): { list: ChangesList | undefined; error: string | null; header: Header | undefined } {
   const [listed, setListed] = useState<ListedPlace | null>(null);
   const [header, setHeader] = useState<Header | null>(null);
   const refresh = useRef<() => void>(() => undefined);
+  const calm = useRef<() => void>(() => undefined);
   const seen = useRef<{ place: string | null; finished: string }>({ place: null, finished });
   const projectId = workspace?.projectId;
   const key = workspace?.workspace;
@@ -94,7 +100,8 @@ export function useChanges(
     let stopped = false;
     let running = false;
     let again = false;
-    let failures = 0;
+    let steps = 0;
+    let last = "";
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ask = () => {
       clearTimeout(timer);
@@ -110,7 +117,13 @@ export function useChanges(
         (result) => {
           running = false;
           if (stopped) return;
-          failures = result.ok && result.value.changes.kind === "files" ? 0 : failures + 1;
+          const answer = JSON.stringify(result);
+          steps = nextSteps(
+            steps,
+            result.ok && result.value.changes.kind === "files",
+            answer !== last,
+          );
+          last = answer;
           setListed((current) => settled(current, answered(current, place, result)));
           if (result.ok) {
             const { base, ahead, behind } = result.value;
@@ -121,20 +134,27 @@ export function useChanges(
             again = false;
             ask();
           } else if (isVisible()) {
-            timer = setTimeout(ask, pollDelay(performance.now() - began, failures));
+            timer = setTimeout(ask, pollDelay(performance.now() - began, steps));
           }
         },
       );
     };
     const askAfresh = () => {
-      failures = 0;
+      steps = 0;
       ask();
+    };
+    const settle = () => {
+      steps = 0;
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = setTimeout(ask, changesPollMs);
     };
     const onVisibility = () => {
       if (isVisible()) askAfresh();
       else clearTimeout(timer);
     };
     refresh.current = askAfresh;
+    calm.current = settle;
     window.addEventListener("focus", askAfresh);
     document.addEventListener("visibilitychange", onVisibility);
     ask();
@@ -142,6 +162,7 @@ export function useChanges(
       stopped = true;
       clearTimeout(timer);
       refresh.current = () => undefined;
+      calm.current = () => undefined;
       window.removeEventListener("focus", askAfresh);
       document.removeEventListener("visibilitychange", onVisibility);
     };
@@ -154,6 +175,10 @@ export function useChanges(
       refresh.current();
     }
   }, [place, finished]);
+
+  useEffect(() => {
+    calm.current();
+  }, [selected]);
 
   const shownHeader = header?.workspace === here ? header : undefined;
   if (listed?.place !== place) return { list: undefined, error: null, header: shownHeader };

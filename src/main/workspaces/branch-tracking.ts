@@ -1,3 +1,4 @@
+import type { ToolRun } from "../platform/tools.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 
 interface Tracking {
@@ -18,8 +19,11 @@ export function parseCount(stdout: string): number | null {
   return countShape.test(stdout) ? capped(stdout.trim()) : null;
 }
 
-export async function hasRemote(root: string): Promise<boolean | undefined> {
-  const run = await runGit(root, ["remote"], gitReadMs);
+export async function hasRemote(
+  root: string,
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
+): Promise<boolean | undefined> {
+  const run = await listed;
   return run?.exitCode === 0 ? run.stdout.trim() !== "" : undefined;
 }
 

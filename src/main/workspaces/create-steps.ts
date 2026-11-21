@@ -163,8 +163,11 @@ async function cachedDefault(root: string, remote: string): Promise<string | nul
   return isBranchName(branch) ? branch : null;
 }
 
-export async function defaultStart(root: string): Promise<DefaultStart | undefined> {
-  const run = await runGit(root, ["remote"], gitReadMs);
+export async function defaultStart(
+  root: string,
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
+): Promise<DefaultStart | undefined> {
+  const run = await listed;
   if (run?.exitCode !== 0) return undefined;
   const remote = pickRemote(run.stdout);
   if (remote === null) return { remote };

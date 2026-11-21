@@ -275,7 +275,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
-  const changes = useChanges(changesHere, changesView, finishedHere);
+  const changes = useChanges(changesHere, changesView, finishedHere, shownText?.path);
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
   const neighbour = (step: number) =>
     tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;

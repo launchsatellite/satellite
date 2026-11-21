@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pollDelay } from "./use-changes.ts";
+import { nextSteps, pollDelay } from "./use-changes.ts";
 
 describe("change list poll", () => {
   it("waits 2 seconds after a quick list", () => {
@@ -20,5 +20,17 @@ describe("change list poll", () => {
       4000, 8000, 16_000, 30_000, 30_000, 30_000,
     ]);
     expect(pollDelay(3000, 1)).toBe(12_000);
+  });
+
+  it("doubles the wait for each list in a row that came back the same, and resets on a change", () => {
+    let steps = 0;
+    const waits: number[] = [];
+    for (let list = 0; list < 6; list += 1) {
+      waits.push(pollDelay(10, steps));
+      steps = nextSteps(steps, true, false);
+    }
+    expect(waits).toEqual([2000, 4000, 8000, 16_000, 30_000, 30_000]);
+    expect(nextSteps(steps, true, true)).toBe(0);
+    expect(nextSteps(3, false, true)).toBe(4);
   });
 });
