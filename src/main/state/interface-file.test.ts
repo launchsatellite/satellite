@@ -196,6 +196,40 @@ describe("saved tabs hold only what could be loaded again", () => {
     });
   });
 
+  it("lets overlapping saves land in the order they arrived, the last one on disk", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const file = createInterfaceFile(home);
+    const slow: { release: () => void } = { release: () => undefined };
+    let calls = 0;
+    const handlers = interfaceHandlers(
+      file,
+      () => undefined,
+      () => {
+        calls += 1;
+        if (calls > 1) return Promise.resolve(known);
+        return new Promise((settle) => {
+          slow.release = () => {
+            settle(known);
+          };
+        });
+      },
+    );
+    const first = handlers["interface.save"](
+      { state: { ...saved, columns: { left: 300, right: 500 } } },
+      owner,
+    );
+    const second = handlers["interface.save"](
+      { state: { ...saved, columns: { left: 310, right: 510 } } },
+      owner,
+    );
+    await new Promise((settle) => setTimeout(settle, 20));
+    slow.release();
+    await Promise.all([first, second]);
+    await file.flush();
+    const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
+    expect(written).toMatchObject({ columns: { left: 310, right: 510 } });
+  });
+
   it("keeps the saved tabs, path checked, when the project list fails, and writes nothing on load", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const text = JSON.stringify({ version: 3, ...hostile });

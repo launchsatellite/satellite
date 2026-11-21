@@ -123,6 +123,18 @@ export function interfaceHandlers(
   recorded: () => Promise<ReadonlySet<string>>,
 ): Pick<BridgeHandlers, "interface.load" | "interface.save"> {
   let noticeGiven = false;
+  let saving: Promise<unknown> = Promise.resolve();
+  const saved = async (state: InterfaceState) => {
+    const kept = { ...state, files: keptTabs(state.files, await recordedOrUnknown(recorded)) };
+    apply(kept);
+    try {
+      await file.save(kept);
+    } catch (error) {
+      console.error("Satellite could not write interface.json", error);
+      throw new BridgeFailure("failed", saveFailure);
+    }
+    return {};
+  };
   return {
     "interface.load": async () => {
       const { state, notice } = await file.load();
@@ -133,16 +145,10 @@ export function interfaceHandlers(
       noticeGiven = true;
       return answer;
     },
-    "interface.save": async ({ state }) => {
-      const kept = { ...state, files: keptTabs(state.files, await recordedOrUnknown(recorded)) };
-      apply(kept);
-      try {
-        await file.save(kept);
-      } catch (error) {
-        console.error("Satellite could not write interface.json", error);
-        throw new BridgeFailure("failed", saveFailure);
-      }
-      return {};
+    "interface.save": ({ state }) => {
+      const run = saving.then(() => saved(state));
+      saving = run.catch(() => undefined);
+      return run;
     },
   };
 }
