@@ -646,6 +646,7 @@ export const bridgeRequests = {
         more: z.boolean(),
       }),
       z.strictObject({ kind: z.literal("empty") }),
+      z.strictObject({ kind: z.literal("too-large") }),
       z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
     ]),
   },

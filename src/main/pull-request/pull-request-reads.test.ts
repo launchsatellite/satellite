@@ -608,6 +608,16 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     });
   });
 
+  it("says a log past the output bound is too large, not slow", async () => {
+    const { answer, read, reads } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await answer("log", { stdout: "x".repeat(17 * 1024 * 1024) });
+    expect(
+      await reads.handlers["pullRequest.log"]({ workspace: first, job: "2001" }, owner),
+    ).toEqual({ kind: "too-large" });
+  });
+
   it("reads one job's log with a plain api request that writes nothing", async () => {
     const { answer, read, reads, calls } = await setup();
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });

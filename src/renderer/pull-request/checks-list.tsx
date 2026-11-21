@@ -14,6 +14,7 @@ import { VisibleName } from "../ui/visible-name.tsx";
 import { checkRequest } from "./pull-request-requests.ts";
 import {
   emptyLogSentence,
+  largeLogSentence,
   logCutSentence,
   moreSentence,
   noChecksSentence,
@@ -70,7 +71,9 @@ function LogBody({ state, testId }: { state: LogState; testId: string }) {
   }
   return (
     <p className="text-[12px] text-fg2">
-      {answer.kind === "empty" ? emptyLogSentence : troubleSentence(answer.reason)}
+      {answer.kind === "empty" && emptyLogSentence}
+      {answer.kind === "too-large" && largeLogSentence}
+      {answer.kind === "unavailable" && troubleSentence(answer.reason)}
     </p>
   );
 }

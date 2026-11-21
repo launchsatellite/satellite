@@ -113,14 +113,16 @@ async function runGh(
   folder: string,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<{ run: ToolRun } | { failure: Failure }> {
+): Promise<{ run: ToolRun } | { failure: Failure; oversize?: boolean }> {
   try {
     const run = await runTool("gh", args, { cwd: folder, timeoutMs, signal });
     if (run === undefined) return { failure: ghFailure(undefined, undefined) };
     return run.exitCode === 0 ? { run } : { failure: ghFailure(run, undefined) };
   } catch (error) {
     signal.throwIfAborted();
-    if (error instanceof ToolStopped) return { failure: ghFailure(undefined, error.reason) };
+    if (error instanceof ToolStopped) {
+      return { failure: ghFailure(undefined, error.reason), oversize: error.reason === "output" };
+    }
     if (error instanceof AbandonedRun) return { failure: "hung" };
     return { failure: "failed" };
   }
@@ -430,6 +432,7 @@ export function createPullRequests({
         { signal: controller.signal, lane: "log", owner },
       );
       if ("failure" in result) {
+        if (result.oversize === true) return { kind: "too-large" };
         const reason = troubleOf(result.failure);
         if (reason === "rate-limited") pace.pause();
         return { kind: "unavailable", reason };

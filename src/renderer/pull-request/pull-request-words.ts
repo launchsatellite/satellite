@@ -25,6 +25,7 @@ export const runningChecksSentence = "Checks that are still running show their r
 export const unnamedCheck = "Unnamed check";
 export const readingLogSentence = "Reading the failing lines.";
 export const emptyLogSentence = "No failing lines came back. Open the check on GitHub.";
+export const largeLogSentence = "This log is too large to show here. Open the check on GitHub.";
 export const noLogSentence =
   "This kind of check has no log to read here. Open its details on GitHub.";
 export const logCutSentence = "The rest is on GitHub.";
