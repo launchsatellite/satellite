@@ -16,11 +16,9 @@ export type ConflictCheck =
 export const conflictReadMs = 15_000;
 
 const quarantineFolder = "quarantine";
-const minimumGit = { major: 2, minor: 38 };
 const unsupportedExit = 129;
 const countCap = 1_000_000;
 const cachedChecks = 512;
-const versionOutput = /^git version (\d+)\.(\d+)/;
 const none: ConflictCheck = { kind: "none" };
 const oldGit: ConflictCheck = { kind: "old-git" };
 const slow: ConflictCheck = { kind: "slow" };
@@ -63,19 +61,6 @@ function parseConflicts(stdout: string): ConflictCheck | undefined {
   };
 }
 
-async function isSupported(folder: string, signal?: AbortSignal): Promise<boolean | undefined> {
-  if (unsupported) return false;
-  const run = await runGit(folder, ["--version"], gitReadMs, signal);
-  const match = versionOutput.exec(run?.stdout ?? "");
-  if (match === null) return undefined;
-  const major = Number(match[1]);
-  const minor = Number(match[2]);
-  const supported =
-    major > minimumGit.major || (major === minimumGit.major && minor >= minimumGit.minor);
-  if (!supported) unsupported = true;
-  return supported;
-}
-
 async function objectsFolder(folder: string, signal?: AbortSignal): Promise<string | undefined> {
   const run = await runGit(
     folder,
@@ -100,12 +85,12 @@ async function makeScratchRepository(home: string, sha256: boolean): Promise<str
   await mkdir(join(folder, "objects"), { mode: 0o700 });
   await mkdir(join(folder, "refs"), { mode: 0o700 });
   await writeFile(join(folder, "HEAD"), "ref: refs/heads/main\n");
-  const format = sha256 ? "[extensions]\n\tobjectformat = sha256\n" : "";
-  const version = sha256 ? 1 : 0;
-  await writeFile(
-    join(folder, "config"),
-    `[core]\n\trepositoryformatversion = ${String(version)}\n\tbare = true\n${format}`,
-  );
+  if (sha256) {
+    await writeFile(
+      join(folder, "config"),
+      "[core]\n\trepositoryformatversion = 1\n\tbare = true\n[extensions]\n\tobjectformat = sha256\n",
+    );
+  }
   return folder;
 }
 
@@ -214,9 +199,6 @@ export async function conflictCheck(
   signal?.throwIfAborted();
   if (!named) return null;
   return oneAtATime(signal, async () => {
-    const supported = await isSupported(folder, signal);
-    if (supported === undefined) return null;
-    if (!supported) return oldGit;
     const found = (await trialMerge(home, folder, head, base, signal)) ?? null;
     if (found?.kind === "old-git") return found;
     results.set(key, found);

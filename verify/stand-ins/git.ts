@@ -13,10 +13,10 @@ function claimedVersion(): string | undefined {
   }
 }
 
-const version = args.includes("--version") ? claimedVersion() : undefined;
-if (version !== undefined) {
-  process.stdout.write(`git version ${version}\n`);
-  process.exitCode = 0;
+const old = args.includes("--write-tree") && claimedVersion() !== undefined;
+if (old) {
+  process.stderr.write("usage: git merge-tree [<options>] <branch1> <branch2>\n");
+  process.exitCode = 129;
 } else {
   const run = spawnSync("git", args, { stdio: "inherit" });
   process.exitCode = run.status ?? 1;

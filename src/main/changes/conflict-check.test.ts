@@ -149,6 +149,35 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
     expect(await exists(marker)).toBe(false);
   });
 
+  it("checks a repository that uses sha256 object names", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-sha256-")));
+    const config = join(base, "gitconfig");
+    await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+    process.env["GIT_CONFIG_GLOBAL"] = config;
+    process.env["GIT_CONFIG_NOSYSTEM"] = "1";
+    const repo = join(base, "repo");
+    const home = join(base, "home");
+    await mkdir(home);
+    await run("git", ["init", "-q", "-b", "main", "--object-format=sha256", repo]);
+    const git = async (...args: string[]) =>
+      (await run("git", ["-C", repo, ...args])).stdout.trim();
+    const commit = async (text: string) => {
+      await writeFile(join(repo, "shared.txt"), twoLines(text));
+      await git("add", "-A");
+      await git("commit", "-q", "-m", text);
+    };
+    await commit("two");
+    await git("switch", "-q", "-c", "alpha");
+    await commit("alpha");
+    await git("switch", "-q", "main");
+    await commit("main");
+    await git("switch", "-q", "alpha");
+    const head = await git("rev-parse", "HEAD");
+    const other = await git("rev-parse", "main");
+    expect(head).toHaveLength(64);
+    expect(await conflictCheck(home, repo, head, other)).toMatchObject({ kind: "files" });
+  });
+
   it("answers none for a base that merges cleanly, and for a branch already merged", async () => {
     const box = await sandbox();
     const { head, base } = await diverge(
@@ -359,7 +388,7 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
     const shim = join(box.base, "shim.mjs");
     await writeFile(
       shim,
-      `import { spawnSync } from "node:child_process";\nconst args = process.argv.slice(2);\nif (args.includes("--version")) { process.stdout.write("git version 2.35.0\\n"); process.exit(0); }\nconst out = spawnSync("git", args, { stdio: "inherit" });\nprocess.exit(out.status ?? 1);\n`,
+      `import { spawnSync } from "node:child_process";\nconst args = process.argv.slice(2);\nif (args.includes("--write-tree")) { process.stderr.write("usage: git merge-tree\\n"); process.exit(129); }\nconst out = spawnSync("git", args, { stdio: "inherit" });\nprocess.exit(out.status ?? 1);\n`,
     );
     process.env["SATELLITE_GIT"] = JSON.stringify([process.execPath, shim]);
     const fresh = await import("./conflict-check.ts");
