@@ -1,3 +1,8 @@
+export interface VisiblePart {
+  text: string;
+  revealed: boolean;
+}
+
 export interface RevealedRange {
   line: number;
   start: number;
@@ -37,6 +42,24 @@ export const keptJoins = `${emojiJoin}|${scriptJoin}`;
 
 export function visibleText(raw: string): string {
   return raw.replace(hiddenCharacter, codePoint);
+}
+
+export function visibleParts(raw: string): VisiblePart[] {
+  const parts: VisiblePart[] = [];
+  const add = (text: string, revealed: boolean) => {
+    const previous = parts.at(-1);
+    if (text === "") return;
+    if (previous?.revealed === revealed) previous.text += text;
+    else parts.push({ text, revealed });
+  };
+  let last = 0;
+  for (const found of raw.matchAll(hiddenCharacter)) {
+    add(raw.slice(last, found.index), false);
+    add(codePoint(found[0]), true);
+    last = found.index + found[0].length;
+  }
+  add(raw.slice(last), false);
+  return parts;
 }
 
 export function revealLines(raw: string): { text: string; revealed: RevealedRange[] } {

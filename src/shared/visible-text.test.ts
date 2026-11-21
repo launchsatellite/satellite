@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revealLines, visibleText } from "./visible-text.ts";
+import { revealLines, visibleParts, visibleText } from "./visible-text.ts";
 
 describe("visibleText", () => {
   it("reveals direction and invisible characters in a name", () => {
@@ -37,6 +37,18 @@ describe("visibleText", () => {
     expect(
       visibleText("admin\u{17b4}\u{17b5}\u{2065}\u{fff0}\u{fff8}\u{e0000}\u{e0002}\u{e0fff}"),
     ).toBe("admin[U+17B4][U+17B5][U+2065][U+FFF0][U+FFF8][U+E0000][U+E0002][U+E0FFF]");
+  });
+
+  it("tells revealed characters in a name from the same text typed into it", () => {
+    expect(visibleParts("report\u{202e}\u{200b}txt.md")).toEqual([
+      { text: "report", revealed: false },
+      { text: "[U+202E][U+200B]", revealed: true },
+      { text: "txt.md", revealed: false },
+    ]);
+    expect(visibleParts("report[U+202E]txt.md")).toEqual([
+      { text: "report[U+202E]txt.md", revealed: false },
+    ]);
+    expect(visibleParts("")).toEqual([]);
   });
 
   it("keeps plain unicode names as they are", () => {

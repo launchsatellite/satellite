@@ -1,5 +1,5 @@
 import type { ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
-import { visibleText } from "../../shared/visible-text.ts";
+import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
@@ -34,7 +34,7 @@ export function WorkspaceHeader({ project, workspace, base, ahead, behind }: Wor
             <Icon name="branch" size={13} />
           </span>
           <span dir="ltr" className="min-w-0 truncate font-mono text-[12px] [unicode-bidi:isolate]">
-            {visibleText(workspaceLabel(project, workspace))}
+            <VisibleName text={workspaceLabel(project, workspace)} />
           </span>
           {base !== null && (
             <span
@@ -42,7 +42,7 @@ export function WorkspaceHeader({ project, workspace, base, ahead, behind }: Wor
               dir="ltr"
               className="min-w-[6ch] truncate font-mono text-[12px] [unicode-bidi:isolate]"
             >
-              from {visibleText(base)}
+              from <VisibleName text={base} />
             </span>
           )}
           {tracking !== "" && (

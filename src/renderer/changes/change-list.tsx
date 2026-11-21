@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile, ChangeLetter } from "../../shared/bridge-contract.ts";
-import { visibleText } from "../../shared/visible-text.ts";
+import { VisibleName } from "../ui/visible-name.tsx";
 import { longPathsSentence, moreSentence, rowName } from "./change-words.ts";
 
 interface ChangeListProps {
@@ -77,10 +77,14 @@ export function ChangeList({ files, more, longPaths, selected, onSelect }: Chang
                   dir="ltr"
                   className="flex min-w-0 flex-1 font-mono text-[12px] whitespace-nowrap [unicode-bidi:isolate]"
                 >
-                  <span className="min-w-0 shrink-[1000] truncate text-dim">
-                    {visibleText(folder)}
+                  <span className="min-w-0 shrink-[1000] truncate text-left text-dim [direction:rtl]">
+                    <span dir="ltr" className="[unicode-bidi:isolate]">
+                      <VisibleName text={folder} />
+                    </span>
                   </span>
-                  <span className="min-w-[4ch] truncate text-fg">{visibleText(name)}</span>
+                  <span className="max-w-full min-w-[4ch] flex-none truncate text-fg">
+                    <VisibleName text={name} />
+                  </span>
                 </span>
                 <span
                   aria-hidden
