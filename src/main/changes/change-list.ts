@@ -222,11 +222,15 @@ function oncePerPath(changes: ListedChange[]): ListedChange[] {
   });
 }
 
-async function countLines(folder: string, untracked: ListedChange[]): Promise<void> {
+async function countLines(
+  folder: string,
+  untracked: ListedChange[],
+  signal: AbortSignal,
+): Promise<void> {
   let left = changesLimits.countedBytes;
   const counted = untracked.filter((change) => change.kind !== "repository");
   for (const change of counted.slice(0, changesLimits.countedFiles)) {
-    if (left <= 0) return;
+    if (left <= 0 || signal.aborted) return;
     const side = await readWorktreeSide(
       folder,
       change.path,
@@ -324,7 +328,7 @@ export async function readChangeList(
   const unmerged = conflictedOut === undefined ? undefined : parseUnmerged(conflictedOut);
   if (parsed === undefined || fields === undefined || unmerged === undefined) return failed;
   const untracked = fields.map(untrackedChange).sort(byPath);
-  await countLines(folder, untracked);
+  await countLines(folder, untracked, signal);
   if (signal.aborted) return failed;
   const merged = oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]);
   const named = merged.filter(isNamed).sort(byPath);

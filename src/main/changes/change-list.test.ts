@@ -11,7 +11,7 @@ import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./chan
 import { readWorktreeSide } from "./file-sides.ts";
 
 const fileCalls = vi.hoisted(() => {
-  const calls: { lstat?: ((path: string) => Promise<BigIntStats>) | undefined } = {};
+  const calls: { lstat?: ((path: string) => Promise<BigIntStats> | undefined) | undefined } = {};
   return calls;
 });
 
@@ -543,6 +543,32 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       ["dir", "A", expect.stringMatching(/^new:\d+:\d+$/)],
       ["dir/hosts", "D", expect.stringMatching(/^[0-9a-f]{40}:gone$/)],
     ]);
+  });
+
+  it("stops counting untracked lines as soon as the list is stopped", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "kept.txt"), "kept\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const names = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"];
+    for (const name of names) await writeFile(join(repo, name), "new\n");
+    const head = await git("rev-parse", "HEAD");
+    const stop = new AbortController();
+    const touched: string[] = [];
+    fileCalls.lstat = (path) => {
+      if (names.some((name) => path.endsWith(name))) touched.push(path);
+      stop.abort();
+      return undefined;
+    };
+    try {
+      expect(await readChangeList(repo, head, stop.signal)).toEqual({
+        kind: "unavailable",
+        reason: "failed",
+      });
+    } finally {
+      fileCalls.lstat = undefined;
+    }
+    expect(touched).toHaveLength(1);
   });
 
   it("answers hung when git times out or is stuck in the folder", async () => {

@@ -102,12 +102,15 @@ function remember(page: PageReads, key: string, list: CachedList): void {
   }
 }
 
-async function tracking(root: string, branch: string | null) {
+async function tracking(root: string, branch: string | null, signal: AbortSignal) {
   const none = { ahead: null, behind: null };
   if (branch === null) return none;
+  signal.throwIfAborted();
   const track = (await readTracking(root, [branch])).get(branch);
   if (track !== null) return { ahead: track?.ahead ?? null, behind: track?.behind ?? null };
+  signal.throwIfAborted();
   if ((await hasRemote(root)) !== true) return none;
+  signal.throwIfAborted();
   return { ahead: await countUnpushed(root, branch), behind: null };
 }
 
@@ -204,7 +207,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     const header: Header = {
       branch: shortName(branch),
       base: shortName(base?.name),
-      ...(await tracking(project.path, branch ?? null)),
+      ...(await tracking(project.path, branch ?? null, signal)),
       conflict: null,
     };
     const unavailable = (reason: Unavailable): { answer: ChangesList } => ({
