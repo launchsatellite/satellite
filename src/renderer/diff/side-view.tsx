@@ -11,6 +11,7 @@ import {
   lineMarks,
   plainModel,
   readOnlyOptions,
+  gitLineCount,
   selectedLines,
   type DiffHandle,
   type DiffSide,
@@ -37,9 +38,8 @@ const sideLook = {
   },
 };
 
-function gitLines(text: string, model: editor.ITextModel): number[] {
-  const count = model.getLineCount() - (text === "" || text.endsWith("\n") ? 1 : 0);
-  return Array.from({ length: count }, (_, index) => index + 1);
+function gitLines(model: editor.ITextModel): number[] {
+  return Array.from({ length: gitLineCount(model) }, (_, index) => index + 1);
 }
 
 export function SideView({ text, side, path, label, handle }: SideViewProps) {
@@ -88,7 +88,7 @@ export function SideView({ text, side, path, label, handle }: SideViewProps) {
     if (viewState !== null) made.restoreViewState(viewState);
     shownPath.current = path;
     previous?.dispose();
-    const lines = gitLines(text, model);
+    const lines = gitLines(model);
     const last = lines.length;
     const sideMark = {
       range: { startLineNumber: 1, startColumn: 1, endLineNumber: last, endColumn: 1 },

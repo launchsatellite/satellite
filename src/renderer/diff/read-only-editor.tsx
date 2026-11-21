@@ -1,6 +1,7 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import { revealLines, type RevealedRange } from "../../shared/visible-text.ts";
 import { AmbiguousCharacters } from "monaco-editor/base/common/strings";
+import { lineRange } from "./line-range.ts";
 import { confusableColumns, lookAlikeColumns, type ColumnRange } from "./look-alikes.ts";
 
 export interface DiffSelection {
@@ -88,13 +89,25 @@ export function lineMarks(
   return [...shownRevealed, ...lookAlikes];
 }
 
+export function gitLineCount(model: editor.ITextModel): number {
+  const last = model.getLineCount();
+  return last - (model.getLineLength(last) === 0 ? 1 : 0);
+}
+
 export function selectedLines(sideEditor: editor.ICodeEditor, side: DiffSide) {
-  if (sideEditor.getModel() === null) return null;
+  const model = sideEditor.getModel();
   const selection = sideEditor.getSelection();
-  if (selection === null) return null;
-  const { startLineNumber: start, endLineNumber, endColumn } = selection;
-  const end = endLineNumber > start && endColumn === 1 ? endLineNumber - 1 : endLineNumber;
-  return { side, start, end };
+  if (model === null || selection === null) return null;
+  const range = lineRange(
+    {
+      startLine: selection.startLineNumber,
+      endLine: selection.endLineNumber,
+      endColumn: selection.endColumn,
+      empty: selection.isEmpty(),
+    },
+    gitLineCount(model),
+  );
+  return range === null ? null : { side, ...range };
 }
 
 export function CutShort({ shown }: { shown: boolean }) {

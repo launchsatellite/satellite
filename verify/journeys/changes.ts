@@ -24,6 +24,7 @@ interface Row {
 
 const shortcut = process.platform === "darwin" ? "Meta+L" : "Control+Shift+L";
 const bracketed = (text: string) => `\u001b[200~${text}\u001b[201~`;
+const noLinesSentence = "Select some lines in the diff first.";
 const hiddenNameSentence =
   "This file's name holds hidden characters, so Satellite can't point Claude Code at it. Ask in your own words.";
 const notReadySentence =
@@ -455,6 +456,9 @@ async function sendsLines(session: AppSession): Promise<void> {
   await select(session, "src/app.ts");
   await page.locator('[data-testid="diff"] .editor.modified').waitFor();
   let from = (await session.standInEvents()).length;
+  await page.keyboard.press(shortcut);
+  await toastReads(session, noLinesSentence, "after pressing the shortcut with nothing selected");
+  assert.equal(await standInInput(session, from), "", "lines nobody selected reached the prompt");
   await session.selectDiffLines("modified", 2, 3);
   await page.keyboard.press(shortcut);
   await typedAfter(session, from, bracketed("Lines 2 to 3 of src/app.ts in this workspace. "));
