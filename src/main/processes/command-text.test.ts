@@ -11,6 +11,18 @@ describe("shownCommand", () => {
     }
   });
 
+  it("shows the home folder as a tilde on a path boundary only", () => {
+    const home = "/srv/me";
+    const show = (command: string) => shownCommand(command, home).text;
+    expect(show("node /srv/me/app/x.js --root=/srv/me")).toBe("node ~/app/x.js --root=~");
+    expect(show("node /srv/me2/x.js /opt/srv/me/x.js /srv/mex")).toBe(
+      "node /srv/me2/x.js /opt/srv/me/x.js /srv/mex",
+    );
+    expect(show("run '/srv/me/a' /srv/me/b:/srv/me/c")).toBe("run '~/a' ~/b:~/c");
+    expect(shownCommand("node /srv/me/x.js", "/srv/me/").text).toBe("node ~/x.js");
+    expect(shownCommand("node /srv/me/x.js").text).toBe("node /srv/me/x.js");
+  });
+
   it("hides credentials inside an address", () => {
     expect(shownCommand("psql postgres://admin:hunter@db.local/app").text).toBe(
       "psql postgres://***@db.local/app",

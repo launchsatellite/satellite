@@ -30,6 +30,7 @@ function setup(
     table?: ProcessEntry[];
     roots?: RunningRoot[];
     end?: (target: ProcessEntry) => Promise<void>;
+    home?: string;
   } = {},
 ) {
   let clock = fixtureNow;
@@ -43,6 +44,7 @@ function setup(
     readPorts,
     end,
     now: () => clock,
+    home: options.home ?? "/srv/nobody",
   });
   return {
     list: (owner: BridgeOwner = pageOne) => processes.handlers["processes.list"]({}, owner),
@@ -65,6 +67,15 @@ function startOf(table: readonly ProcessEntry[], pid: number): number {
 }
 
 describe("processes.list", () => {
+  it("shows the home folder as a tilde before anything crosses", async () => {
+    const table = parsePsTable(psMacos).map((entry) =>
+      entry.pid === 4402 ? { ...entry, command: "node /srv/owner/app/worker.js" } : entry,
+    );
+    const { list } = setup({ table, home: "/srv/owner" });
+    const answer = await list();
+    expect(answer.rows.find((row) => row.pid === 4402)?.command).toBe("node ~/app/worker.js");
+  });
+
   it("lists rows with a hidden, cut command and the ports of the whole subtree", async () => {
     const table = parsePsTable(psMacos).map((entry) =>
       entry.pid === 4402

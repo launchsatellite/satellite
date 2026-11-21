@@ -3,6 +3,7 @@ import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/
 import { type ListeningPort, readListeningPorts } from "../platform/listening-ports.ts";
 import { type ProcessEntry, readProcessTable } from "../platform/process-table.ts";
 import { endSubtree } from "../platform/process-tree.ts";
+import { userHomeFolder } from "../platform/satellite-home.ts";
 import { shownCommand } from "./command-text.ts";
 import {
   listedProcesses,
@@ -27,6 +28,7 @@ interface ProcessesOptions {
   readPorts?: (pids: readonly number[]) => Promise<ListeningPort[]>;
   end?: (target: ProcessEntry) => Promise<void>;
   now?: () => number;
+  home?: string;
 }
 
 interface Snapshot {
@@ -54,9 +56,13 @@ function portsOf(
     .map(([port, hosts]) => ({ port, url: portUrl(hosts, port) }));
 }
 
-function rowOf(owned: OwnedProcess, ports: readonly ListeningPort[]): ProcessRow | undefined {
+function rowOf(
+  owned: OwnedProcess,
+  ports: readonly ListeningPort[],
+  home: string,
+): ProcessRow | undefined {
   const { entry, root, subtree } = owned;
-  const command = shownCommand(entry.command);
+  const command = shownCommand(entry.command, home);
   const parsed = processRow.safeParse({
     workspace: root.workspace,
     session: root.session,
@@ -75,6 +81,7 @@ export function createProcesses({
   readPorts = readListeningPorts,
   end = endSubtree,
   now = Date.now,
+  home = userHomeFolder(),
 }: ProcessesOptions): Processes {
   let reading: Promise<Snapshot> | undefined;
   let finished: { readonly snapshot: Snapshot; readonly at: number } | undefined;
@@ -94,7 +101,7 @@ export function createProcesses({
     if (listed.length === 0) return { at, rows: [] };
     const ports = await readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid)));
     const rows = listed.flatMap((owned) => {
-      const row = rowOf(owned, ports);
+      const row = rowOf(owned, ports, home);
       const owner = running.find(({ root }) => root === owned.root)?.owner;
       return row === undefined || owner === undefined ? [] : [{ owner, row }];
     });

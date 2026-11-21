@@ -12,6 +12,20 @@ const scheme = /^(?:bearer|basic)$/i;
 const opaqueRun = /[A-Za-z0-9_+=-]{32,}/g;
 const highSurrogate = /[\uD800-\uDBFF]/;
 
+function escaped(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tildeHome(raw: string, home: string): string {
+  const folder = home.replace(/[\\/]+$/, "");
+  if (folder === "") return raw;
+  const boundary = new RegExp(
+    `(^|[^\\w./\\\\~-])${escaped(folder)}(?=[\\\\/\\s"']|$)`,
+    process.platform === "win32" ? "gi" : "g",
+  );
+  return raw.replace(boundary, "$1~");
+}
+
 function windowOf(raw: string): { text: string; cut: boolean } {
   if (raw.length <= commandWindow) return { text: raw, cut: false };
   const head = raw.slice(0, commandWindow);
@@ -58,8 +72,8 @@ function hidden(words: readonly string[]): string[] {
   return shown;
 }
 
-export function shownCommand(raw: string): { text: string; cut: boolean } {
-  const window = windowOf(raw);
+export function shownCommand(raw: string, home?: string): { text: string; cut: boolean } {
+  const window = windowOf(home === undefined ? raw : tildeHome(raw, home));
   const text = hidden(window.text.split(/\s+/).filter((word) => word !== "")).join(" ");
   if (text.length <= processesLimits.commandChars) return { text, cut: window.cut };
   const end = processesLimits.commandChars;
