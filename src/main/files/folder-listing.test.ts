@@ -3,7 +3,8 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FolderListing } from "../../shared/bridge-contract.ts";
-import { listFolder } from "./folder-listing.ts";
+import { listFolder, listFolders } from "./folder-listing.ts";
+import { checkIgnored } from "./ignore-check.ts";
 import { readFileForViewing } from "./file-read.ts";
 import { readNames } from "./name-index.ts";
 import {
@@ -16,6 +17,10 @@ import {
   snapshot,
 } from "./repository-fixture.ts";
 
+vi.mock("./ignore-check.ts", async (original) => {
+  const real = await original<typeof import("./ignore-check.ts")>();
+  return { checkIgnored: vi.fn(real.checkIgnored) };
+});
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),
 }));
@@ -40,6 +45,26 @@ async function makeMany(folder: string, count: number): Promise<void> {
     await Promise.all(batch);
   }
 }
+
+describe("listFolders", () => {
+  it("asks git once for every folder and still marks each folder's ignored entries", async () => {
+    const root = await makeRepository();
+    await put(root, {
+      ".gitignore": "*.log\nbuild/\n",
+      "a.log": "x",
+      "a.txt": "x",
+      "src/b.log": "x",
+      "src/b.ts": "x",
+    });
+    vi.mocked(checkIgnored).mockClear();
+    const listings = await listFolders(root, ["", "src"]);
+    expect(vi.mocked(checkIgnored)).toHaveBeenCalledTimes(1);
+    expect(listings.map(shown)).toEqual([
+      ["folder:src", "file:.gitignore", "~file:a.log", "file:a.txt"],
+      ["~file:b.log", "file:b.ts"],
+    ]);
+  });
+});
 
 describe("listFolder", () => {
   it("lists folders first, shows ignored entries and dot files flagged, and leaves out .git", async () => {

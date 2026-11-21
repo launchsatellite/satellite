@@ -6,8 +6,8 @@ import { isInsidePath } from "../platform/paths.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import { sessionFolder } from "../sessions/session-folder.ts";
 import { readFileForViewing } from "./file-read.ts";
-import { listFolder } from "./folder-listing.ts";
-import { rankFiles, readableNames, readNames } from "./name-index.ts";
+import { listFolders } from "./folder-listing.ts";
+import { rankReadable, readNames } from "./name-index.ts";
 
 export interface Files {
   handlers: Pick<BridgeHandlers, "files.list" | "files.read" | "files.find">;
@@ -117,12 +117,11 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
     folder: string,
     signal: AbortSignal,
   ): Promise<FilesList> => {
-    const answers: FilesList["folders"] = [];
-    for (const path of new Set(folders)) {
-      signal.throwIfAborted();
-      answers.push({ path, listing: await listFolder(folder, path, signal) });
-    }
-    return { folders: answers };
+    const unique = [...new Set(folders)];
+    const listings = await listFolders(folder, unique, signal);
+    return {
+      folders: unique.map((path, at) => ({ path, listing: listings[at] ?? { state: "failed" } })),
+    };
   };
 
   const found = async (
@@ -133,8 +132,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
   ): Promise<FilesFind> => {
     const cached = page.names;
     if (cached?.folder === folder && Date.now() - cached.at < nameIndexMs) {
-      const ranked = await rankFiles(query, cached.names, signal);
-      return { kind: "found", paths: await readableNames(folder, ranked) };
+      return { kind: "found", paths: await rankReadable(folder, query, cached.names, signal) };
     }
     const index = await readNames(folder, signal);
     signal.throwIfAborted();
@@ -143,8 +141,7 @@ export function createFiles({ home, store }: { home: string; store: ProjectStore
       return { kind: index.kind };
     }
     page.names = { folder, at: Date.now(), names: index.names };
-    const ranked = await rankFiles(query, index.names, signal);
-    return { kind: "found", paths: await readableNames(folder, ranked) };
+    return { kind: "found", paths: await rankReadable(folder, query, index.names, signal) };
   };
 
   return {

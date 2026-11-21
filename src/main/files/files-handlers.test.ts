@@ -24,7 +24,7 @@ vi.mock("./file-read.ts", async (original) => {
 });
 vi.mock("./folder-listing.ts", async (original) => {
   const real = await original<typeof import("./folder-listing.ts")>();
-  return { listFolder: vi.fn(real.listFolder) };
+  return { listFolders: vi.fn(real.listFolders) };
 });
 vi.mock("./name-index.ts", async (original) => {
   const real = await original<typeof import("./name-index.ts")>();
@@ -32,7 +32,7 @@ vi.mock("./name-index.ts", async (original) => {
 });
 
 const { readFileForViewing } = await import("./file-read.ts");
-const { listFolder } = await import("./folder-listing.ts");
+const { listFolders } = await import("./folder-listing.ts");
 const { readNames } = await import("./name-index.ts");
 
 const projectId = "0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
@@ -43,7 +43,7 @@ beforeEach(isolateGit);
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.mocked(readFileForViewing).mockClear();
-  vi.mocked(listFolder).mockClear();
+  vi.mocked(listFolders).mockClear();
   vi.mocked(readNames).mockClear();
   held.reads = 0;
 });
@@ -113,21 +113,22 @@ describe("files handlers", { timeout: 30_000 }, () => {
       "listed",
       "listed",
     ]);
-    expect(vi.mocked(listFolder)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(listFolders)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(listFolders).mock.calls[0]?.[1]).toEqual(["b", "a", ""]);
   });
 
   it("a newer list stops the page's older one and answers refused", async () => {
     const { files } = await repository();
-    const { promise, resolve } = Promise.withResolvers<{ state: "missing" }>();
-    vi.mocked(listFolder).mockImplementationOnce(() => promise);
+    const { promise, resolve } = Promise.withResolvers<{ state: "missing" }[]>();
+    vi.mocked(listFolders).mockImplementationOnce(() => promise);
     const page = ownerOf(1);
     const older = files.handlers["files.list"]({ workspace, folders: ["a", "b"] }, page);
-    await until(() => vi.mocked(listFolder).mock.calls.length === 1);
+    await until(() => vi.mocked(listFolders).mock.calls.length === 1);
     const newer = files.handlers["files.list"]({ workspace, folders: ["b"] }, page);
-    resolve({ state: "missing" });
+    resolve([{ state: "missing" }, { state: "missing" }]);
     await expect(older).rejects.toMatchObject(movedOn);
     expect((await newer).folders).toHaveLength(1);
-    expect(vi.mocked(listFolder)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(listFolders)).toHaveBeenCalledTimes(2);
   });
 
   it("a read of a path the rules refuse reads nothing", async () => {

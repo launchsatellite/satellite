@@ -15,6 +15,7 @@ import { checkIgnored } from "./ignore-check.ts";
 
 const lstatsAtOnce = 32;
 const ignoreCheckMs = 2000;
+const ignoreChunk = 5000;
 const missing: FolderListing = { state: "missing" };
 const unreadable: FolderListing = { state: "unreadable" };
 const hung: FolderListing = { state: "hung" };
@@ -77,11 +78,15 @@ function order(a: FileEntry, b: FileEntry): number {
   return a.name < b.name ? -1 : 1;
 }
 
-async function listConfined(
-  root: string,
-  folder: string,
-  signal?: AbortSignal,
-): Promise<FolderListing> {
+interface Prepared {
+  folder: string;
+  real: string;
+  entries: FileEntry[];
+  paths: string[];
+  dropped: number;
+}
+
+async function prepare(root: string, folder: string): Promise<FolderListing | Prepared> {
   const parent = folder === "" ? "." : posix.dirname(folder);
   const parentReal = await confinedFolder(root, parent);
   if (typeof parentReal !== "string") {
@@ -98,10 +103,17 @@ async function listConfined(
   if (scanned === undefined) return { state: "too-many" };
   const entries = await classified(real, scanned.names);
   const paths = entries.map((entry) => checkedPath(folder, entry.name));
-  const check = await checkIgnored(root, paths, signal, ignoreCheckMs);
+  return { folder, real, entries, paths, dropped: scanned.dropped };
+}
+
+async function finish(
+  root: string,
+  { folder, real, entries, paths, dropped }: Prepared,
+  ignored: ReadonlySet<string>,
+): Promise<FolderListing> {
   const marked = entries.map((entry, at) => ({
     ...entry,
-    ignored: check.kind === "checked" && check.ignored.has(paths[at] ?? ""),
+    ignored: ignored.has(paths[at] ?? ""),
   }));
   const again = await confinedFolder(root, folder === "" ? "." : folder);
   if (typeof again !== "string" || !sameFolder(again, real)) return unreadable;
@@ -109,8 +121,66 @@ async function listConfined(
   return {
     state: "listed",
     entries: marked.slice(0, filesLimits.folderEntries),
-    more: Math.max(0, marked.length - filesLimits.folderEntries) + scanned.dropped,
+    more: Math.max(0, marked.length - filesLimits.folderEntries) + dropped,
   };
+}
+
+async function guarded<T>(root: string, work: () => Promise<T>): Promise<T | FolderListing> {
+  const running = work().catch((error: unknown): FolderListing =>
+    isMissing(error) || errorCode(error) === "ENOTDIR" ? missing : unreadable,
+  );
+  const result = await withinTime(running, gitReadMs);
+  if (result !== undefined) return result;
+  markStuck(root, running);
+  return hung;
+}
+
+function isListing(result: FolderListing | Prepared): result is FolderListing {
+  return "state" in result;
+}
+
+async function ignoredAmong(
+  root: string,
+  paths: readonly string[],
+  signal?: AbortSignal,
+): Promise<Set<string>> {
+  const ignored = new Set<string>();
+  for (let at = 0; at < paths.length; at += ignoreChunk) {
+    signal?.throwIfAborted();
+    const check = await checkIgnored(
+      root,
+      paths.slice(at, at + ignoreChunk),
+      signal,
+      ignoreCheckMs,
+    );
+    if (check.kind === "checked") for (const path of check.ignored) ignored.add(path);
+  }
+  return ignored;
+}
+
+export async function listFolders(
+  root: string,
+  folders: readonly string[],
+  signal?: AbortSignal,
+): Promise<FolderListing[]> {
+  const prepared: (FolderListing | Prepared)[] = [];
+  for (const folder of folders) {
+    signal?.throwIfAborted();
+    if (folder !== "" && !isChangePath(folder)) prepared.push(unreadable);
+    else if (rootsWithStuckReads.has(root)) prepared.push(hung);
+    else prepared.push(await guarded(root, () => prepare(root, folder)));
+  }
+  const ignored = await ignoredAmong(
+    root,
+    prepared.flatMap((result) => (isListing(result) ? [] : result.paths)),
+    signal,
+  );
+  const listings: FolderListing[] = [];
+  for (const result of prepared) {
+    if (isListing(result)) listings.push(result);
+    else listings.push(await guarded(root, () => finish(root, result, ignored)));
+  }
+  return listings;
 }
 
 export async function listFolder(
@@ -118,13 +188,5 @@ export async function listFolder(
   folder: string,
   signal?: AbortSignal,
 ): Promise<FolderListing> {
-  if (folder !== "" && !isChangePath(folder)) return unreadable;
-  if (rootsWithStuckReads.has(root)) return hung;
-  const work = listConfined(root, folder, signal).catch((error: unknown): FolderListing =>
-    isMissing(error) || errorCode(error) === "ENOTDIR" ? missing : unreadable,
-  );
-  const listing = await withinTime(work, gitReadMs);
-  if (listing !== undefined) return listing;
-  markStuck(root, work);
-  return hung;
+  return (await listFolders(root, [folder], signal))[0] ?? unreadable;
 }
