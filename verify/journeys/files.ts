@@ -617,10 +617,7 @@ async function openRoot(session: AppSession, name: string): Promise<void> {
   await rowLocator(session.page, name).click();
 }
 
-export async function showsSentences(
-  session: AppSession,
-  shoot: (name: string) => Promise<void> = () => Promise.resolve(),
-): Promise<void> {
+async function showsSentences(session: AppSession): Promise<void> {
   const { page } = session;
   const folder = worktree(session);
   await openFolder(session, "assets");
@@ -652,7 +649,6 @@ export async function showsSentences(
     "wide.png did not draw",
   );
   await sentenceReads(session, "file-image-size", "120 × 80 pixels");
-  await shoot("image");
 
   await writeFile(join(folder, "many-lines.txt"), "x\n".repeat(30_000));
   await openRoot(session, "many-lines.txt");
@@ -660,22 +656,18 @@ export async function showsSentences(
   const started = Date.now();
   await page.evaluate(() => 1);
   assert.ok(Date.now() - started < 2000, "the window stalled on a large file");
-  await shoot("too-large");
 
   await writeFile(join(folder, "has-nul.txt"), Buffer.from([0x61, 0x00, 0x62, 0x0a]));
   await openRoot(session, "has-nul.txt");
   await sentenceReads(session, "file-sentence", "binary file");
-  await shoot("binary");
 
   await writeFile(join(folder, "latin.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
   await openRoot(session, "latin.txt");
   await sentenceReads(session, "file-sentence", "isn't UTF-8 text");
-  await shoot("not-utf8");
 
   await writeFile(join(folder, "bomb.png"), pngSignature(10_000, 10_000));
   await openRoot(session, "bomb.png");
   await sentenceReads(session, "file-sentence", "too large");
-  await shoot("too-many-pixels");
 
   await writeFile(
     join(folder, "huge.png"),
@@ -683,12 +675,10 @@ export async function showsSentences(
   );
   await openRoot(session, "huge.png");
   await sentenceReads(session, "file-sentence", "too large");
-  await shoot("too-many-bytes");
 
   await writeFile(join(folder, "broken.png"), pngSignature(8, 8));
   await openRoot(session, "broken.png");
   await sentenceReads(session, "file-sentence", "couldn't draw this image");
-  await shoot("malformed-image");
 
   await writeFile(
     join(folder, "shape.svg"),
@@ -701,13 +691,11 @@ export async function showsSentences(
   await symlink("many-lines.txt", join(folder, "pointer.txt"));
   await openRoot(session, "pointer.txt");
   await sentenceReads(session, "file-link-note", "This is a link");
-  await shoot("link");
 
   if (process.platform !== "win32") {
     await writeFile(join(folder, "locked.txt"), "secret\n", { mode: 0 });
     await openRoot(session, "locked.txt");
     await sentenceReads(session, "file-sentence", "can't open this file");
-    await shoot("unreadable");
   }
 
   await writeFile(join(folder, "swap.txt"), "about to be a folder\n");
@@ -716,7 +704,6 @@ export async function showsSentences(
   await unlink(join(folder, "swap.txt"));
   await mkdir(join(folder, "swap.txt"));
   await sentenceReads(session, "file-sentence", "isn't there anymore");
-  await shoot("gone");
 
   const nested = join(folder, "nested-repo");
   await mkdir(nested);
@@ -735,7 +722,6 @@ export async function showsSentences(
   await rowOf(session, "nested-repo/inner.txt", "after opening the repository of its own");
   await rowLocator(page, "nested-repo/inner.txt").click();
   await editorShows(session, "inside", "after opening a file of a repository of its own");
-  await shoot("repository");
 }
 
 export const filesJourney: Journey = {
