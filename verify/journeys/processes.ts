@@ -156,6 +156,11 @@ async function run(session: AppSession): Promise<void> {
   await visible(session, "link-dialog", "after the port was pressed");
   const address = `http://127.0.0.1:${String(server.port)}/`;
   assert.equal((await textOf(session, "link-address")).trim(), address);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
+    "link-cancel",
+    "the question over the list did not start with focus on Cancel",
+  );
   await page.getByTestId("link-cancel").click();
   await gone(session, "link-dialog", "after the question was cancelled");
   await visible(session, "processes-dialog", "after the question was cancelled");

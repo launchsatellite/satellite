@@ -64,6 +64,9 @@ export function Dialog({
     };
     const keepFocus = (event: FocusEvent) => {
       if (covered()) return;
+      if (event.target instanceof Element && event.target.closest("[role='dialog']") !== null) {
+        return;
+      }
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
     };
     document.addEventListener("keydown", press, { capture: true });
@@ -78,10 +81,11 @@ export function Dialog({
     const overlay = element?.parentElement;
     if (element === null || overlay === null || overlay === undefined) return;
     const focused = document.activeElement;
-    const opener =
+    const priorFocus =
       focusedAtRender instanceof HTMLElement && focusedAtRender !== document.body
         ? focusedAtRender
         : focused;
+    const opener = priorFocus === document.body || element.contains(priorFocus) ? null : priorFocus;
     const behind = [...(overlay.parentElement?.children ?? [])].filter(
       (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
     );
