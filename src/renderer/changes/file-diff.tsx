@@ -9,7 +9,7 @@ import type {
 import { invoke } from "../bridge/bridge-client.ts";
 import type { DiffHandle, DiffSide } from "../diff/read-only-editor.tsx";
 import { diffLabels, sideSentence } from "./change-words.ts";
-import { changesPlace } from "./use-changes.ts";
+import { changesPlace, pollDelay } from "./use-changes.ts";
 
 export interface ShownText {
   path: string;
@@ -43,6 +43,10 @@ const SideView = lazy(() => editors().then(([, module]) => ({ default: module.Si
 const cachedAnswers = 8;
 const cachedChars = 8_388_608;
 const answers = new Map<string, { sides: FileSides; chars: number }>();
+
+function passing(answer: Answer): boolean {
+  return answer.sides === null || answer.sides.kind === "changing" || answer.sides.kind === "hung";
+}
 
 function sidesChars(sides: FileSides): number {
   return sides.kind === "text" ? sides.original.length + sides.modified.length : 0;
@@ -81,6 +85,42 @@ function Opening() {
   );
 }
 
+function Editors({
+  sides,
+  file,
+  inline,
+  handle,
+}: {
+  sides: Extract<FileSides, { kind: "text" }>;
+  file: ChangedFile;
+  inline: boolean;
+  handle: Ref<DiffHandle>;
+}) {
+  const labels = diffLabels(file);
+  const only = sideOnly(file.letter);
+  if (only === null) {
+    return (
+      <DiffView
+        original={sides.original}
+        modified={sides.modified}
+        path={file.path}
+        inline={inline}
+        labels={labels}
+        handle={handle}
+      />
+    );
+  }
+  return (
+    <SideView
+      text={only === "original" ? sides.original : sides.modified}
+      side={only}
+      path={file.path}
+      label={labels[only]}
+      handle={handle}
+    />
+  );
+}
+
 export function sideOnly(letter: ChangeLetter): DiffSide | null {
   if (letter === "A") return "modified";
   if (letter === "D") return "original";
@@ -91,6 +131,8 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
   const place = changesPlace(workspace, view);
   const key = `${place}\u0000${file.path}\u0000${file.stamp}`;
   const [answer, setAnswer] = useState<Answer | null>(null);
+  const [retried, setRetried] = useState({ key, count: 0 });
+  const attempt = retried.key === key ? retried.count : 0;
   const sequence = useRef(0);
   const listedFile = useRef(file);
   const { projectId, workspace: workspaceKey } = workspace;
@@ -115,14 +157,34 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
       path,
     }).then((result) => {
       if (asked !== sequence.current) return;
-      if (result.ok) remember(key, result.value);
-      setAnswer(
-        result.ok
-          ? { key, file: listed, sides: result.value, failure: null }
-          : { key, file: listed, sides: null, failure: result.error.message },
-      );
+      const answered: Answer = result.ok
+        ? { key, file: listed, sides: result.value, failure: null }
+        : { key, file: listed, sides: null, failure: result.error.message };
+      if (result.ok && !passing(answered)) remember(key, result.value);
+      setAnswer(answered);
     });
-  }, [key, projectId, workspaceKey, view, path]);
+  }, [key, projectId, workspaceKey, view, path, attempt]);
+
+  useEffect(() => {
+    if (answer?.key !== key || !passing(answer)) return;
+    const again = () => {
+      setRetried({ key, count: attempt + 1 });
+    };
+    const whenVisible = () => {
+      if (document.visibilityState === "visible") again();
+    };
+    const timer = setTimeout(
+      () => {
+        if (document.visibilityState === "visible") again();
+        else document.addEventListener("visibilitychange", whenVisible);
+      },
+      pollDelay(0, attempt),
+    );
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", whenVisible);
+    };
+  }, [answer, key, attempt]);
 
   useEffect(
     () => () => {
@@ -150,38 +212,23 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
   );
 
   if (drawn === null) return <Opening />;
-  if (drawn.sides?.kind === "text") {
-    const { original, modified } = drawn.sides;
-    const labels = diffLabels(drawn.file);
-    const only = sideOnly(drawn.file.letter);
-    return (
-      <Suspense fallback={<Opening />}>
-        {only === null ? (
-          <DiffView
-            original={original}
-            modified={modified}
-            path={drawn.file.path}
-            inline={inline}
-            labels={labels}
-            handle={handle}
-          />
-        ) : (
-          <SideView
-            text={only === "original" ? original : modified}
-            side={only}
-            path={drawn.file.path}
-            label={labels[only]}
-            handle={handle}
-          />
-        )}
-      </Suspense>
-    );
-  }
+  const stale = drawn.file.path !== path;
   return (
-    <div className="flex h-full items-center justify-center p-8">
-      <p data-testid="changes-sentence" className="max-w-[360px] text-center text-[13px] text-fg2">
-        {drawn.sides === null ? drawn.failure : sideSentence(drawn.sides)}
-      </p>
+    <div className={`h-full ${stale ? "opacity-50" : ""}`} aria-busy={stale || undefined}>
+      {drawn.sides?.kind === "text" ? (
+        <Suspense fallback={<Opening />}>
+          <Editors sides={drawn.sides} file={drawn.file} inline={inline} handle={handle} />
+        </Suspense>
+      ) : (
+        <div className="flex h-full items-center justify-center p-8">
+          <p
+            data-testid="changes-sentence"
+            className="max-w-[360px] text-center text-[13px] text-fg2"
+          >
+            {drawn.sides === null ? drawn.failure : sideSentence(drawn.sides)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
