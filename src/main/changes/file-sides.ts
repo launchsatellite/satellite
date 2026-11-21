@@ -37,6 +37,11 @@ const binary: SideRead = { kind: "binary" };
 const changing: SideRead = { kind: "changing" };
 const notLocal: SideRead = { kind: "not-local" };
 const rootsWithStuckReads = new Set<string>();
+const objectLengths = new Map<string, number>();
+const objectFormatLengths = new Map([
+  ["sha1\n", 40],
+  ["sha256\n", 64],
+]);
 const unreadable: SideRead = { kind: "unreadable" };
 const promisorKeys = "^(extensions\\.partialclone|remote\\..+\\.promisor)$";
 const falseValues = new Set(["", "false", "no", "off", "0"]);
@@ -131,6 +136,15 @@ async function gitOutput(folder: string, args: string[], signal?: AbortSignal) {
   return run?.exitCode === 0 ? run.stdout : undefined;
 }
 
+async function objectLength(folder: string, signal?: AbortSignal) {
+  const known = objectLengths.get(folder);
+  if (known !== undefined) return known;
+  const format = await gitOutput(folder, ["rev-parse", "--show-object-format"], signal);
+  const length = format === undefined ? undefined : objectFormatLengths.get(format);
+  if (length !== undefined) objectLengths.set(folder, length);
+  return length;
+}
+
 function namesPromisor(entry: string): boolean {
   const [, value] = entry.split("\n");
   return value === undefined || !falseValues.has(value.toLowerCase());
@@ -187,6 +201,7 @@ export async function readBlobSide(
   signal?: AbortSignal,
 ): Promise<SideRead> {
   if (!oidPattern.test(oid) || allZeros.test(oid)) return refused;
+  if ((await objectLength(folder, signal)) !== oid.length) return refused;
   const size = sizeOutput.exec((await gitOutput(folder, ["cat-file", "-s", oid], signal)) ?? "");
   if (size?.[1] === undefined) return missingBlob(folder, signal);
   if (Number(size[1]) > changesLimits.sideBytes) return large;

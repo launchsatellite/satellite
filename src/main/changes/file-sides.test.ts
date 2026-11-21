@@ -307,6 +307,29 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
     }
   });
 
+  it("refuses a name of the other hash length, which git would read as a ref", async () => {
+    const base = await scratch();
+    const config = join(base, "gitconfig");
+    await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+    const env = gitEnvironment(config);
+    const formats: [string, string][] = [
+      ["sha1", "a".repeat(64)],
+      ["sha256", "a".repeat(40)],
+    ];
+    for (const [format, other] of formats) {
+      const repo = join(base, format);
+      const git = (args: string[]) => run("git", ["-C", repo, ...args], { env });
+      await run("git", ["init", "-q", "-b", "main", `--object-format=${format}`, repo], { env });
+      await writeFile(join(repo, "file.txt"), "secret\n");
+      await git(["add", "."]);
+      await git(["commit", "-q", "-m", "one"]);
+      const blob = (await git(["rev-parse", "HEAD:file.txt"])).stdout.trim();
+      await git(["update-ref", `refs/tags/${other}`, blob]);
+      expect(await readBlobSide(repo, blob)).toEqual({ kind: "text", text: "secret\n" });
+      expect(await readBlobSide(repo, other)).toEqual({ kind: "refused" });
+    }
+  });
+
   it.skipIf(!hasNoLazyFetch)(
     "answers not-local for a blob a partial clone left on its remote, without fetching it",
     async () => {
