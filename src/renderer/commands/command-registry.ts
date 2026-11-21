@@ -17,6 +17,7 @@ export type CommandId =
   | "session.next"
   | "session.previous"
   | "tools.check"
+  | "guide.show"
   | "theme.system"
   | "theme.light"
   | "theme.dark"
