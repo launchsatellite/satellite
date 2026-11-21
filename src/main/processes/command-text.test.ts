@@ -37,6 +37,46 @@ describe("shownCommand", () => {
     expect(shownCommand(`run ${"a".repeat(31)}`).text).toBe(`run ${"a".repeat(31)}`);
   });
 
+  it("hides the other common shapes of a secret", () => {
+    const hide = (command: string) => shownCommand(command).text;
+    expect(hide("run DB_PASS=abc PORT=3000")).toBe("run DB_PASS=*** PORT=3000");
+    expect(hide("serve --pass abc --api-key def --secret=ghi")).toBe(
+      "serve --pass *** --api-key *** --secret=***",
+    );
+    expect(hide('serve --password "a b c" --port 3000')).toBe(
+      "serve --password *** *** *** --port 3000",
+    );
+    expect(hide("curl -H X-Api-Key: abc http://h/")).toBe("curl -H X-Api-Key: *** http://h/");
+    expect(hide("curl -H Authorization:Bearer abc http://h/")).toBe(
+      "curl -H Authorization:*** abc http://h/",
+    );
+    expect(hide("curl --header Authorization: Bearer abc")).toBe(
+      "curl --header Authorization: Bearer ***",
+    );
+    expect(hide("curl http://h/?a=1&password=abc&b=2")).toBe("curl http://h/?a=1&password=***&b=2");
+    expect(hide("ssh admin:hunter@host")).toBe("ssh admin:***@host");
+    expect(hide("ssh git@github.com:org/repo.git")).toBe("ssh git@github.com:org/repo.git");
+  });
+
+  it("stays bounded on hostile words", () => {
+    for (const word of [
+      "key=".repeat(300),
+      "key".repeat(400),
+      "a:".repeat(500),
+      `"${"?&key=".repeat(150)}`,
+    ]) {
+      expect(shownCommand(`${word} tail`).text.length).toBeLessThanOrEqual(
+        processesLimits.commandChars,
+      );
+    }
+  });
+
+  it("keeps a bare -p, -u and a port", () => {
+    expect(shownCommand("mysql -u root -p 3306 --port 3306").text).toBe(
+      "mysql -u root -p 3306 --port 3306",
+    );
+  });
+
   it("cuts to 200 characters after hiding, never through a pair, and says so", () => {
     const words = Array.from({ length: 60 }, (_, index) => `w${String(index)}`).join(" ");
     const result = shownCommand(words);
