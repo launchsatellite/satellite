@@ -12,6 +12,7 @@ import {
   forceKillGraceMs,
   subtreeStopBoundMs,
   treeKillBoundMs,
+  UnreadableTable,
 } from "./process-tree.ts";
 
 const ignoresHangup = "process.on('SIGHUP', () => {}); setTimeout(() => {}, 60_000);";
@@ -115,6 +116,45 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       await endSubtree({ ...found, identity: `${String(pid)} an earlier start` });
       await delay(100);
       expect(isAlive(pid)).toBe(true);
+    } finally {
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  });
+
+  it("signals nothing and fails when the fresh table cannot be read", async () => {
+    const stranger = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000);"], {
+      stdio: "ignore",
+    });
+    const pid = stranger.pid ?? 0;
+    try {
+      const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
+      expect(found).toBeDefined();
+      if (found === undefined) return;
+      await expect(endSubtree(found, () => Promise.resolve([]))).rejects.toBeInstanceOf(
+        UnreadableTable,
+      );
+      await delay(100);
+      expect(isAlive(pid)).toBe(true);
+    } finally {
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  });
+
+  it("fails instead of claiming success when the read after the signal cannot be read", async () => {
+    const stranger = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000);"], {
+      stdio: "ignore",
+    });
+    const pid = stranger.pid ?? 0;
+    try {
+      const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
+      expect(found).toBeDefined();
+      if (found === undefined) return;
+      let reads = 0;
+      const failing = async () => {
+        reads += 1;
+        return reads === 1 ? readProcessTable() : [];
+      };
+      await expect(endSubtree(found, failing)).rejects.toBeInstanceOf(UnreadableTable);
     } finally {
       if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
     }

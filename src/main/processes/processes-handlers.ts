@@ -2,7 +2,7 @@ import { processesLimits, processRow, type ProcessRow } from "../../shared/bridg
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import { type ListeningPort, readListeningPorts } from "../platform/listening-ports.ts";
 import { type ProcessEntry, readProcessTable } from "../platform/process-table.ts";
-import { endSubtree } from "../platform/process-tree.ts";
+import { endSubtree, UnreadableTable } from "../platform/process-tree.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
 import { shownCommand } from "./command-text.ts";
 import {
@@ -37,6 +37,8 @@ interface Snapshot {
 }
 
 const tableReuseMs = 2000;
+const unreadableSentence = "Satellite couldn't read the running processes, so it stopped nothing.";
+const unconfirmedSentence = "Satellite couldn't confirm that the process stopped. Check the list.";
 
 function portsOf(
   subtree: readonly ProcessEntry[],
@@ -158,15 +160,19 @@ export function createProcesses({
         try {
           const table = await readTable();
           if (table.length === 0) {
-            throw new BridgeFailure(
-              "failed",
-              "Satellite couldn't read the running processes, so it stopped nothing.",
-            );
+            throw new BridgeFailure("failed", unreadableSentence);
           }
           const owned = ownedProcess(table, own, pid, started, now());
           if (owned === undefined)
             throw new BridgeFailure("not-found", "That process already ended.");
-          await end(owned.entry);
+          try {
+            await end(owned.entry);
+          } catch (error) {
+            if (error instanceof UnreadableTable) {
+              throw new BridgeFailure("failed", unconfirmedSentence);
+            }
+            throw error;
+          }
           return {};
         } finally {
           stopping = false;

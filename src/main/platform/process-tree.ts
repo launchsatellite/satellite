@@ -9,6 +9,14 @@ export const subtreeStopBoundMs = forceKillGraceMs + 3 * psTimeoutMs;
 const taskkillTimeoutMs = treeKillBoundMs - forceKillGraceMs;
 const termCheckMs = 300;
 
+export class UnreadableTable extends Error {}
+
+async function readOrFail(read: () => Promise<ProcessEntry[]>): Promise<ProcessEntry[]> {
+  const table = await read();
+  if (table.length === 0) throw new UnreadableTable("the process table could not be read");
+  return table;
+}
+
 function signal(pid: number, name: NodeJS.Signals): void {
   try {
     process.kill(pid, name);
@@ -92,8 +100,11 @@ function mayBeSignalled(entry: ProcessEntry): boolean {
   return entry.pid > 1 && entry.pid !== process.pid;
 }
 
-async function freshSubtree(target: ProcessEntry): Promise<ProcessEntry[]> {
-  const table = await readProcessTable();
+async function freshSubtree(
+  target: ProcessEntry,
+  read: () => Promise<ProcessEntry[]>,
+): Promise<ProcessEntry[]> {
+  const table = await readOrFail(read);
   const found = table.find((entry) => entry.identity === target.identity);
   return found === undefined ? [] : subtreeOf(found, table).filter(mayBeSignalled);
 }
@@ -109,8 +120,11 @@ function subtreeSurvivors(
   return [...found.values()].filter(mayBeSignalled);
 }
 
-export async function endSubtree(target: ProcessEntry): Promise<void> {
-  const subtree = await freshSubtree(target);
+export async function endSubtree(
+  target: ProcessEntry,
+  read: () => Promise<ProcessEntry[]> = readProcessTable,
+): Promise<void> {
+  const subtree = await freshSubtree(target, read);
   if (subtree.length === 0) return;
   if (process.platform === "win32") {
     const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
@@ -126,9 +140,9 @@ export async function endSubtree(target: ProcessEntry): Promise<void> {
   const known = new Set(subtree.map((entry) => entry.identity));
   for (const entry of subtree) signal(entry.pid, "SIGTERM");
   await delay(termCheckMs);
-  if (subtreeSurvivors(known, await readProcessTable()).length === 0) return;
+  if (subtreeSurvivors(known, await readOrFail(read)).length === 0) return;
   await delay(Math.max(0, deadline - Date.now()));
-  for (const entry of subtreeSurvivors(known, await readProcessTable())) {
+  for (const entry of subtreeSurvivors(known, await readOrFail(read))) {
     signal(entry.pid, "SIGKILL");
   }
 }
