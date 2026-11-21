@@ -6,7 +6,6 @@ import { portUrl } from "./port-address.ts";
 describe("portUrl", () => {
   it("opens 127.0.0.1 for an IPv4 loopback or wildcard bind", () => {
     expect(portUrl(["127.0.0.1"], 3000)).toBe("http://127.0.0.1:3000/");
-    expect(portUrl(["127.0.0.53"], 3000)).toBe("http://127.0.0.1:3000/");
     expect(portUrl(["0.0.0.0"], 3000)).toBe("http://127.0.0.1:3000/");
     expect(portUrl(["::", "0.0.0.0"], 3000)).toBe("http://127.0.0.1:3000/");
   });
@@ -22,7 +21,15 @@ describe("portUrl", () => {
   });
 
   it("gives no address for a LAN, link-local or unreadable bind", () => {
-    for (const host of ["192.168.1.20", "fe80::1", "10.0.0.5", "example.com", "127.evil"]) {
+    for (const host of [
+      "192.168.1.20",
+      "fe80::1",
+      "10.0.0.5",
+      "example.com",
+      "127.evil",
+      "127.0.0.2",
+      "127.0.0.53",
+    ]) {
       expect(portUrl([host], 3000)).toBeNull();
     }
     expect(portUrl([], 3000)).toBeNull();

@@ -5,7 +5,7 @@ const defaultHttpPort = 80;
 
 function opensAtIpv4(host: string): boolean {
   const address = host.startsWith(mappedPrefix) ? host.slice(mappedPrefix.length) : host;
-  return isIPv4(address) && (address === "0.0.0.0" || address.startsWith("127."));
+  return isIPv4(address) && (address === "0.0.0.0" || address === "127.0.0.1");
 }
 
 function opensAtIpv6(host: string): boolean {
