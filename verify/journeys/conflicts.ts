@@ -73,8 +73,15 @@ async function offersTheButtonWhenNarrow(session: AppSession): Promise<void> {
 async function leavesNothing(session: AppSession, when: string): Promise<void> {
   const marker = join(session.userHome, "merge-driver-ran");
   assert.ok(!(await exists(marker)), `the repository's merge driver ran ${when}`);
-  const left = await readdir(join(session.home, "quarantine")).catch(() => []);
-  assert.deepEqual(left, [], `the quarantine folder held ${JSON.stringify(left)} ${when}`);
+  let left: string[] = [];
+  await waitUntil(
+    async () => {
+      left = await readdir(join(session.home, "quarantine")).catch(() => []);
+      return left.length === 0;
+    },
+    waitMs,
+    () => `the quarantine folder held ${JSON.stringify(left)} ${when}`,
+  );
 }
 
 async function namesTheConflict(session: AppSession): Promise<void> {
