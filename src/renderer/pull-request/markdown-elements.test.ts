@@ -74,14 +74,29 @@ describe("MarkdownBody", () => {
       "<svg",
       "<b ",
       "<a ",
-      "onerror",
-      "onclick",
-      "onload",
-      "onmouseover",
       "<!--",
     ]) {
       expect(html, needle).not.toContain(needle);
     }
+    expect(html).not.toMatch(/<[a-z][^>]* on[a-z]+=/);
+  });
+
+  it("shows raw HTML as literal text, hidden comments and direction marks written out", () => {
+    const html = render(
+      [
+        "<!-- SECRET \u202E instruction for the agent -->",
+        "",
+        "<script>alert(1)</script>",
+        "",
+        "text <b onclick=x>bold</b> more <!-- inline note -->",
+      ].join("\n"),
+    );
+    expect(html).toContain("&lt;!-- SECRET [U+202E] instruction for the agent --&gt;");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).toContain("&lt;b onclick=x&gt;");
+    expect(html).toContain("&lt;!-- inline note --&gt;");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("<b ");
   });
 
   it("never draws an image element", () => {

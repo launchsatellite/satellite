@@ -10,12 +10,21 @@ export const longestDrawn = 20_000;
 const mostNodes = 20_000;
 const deepestTree = 64;
 
-function reveal(node: Nodes): void {
+const flowParents = new Set(["root", "blockquote", "listItem", "footnoteDefinition"]);
+
+function reveal(node: Nodes, parent: Nodes | null = null): void {
   if ("value" in node) node.value = revealLines(node.value).text;
+  if (node.type === "html") {
+    Object.assign(node, {
+      type: parent !== null && flowParents.has(parent.type) ? "code" : "inlineCode",
+    });
+  }
   if (node.type === "image" || node.type === "imageReference") {
     node.alt = revealLines(node.alt ?? "").text;
   }
-  if ("children" in node) node.children.forEach(reveal);
+  if ("children" in node) {
+    for (const child of node.children) reveal(child, node);
+  }
 }
 
 function revealAfterParse() {

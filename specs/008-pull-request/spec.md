@@ -18,7 +18,7 @@ After an agent opens a pull request, the user goes to GitHub to read it, see its
 - The sidebar row and the workspace header show the pull request number, state and checks summary.
 - Failed checks, requested changes and conflicts make the workspace need the user and appear in the inbox.
 - Data refreshes when a session finishes a turn, when the window regains focus and on a slow timer, within GitHub's limits.
-- Descriptions and comments are untrusted. They render as sanitised Markdown with no scripts, no raw HTML and no remote images.
+- Descriptions and comments are untrusted. They render as sanitised Markdown with no scripts, no HTML elements and no remote images, and raw HTML shows as literal text so nothing is hidden from the user.
 
 ## Decisions
 
@@ -38,7 +38,7 @@ Creating pull requests, replying, reviewing and merging. Agents and GitHub own t
 - [ ] A failed check shows its failing lines and the request lands in the prompt. Proof, scenario `checks-failed`.
 - [ ] A review thread appears on its line in the diff and its request lands in the prompt. Proof, scenario `changes-requested`.
 - [ ] Each of failed checks, requested changes and conflicts puts the workspace in the inbox and leaves when fixed. Proof, the three scenarios.
-- [ ] A description with a script, raw HTML and a remote image renders none of them. Proof, scenario `hostile-description` and unit tests on the renderer.
+- [ ] A description with a script, raw HTML and a remote image renders none of them as elements, and the raw HTML reads as text. Proof, scenario `hostile-description` and unit tests on the renderer.
 - [ ] Every shape of `gh` answer the view depends on parses, and a missing field degrades to a sentence. Proof, unit tests on the parsers.
 - [ ] With `gh` signed out the tab says so and names the fix. Proof, scenario `not-signed-in`.
 - [ ] A new pull request opened by the agent appears without any action. Proof, a journey.

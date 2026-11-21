@@ -265,6 +265,8 @@ async function hostile(session: AppSession): Promise<void> {
     assert.equal(await page.title(), title, "a pull request changed the document title");
   };
   await bare();
+  const written = await page.getByTestId("pull-request").innerText();
+  assert.ok(written.includes("<script>document.title"), "raw HTML was not shown as literal text");
   const addresses = await page
     .getByTestId("markdown-link")
     .evaluateAll((links) => links.map((link) => link.getAttribute("data-address") ?? ""));
