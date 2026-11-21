@@ -41,6 +41,7 @@ export function MarkdownText({ text, onLink }: MarkdownTextProps) {
     <MarkdownBody
       text={text}
       tree={parsed?.kind === "tree" ? parsed.tree : null}
+      why={parsed?.kind === "plain" ? parsed.why : undefined}
       waiting={parsed === undefined}
       onLink={onLink}
     />

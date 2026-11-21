@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MarkdownBody, plainSentence } from "./markdown-elements.tsx";
+import { MarkdownBody, plainSentences } from "./markdown-elements.tsx";
 import { parseMarkdown } from "./markdown-tree.ts";
 
 const render = (text: string) =>
@@ -213,19 +213,19 @@ describe("MarkdownBody", () => {
     );
     const log = render(changelog.join("\n"));
     expect(log).toContain("<strong>");
-    expect(log).not.toContain(plainSentence);
+    expect(log).not.toContain(plainSentences.large);
     const rows = Array.from(
       { length: 300 },
       (_, at) => `| **${String(at)}** | \`x\` | [l](https://example.invalid/${String(at)}) |`,
     );
     const table = render(["| a | b | c |", "| - | - | - |", ...rows].join("\n"));
     expect(table).toContain("<table");
-    expect(table).not.toContain(plainSentence);
+    expect(table).not.toContain(plainSentences.large);
   });
 
   it("draws plain text with its sentence when the tree is too deep", () => {
     const html = render(`${"> ".repeat(100)}deep`);
-    expect(html).toContain(plainSentence);
+    expect(html).toContain(plainSentences.large);
     expect(html).not.toContain("<blockquote");
   });
 

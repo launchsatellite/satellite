@@ -3,8 +3,13 @@ import { toJsxRuntime, type Components } from "hast-util-to-jsx-runtime";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { revealLines } from "../../shared/visible-text.ts";
+import type { PlainWhy } from "./markdown-parser.ts";
 
-export const plainSentence = "Shown as plain text because it could not be drawn safely in time.";
+export const plainSentences: Record<PlainWhy, string> = {
+  large: "Shown as plain text because it is too large to draw safely.",
+  slow: "Shown as plain text because drawing it took too long.",
+  skipped: "Shown as plain text for now because other text took too long to draw.",
+};
 
 const InsideLink = createContext(false);
 
@@ -132,10 +137,10 @@ function ImageLink({
   );
 }
 
-function PlainText({ text, waiting }: { text: string; waiting: boolean }) {
+function PlainText({ text, why, waiting }: { text: string; why: PlainWhy; waiting: boolean }) {
   return (
     <>
-      {!waiting && <p className="text-[12px] text-dim">{plainSentence}</p>}
+      {!waiting && <p className="text-[12px] text-dim">{plainSentences[why]}</p>}
       <pre className="my-2 font-mono text-[12px] break-words whitespace-pre-wrap text-fg">
         {revealLines(text).text}
       </pre>
@@ -146,11 +151,13 @@ function PlainText({ text, waiting }: { text: string; waiting: boolean }) {
 export function MarkdownBody({
   text,
   tree,
+  why = "large",
   waiting = false,
   onLink,
 }: {
   text: string;
   tree: Root | null;
+  why?: PlainWhy;
   waiting?: boolean;
   onLink: (address: string) => void;
 }) {
@@ -170,7 +177,7 @@ export function MarkdownBody({
   );
   return (
     <div data-testid="markdown" className="min-w-0 text-[13px] leading-[1.5] text-fg">
-      {drawn ?? <PlainText text={text} waiting={waiting} />}
+      {drawn ?? <PlainText text={text} why={why} waiting={waiting} />}
     </div>
   );
 }

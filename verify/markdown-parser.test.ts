@@ -98,7 +98,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     const parser = parserOver(silent);
     const first = answer(parser, "# one", "first");
     const second = answer(parser, "# two", "second");
-    expect(await first).toEqual({ kind: "plain" });
+    expect(await first).toEqual({ kind: "plain", why: "slow" });
     expect((await second).kind).toBe("tree");
     expect(spawned).toBe(2);
   });
@@ -149,7 +149,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
       spawned += 1;
       return { post: () => undefined, stop: () => undefined };
     });
-    expect(parser.read("x".repeat(20_001))).toEqual({ kind: "plain" });
+    expect(parser.read("x".repeat(20_001))).toEqual({ kind: "plain", why: "large" });
     expect(spawned).toBe(0);
   });
 
@@ -166,7 +166,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     }
     const tree: Root = { type: "root", children: [deep] };
     reply(tree);
-    expect(await waiting).toEqual({ kind: "plain" });
+    expect(await waiting).toEqual({ kind: "plain", why: "large" });
   });
 
   it("parses each of a hundred mounted bodies once and then goes idle", async () => {
@@ -188,7 +188,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     for (const text of texts) expect(parser.read(text)?.kind).toBe("tree");
   });
 
-  it("draws the rest as plain text once a few bodies have missed the deadline", async () => {
+  it("skips the rest while bodies keep missing the deadline and parses them once the burst is over", async () => {
     const hostile = Array.from({ length: 10 }, (_, at) =>
       `${"*_".repeat(9000)}${String(at)}`.slice(0, 19_000),
     );
@@ -204,13 +204,26 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
         stop: real.stop,
       };
     });
+    const seen: string[] = [];
+    parser.subscribe(() => {
+      const shown = parser.read(ordinary[0] ?? "");
+      if (shown?.kind === "plain") seen.push(shown.why);
+    });
     const began = performance.now();
     await Promise.all(
       [...hostile, ...ordinary].map((text, at) => answer(parser, text, `owner-${String(at)}`)),
     );
     expect(performance.now() - began).toBeLessThan(3 * (deadlineMs + 700) + 1000);
-    expect(posts.filter((text) => hostile.includes(text)).length).toBeLessThanOrEqual(3);
-    for (const text of hostile) expect(parser.read(text)).toEqual({ kind: "plain" });
+    expect(seen).toContain("skipped");
+    const until = performance.now() + 30_000;
+    while (
+      !ordinary.every((text) => parser.read(text)?.kind === "tree") &&
+      performance.now() < until
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    for (const text of ordinary) expect(parser.read(text)?.kind).toBe("tree");
+    for (const text of hostile) expect(parser.read(text)).toMatchObject({ kind: "plain" });
   });
 
   it("tries a small body that missed the deadline again when it is opened again", async () => {
@@ -219,7 +232,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
       post: (text) => posts.push(text),
       stop: () => undefined,
     }));
-    expect(await answer(parser, "# one", "view")).toEqual({ kind: "plain" });
+    expect(await answer(parser, "# one", "view")).toEqual({ kind: "plain", why: "slow" });
     parser.drop("view");
     expect(parser.read("# one")).toBeUndefined();
     void answer(parser, "# one", "view");
