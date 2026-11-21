@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { noticeName, noticeNameLimit, noticeText } from "./notice-text.ts";
+import { noticeName, noticeNameLimit } from "../../shared/notice-name.ts";
+import { noticeText } from "./notice-text.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 const hostile = '<b>x</b> & "y"\n\u202ez\u0007';
