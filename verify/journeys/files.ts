@@ -469,7 +469,8 @@ async function findsByName(session: AppSession): Promise<void> {
   while ((await page.getByTestId("file-tab-0-close").count()) > 0) {
     await page.getByTestId("file-tab-0-close").click({ force: true });
   }
-  await page.getByTestId("file-empty").waitFor({ timeout: waitMs });
+  await page.getByTestId("file-tabs").waitFor({ state: "detached", timeout: waitMs });
+  await page.getByTestId("file-empty").waitFor({ state: "attached", timeout: waitMs });
   await page.getByTestId("centre-tab-changes").click();
   await page.getByTestId("changes").waitFor({ timeout: waitMs });
   await page.keyboard.press(findShortcut);
