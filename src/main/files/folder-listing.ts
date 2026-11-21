@@ -182,11 +182,3 @@ export async function listFolders(
   }
   return listings;
 }
-
-export async function listFolder(
-  root: string,
-  folder: string,
-  signal?: AbortSignal,
-): Promise<FolderListing> {
-  return (await listFolders(root, [folder], signal))[0] ?? unreadable;
-}

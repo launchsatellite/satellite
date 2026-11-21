@@ -1,6 +1,6 @@
 import type { FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
 
-export interface TreeMemory {
+interface TreeMemory {
   open: readonly string[];
   listings: ReadonlyMap<string, FolderListing>;
   scroll: number;

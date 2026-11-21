@@ -3,7 +3,7 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FolderListing } from "../../shared/bridge-contract.ts";
-import { listFolder, listFolders } from "./folder-listing.ts";
+import { listFolders } from "./folder-listing.ts";
 import { checkIgnored } from "./ignore-check.ts";
 import { readFileForViewing } from "./file-read.ts";
 import { readNames } from "./name-index.ts";
@@ -24,6 +24,12 @@ vi.mock("./ignore-check.ts", async (original) => {
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),
 }));
+
+async function listFolder(root: string, folder: string): Promise<FolderListing> {
+  const [listing] = await listFolders(root, [folder]);
+  if (listing === undefined) throw new Error("no listing came back");
+  return listing;
+}
 
 beforeEach(isolateGit);
 afterEach(() => {

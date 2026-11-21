@@ -4,10 +4,10 @@ import { fuzzyScore } from "../../shared/fuzzy-match.ts";
 import { confinedFolder, isChangePath } from "../changes/file-sides.ts";
 import { noLazyFetch, readGit } from "../workspaces/git-command.ts";
 
-export type NameIndex =
+type NameIndex =
   { kind: "names"; names: string[] } | { kind: "too-many" | "hung" | "failed" };
 
-export const findReadMs = 15_000;
+const findReadMs = 15_000;
 const rankedPerTurn = 2000;
 const readablePasses = 8;
 

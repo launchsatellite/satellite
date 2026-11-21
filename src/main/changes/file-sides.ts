@@ -24,7 +24,7 @@ export type SideRead =
   | { kind: "not-utf8" }
   | { kind: "refused" };
 type FolderKind = "plain" | "missing" | "other";
-export interface ReadBounds {
+interface ReadBounds {
   probe: number;
   limitFor: (head: Uint8Array) => number;
 }
@@ -54,7 +54,7 @@ const objectFormatLengths = new Map([
   ["sha256\n", 64],
 ]);
 
-export function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
+function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   if (!isSafeFileName(segment, platform)) return false;
   if (segment.replace(ignorableInNames, "").toLowerCase() === ".git") return false;
   return platform !== "win32" || !windowsShortName.test(segment);
@@ -65,7 +65,7 @@ export function sameFolder(a: string, b: string): boolean {
   return samePath(a.normalize("NFC"), b.normalize("NFC"));
 }
 
-export function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
+function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
   return (
     a.dev === b.dev &&
     a.ino === b.ino &&
@@ -86,7 +86,7 @@ export function decodedText(bytes: Uint8Array): SideRead {
   return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };
 }
 
-export async function folderPathKind(realRoot: string, parent: string): Promise<FolderKind> {
+async function folderPathKind(realRoot: string, parent: string): Promise<FolderKind> {
   if (parent === ".") return "plain";
   let folder = "";
   for (const segment of parent.split("/")) {
@@ -261,7 +261,7 @@ export function isChangePath(path: string, platform: NodeJS.Platform = process.p
   return path.split("/").every((segment) => isChangeSegment(segment, platform));
 }
 
-export function looksBinary(bytes: Uint8Array): boolean {
+function looksBinary(bytes: Uint8Array): boolean {
   return bytes.subarray(0, changesLimits.binaryProbe).includes(0);
 }
 

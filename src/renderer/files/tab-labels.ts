@@ -1,4 +1,4 @@
-export interface TabLabel {
+interface TabLabel {
   name: string;
   parent: string | undefined;
 }

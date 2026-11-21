@@ -6,7 +6,7 @@ import {
   type WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 
-export type OpenTabs = Pick<FileTabs, "paths" | "active">;
+type OpenTabs = Pick<FileTabs, "paths" | "active">;
 type Update = (change: (current: InterfaceState) => InterfaceState, persist: boolean) => void;
 
 export function tabsAfterOpen(entry: OpenTabs | undefined, path: string): OpenTabs {

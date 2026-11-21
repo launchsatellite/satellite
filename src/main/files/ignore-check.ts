@@ -1,6 +1,6 @@
 import { gitReadMs, noLazyFetch, readGit } from "../workspaces/git-command.ts";
 
-export type IgnoreCheck =
+type IgnoreCheck =
   { kind: "checked"; ignored: ReadonlySet<string> } | { kind: "hung" } | { kind: "failed" };
 
 const maxPaths = 5000;

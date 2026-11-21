@@ -1,6 +1,6 @@
 import { fileIconIds, folderIconIds, type IconIds } from "./icon-ids.ts";
 
-export interface IconSources {
+interface IconSources {
   src: string;
   lightSrc: string | undefined;
 }

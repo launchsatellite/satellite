@@ -18,16 +18,16 @@ export interface ItemRow {
   open: boolean;
 }
 
-export interface NoteRow {
+interface NoteRow {
   type: "note";
   folder: string;
   level: number;
   sentence: string;
 }
 
-export type TreeRow = ItemRow | NoteRow;
+type TreeRow = ItemRow | NoteRow;
 
-export function childPath(folder: string, name: string): string {
+function childPath(folder: string, name: string): string {
   return folder === "" ? name : `${folder}/${name}`;
 }
 
