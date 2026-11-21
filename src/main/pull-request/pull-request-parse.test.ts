@@ -397,6 +397,57 @@ describe("parseThreads", () => {
     expect(detail?.reviews.map(({ body }) => body)).toEqual(["A note."]);
   });
 
+  it("empty commented reviews do not crowd real reviews out", () => {
+    const empties = Array.from({ length: 60 }, () => ({ state: "COMMENTED", body: "" }));
+    const detail = parseThreads(
+      threadsAnswer({
+        ...full(),
+        reviews: {
+          totalCount: 61,
+          nodes: [{ state: "CHANGES_REQUESTED", body: "Please fix." }, ...empties],
+        },
+      }),
+      place,
+    );
+    expect(detail?.reviews.map(({ state }) => state)).toEqual(["changes-requested"]);
+    expect(detail?.moreReviews).toBe(0);
+  });
+
+  it("holds the whole conversation to its character budget and counts what it cut", () => {
+    const long = (index: number) => comment({ body: String(index % 10).repeat(20_000) });
+    const many = (count: number) => Array.from({ length: count }, (_, index) => long(index));
+    const detail = parseThreads(
+      threadsAnswer({
+        reviews: { totalCount: 0, nodes: [] },
+        comments: { totalCount: 50, nodes: many(50) },
+        reviewThreads: {
+          totalCount: 100,
+          nodes: Array.from({ length: 100 }, () =>
+            thread({ comments: { totalCount: 20, nodes: many(20) } }),
+          ),
+        },
+      }),
+      place,
+    );
+    const bodies = [
+      ...(detail?.comments ?? []),
+      ...(detail?.threads.flatMap(({ comments }) => comments) ?? []),
+    ];
+    const total = bodies.reduce((sum, { body }) => sum + body.length, 0);
+    expect(total).toBeLessThanOrEqual(pullRequestLimits.detailChars);
+    expect(total).toBe(pullRequestLimits.detailChars);
+    expect(detail?.comments).toHaveLength(20);
+    expect(detail?.moreComments).toBe(30);
+    expect(detail?.threads[0]?.comments).toHaveLength(0);
+    expect(detail?.threads[0]?.moreComments).toBe(20);
+    expect(JSON.stringify(detail).length).toBeLessThan(pullRequestLimits.detailChars + 200_000);
+    const checked = pullRequestAnswer.safeParse({
+      ...read(view())?.found,
+      detail,
+    });
+    expect(checked.success).toBe(true);
+  });
+
   it("hides a minimized comment", () => {
     const detail = parseThreads(
       threadsAnswer({

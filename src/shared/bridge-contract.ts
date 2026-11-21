@@ -224,6 +224,7 @@ export type WindowsPty = z.output<typeof windowsPty>;
 export const pullRequestLimits = {
   titleChars: 256,
   bodyChars: 20_000,
+  detailChars: 400_000,
   nameChars: 255,
   urlChars: 2048,
   checks: 100,
@@ -292,15 +293,24 @@ const pullRequestThread = z.strictObject({
   moreComments: count,
 });
 const pullRequestDetail = z.discriminatedUnion("kind", [
-  z.strictObject({
-    kind: z.literal("read"),
-    reviews: z.array(pullRequestReview).max(pullRequestLimits.reviews),
-    moreReviews: count,
-    comments: z.array(pullRequestComment).max(pullRequestLimits.comments),
-    moreComments: count,
-    threads: z.array(pullRequestThread).max(pullRequestLimits.threads),
-    moreThreads: count,
-  }),
+  z
+    .strictObject({
+      kind: z.literal("read"),
+      reviews: z.array(pullRequestReview).max(pullRequestLimits.reviews),
+      moreReviews: count,
+      comments: z.array(pullRequestComment).max(pullRequestLimits.comments),
+      moreComments: count,
+      threads: z.array(pullRequestThread).max(pullRequestLimits.threads),
+      moreThreads: count,
+    })
+    .refine(
+      ({ reviews, comments, threads }) =>
+        [...reviews, ...comments, ...threads.flatMap((thread) => thread.comments)].reduce(
+          (total, { body }) => total + body.length,
+          0,
+        ) <= pullRequestLimits.detailChars,
+      { message: "The conversation holds more text than Satellite shows" },
+    ),
   z.strictObject({ kind: z.literal("unavailable"), reason: pullRequestTrouble }),
 ]);
 export const pullRequestAnswer = z.discriminatedUnion("kind", [

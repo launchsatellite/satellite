@@ -183,30 +183,56 @@ function lastOf<T>(items: T[], limit: number): T[] {
   return items.slice(-limit);
 }
 
-function reviewsOf(list: z.output<typeof connection> | null | undefined): {
-  reviews: Review[];
-  more: number;
-} {
-  const nodes = lastOf(each(list?.nodes, commentNode), pullRequestLimits.reviews);
-  const reviews = nodes.flatMap((node): Review[] => {
+interface Budget {
+  left: number;
+}
+
+function withinBudget(comment: Comment, budget: Budget): Comment | null {
+  if (budget.left <= 0) return null;
+  const fits = comment.body.length <= budget.left;
+  const body = fits ? comment.body : cutText(comment.body, budget.left).text;
+  budget.left -= body.length;
+  return { ...comment, body, bodyCut: comment.bodyCut || !fits };
+}
+
+function reviewsOf(
+  list: z.output<typeof connection> | null | undefined,
+  budget: Budget,
+): { reviews: Review[]; more: number } {
+  const nodes = each(list?.nodes, commentNode);
+  const real = nodes.flatMap((node): { node: typeof node; state: Review["state"] }[] => {
     const state = reviewStateOf.safeParse(dashed(node.state));
     if (!state.success) return [];
     if (state.data === "commented" && (node.body ?? "").trim() === "") return [];
-    return [{ ...commentOf(node, node.submittedAt), state: state.data }];
+    return [{ node, state: state.data }];
   });
-  return { reviews, more: restOf(list?.totalCount, nodes.length) };
+  const newest = lastOf(real, pullRequestLimits.reviews);
+  const reviews = newest.flatMap(({ node, state }): Review[] => {
+    const comment = withinBudget(commentOf(node, node.submittedAt), budget);
+    return comment === null ? [] : [{ ...comment, state }];
+  });
+  const unseen = restOf(list?.totalCount, nodes.length);
+  return { reviews, more: unseen + real.length - reviews.length };
 }
 
 function isDiscussion(address: string, prefix: string): boolean {
   return address.startsWith(prefix) && /^[0-9]+$/.test(address.slice(prefix.length));
 }
 
-function threadOf(node: z.output<typeof threadNode>, place: PullRequestPlace): Thread {
+function threadOf(
+  node: z.output<typeof threadNode>,
+  place: PullRequestPlace,
+  budget: Budget,
+): Thread {
   const nodes = each(node.comments?.nodes, commentNode).slice(0, pullRequestLimits.threadComments);
   const line = node.line;
   const side = (node.diffSide ?? "").toLowerCase();
   const discussion = `https://${place.host}/${place.owner}/${place.repo}/pull/${String(place.number)}#discussion_r`;
   const first = nodes[0]?.url;
+  const comments = nodes.flatMap((comment) => {
+    const kept = withinBudget(commentOf(comment, comment.createdAt), budget);
+    return kept === null ? [] : [kept];
+  });
   return {
     resolved: node.isResolved === true,
     outdated: node.isOutdated === true,
@@ -222,8 +248,8 @@ function threadOf(node: z.output<typeof threadNode>, place: PullRequestPlace): T
         : null,
     side: side === "left" || side === "right" ? side : null,
     url: first !== undefined && first !== null && isDiscussion(first, discussion) ? first : null,
-    comments: nodes.map((comment) => commentOf(comment, comment.createdAt)),
-    moreComments: restOf(node.comments?.totalCount, nodes.length),
+    comments,
+    moreComments: restOf(node.comments?.totalCount, nodes.length) + nodes.length - comments.length,
   };
 }
 
@@ -308,23 +334,27 @@ export function parseThreads(stdout: string, place: PullRequestPlace): ReadDetai
   const parsed = threadsShape.safeParse(parseJson(stdout));
   const pullRequest = parsed.success ? parsed.data.data?.repository?.pullRequest : undefined;
   if (pullRequest === undefined || pullRequest === null) return null;
-  const reviews = reviewsOf(pullRequest.reviews);
-  const comments = lastOf(
-    each(pullRequest.comments?.nodes, commentNode),
-    pullRequestLimits.comments,
-  );
-  const threads = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
+  const budget = { left: pullRequestLimits.detailChars };
+  const reviews = reviewsOf(pullRequest.reviews, budget);
+  const nodes = lastOf(each(pullRequest.comments?.nodes, commentNode), pullRequestLimits.comments);
+  const comments = nodes.flatMap((node) => {
+    const kept = withinBudget(commentOf(node, node.createdAt), budget);
+    return kept === null ? [] : [kept];
+  });
+  const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
     0,
     pullRequestLimits.threads,
   );
+  const threads = threadNodes.map((thread) => threadOf(thread, place, budget));
   return {
     kind: "read",
     reviews: reviews.reviews,
     moreReviews: reviews.more,
-    comments: comments.map((comment) => commentOf(comment, comment.createdAt)),
-    moreComments: restOf(pullRequest.comments?.totalCount, comments.length),
-    threads: threads.map((thread) => threadOf(thread, place)),
-    moreThreads: restOf(pullRequest.reviewThreads?.totalCount, threads.length),
+    comments,
+    moreComments:
+      restOf(pullRequest.comments?.totalCount, nodes.length) + nodes.length - comments.length,
+    threads,
+    moreThreads: restOf(pullRequest.reviewThreads?.totalCount, threadNodes.length),
   };
 }
 
