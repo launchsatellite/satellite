@@ -607,11 +607,14 @@ describe("readChangeList", { timeout: 60_000 }, () => {
       const reading = readChangeList(repo, head, new AbortController().signal);
       await reached;
       await vi.advanceTimersByTimeAsync(gitReadMs);
-      const list = await reading;
-      expect(list.kind === "files" ? list.records.map((record) => record.stamp) : []).toEqual([
-        expect.stringMatching(/^[0-9a-f]{40}:late$/),
-      ]);
+      const stampsOf = (list: Awaited<typeof reading>) =>
+        list.kind === "files" ? list.records.map((record) => record.stamp) : [];
+      const first = stampsOf(await reading);
+      expect(first).toEqual([expect.stringMatching(/^[0-9a-f]{40}:late:\d+$/)]);
       expect(await readWorktreeSide(repo, "edit.txt")).toEqual({ kind: "hung" });
+      const again = stampsOf(await readChangeList(repo, head, new AbortController().signal));
+      expect(again).toEqual([expect.stringMatching(/^[0-9a-f]{40}:late:\d+$/)]);
+      expect(again).not.toEqual(first);
     } finally {
       fileCalls.lstat = undefined;
       vi.useRealTimers();

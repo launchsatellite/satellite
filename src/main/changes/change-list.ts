@@ -1,8 +1,7 @@
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
-import { gitReadMs, readGit, type GitStop } from "../workspaces/git-command.ts";
+import { readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import {
-  isChangePath,
   isPartialClone,
   lineCount,
   noLazyFetch,
@@ -74,6 +73,7 @@ const diffArgs = [
 ];
 const untrackedArgs = ["ls-files", "--others", "--exclude-standard", "-z"];
 const unmergedArgs = ["ls-files", "--unmerged", "-z"];
+let lateLists = 0;
 const letters = new Set<string>(changeLetter.options);
 const failed: ChangeListRead = { kind: "unavailable", reason: "failed" };
 const notLocal: ChangeListRead = { kind: "unavailable", reason: "not-local" };
@@ -249,6 +249,8 @@ async function stamped(
   changes: ListedChange[],
   signal: AbortSignal,
 ): Promise<ChangeRecord[]> {
+  lateLists += 1;
+  const late = `late:${String(lateLists)}`;
   const stamps = await worktreeStamps(
     folder,
     changes.map((change) => change.path),
@@ -256,7 +258,7 @@ async function stamped(
   );
   return changes.map((change) => ({
     ...change,
-    stamp: `${change.sourceOid ?? "new"}:${stamps.get(change.path) ?? "late"}`,
+    stamp: `${change.sourceOid ?? "new"}:${stamps.get(change.path) ?? late}`,
   }));
 }
 
