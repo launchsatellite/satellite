@@ -21,7 +21,7 @@ export interface ChangeRecord {
   targetOid: string | null;
   stamp: string;
 }
-export type ListedChange = Omit<ChangeRecord, "stamp">;
+export type ListedChange = Omit<ChangeRecord, "stamp"> & { statDirty?: true };
 export type ChangeListRead =
   | { kind: "files"; records: ChangeRecord[]; more: number; longPaths: number }
   | { kind: "unavailable"; reason: "not-local" | "too-many" | "hung" | "failed" };
@@ -55,6 +55,8 @@ const digits = /^\d+$/;
 const allZeros = /^0+$/;
 const promisorMissing = /^fatal: could not fetch [0-9a-f]+ from promisor remote$/m;
 const countCap = 1_000_000;
+const touchedFiles = 50;
+const touchedBytes = 33_554_432;
 const submoduleMode = "160000";
 const diffArgs = [
   "-c",
@@ -162,6 +164,7 @@ function listedChange(raw: RawRecord, stat: StatRecord): ListedChange | null {
     removed: counted ? countOf(stat.removed) : null,
     sourceOid: allZeros.test(raw.sourceOid) ? null : raw.sourceOid,
     targetOid: allZeros.test(raw.targetOid) ? null : raw.targetOid,
+    ...(binary && unchangedContent(raw) && allZeros.test(raw.targetOid) ? { statDirty: true } : {}),
   };
 }
 
@@ -220,6 +223,39 @@ function oncePerPath(changes: ListedChange[]): ListedChange[] {
     seen.add(change.path);
     return true;
   });
+}
+
+function sizeOfStamp(stamp: string | undefined): number | undefined {
+  const size = /^(\d{1,16}):/.exec(stamp ?? "")?.[1];
+  return size === undefined ? undefined : Number(size);
+}
+
+async function withoutTouched(
+  folder: string,
+  changes: ListedChange[],
+  signal: AbortSignal,
+): Promise<ListedChange[]> {
+  const candidates = changes.filter((change) => change.statDirty === true);
+  if (candidates.length === 0) return changes;
+  const stamps = await worktreeStamps(
+    folder,
+    candidates.map((change) => change.path),
+    signal,
+  );
+  const unchanged = new Set<ListedChange>();
+  let left = touchedBytes;
+  for (const change of candidates.slice(0, touchedFiles)) {
+    const size = sizeOfStamp(stamps.get(change.path));
+    if (size === undefined || size > left || signal.aborted || change.sourceOid === null) continue;
+    left -= size;
+    const hashed = await gitOutput(
+      folder,
+      ["hash-object", "--no-filters", "--", change.path],
+      signal,
+    );
+    if (stdoutOf(hashed)?.trim() === change.sourceOid) unchanged.add(change);
+  }
+  return changes.filter((change) => !unchanged.has(change));
 }
 
 async function countLines(
@@ -339,7 +375,11 @@ export async function readChangeList(
   const untracked = fields.map(untrackedChange).sort(byPath);
   await countLines(folder, untracked, signal);
   if (signal.aborted) return failed;
-  const merged = oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]);
+  const merged = await withoutTouched(
+    folder,
+    oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]),
+    signal,
+  );
   const named = merged.filter(isNamed).sort(byPath);
   const kept = named.slice(0, changesLimits.files);
   return {

@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import type { BigIntStats } from "node:fs";
 import { renameSync, symlinkSync } from "node:fs";
-import { mkdir, mkdtemp, realpath, rename, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rename, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -200,6 +200,7 @@ describe("parseDiff", () => {
         added: null,
         removed: null,
         sourceOid: one,
+        statDirty: true,
       }),
       change("module", {
         letter: "M",
@@ -535,6 +536,21 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     expect(
       await readChangeList(repo, await git("rev-parse", "HEAD"), new AbortController().signal),
     ).toEqual({ kind: "unavailable", reason: "too-many" });
+  });
+
+  it("leaves out a binary file whose bytes are unchanged and lists one whose bytes changed", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "same.dat"), Buffer.from([97, 0, 98]));
+    await writeFile(join(repo, "other.dat"), Buffer.from([97, 0, 98]));
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const later = new Date(Date.now() + 60_000);
+    await utimes(join(repo, "same.dat"), later, later);
+    await writeFile(join(repo, "other.dat"), Buffer.from([97, 0, 99]));
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.letter, record.kind])).toEqual([
+      ["other.dat", "M", "binary"],
+    ]);
   });
 
   it("never stamps a file through a folder that is a link to outside", async () => {
