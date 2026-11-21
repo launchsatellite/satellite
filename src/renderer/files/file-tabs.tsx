@@ -2,6 +2,7 @@ import { useEffect, type KeyboardEvent } from "react";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Icon } from "../ui/icon.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
+import { tabLabels } from "./tab-labels.ts";
 
 interface FileTabsProps {
   paths: readonly string[];
@@ -13,10 +14,6 @@ interface FileTabsProps {
 const focusRing =
   "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
 
-function baseName(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1);
-}
-
 function focusActiveTabIfLost(): void {
   requestAnimationFrame(() => {
     const focused = document.activeElement;
@@ -26,6 +23,8 @@ function focusActiveTabIfLost(): void {
       ?.focus();
   });
 }
+
+export const fileTabPanelId = "file-tab-panel";
 
 export function fileTabId(index: number): string {
   return `file-tab-${String(index)}`;
@@ -38,6 +37,7 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
       .getElementById(fileTabId(active))
       ?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active]);
+  const labels = tabLabels(paths);
   const close = (index: number) => {
     onClose(index);
     focusActiveTabIfLost();
@@ -73,7 +73,7 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
     >
       {paths.map((path, index) => {
         const selected = index === active;
-        const name = baseName(path);
+        const { name, parent } = labels[index] ?? { name: path, parent: undefined };
         const shown = visibleText(path);
         return (
           <div
@@ -86,6 +86,7 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
               role="tab"
               id={fileTabId(index)}
               aria-selected={selected}
+              aria-controls={selected ? fileTabPanelId : undefined}
               aria-keyshortcuts="Delete"
               aria-label={shown}
               title={shown}
@@ -99,6 +100,11 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
             >
               <span aria-hidden dir="ltr" className="[unicode-bidi:isolate]">
                 <VisibleName text={name} />
+                {parent !== undefined && (
+                  <span className="ml-1.5 text-dim">
+                    <VisibleName text={parent} />
+                  </span>
+                )}
               </span>
             </button>
             <button
