@@ -166,20 +166,18 @@ export function ChangesView({
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) inside.current = false;
       }}
     >
-      <div className="@container flex h-10 flex-none items-center gap-2 border-b border-line bg-side px-2">
+      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
         <CentreTabs />
-        <div className="ml-auto flex flex-none items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           {textShown && (
-            <span className="hidden @min-[560px]:block">
-              <CommandButton
-                command="changes.send-lines"
-                variant="ghost"
-                size="small"
-                testId="diff-send-lines"
-              >
-                Send lines
-              </CommandButton>
-            </span>
+            <CommandButton
+              command="changes.send-lines"
+              variant="ghost"
+              size="small"
+              testId="diff-send-lines"
+            >
+              Send lines
+            </CommandButton>
           )}
           <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
           {layoutShown && (

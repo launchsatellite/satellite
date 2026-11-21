@@ -15,7 +15,7 @@ function Names({ names, files }: { names: readonly string[]; files: number }) {
   return (
     <span
       data-testid="changes-banner-files"
-      className="min-w-0 shrink-[3] truncate font-mono text-[12px]"
+      className="max-w-full min-w-0 truncate font-mono text-[12px]"
     >
       {names.map((name, index) => (
         <span key={name}>
@@ -38,10 +38,10 @@ function Message({
   conflict: NonNullable<ConflictBannerProps["conflict"]>;
 }) {
   if (conflict.kind !== "files")
-    return <span className="min-w-0 truncate">{conflictNote(conflict.kind, base)}</span>;
+    return <span className="min-w-0">{conflictNote(conflict.kind, base)}</span>;
   return (
     <>
-      <span className="min-w-0 truncate">
+      <span className="min-w-0">
         <span dir="ltr" className="[unicode-bidi:isolate]">
           {base === null ? "The base branch" : <VisibleName text={base} />}
         </span>{" "}
@@ -59,7 +59,7 @@ export function ConflictBanner({ base, conflict }: ConflictBannerProps) {
       {conflict !== null && (
         <div
           data-testid="changes-banner"
-          className="flex h-9 items-center gap-2 border-b border-line bg-side px-4 py-2 text-[13px] text-fg2"
+          className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-side px-4 py-2 text-[13px] text-fg2"
         >
           <span className="flex-none text-dim">
             <Icon name="branch" size={13} />
