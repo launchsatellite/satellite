@@ -19,6 +19,14 @@ describe("scenarioSchema", () => {
     }
   });
 
+  it("accepts a number on a call entry and refuses a number that is not a positive integer", () => {
+    const entry = { call: "pull-request", number: 12 };
+    expect(scenarioSchema.safeParse({ ...base, gh: [entry] }).success).toBe(true);
+    for (const number of [0, -1, 1.5, "12"]) {
+      expect(scenarioSchema.safeParse({ ...base, gh: [{ ...entry, number }] }).success).toBe(false);
+    }
+  });
+
   it("keeps the exact arguments entry and refuses a call that is not one of the three", () => {
     expect(scenarioSchema.safeParse({ ...base, gh: [{ args: ["--version"] }] }).success).toBe(true);
     expect(scenarioSchema.safeParse({ ...base, gh: [{ call: "merge" }] }).success).toBe(false);

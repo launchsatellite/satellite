@@ -168,6 +168,15 @@ async function appears(session: AppSession): Promise<void> {
   await endTurn(session, true);
   await attributeIs(session, "centre-tab-pull-request", "data-number", "12", "after the turn");
   await visible(session, "workspace-repo-alpha-pull-request", "after the turn");
+  const asked = (await ghEvents(session)).map((event) => event.args.join(" "));
+  assert.ok(
+    asked.some((line) => line.startsWith("pr view 12 ")),
+    "the stranger's newer pull request was not set aside for the one a writer opened",
+  );
+  assert.ok(
+    !asked.some((line) => line.startsWith("pr view 13 ")),
+    "a stranger's pull request was read by number",
+  );
 }
 
 async function checksFailed(session: AppSession): Promise<void> {

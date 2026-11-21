@@ -30,8 +30,14 @@ function exactAnswer(): GhEntry | undefined {
   );
 }
 
+function askedNumber(): number | undefined {
+  return call === "pull-request" && args[2] !== "--json" ? Number(args[2]) : undefined;
+}
+
 function callAnswer(): CallEntry | undefined {
-  const entries = scenario.gh.filter(isCallEntry).filter((entry) => entry.call === call);
+  const entries = scenario.gh
+    .filter(isCallEntry)
+    .filter((entry) => entry.call === call && entry.number === askedNumber());
   const reached = entries.filter((entry) => entry.after !== undefined && marked(entry.after));
   return reached.at(-1) ?? entries.find((entry) => entry.after === undefined);
 }

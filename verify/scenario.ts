@@ -35,6 +35,7 @@ const ghAnswerSchema = z.union([
   z.strictObject({ args: z.array(z.string()), ...ghResult }),
   z.strictObject({
     call: z.enum(["pull-request", "threads", "failed-log"]),
+    number: z.int().min(1).optional(),
     json: z.unknown().optional(),
     after: z
       .string()
