@@ -9,7 +9,7 @@ import {
   nonBlocking,
   noTerminal,
 } from "../platform/file-system.ts";
-import { realpathOrUndefined, samePath } from "../platform/paths.ts";
+import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
 import { gitReadMs, noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
@@ -48,6 +48,7 @@ const unreadable: SideRead = { kind: "unreadable" };
 const notUtf8: SideRead = { kind: "not-utf8" };
 const utf8 = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
 export const rootsWithStuckReads = new Set<string>();
+let protectedHome: string | undefined;
 const objectLengths = new Map<string, number>();
 const objectFormatLengths = new Map([
   ["sha1\n", 40],
@@ -100,6 +101,18 @@ async function folderPathKind(realRoot: string, parent: string): Promise<FolderK
   return "plain";
 }
 
+export function protectHome(home: string | undefined): void {
+  protectedHome = home;
+}
+
+async function isSatelliteState(realRoot: string, folder: string): Promise<boolean> {
+  if (protectedHome === undefined) return false;
+  const realHome = await realpathOrUndefined(protectedHome);
+  return (
+    realHome !== undefined && isInsidePath(realHome, folder) && !isInsidePath(realHome, realRoot)
+  );
+}
+
 export async function confinedFolder(root: string, parent: string): Promise<string | SideRead> {
   const realRoot = await realpathOrUndefined(root);
   if (realRoot === undefined) return gone;
@@ -108,7 +121,10 @@ export async function confinedFolder(root: string, parent: string): Promise<stri
   const expected = join(realRoot, parent);
   const realParent = await realpathOrUndefined(expected);
   if (realParent === undefined) return gone;
-  return sameFolder(realParent, expected) ? realParent : refused;
+  if (!sameFolder(realParent, expected) || (await isSatelliteState(realRoot, realParent))) {
+    return refused;
+  }
+  return realParent;
 }
 
 export async function linkSide(file: string): Promise<SideRead> {

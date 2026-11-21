@@ -3,6 +3,8 @@ import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesLimits } from "../../shared/bridge-contract.ts";
+import { protectHome } from "../changes/file-sides.ts";
+import { listFolders } from "./folder-listing.ts";
 import { readFileForViewing } from "./file-read.ts";
 import { gif, jpeg, png, webpExtended, webpLossless, webpLossy } from "./image-fixture.ts";
 import {
@@ -19,6 +21,7 @@ vi.mock("../platform/user-environment.ts", () => ({
 
 beforeEach(isolateGit);
 afterEach(() => {
+  protectHome(undefined);
   vi.unstubAllEnvs();
 });
 
@@ -28,6 +31,26 @@ async function seen(root: string, path: string, known: string | null = null): Pr
   expect(read.stamp).toMatch(/^\d+:\d+:\d+$/);
   return Object.fromEntries(Object.entries(read).filter(([key]) => key !== "stamp"));
 }
+
+describe("the Satellite home", () => {
+  it("is neither listed nor read from a workspace that contains it", async () => {
+    const root = await makeRepository();
+    await put(root, { ".satellite/projects.json": "{}\n", "ok.txt": "ok\n" });
+    protectHome(join(root, ".satellite"));
+    expect(await seen(root, ".satellite/projects.json")).toEqual({ kind: "unreadable" });
+    expect(await seen(root, "ok.txt")).toEqual({ kind: "text", text: "ok\n" });
+    expect(await listFolders(root, [".satellite"])).toEqual([{ state: "unreadable" }]);
+  });
+
+  it("is read from a workspace whose own worktree lives inside it", async () => {
+    const home = await scratch();
+    const root = join(home, "worktrees", "project", "work");
+    await put(root, { "a.txt": "a\n" });
+    protectHome(home);
+    expect(await seen(root, "a.txt")).toEqual({ kind: "text", text: "a\n" });
+    expect(await listFolders(root, [""])).toMatchObject([{ state: "listed" }]);
+  });
+});
 
 describe("readFileForViewing", () => {
   it("refuses a file reached through a linked folder, .git, an absolute path and a path that climbs out", async () => {

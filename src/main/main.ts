@@ -3,6 +3,7 @@ import { app, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
+import { protectHome } from "./changes/file-sides.ts";
 import { createFiles, type Files } from "./files/files-handlers.ts";
 import { noticeSubject } from "./inbox/notice-subject.ts";
 import { createNotices, type Notices } from "./inbox/notices.ts";
@@ -177,6 +178,7 @@ function assemble(home: string): Parts {
       notices.update(needing);
     },
   });
+  protectHome(home);
   const changes = createChanges({ home, store: projects.store });
   const files = createFiles({ home, store: projects.store });
   const sessionsInside = {
