@@ -19,12 +19,14 @@ const noConfigFile = "no-config";
 const unsupportedExit = 129;
 const countCap = 1_000_000;
 const cachedChecks = 512;
+export const retryFailedMs = 30_000;
+export const retryOldGitMs = 600_000;
 const none: ConflictCheck = { kind: "none" };
 const oldGit: ConflictCheck = { kind: "old-git" };
 const slow: ConflictCheck = { kind: "slow" };
-const results = new Map<string, ConflictCheck | null>();
+const results = new Map<string, { found: ConflictCheck | null; at: number }>();
 const sweeps = new Map<string, Promise<void>>();
-let unsupported = false;
+let unsupportedAt: number | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function sweep(home: string): Promise<void> {
@@ -138,7 +140,7 @@ async function trialMerge(
       return undefined;
     }
     if (run.exitCode === unsupportedExit) {
-      unsupported = true;
+      unsupportedAt = Date.now();
       return oldGit;
     }
     if (run.exitCode === 0) return none;
@@ -166,12 +168,25 @@ async function oneAtATime<T>(signal: AbortSignal | undefined, work: () => Promis
   return running;
 }
 
+function isOldGit(): boolean {
+  if (unsupportedAt === null) return false;
+  if (Date.now() - unsupportedAt < retryOldGitMs) return true;
+  unsupportedAt = null;
+  return false;
+}
+
 function remembered(key: string): ConflictCheck | null | undefined {
   const known = results.get(key);
   if (known === undefined) return undefined;
+  if (known.found === null || known.found.kind === "slow") {
+    if (Date.now() - known.at >= retryFailedMs) {
+      results.delete(key);
+      return undefined;
+    }
+  }
   results.delete(key);
   results.set(key, known);
-  return known;
+  return known.found;
 }
 
 export function knownConflict(
@@ -179,7 +194,7 @@ export function knownConflict(
   head: string,
   base: string,
 ): ConflictCheck | null | undefined {
-  if (unsupported) return oldGit;
+  if (isOldGit()) return oldGit;
   return remembered(`${folder}\0${head}\0${base}`);
 }
 
@@ -191,7 +206,7 @@ export async function conflictCheck(
   signal?: AbortSignal,
 ): Promise<ConflictCheck | null> {
   await sweep(home);
-  if (unsupported) return oldGit;
+  if (isOldGit()) return oldGit;
   const key = `${folder}\0${head}\0${base}`;
   const known = remembered(key);
   if (known !== undefined) return known;
@@ -202,7 +217,7 @@ export async function conflictCheck(
   return oneAtATime(signal, async () => {
     const found = (await trialMerge(home, folder, head, base, signal)) ?? null;
     if (found?.kind === "old-git") return found;
-    results.set(key, found);
+    results.set(key, { found, at: Date.now() });
     const oldest = results.keys().next().value;
     if (results.size > cachedChecks && oldest !== undefined) results.delete(oldest);
     return found;

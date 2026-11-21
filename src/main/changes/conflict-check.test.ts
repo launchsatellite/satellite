@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { conflictCheck } from "./conflict-check.ts";
+import { conflictCheck, retryFailedMs, retryOldGitMs } from "./conflict-check.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -439,5 +439,48 @@ describe("conflictCheck", { timeout: 60_000 }, () => {
     );
     expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toEqual({ kind: "old-git" });
     expect(await readdir(join(box.home, "quarantine")).catch(() => [])).toEqual([]);
+    delete process.env["SATELLITE_GIT"];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toEqual({
+        kind: "old-git",
+      });
+      vi.setSystemTime(Date.now() + retryOldGitMs + 1);
+      expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toMatchObject({
+        kind: "files",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.skipIf(windows)("tries a failed check again after a while, and not before", async () => {
+    vi.resetModules();
+    const box = await sandbox();
+    const shim = join(box.base, "shim.mjs");
+    const marker = join(box.base, "failed-once");
+    await writeFile(
+      shim,
+      `import { spawnSync } from "node:child_process";\nimport { existsSync, writeFileSync } from "node:fs";\nconst args = process.argv.slice(2);\nif (args.includes("--write-tree") && !existsSync(${JSON.stringify(marker)})) { writeFileSync(${JSON.stringify(marker)}, "x"); process.exit(2); }\nconst out = spawnSync("git", args, { stdio: "inherit" });\nprocess.exit(out.status ?? 1);\n`,
+    );
+    process.env["SATELLITE_GIT"] = JSON.stringify([process.execPath, shim]);
+    const fresh = await import("./conflict-check.ts");
+    const { head, base } = await diverge(
+      box,
+      () => box.write("shared.txt", twoLines("two")),
+      () => box.write("shared.txt", twoLines("alpha")),
+      () => box.write("shared.txt", twoLines("main")),
+    );
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toBeNull();
+      expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toBeNull();
+      vi.setSystemTime(Date.now() + retryFailedMs + 1);
+      expect(await fresh.conflictCheck(box.home, box.repo, head, base)).toMatchObject({
+        kind: "files",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
