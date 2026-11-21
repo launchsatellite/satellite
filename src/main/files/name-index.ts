@@ -1,4 +1,5 @@
-import { posix } from "node:path";
+import { lstat } from "node:fs/promises";
+import { join, posix } from "node:path";
 import { filesLimits } from "../../shared/bridge-contract.ts";
 import { fuzzyScore } from "../../shared/fuzzy-match.ts";
 import { confinedFolder, isChangePath } from "../changes/file-sides.ts";
@@ -86,18 +87,39 @@ export async function rankFiles(
   return [...byName, ...byPath].slice(0, filesLimits.findResults).map((entry) => entry.name);
 }
 
-export async function readableNames(root: string, paths: readonly string[]): Promise<string[]> {
-  const parents = new Map<string, Promise<boolean>>();
-  const readable = (parent: string): Promise<boolean> => {
+interface Checked {
+  kept: string[];
+  refusedParents: string[];
+  missing: string[];
+}
+
+export async function readableNames(root: string, paths: readonly string[]): Promise<Checked> {
+  const parents = new Map<string, Promise<string | undefined>>();
+  const folderOf = (parent: string): Promise<string | undefined> => {
     const known = parents.get(parent);
     if (known !== undefined) return known;
-    const asked = confinedFolder(root, parent).then((folder) => typeof folder === "string");
+    const asked = confinedFolder(root, parent).then((folder) =>
+      typeof folder === "string" ? folder : undefined,
+    );
     parents.set(parent, asked);
     return asked;
   };
-  const kept: string[] = [];
-  for (const path of paths) if (await readable(posix.dirname(path))) kept.push(path);
-  return kept;
+  const checked: Checked = { kept: [], refusedParents: [], missing: [] };
+  for (const path of paths) {
+    const parent = posix.dirname(path);
+    const folder = await folderOf(parent);
+    if (folder === undefined) {
+      if (!checked.refusedParents.includes(parent)) checked.refusedParents.push(parent);
+      continue;
+    }
+    const present = await lstat(join(folder, posix.basename(path))).then(
+      () => true,
+      () => false,
+    );
+    if (present) checked.kept.push(path);
+    else checked.missing.push(path);
+  }
+  return checked;
 }
 
 export async function rankReadable(
@@ -107,19 +129,20 @@ export async function rankReadable(
   signal?: AbortSignal,
 ): Promise<string[]> {
   const refused: string[] = [];
+  const dropped = new Set<string>();
   for (let pass = 0; pass < readablePasses; pass += 1) {
     const pool =
-      refused.length === 0
+      refused.length === 0 && dropped.size === 0
         ? names
-        : names.filter((name) => !refused.some((parent) => name.startsWith(`${parent}/`)));
+        : names.filter(
+            (name) =>
+              !dropped.has(name) && !refused.some((parent) => name.startsWith(`${parent}/`)),
+          );
     const ranked = await rankFiles(query, pool, signal);
-    const kept = await readableNames(root, ranked);
+    const { kept, refusedParents, missing } = await readableNames(root, ranked);
     if (kept.length === ranked.length || pass === readablePasses - 1) return kept;
-    const readable = new Set(kept);
-    for (const name of ranked) {
-      const parent = posix.dirname(name);
-      if (!readable.has(name) && !refused.includes(parent)) refused.push(parent);
-    }
+    for (const parent of refusedParents) if (!refused.includes(parent)) refused.push(parent);
+    for (const name of missing) dropped.add(name);
   }
   return [];
 }

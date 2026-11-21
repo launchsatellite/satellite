@@ -110,13 +110,18 @@ describe("readableNames", () => {
   it("drops a name that sits under a link, which the reader would refuse", async () => {
     const root = await scratch();
     const outside = await scratch();
-    await mkdir(join(root, "ok"));
+    await put(root, { "ok/b.txt": "b\n", "top.txt": "t\n" });
     await writeFile(join(outside, "a.txt"), "outside\n");
     await symlink(outside, join(root, "linked"), "junction");
-    expect(await readableNames(root, ["linked/a.txt", "ok/b.txt", "top.txt"])).toEqual([
-      "ok/b.txt",
-      "top.txt",
-    ]);
+    const { kept } = await readableNames(root, ["linked/a.txt", "ok/b.txt", "top.txt"]);
+    expect(kept).toEqual(["ok/b.txt", "top.txt"]);
+  });
+
+  it("drops a name that is not in the workspace folder", async () => {
+    const root = await scratch();
+    await put(root, { "top.txt": "t\n" });
+    const { kept } = await readableNames(root, ["top.txt", "elsewhere.txt", "gone/inner.txt"]);
+    expect(kept).toEqual(["top.txt"]);
   });
 });
 
@@ -124,7 +129,7 @@ describe("rankReadable", () => {
   it("keeps a good match when better ranked names sit under a link", async () => {
     const root = await scratch();
     const outside = await scratch();
-    await mkdir(join(root, "ok"));
+    await put(root, { "ok/xxa.txt": "x\n" });
     await symlink(outside, join(root, "linked"), "junction");
     const linked = Array.from(
       { length: filesLimits.findResults + 10 },
@@ -132,5 +137,31 @@ describe("rankReadable", () => {
     );
     const names = [...linked, "ok/xxa.txt"];
     expect(await rankReadable(root, "a", names)).toEqual(["ok/xxa.txt"]);
+  });
+
+  it("answers no name from a repository that redirects git to another folder", async () => {
+    const outside = await makeRepository();
+    await put(outside, { "top-secret.txt": "s\n", "secrets/key": "k\n" });
+    const root = await makeRepository();
+    await mkdir(join(root, "secrets"));
+    await git(root, "config", "core.worktree", outside);
+    const index = await readNames(root);
+    expect(index).toMatchObject({ kind: "names" });
+    const names = index.kind === "names" ? index.names : [];
+    expect(names).toContain("top-secret.txt");
+    expect(await rankReadable(root, "secret", names)).toEqual([]);
+  });
+
+  it("answers no name from a repository whose git folder is another repository's", async () => {
+    const other = await makeRepository();
+    await put(other, { "payroll.csv": "p\n", "src/plan.md": "m\n" });
+    await git(other, "add", ".");
+    const root = await scratch();
+    await writeFile(join(root, ".git"), `gitdir: ${join(other, ".git")}\n`);
+    const index = await readNames(root);
+    expect(index).toMatchObject({ kind: "names" });
+    const names = index.kind === "names" ? index.names : [];
+    expect(names).toContain("payroll.csv");
+    expect(await rankReadable(root, "p", names)).toEqual([]);
   });
 });
