@@ -44,6 +44,19 @@ export const bridgeLimits = {
   rows: { min: 1, max: 300 },
 };
 
+export const changesLimits = {
+  files: 1000,
+  parsed: 5000,
+  sideBytes: 1_048_576,
+  sideLines: 20_000,
+  countedFiles: 200,
+  countedBytes: 8_388_608,
+  binaryProbe: 8000,
+  pathChars: 4096,
+  linkChars: 4096,
+  stampChars: 200,
+};
+
 export const interfaceLimits = {
   left: { min: 200, max: 360, initial: 248 },
   right: { min: 360, max: 640, initial: 440 },
