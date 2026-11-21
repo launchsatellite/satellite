@@ -22,22 +22,29 @@ const observationLagMs = 200;
 const branchRows: [string, string][] = [
   ["-dash.txt", "A"],
   ["README.md", "M"],
-  ["café notes.md", "R"],
+  ["caf\u{e9} notes.md", "R"],
   ["docs/new guide.md", "A"],
   ["it's new.txt", "A"],
   ["logo.bin", "A"],
   ["old.txt", "D"],
-  ["report‮txt.md", "A"],
+  ["report\u{202e}txt.md", "A"],
   ["src/app.ts", "M"],
 ];
-const uncommittedRows = ["-dash.txt", "README.md", "it's new.txt", "logo.bin", "report‮txt.md"];
+const uncommittedRows = [
+  "-dash.txt",
+  "README.md",
+  "it's new.txt",
+  "logo.bin",
+  "report\u{202e}txt.md",
+];
 const binarySentence = "This is a binary file, so there is no diff to show.";
+const notUtf8Sentence = "This file isn't UTF-8 text, so there is no diff to show.";
 const largeSentence = "This file is too large to show here, over 1 MB or 20,000 lines.";
 const hostileApp =
   "export function greet(name: string) {\r\n" +
-  '  const greeting = "Hello​";\n' +
-  '  const pаypal = "lone\rreturn";\n' +
-  "  return `${greeting}, ${name}!`;\n" +
+  '  const greeting = "Hello\u{200b}\u{17b4}";\n' +
+  '  const p\u{430}ypal = "lone\rreturn";\n' +
+  "  return `${greeting}, ${name}!`\u{37e}\n" +
   "}\n";
 
 function worktree(session: AppSession): string {
@@ -85,7 +92,7 @@ async function select(session: AppSession, path: string): Promise<void> {
 async function sideText(page: Page, side: "original" | "modified"): Promise<string> {
   const lines = page.locator(`[data-testid="diff"] .editor.${side} .view-lines`);
   if ((await lines.count()) === 0) return "";
-  return (await lines.innerText()).replaceAll(" ", " ");
+  return (await lines.innerText()).replaceAll("\u{a0}", " ");
 }
 
 async function modifiedShows(session: AppSession, text: string, when: string): Promise<void> {
@@ -341,6 +348,11 @@ async function showsSentences(session: AppSession, folder: string): Promise<void
   await select(session, "logo.bin");
   await sentenceReads(session, binarySentence, "binary");
 
+  await writeFile(join(folder, "latin.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+  await rowOf(session, "latin.txt", "after latin.txt was written");
+  await select(session, "latin.txt");
+  await sentenceReads(session, notUtf8Sentence, "not UTF-8");
+
   await writeFile(join(folder, "big.txt"), "line\n".repeat(30_000));
   await rowOf(session, "big.txt", "after big.txt was written");
   await select(session, "big.txt");
@@ -355,10 +367,16 @@ async function revealsHiddenText(session: AppSession, folder: string): Promise<v
   await writeFile(join(folder, "src", "app.ts"), hostileApp);
   await rowOf(session, "src/app.ts", "after src/app.ts was rewritten");
   await select(session, "src/app.ts");
-  await modifiedShows(session, "[U+200B]", "for the zero-width space");
+  await modifiedShows(session, "[U+200B][U+17B4]", "for the zero-width space and the Khmer vowel");
   await modifiedShows(session, "␍", "for the carriage returns");
   const marks = await page.locator('[data-testid="diff"] .editor.modified .look-alike').count();
-  assert.equal(marks, 1, `the Cyrillic letter in a Latin word was marked ${String(marks)} times`);
+  assert.equal(
+    marks,
+    2,
+    `the Cyrillic letter and the Greek question mark were marked ${String(marks)} times, not twice`,
+  );
+  const revealed = await page.locator('[data-testid="diff"] .editor.modified .revealed').count();
+  assert.ok(revealed >= 2, `only ${String(revealed)} revealed runs drew in their own style`);
   assert.equal(await page.locator(".editor-banner").count(), 0, "the editor showed its own banner");
   const lastLine = await page.evaluate(() =>
     Math.max(
