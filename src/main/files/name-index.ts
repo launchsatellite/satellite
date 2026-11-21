@@ -9,6 +9,7 @@ export type NameIndex =
 
 export const findReadMs = 15_000;
 const rankedPerTurn = 2000;
+const readablePasses = 8;
 
 interface Ranked {
   name: string;
@@ -98,4 +99,28 @@ export async function readableNames(root: string, paths: readonly string[]): Pro
   const kept: string[] = [];
   for (const path of paths) if (await readable(posix.dirname(path))) kept.push(path);
   return kept;
+}
+
+export async function rankReadable(
+  root: string,
+  query: string,
+  names: readonly string[],
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const refused: string[] = [];
+  for (let pass = 0; pass < readablePasses; pass += 1) {
+    const pool =
+      refused.length === 0
+        ? names
+        : names.filter((name) => !refused.some((parent) => name.startsWith(`${parent}/`)));
+    const ranked = await rankFiles(query, pool, signal);
+    const kept = await readableNames(root, ranked);
+    if (kept.length === ranked.length || pass === readablePasses - 1) return kept;
+    const readable = new Set(kept);
+    for (const name of ranked) {
+      const parent = posix.dirname(name);
+      if (!readable.has(name) && !refused.includes(parent)) refused.push(parent);
+    }
+  }
+  return [];
 }

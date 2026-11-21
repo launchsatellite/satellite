@@ -2,7 +2,7 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesLimits } from "../../shared/bridge-contract.ts";
-import { rankFiles, readableNames, readNames } from "./name-index.ts";
+import { rankFiles, rankReadable, readableNames, readNames } from "./name-index.ts";
 import {
   git,
   isolateGit,
@@ -117,5 +117,20 @@ describe("readableNames", () => {
       "ok/b.txt",
       "top.txt",
     ]);
+  });
+});
+
+describe("rankReadable", () => {
+  it("keeps a good match when better ranked names sit under a link", async () => {
+    const root = await scratch();
+    const outside = await scratch();
+    await mkdir(join(root, "ok"));
+    await symlink(outside, join(root, "linked"), "junction");
+    const linked = Array.from(
+      { length: filesLimits.findResults + 10 },
+      (_, at) => `linked/a${String(at)}.txt`,
+    );
+    const names = [...linked, "ok/xxa.txt"];
+    expect(await rankReadable(root, "a", names)).toEqual(["ok/xxa.txt"]);
   });
 });
