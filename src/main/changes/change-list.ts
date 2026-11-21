@@ -27,7 +27,7 @@ export interface ChangeRecord {
 export type ListedChange = Omit<ChangeRecord, "stamp">;
 export type ChangeListRead =
   | { kind: "files"; records: ChangeRecord[]; more: number; longPaths: number }
-  | { kind: "unavailable"; reason: "not-local" | "too-many" | "failed" };
+  | { kind: "unavailable"; reason: "not-local" | "too-many" | "hung" | "failed" };
 export interface ParsedList {
   records: ListedChange[];
   more: number;
@@ -80,6 +80,7 @@ const letters = new Set<string>(changeLetter.options);
 const failed: ChangeListRead = { kind: "unavailable", reason: "failed" };
 const notLocal: ChangeListRead = { kind: "unavailable", reason: "not-local" };
 const tooMany: ChangeListRead = { kind: "unavailable", reason: "too-many" };
+const hung: ChangeListRead = { kind: "unavailable", reason: "hung" };
 
 function isLetter(letter: string): letter is ChangeLetter {
   return letters.has(letter);
@@ -332,7 +333,9 @@ export async function readChangeList(
     gitOutput(folder, untrackedArgs, signal),
     gitOutput(folder, unmergedArgs, signal),
   ]);
-  if ([diff, others, conflicted].includes("output")) return tooMany;
+  const runs = [diff, others, conflicted];
+  if (runs.includes("output")) return tooMany;
+  if (runs.includes("time") || runs.includes("stuck")) return hung;
   if (typeof diff === "object" && diff.exitCode !== 0 && !signal.aborted) {
     return (await isPartialClone(folder, signal)) ? notLocal : failed;
   }

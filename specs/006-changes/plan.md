@@ -144,7 +144,7 @@ Requests, added to `bridgeRequests`.
       }),
       z.strictObject({
         kind: z.literal("unavailable"),
-        reason: z.enum(["no-commits", "no-base", "unrelated", "not-local", "too-many", "failed"]),
+        reason: z.enum(["no-commits", "no-base", "unrelated", "not-local", "too-many", "hung", "failed"]),
       }),
     ]),
   }),
@@ -168,7 +168,7 @@ Requests, added to `bridgeRequests`.
 
 - `branch` is `git branch --show-current` in the worktree, `null` when detached. `base` is the base's short name, `origin/main` for `refs/remotes/origin/main`, `main` for `refs/heads/main`. `ahead` and `behind` follow the sidebar's rule, against the upstream, or without one `ahead` counts the commits on no remote and `behind` is `null`, both `null` without a remote.
 - `conflict` is `null` until Task 7.
-- `longPaths` counts the files whose path or former path is longer than `pathChars`, left out of `files`. `not-local` is a list git cannot build because a partial clone never downloaded its objects, `too-many` one whose git output passed the 16 MiB `runTool` reads. A file listed twice, deleted from the index and untracked on disk, is listed once as its tracked record. A file the index holds in merge stages is `U`.
+- `longPaths` counts the files whose path or former path is longer than `pathChars`, left out of `files`. `not-local` is a list git cannot build because a partial clone never downloaded its objects, `too-many` one whose git output passed the 16 MiB `runTool` reads, `hung` one whose git ran out of time or found git stuck in that folder. A file listed twice, deleted from the index and untracked on disk, is listed once as its tracked record. A file the index holds in merge stages is `U`.
 - `hung` is a side whose read did not finish in time, `not-local` a committed side a partial clone never downloaded.
 - An added file's `original` and a deleted file's `modified` are `""`.
 - No new event. `window.satellite` keeps its three functions.
@@ -200,7 +200,7 @@ Every sentence is fixed here. Names inside them are `visibleText` of the name. N
 - Centre tab `Changes`. View control labelled `Changes to show`, options `Branch` and `Uncommitted`. Layout control labelled `Diff layout`, options `Side by side` and `Inline`.
 - Header, after the branch, `from <base>` in `text-dim` font-mono, then the readout `↑<ahead>` and `↓<behind>` in `font-pixel text-[12px] text-dim uppercase`, each shown only when not null, beside an `sr-only` span `<ahead> ahead, <behind> behind`, leaving out a part that is null.
 - Empty, Uncommitted `Nothing changed since the last commit.`, Branch `Nothing changed against <base>.`
-- Unavailable, `no-commits` `This branch has no commits yet, so there is nothing to compare.`, `no-base` `Satellite found no base branch to compare with. Uncommitted shows the work here.`, `unrelated` `This branch shares no history with <base>, so Branch has nothing to compare.`, `not-local` `This clone never downloaded some of the files these changes need, so Satellite can't list them.`, `too-many` `Too many files changed here for Satellite to list.`, `failed` `Satellite couldn't read the changes here. It tries again in a moment.`
+- Unavailable, `no-commits` `This branch has no commits yet, so there is nothing to compare.`, `no-base` `Satellite found no base branch to compare with. Uncommitted shows the work here.`, `unrelated` `This branch shares no history with <base>, so Branch has nothing to compare.`, `not-local` `This clone never downloaded some of the files these changes need, so Satellite can't list them.`, `too-many` `Too many files changed here for Satellite to list.`, `hung` `Reading the changes here took too long. It tries again in a moment.`, `failed` `Satellite couldn't read the changes here. It tries again in a moment.`
 - Below a capped list, `1 more file is not listed.` or `<n> more files are not listed.`, and for `longPaths` `1 file has a path too long to show.` or `<n> files have paths too long to show.`
 - A row's accessible name and tooltip, `<path>, <state>` then `, <added> added, <removed> removed` when both counts are numbers, or `, binary` for a binary file. `<state>` is `added`, `added, not tracked yet`, `modified`, `deleted`, `renamed from <from>`, `copied from <from>`, `changed type` or `in a merge`.
 - Instead of a diff, `binary` `This is a binary file, so there is no diff to show.`, `large` `This file is too large to show here, over 1 MB or 20,000 lines.`, `repository` `This folder is a repository of its own, so Satellite shows no diff for it.`, `unmerged` `This file is in the middle of a merge. Claude Code can resolve it.`, `changing` `This file changed while Satellite read it. It shows again on the next refresh.`, `hung` `Reading this file took too long. It tries again on the next refresh.`, `not-local` `This clone never downloaded the earlier version of this file, so there is no diff to show.`, `unreadable` `This file's name isn't valid text, so Satellite can't read it.`, `submodule` `This submodule moved from <from> to <to>.`, or with no `from` `This submodule was added at <to>.`, with no `to` `This submodule was removed. It was at <from>.`, with neither `This submodule changed.`

@@ -23,6 +23,20 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   };
 });
 
+const gitCalls = vi.hoisted(() => {
+  const calls: { stop?: "time" | "stuck" | undefined } = {};
+  return calls;
+});
+
+vi.mock("../workspaces/git-command.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../workspaces/git-command.ts")>();
+  return {
+    ...actual,
+    readGit: (...args: Parameters<typeof actual.readGit>) =>
+      gitCalls.stop === undefined ? actual.readGit(...args) : Promise.resolve(gitCalls.stop),
+  };
+});
+
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
     Promise.resolve(
@@ -510,6 +524,25 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     expect(
       await readChangeList(repo, await git("rev-parse", "HEAD"), new AbortController().signal),
     ).toEqual({ kind: "unavailable", reason: "too-many" });
+  });
+
+  it("answers hung when git times out or is stuck in the folder", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "edit.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    const head = await git("rev-parse", "HEAD");
+    try {
+      for (const stop of ["time", "stuck"] as const) {
+        gitCalls.stop = stop;
+        expect(await readChangeList(repo, head, new AbortController().signal)).toEqual({
+          kind: "unavailable",
+          reason: "hung",
+        });
+      }
+    } finally {
+      gitCalls.stop = undefined;
+    }
   });
 
   it("stamps within its time and marks the stamps it could not read as late", async () => {

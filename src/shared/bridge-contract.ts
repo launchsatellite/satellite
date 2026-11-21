@@ -299,7 +299,15 @@ export const bridgeRequests = {
         }),
         z.strictObject({
           kind: z.literal("unavailable"),
-          reason: z.enum(["no-commits", "no-base", "unrelated", "not-local", "too-many", "failed"]),
+          reason: z.enum([
+            "no-commits",
+            "no-base",
+            "unrelated",
+            "not-local",
+            "too-many",
+            "hung",
+            "failed",
+          ]),
         }),
       ]),
     }),
