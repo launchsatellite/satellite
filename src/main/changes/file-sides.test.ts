@@ -1,5 +1,16 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import type { BigIntStats } from "node:fs";
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  realpath,
+  stat,
+  symlink,
+  utimes,
+  writeFile,
+  type FileHandle,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -8,7 +19,11 @@ import { gitReadMs } from "../workspaces/git-command.ts";
 import { isChangePath, lineCount, readBlobSide, readWorktreeSide } from "./file-sides.ts";
 
 const fileCalls = vi.hoisted(() => {
-  const calls: { realpath?: ((path: string) => Promise<string>) | undefined } = {};
+  const calls: {
+    realpath?: ((path: string) => Promise<string>) | undefined;
+    lstat?: ((path: string) => Promise<BigIntStats>) | undefined;
+    open?: ((path: string, flags: number) => Promise<FileHandle>) | undefined;
+  } = {};
   return calls;
 });
 
@@ -17,6 +32,10 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     realpath: (path: string) => fileCalls.realpath?.(path) ?? actual.realpath(path),
+    lstat: (path: string, options: { bigint: true }) =>
+      fileCalls.lstat?.(path) ?? actual.lstat(path, options),
+    open: (path: string, flags: number) =>
+      fileCalls.open?.(path, flags) ?? actual.open(path, flags),
   };
 });
 
@@ -232,6 +251,8 @@ describe("readWorktreeSide", () => {
 describe("readWorktreeSide on a file system that stalls", () => {
   afterEach(() => {
     fileCalls.realpath = undefined;
+    fileCalls.lstat = undefined;
+    fileCalls.open = undefined;
     vi.useRealTimers();
   });
 
@@ -259,6 +280,99 @@ describe("readWorktreeSide on a file system that stalls", () => {
       expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "text", text: "file\n" });
     });
   });
+});
+
+describe("readWorktreeSide while the file changes under it", () => {
+  afterEach(() => {
+    fileCalls.realpath = undefined;
+    fileCalls.lstat = undefined;
+    fileCalls.open = undefined;
+  });
+
+  async function opened(root: string, change: (handle: FileHandle) => Promise<void>) {
+    fileCalls.open = async (path, flags) => {
+      fileCalls.open = undefined;
+      const handle = await open(path, flags);
+      await change(handle);
+      return handle;
+    };
+    return readWorktreeSide(root, "file.txt");
+  }
+
+  it("answers changing when the opened file is not the one it checked", async () => {
+    const { base, root } = await worktree();
+    await writeFile(join(root, "file.txt"), "file\n");
+    await writeFile(join(base, "other.txt"), "file\n");
+    const other = await stat(join(base, "other.txt"), { bigint: true });
+    const read = await opened(root, async (handle) => {
+      vi.spyOn(handle, "stat").mockResolvedValueOnce(other);
+      await Promise.resolve();
+    });
+    expect(read).toEqual({ kind: "changing" });
+  });
+
+  it("answers changing when fewer bytes arrive than the file held", async () => {
+    const { root } = await worktree();
+    await writeFile(join(root, "file.txt"), "file\n");
+    const read = await opened(root, async (handle) => {
+      vi.spyOn(handle, "read").mockResolvedValue({ bytesRead: 0, buffer: new Uint8Array(0) });
+      await Promise.resolve();
+    });
+    expect(read).toEqual({ kind: "changing" });
+  });
+
+  it("answers changing when the file is rewritten while read, even with its time put back", async () => {
+    const { root } = await worktree();
+    const file = join(root, "file.txt");
+    await writeFile(file, "before\n");
+    await utimes(file, 1000, 1000);
+    const read = await opened(root, async (handle) => {
+      const first = await handle.stat({ bigint: true });
+      vi.spyOn(handle, "stat").mockImplementationOnce(async () => {
+        await writeFile(file, "after!\n");
+        await utimes(file, 1000, 1000);
+        return first;
+      });
+    });
+    expect(read).toEqual({ kind: "changing" });
+  });
+
+  it("refuses when a parent folder turns into a link during the read", async () => {
+    const { base, root } = await worktree();
+    await writeFile(join(root, "file.txt"), "file\n");
+    const read = await opened(root, async () => {
+      fileCalls.realpath = () => Promise.resolve(base);
+      await Promise.resolve();
+    });
+    expect(read).toEqual({ kind: "refused" });
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "never follows a link that replaced the file after its check",
+    async () => {
+      const { base, root } = await worktree();
+      await writeFile(join(base, "secret.txt"), "secret\n");
+      await symlink(join(base, "secret.txt"), join(root, "file.txt"));
+      fileCalls.lstat = (path) => stat(path, { bigint: true });
+      expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "refused" });
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "never blocks on a pipe that replaced the file after its check",
+    { timeout: 3000 },
+    async () => {
+      const { base, root } = await worktree();
+      await writeFile(join(base, "plain.txt"), "plain\n");
+      await run("mkfifo", [join(root, "file.txt")]);
+      fileCalls.lstat = () => stat(join(base, "plain.txt"), { bigint: true });
+      try {
+        expect(await readWorktreeSide(root, "file.txt")).toEqual({ kind: "changing" });
+      } finally {
+        fileCalls.lstat = undefined;
+      }
+    },
+  );
 });
 
 describe("readWorktreeSide on macOS", () => {
