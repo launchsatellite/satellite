@@ -307,6 +307,39 @@ describe("readBlobSide", { timeout: 30_000 }, () => {
     }
   });
 
+  it("decides binary on the first 8000 bytes, as git and the worktree side do", async () => {
+    const base = await scratch();
+    const repo = join(base, "repo");
+    const config = join(base, "gitconfig");
+    await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+    const env = gitEnvironment(config);
+    const git = (args: string[]) => run("git", ["-C", repo, ...args], { env });
+    await run("git", ["init", "-q", "-b", "main", repo], { env });
+    const late = Buffer.concat([Buffer.from("€".repeat(3000)), Buffer.from([0])]);
+    const early = Buffer.concat([
+      Buffer.from("€".repeat(2666)),
+      Buffer.from("x"),
+      Buffer.from([0]),
+    ]);
+    await writeFile(join(repo, "late.txt"), late);
+    await writeFile(join(repo, "early.txt"), early);
+    await git(["add", "."]);
+    await git(["commit", "-q", "-m", "one"]);
+    const numstat = (
+      await git(["diff", "--numstat", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD"])
+    ).stdout;
+    expect(numstat).toBe("-\t-\tearly.txt\n1\t0\tlate.txt\n");
+    const expected: [string, string][] = [
+      ["late.txt", "text"],
+      ["early.txt", "binary"],
+    ];
+    for (const [name, kind] of expected) {
+      const blob = (await git(["rev-parse", `HEAD:${name}`])).stdout.trim();
+      expect((await readBlobSide(repo, blob)).kind).toBe(kind);
+      expect((await readWorktreeSide(repo, name)).kind).toBe(kind);
+    }
+  });
+
   it("refuses a name of the other hash length, which git would read as a ref", async () => {
     const base = await scratch();
     const config = join(base, "gitconfig");

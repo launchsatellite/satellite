@@ -224,7 +224,12 @@ export async function childEnvironment(): Promise<Record<string, string>> {
 export async function runTool(
   tool: Tool,
   args: readonly string[],
-  options: { timeoutMs?: number; signal?: AbortSignal; switches?: readonly GitSwitch[] } = {},
+  options: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    switches?: readonly GitSwitch[];
+    bytes?: boolean;
+  } = {},
 ): Promise<ToolRun | undefined> {
   const command = await resolveTool(tool);
   if (command === undefined) return undefined;
@@ -275,7 +280,9 @@ export async function runTool(
       if (output.size > outputLimit) stop(new Error(`${tool} printed more than Satellite reads`));
       else output[stream] += chunk;
     };
-    child.stdout.setEncoding("utf8").on("data", collect("stdout"));
+    child.stdout
+      .setEncoding(options.bytes === true ? "latin1" : "utf8")
+      .on("data", collect("stdout"));
     child.stderr.setEncoding("utf8").on("data", collect("stderr"));
     child.once("error", (error: NodeJS.ErrnoException) => {
       settle();

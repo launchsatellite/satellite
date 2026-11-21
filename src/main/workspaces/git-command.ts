@@ -39,12 +39,12 @@ export async function runGit(
   args: readonly string[],
   timeoutMs: number,
   signal?: AbortSignal,
-  switches: readonly GitSwitch[] = [],
+  extra: { switches?: readonly GitSwitch[]; bytes?: boolean } = {},
 ): Promise<ToolRun | undefined> {
   if (foldersWithStuckGit.has(folder)) return undefined;
   let run: ToolRun | undefined;
   try {
-    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, switches });
+    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, ...extra });
   } catch (error) {
     if (error instanceof AbandonedRun) {
       foldersWithStuckGit.add(folder);

@@ -131,8 +131,11 @@ async function confinedSide(root: string, path: string, bytes: number): Promise<
   return sameFolder(recheck, folder) ? read : refused;
 }
 
-async function gitOutput(folder: string, args: string[], signal?: AbortSignal) {
-  const run = await runGit(folder, args, gitReadMs, signal, ["no-lazy-fetch"]);
+async function gitOutput(folder: string, args: string[], signal?: AbortSignal, bytes = false) {
+  const run = await runGit(folder, args, gitReadMs, signal, {
+    switches: ["no-lazy-fetch"],
+    bytes,
+  });
   return run?.exitCode === 0 ? run.stdout : undefined;
 }
 
@@ -205,9 +208,8 @@ export async function readBlobSide(
   const size = sizeOutput.exec((await gitOutput(folder, ["cat-file", "-s", oid], signal)) ?? "");
   if (size?.[1] === undefined) return missingBlob(folder, signal);
   if (Number(size[1]) > changesLimits.sideBytes) return large;
-  const text = await gitOutput(folder, ["cat-file", "blob", oid], signal);
-  if (text === undefined) return missingBlob(folder, signal);
-  if (text.slice(0, changesLimits.binaryProbe).includes("\0")) return binary;
-  if (text.length > changesLimits.sideBytes) return large;
-  return lineCount(text) > changesLimits.sideLines ? large : { kind: "text", text };
+  const content = await gitOutput(folder, ["cat-file", "blob", oid], signal, true);
+  if (content === undefined) return missingBlob(folder, signal);
+  if (content.length > changesLimits.sideBytes) return large;
+  return decodedText(Buffer.from(content, "latin1"));
 }
