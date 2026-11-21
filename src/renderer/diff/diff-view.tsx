@@ -4,20 +4,19 @@ import "monaco-editor/features/diffEditor/register";
 import "monaco-editor/features/unicodeHighlighter/register";
 import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { visibleLines } from "../../shared/visible-text.ts";
 import { diffLanguage } from "./diff-language.ts";
-import { lookAlikeColumns } from "./look-alikes.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
-
-export interface DiffSelection {
-  side: "original" | "modified";
-  start: number;
-  end: number;
-}
-
-export interface DiffHandle {
-  selection(): DiffSelection | null;
-}
+import {
+  drawnColumns,
+  EditorNotes,
+  fewNonAscii,
+  lookAlikeMarks,
+  plainModel,
+  readOnlyOptions,
+  selectedLines,
+  type DiffHandle,
+  type DiffSide,
+} from "./read-only-editor.tsx";
 
 interface DiffViewProps {
   original: string;
@@ -26,31 +25,6 @@ interface DiffViewProps {
   inline: boolean;
   labels: { original: string; modified: string };
   handle?: Ref<DiffHandle>;
-}
-
-type DiffSide = DiffSelection["side"];
-
-const noBracketColours = { enabled: false, independentColorPoolPerBracketType: false };
-const drawnColumns = 10_000;
-const boxedLimit = 1000;
-const longLineSentence =
-  "A changed line here runs past 10,000 characters, so the diff shows only its start.";
-const fewBoxesSentence =
-  "This file holds over 1,000 characters beyond ASCII, so look-alike letters are marked only inside words on changed lines.";
-
-function plainModel(text: string, language: string): editor.ITextModel {
-  const model = editor.createModel(visibleLines(text), language);
-  model.updateOptions({ bracketColorizationOptions: noBracketColours });
-  return model;
-}
-
-function fewNonAscii(text: string): boolean {
-  let found = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    if (text.charCodeAt(index) > 0x7e) found += 1;
-    if (found >= boxedLimit) return false;
-  }
-  return true;
 }
 
 function changedLines(created: editor.IStandaloneDiffEditor, side: DiffSide): number[] {
@@ -62,26 +36,6 @@ function changedLines(created: editor.IStandaloneDiffEditor, side: DiffSide): nu
     for (let line = Math.max(start, 1); line <= end; line += 1) lines.push(line);
   }
   return lines;
-}
-
-function lookAlikeMarks(model: editor.ITextModel, lines: readonly number[]) {
-  return lines.flatMap((line) =>
-    lookAlikeColumns(model.getLineContent(line)).map(({ start, end }) => ({
-      range: { startLineNumber: line, startColumn: start, endLineNumber: line, endColumn: end },
-      options: { inlineClassName: "look-alike" },
-    })),
-  );
-}
-
-function selectedLines(created: editor.IStandaloneDiffEditor, side: DiffSide) {
-  if (created.getModel() === null) return null;
-  const sideEditor =
-    side === "original" ? created.getOriginalEditor() : created.getModifiedEditor();
-  const selection = sideEditor.getSelection();
-  if (selection === null) return null;
-  const { startLineNumber: start, endLineNumber, endColumn } = selection;
-  const end = endLineNumber > start && endColumn === 1 ? endLineNumber - 1 : endLineNumber;
-  return { side, start, end };
 }
 
 export function DiffView({ original, modified, path, inline, labels, handle }: DiffViewProps) {
@@ -99,7 +53,11 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
       selection: () => {
         const created = diffEditor.current;
         if (created === null) return null;
-        return selectedLines(created, inline ? "modified" : focusedSide.current);
+        const side = inline ? "modified" : focusedSide.current;
+        return selectedLines(
+          side === "original" ? created.getOriginalEditor() : created.getModifiedEditor(),
+          side,
+        );
       },
     }),
     [inline],
@@ -110,21 +68,11 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
     if (element === null) return;
     applyMonacoTheme();
     const created = editor.createDiffEditor(element, {
-      readOnly: true,
+      ...readOnlyOptions,
       originalEditable: false,
-      domReadOnly: true,
       useInlineViewWhenSpaceIsLimited: false,
       renderGutterMenu: false,
-      renderLineHighlight: "none",
-      automaticLayout: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
       renderOverviewRuler: false,
-      overviewRulerLanes: 0,
-      overviewRulerBorder: false,
-      scrollbar: { useShadows: false },
-      fontFamily: '"Geist Mono Variable", monospace',
-      fontSize: 13,
       renderIndicators: true,
       hideUnchangedRegions: {
         enabled: true,
@@ -136,21 +84,6 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
       maxFileSize: 2,
       diffAlgorithm: "advanced",
       ignoreTrimWhitespace: false,
-      renderControlCharacters: true,
-      stopRenderingLineAfter: drawnColumns,
-      unicodeHighlight: {
-        invisibleCharacters: false,
-        ambiguousCharacters: false,
-        nonBasicASCII: false,
-        includeComments: true,
-        includeStrings: true,
-        allowedLocales: {},
-      },
-      tabFocusMode: true,
-      dropIntoEditor: { enabled: false },
-      dragAndDrop: false,
-      contextmenu: false,
-      links: false,
     });
     diffEditor.current = created;
     created.getOriginalEditor().onDidFocusEditorText(() => {
@@ -226,22 +159,7 @@ export function DiffView({ original, modified, path, inline, labels, handle }: D
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {fewBoxes && (
-        <p
-          data-testid="diff-few-boxes"
-          className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
-        >
-          {fewBoxesSentence}
-        </p>
-      )}
-      {cutShort && (
-        <p
-          data-testid="diff-cut-short"
-          className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
-        >
-          {longLineSentence}
-        </p>
-      )}
+      <EditorNotes fewBoxes={fewBoxes} cutShort={cutShort} />
       <div ref={host} data-testid="diff" className="min-h-0 flex-1" />
     </div>
   );

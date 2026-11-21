@@ -4,12 +4,12 @@ import type {
   ChangesView as View,
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
-import type { DiffHandle } from "../diff/diff-view.tsx";
+import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { Segmented } from "../ui/segmented.tsx";
 import { CentreTabs, centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
-import { FileDiff, type ShownText } from "./file-diff.tsx";
+import { FileDiff, sideOnly, type ShownText } from "./file-diff.tsx";
 import { changesPlace } from "./use-changes.ts";
 
 interface ChangesViewProps {
@@ -67,12 +67,12 @@ export function ChangesView({
 }: ChangesViewProps) {
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
-  const [textShown, setTextShown] = useState(false);
+  const [layoutShown, setLayoutShown] = useState(false);
   const listFocused = useRef(false);
   const listHost = useRef<HTMLDivElement>(null);
   const show = useCallback(
     (shown: ShownText | null) => {
-      setTextShown(shown !== null);
+      setLayoutShown(shown !== null && sideOnly(shown.letter) === null);
       onShown(shown);
     },
     [onShown],
@@ -160,7 +160,7 @@ export function ChangesView({
         <CentreTabs />
         <div className="ml-auto flex flex-none items-center gap-2">
           <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
-          {textShown && (
+          {layoutShown && (
             <Segmented
               label="Diff layout"
               value={inline ? "inline" : "side-by-side"}

@@ -10,9 +10,9 @@ import {
 } from "../../shared/bridge-contract.ts";
 import { subscribe } from "../bridge/bridge-client.ts";
 import { ChangesView } from "../changes/changes-view.tsx";
-import type { ShownText } from "../changes/file-diff.tsx";
+import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
 import { useChanges } from "../changes/use-changes.ts";
-import type { DiffHandle } from "../diff/diff-view.tsx";
+import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
@@ -269,7 +269,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const changes = useChanges(changesHere, changesView);
   const changesShown = changesHere !== null;
-  const textShown = changesShown && shownText !== null;
+  const layoutShown = changesShown && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
   const tabsHere = sessionHere === undefined ? [] : sessions.tabsOf(sessionHere);
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -549,7 +549,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "changes.inline",
             title: "Show the diff inline",
-            available: textShown && !diffInline,
+            available: layoutShown && !diffInline,
             run: () => {
               setDiffInline(true);
             },
@@ -557,7 +557,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           {
             id: "changes.side-by-side",
             title: "Show the diff side by side",
-            available: textShown && diffInline,
+            available: layoutShown && diffInline,
             run: () => {
               setDiffInline(false);
             },
@@ -598,7 +598,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     openFromInbox,
     changesShown,
     changesView,
-    textShown,
+    layoutShown,
     diffInline,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {

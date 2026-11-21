@@ -7,7 +7,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { invoke } from "../bridge/bridge-client.ts";
-import type { DiffHandle } from "../diff/diff-view.tsx";
+import type { DiffHandle, DiffSide } from "../diff/read-only-editor.tsx";
 import { diffLabels, sideSentence } from "./change-words.ts";
 import { changesPlace } from "./use-changes.ts";
 
@@ -36,9 +36,10 @@ interface Answer {
   failure: string | null;
 }
 
-const DiffView = lazy(() =>
-  import("../diff/diff-view.tsx").then((module) => ({ default: module.DiffView })),
-);
+const editors = () =>
+  Promise.all([import("../diff/diff-view.tsx"), import("../diff/side-view.tsx")]);
+const DiffView = lazy(() => editors().then(([module]) => ({ default: module.DiffView })));
+const SideView = lazy(() => editors().then(([, module]) => ({ default: module.SideView })));
 const cachedAnswers = 8;
 const cachedChars = 8_388_608;
 const answers = new Map<string, { sides: FileSides; chars: number }>();
@@ -68,6 +69,12 @@ function recalled(key: string): FileSides | undefined {
 
 function peeked(key: string): FileSides | undefined {
   return answers.get(key)?.sides;
+}
+
+export function sideOnly(letter: ChangeLetter): DiffSide | null {
+  if (letter === "A") return "modified";
+  if (letter === "D") return "original";
+  return null;
 }
 
 export function FileDiff({ workspace, view, file, base, inline, handle, onShown }: FileDiffProps) {
@@ -134,16 +141,29 @@ export function FileDiff({ workspace, view, file, base, inline, handle, onShown 
 
   if (drawn === null) return <div className="h-full" />;
   if (drawn.sides?.kind === "text") {
+    const { original, modified } = drawn.sides;
+    const labels = diffLabels(drawn.file);
+    const only = sideOnly(drawn.file.letter);
     return (
       <Suspense fallback={<div className="h-full" />}>
-        <DiffView
-          original={drawn.sides.original}
-          modified={drawn.sides.modified}
-          path={drawn.file.path}
-          inline={inline}
-          labels={diffLabels(drawn.file)}
-          handle={handle}
-        />
+        {only === null ? (
+          <DiffView
+            original={original}
+            modified={modified}
+            path={drawn.file.path}
+            inline={inline}
+            labels={labels}
+            handle={handle}
+          />
+        ) : (
+          <SideView
+            text={only === "original" ? original : modified}
+            side={only}
+            path={drawn.file.path}
+            label={labels[only]}
+            handle={handle}
+          />
+        )}
       </Suspense>
     );
   }
