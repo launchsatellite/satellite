@@ -22,6 +22,7 @@ const findShortcut = process.platform === "darwin" ? "Meta+F" : "Control+Shift+F
 const waitMs = 15_000;
 const followMs = 45_000;
 const settleMs = 6000;
+const quietMs = 1500;
 const deepFolders = [
   "src",
   "src/deep",
@@ -140,9 +141,19 @@ async function listsTheDisk(session: AppSession): Promise<void> {
     listed.every((row) => row.path !== ".git" && !row.path.startsWith(".git/")),
     "the tree listed a .git path",
   );
-  const byPath = new Map(listed.map((row) => [row.path, row]));
-  assert.equal(byPath.get("README.md")?.state, "M", "README.md did not read M");
-  assert.equal(byPath.get("it's new.txt")?.state, "A", "it's new.txt did not read A");
+  let letters: string[] = [];
+  await waitUntil(
+    async () => {
+      const now = await rows(page);
+      letters = ["README.md", "it's new.txt"].map(
+        (name) => now.find((row) => row.path === name)?.state ?? "",
+      );
+      return letters[0] === "M" && letters[1] === "A";
+    },
+    waitMs,
+    () => `README.md and it's new.txt read ${JSON.stringify(letters)}, not M and A`,
+  );
+  const byPath = new Map((await rows(page)).map((row) => [row.path, row]));
   assert.equal(byPath.get("debug.log")?.ignored, true, "debug.log was not marked ignored");
   assert.equal(byPath.get("build")?.ignored, true, "build was not marked ignored");
   assert.equal(byPath.get("README.md")?.ignored, false, "README.md was marked ignored");
@@ -232,8 +243,64 @@ async function nudge(page: Page): Promise<void> {
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
 }
 
+async function activeTestId(page: Page): Promise<string> {
+  return page.evaluate(
+    () => document.activeElement?.closest("[data-testid]")?.getAttribute("data-testid") ?? "",
+  );
+}
+
+async function focusRow(page: Page, path: string): Promise<void> {
+  await page.evaluate((target) => {
+    const row = [
+      ...document.querySelectorAll<HTMLElement>('[data-testid="files-tree"] [data-kind]'),
+    ]
+      .find((candidate) => candidate.dataset["path"] === target)
+      ?.closest<HTMLElement>("[role=treeitem]");
+    row?.focus();
+  }, path);
+}
+
+async function treeHoldsFocus(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.activeElement?.closest('[data-testid="files-tree"]') != null);
+}
+
+async function keepsFocus(session: AppSession, folder: string): Promise<void> {
+  const { page } = session;
+  await writeFile(join(folder, "src", "focus-one.txt"), "one\n");
+  await rowOf(session, "src/focus-one.txt", "after it was written");
+  await focusRow(page, "src/focus-one.txt");
+  assert.ok(await treeHoldsFocus(page), "the row did not take focus");
+  await page.getByTestId("file-tab-0").focus();
+  await writeFile(join(folder, "src", "focus-two.txt"), "two\n");
+  await rowOf(session, "src/focus-two.txt", "after it was written beside a focused tab");
+  await delay(settleMs / 2);
+  const focusedNow = await activeTestId(page);
+  assert.equal(focusedNow, "file-tab-0", `a refresh moved focus from the tab to ${focusedNow}`);
+  await focusRow(page, "src/focus-one.txt");
+  await unlink(join(folder, "src", "focus-one.txt"));
+  await noRow(session, "src/focus-one.txt", "after it was deleted");
+  await waitUntil(
+    () => treeHoldsFocus(page),
+    waitMs,
+    "focus did not move to a remaining row when the focused row went away",
+  );
+  await unlink(join(folder, "src", "focus-two.txt"));
+  await noRow(session, "src/focus-two.txt", "after it was deleted");
+}
+
 async function staysStill(session: AppSession): Promise<void> {
   const { page } = session;
+  await page.getByTestId("file-tab-0").focus();
+  await waitUntil(
+    async () => (await page.locator('[data-testid="file-text"] .focused').count()) === 0,
+    waitMs,
+    "the editor kept its focus ring",
+  );
+  for (let round = 0; round < 10; round += 1) {
+    await watchTree(page);
+    await delay(quietMs);
+    if ((await mutationsSeen(page)).length === 0) break;
+  }
   await watchTree(page);
   for (let round = 0; round < 3; round += 1) {
     await nudge(page);
@@ -381,6 +448,7 @@ export const filesJourney: Journey = {
     await listsTheDisk(session);
     await opensReadOnly(session, folder);
     await staysStill(session);
+    await keepsFocus(session, folder);
     await followsTheDisk(session, folder);
     await managesTabs(session);
     await remembersTabs(session);

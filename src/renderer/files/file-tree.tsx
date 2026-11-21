@@ -1,9 +1,9 @@
 import {
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -138,18 +138,6 @@ export function FileTree({
   const stop = Math.max(0, paths.indexOf(focused ?? ""));
   const { projectId, workspace: key } = workspace;
 
-  useEffect(() => {
-    const away = (event: Event) => {
-      if (!(event.target instanceof Node) || tree.current?.contains(event.target) !== true) {
-        holding.current = false;
-      }
-    };
-    document.addEventListener("pointerdown", away);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-    };
-  }, []);
-
   useLayoutEffect(() => {
     const element = tree.current;
     if (element === null) return;
@@ -174,6 +162,12 @@ export function FileTree({
     );
   }
 
+  const leave = (event: FocusEvent<HTMLDivElement>) => {
+    const moved = event.relatedTarget;
+    if (moved instanceof Node && event.currentTarget.contains(moved)) return;
+    if (event.target instanceof Node && !event.target.isConnected) return;
+    holding.current = false;
+  };
   const activate = (item: ItemRow) => {
     setFocused(item.path);
     if (isFolderKind(item.kind)) onToggle(item.path, !item.open);
@@ -309,7 +303,13 @@ export function FileTree({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={tree} className="min-h-0 flex-1 overflow-y-auto py-1">
-        <div role="tree" aria-label="Files" data-testid="files-tree" onKeyDown={press}>
+        <div
+          role="tree"
+          aria-label="Files"
+          data-testid="files-tree"
+          onKeyDown={press}
+          onBlur={leave}
+        >
           {top}
         </div>
         {rootNotes}
