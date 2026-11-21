@@ -212,6 +212,14 @@ async function objectLength(folder: string, signal?: AbortSignal) {
   return length;
 }
 
+export async function isObjectName(
+  folder: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  return oidPattern.test(name) && (await objectLength(folder, signal)) === name.length;
+}
+
 export function isChangePath(path: string, platform: NodeJS.Platform = process.platform): boolean {
   if (path.length === 0 || path.length > changesLimits.pathChars) return false;
   if (path.includes("\0") || path.includes("\ufffd") || drivePrefix.test(path)) return false;
@@ -276,8 +284,7 @@ export async function readBlobSide(
   oid: string,
   signal?: AbortSignal,
 ): Promise<SideRead> {
-  if (!oidPattern.test(oid) || allZeros.test(oid)) return refused;
-  if ((await objectLength(folder, signal)) !== oid.length) return refused;
+  if (allZeros.test(oid) || !(await isObjectName(folder, oid, signal))) return refused;
   const sized = await gitOutput(folder, ["cat-file", "-s", oid], signal);
   if (isHung(sized)) return hung;
   const size = sizeOutput.exec(stdoutOf(sized) ?? "");

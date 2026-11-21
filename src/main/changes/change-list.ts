@@ -2,9 +2,9 @@ import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bri
 import { readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import {
+  isObjectName,
   lineCount,
   noLazyFetch,
-  oidPattern,
   readWorktreeSide,
   worktreeStamps,
 } from "./file-sides.ts";
@@ -325,6 +325,7 @@ export function parseDiff(stdout: string): ParsedList | undefined {
     if (change !== null) changes.push(change);
   }
   if (next !== stats.length) return undefined;
+  if (changes.length > changesLimits.parsed) changes.sort(byPath);
   return {
     records: changes.slice(0, changesLimits.parsed),
     more: Math.max(0, changes.length - changesLimits.parsed),
@@ -353,7 +354,7 @@ export async function readChangeList(
   compareWith: string,
   signal: AbortSignal,
 ): Promise<ChangeListRead> {
-  if (!oidPattern.test(compareWith)) return failed;
+  if (!(await isObjectName(folder, compareWith, signal))) return failed;
   const [diff, others, conflicted] = await Promise.all([
     gitOutput(folder, [...diffArgs, compareWith, "--"], signal),
     gitOutput(folder, untrackedArgs, signal),

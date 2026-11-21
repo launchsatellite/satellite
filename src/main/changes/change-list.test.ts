@@ -26,7 +26,11 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 const gitCalls = vi.hoisted(() => {
-  const calls: { stop?: "time" | "stuck" | undefined; diff?: string | undefined } = {};
+  const calls: {
+    stop?: "time" | "stuck" | undefined;
+    diff?: string | undefined;
+    seen: string[][];
+  } = { seen: [] };
   return calls;
 });
 
@@ -35,6 +39,7 @@ vi.mock("../workspaces/git-command.ts", async (importOriginal) => {
   return {
     ...actual,
     readGit: (...args: Parameters<typeof actual.readGit>) => {
+      gitCalls.seen.push([...args[1]]);
       if (gitCalls.diff !== undefined && args[1].includes("--raw")) {
         return Promise.resolve({ exitCode: 0, stdout: gitCalls.diff, stderr: "" });
       }
@@ -182,6 +187,22 @@ describe("parseDiff", () => {
       ...names.map(() => [3, 4]),
       [1, 2],
     ]);
+  });
+
+  it("keeps the first records in UTF-16 order when a list passes the cap", () => {
+    const names = Array.from(
+      { length: changesLimits.parsed - 1 },
+      (_, index) => `a${String(index).padStart(5, "0")}`,
+    );
+    const gitOrder = [...names, "\u{ffff}", "\u{10000}"];
+    const stdout = output(
+      ...gitOrder.map((path) => raw("100644 100644", one, two, "M", path)),
+      ...gitOrder.map((path) => stat("1", "1", path)),
+    );
+    const parsed = parseDiff(stdout);
+    expect(parsed?.more).toBe(1);
+    expect(parsed?.records.at(-1)?.path).toBe("\u{10000}");
+    expect(parsed?.records.map((record) => record.path)).not.toContain("\u{ffff}");
   });
 
   it("marks binary files and submodules", () => {
@@ -553,6 +574,14 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     ]);
   });
 
+  it("asks git for nothing when the commit name is not this repository's length", async () => {
+    const { repo } = await repository();
+    gitCalls.seen = [];
+    const read = await readChangeList(repo, "a".repeat(64), new AbortController().signal);
+    expect(read).toEqual({ kind: "unavailable", reason: "failed" });
+    expect(gitCalls.seen.filter((args) => args.includes("diff"))).toEqual([]);
+  });
+
   it("never stamps a file through a folder that is a link to outside", async () => {
     const { repo, git } = await repository();
     await mkdir(join(repo, "dir"));
@@ -699,6 +728,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await git("add", ".");
     await git("commit", "-q", "-m", "one");
     const head = await git("rev-parse", "HEAD");
+    await listed(repo, head);
     try {
       for (const stop of ["time", "stuck"] as const) {
         gitCalls.stop = stop;

@@ -3,7 +3,7 @@ import type { ToolRun } from "../platform/tools.ts";
 import { samePath } from "../platform/paths.ts";
 import { defaultStart } from "../workspaces/create-steps.ts";
 import { gitReadMs, runGit } from "../workspaces/git-command.ts";
-import { noLazyFetch, oidPattern } from "./file-sides.ts";
+import { isObjectName, noLazyFetch } from "./file-sides.ts";
 
 export interface ChangeBase {
   ref: string;
@@ -32,7 +32,7 @@ async function commitOid(folder: string, spec: string, signal?: AbortSignal) {
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;
   const oid = oneLine(run.stdout);
-  return run.exitCode === 0 && oidPattern.test(oid) ? oid : undefined;
+  return run.exitCode === 0 && (await isObjectName(folder, oid, signal)) ? oid : undefined;
 }
 
 async function baseRef(
@@ -94,7 +94,9 @@ export async function mergeBase(
   base: string,
   signal?: AbortSignal,
 ): Promise<string | null | undefined> {
-  if (!oidPattern.test(head) || !oidPattern.test(base)) return undefined;
+  if (!(await isObjectName(folder, head, signal)) || !(await isObjectName(folder, base, signal))) {
+    return undefined;
+  }
   const key = `${folder}\0${head}\0${base}`;
   const known = forks.get(key);
   if (known !== undefined) return known;
@@ -104,7 +106,7 @@ export async function mergeBase(
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;
   const oid = oneLine(run.stdout);
-  if (run.exitCode !== 0 || !oidPattern.test(oid)) return undefined;
+  if (run.exitCode !== 0 || !(await isObjectName(folder, oid, signal))) return undefined;
   forks.set(key, oid);
   const oldest = forks.keys().next().value;
   if (forks.size > cachedForks && oldest !== undefined) forks.delete(oldest);
