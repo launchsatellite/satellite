@@ -5,6 +5,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import type { DiffHandle } from "../diff/read-only-editor.tsx";
+import { CommandButton } from "../commands/commands-context.tsx";
 import { Segmented } from "../ui/segmented.tsx";
 import { CentreTabs, centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
@@ -69,11 +70,13 @@ export function ChangesView({
   const place = changesPlace(workspace, view);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [layoutShown, setLayoutShown] = useState(false);
+  const [textShown, setTextShown] = useState(false);
   const inside = useRef(false);
   const panel = useRef<HTMLDivElement>(null);
   const listHost = useRef<HTMLDivElement>(null);
   const show = useCallback(
     (shown: ShownText | null) => {
+      setTextShown(shown !== null);
       setLayoutShown(shown !== null && sideOnly(shown.letter) === null);
       onShown(shown);
     },
@@ -166,6 +169,16 @@ export function ChangesView({
       <div className="flex h-10 flex-none items-center gap-2 border-b border-line bg-side px-2">
         <CentreTabs />
         <div className="ml-auto flex flex-none items-center gap-2">
+          {textShown && (
+            <CommandButton
+              command="changes.send-lines"
+              variant="ghost"
+              size="small"
+              testId="diff-send-lines"
+            >
+              Send lines
+            </CommandButton>
+          )}
           <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
           {layoutShown && (
             <Segmented

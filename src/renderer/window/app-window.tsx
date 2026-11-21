@@ -11,10 +11,10 @@ import {
 import { subscribe } from "../bridge/bridge-client.ts";
 import { ChangesView } from "../changes/changes-view.tsx";
 import { sideOnly, type ShownText } from "../changes/file-diff.tsx";
-import { conflictRequest } from "../changes/prompt-requests.ts";
+import { conflictRequest, lineReference, noLinesSentence } from "../changes/prompt-requests.ts";
 import { useChanges } from "../changes/use-changes.ts";
+import { useDiffSelection } from "../changes/use-diff-selection.ts";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
-import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { InboxList } from "../inbox/inbox-list.tsx";
@@ -267,7 +267,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [changesView, setChangesView] = useState<ChangesShown>("branch");
   const [diffInline, setDiffInline] = useState(false);
   const [shownText, setShownText] = useState<ShownText | null>(null);
-  const diffHandle = useRef<DiffHandle>(null);
+  const { handle: diffHandle, read: diffSelection } = useDiffSelection();
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const changesShown = changesHere !== null;
   const layoutShown = changesShown && shownText !== null && sideOnly(shownText.letter) === null;
@@ -571,6 +571,30 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "changes.send-lines",
+            title: "Send the selected lines to Claude Code",
+            shortcut: { key: "l" },
+            available: changesShown && shownText !== null,
+            run: () => {
+              const selection = diffSelection();
+              if (shownText === null || selection === null) {
+                notify(noLinesSentence, "error");
+                return;
+              }
+              const side = sideOnly(shownText.letter) ?? selection.side;
+              const reference = lineReference({
+                path: side === "original" ? (shownText.from ?? shownText.path) : shownText.path,
+                side,
+                view: shownText.view,
+                base: shownText.base,
+                start: selection.start,
+                end: selection.end,
+              });
+              if (reference.ok) sendToClaudeCode(reference.text);
+              else notify(reference.sentence, "error");
+            },
+          },
+          {
             id: "changes.side-by-side",
             title: "Show the diff side by side",
             available: layoutShown && diffInline,
@@ -618,6 +642,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     diffInline,
     conflicting,
     conflictBase,
+    shownText,
+    diffSelection,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);

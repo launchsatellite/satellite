@@ -37,6 +37,7 @@ export interface AppSession {
   answerFolderDialog(path: string | undefined): Promise<void>;
   dropFolder(path: string): Promise<void>;
   dropFiles(testId: string, paths: string[]): Promise<void>;
+  selectDiffLines(side: "original" | "modified", start: number, end: number): Promise<void>;
   openedLinks(): Promise<string[]>;
   notices(): Promise<RecordedNotice[]>;
   standInEvents(): Promise<StandInEvent[]>;
@@ -662,6 +663,16 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
     dropFolder: (path) => dropOn(page, "column-repository", [path]),
     dropFiles: (testId, files) => dropOn(page, testId, files),
+    async selectDiffLines(side, start, end) {
+      const number = (line: number) =>
+        page
+          .locator(
+            `[data-testid="diff"][data-side="${side}"] .line-numbers, [data-testid="diff"] .editor.${side} .line-numbers`,
+          )
+          .filter({ hasText: new RegExp(`^${String(line)}$`) });
+      await number(start).click();
+      await number(end).click({ modifiers: ["Shift"] });
+    },
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");
       return text.split("\n").filter((line) => line !== "");

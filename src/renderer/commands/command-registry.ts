@@ -27,7 +27,8 @@ export type CommandId =
   | "changes.uncommitted"
   | "changes.inline"
   | "changes.side-by-side"
-  | "changes.update-from-base";
+  | "changes.update-from-base"
+  | "changes.send-lines";
 
 export interface Command {
   id: CommandId;

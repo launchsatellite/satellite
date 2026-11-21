@@ -74,6 +74,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     answerFolderDialog: (path) => session.answerFolderDialog(path),
     dropFolder: (path) => session.dropFolder(path),
     dropFiles: (testId, paths) => session.dropFiles(testId, paths),
+    selectDiffLines: (side, start, end) => session.selectDiffLines(side, start, end),
     openedLinks: () => session.openedLinks(),
     notices: () => session.notices(),
     consoleErrors: session.consoleErrors,

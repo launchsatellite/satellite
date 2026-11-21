@@ -5,7 +5,15 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import { startClaude, stateIs, waitUntil } from "./conditions.ts";
+import {
+  promptTimeoutMs,
+  standInInput,
+  startClaude,
+  stateIs,
+  terminalFocused,
+  toastReads,
+  waitUntil,
+} from "./conditions.ts";
 
 interface Row {
   path: string;
@@ -14,6 +22,12 @@ interface Row {
   current: boolean;
 }
 
+const shortcut = process.platform === "darwin" ? "Meta+L" : "Control+Shift+L";
+const bracketed = (text: string) => `\u001b[200~${text}\u001b[201~`;
+const hiddenNameSentence =
+  "This file's name holds hidden characters, so Satellite can't point Claude Code at it. Ask in your own words.";
+const notReadySentence =
+  "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const waitMs = 15_000;
 const settleMs = 5000;
 const quickMs = 2000;
@@ -379,14 +393,28 @@ async function revealsHiddenText(session: AppSession, folder: string): Promise<v
   await select(session, "src/app.ts");
   await modifiedShows(session, "[U+200B][U+17B4]", "for the zero-width space and the Khmer vowel");
   await modifiedShows(session, "␍", "for the carriage returns");
-  const marks = await page.locator('[data-testid="diff"] .editor.modified .look-alike').count();
-  assert.equal(
-    marks,
-    2,
-    `the Cyrillic letter and the Greek question mark were marked ${String(marks)} times, not twice`,
+  const markCount = () => page.locator('[data-testid="diff"] .editor.modified .look-alike').count();
+  let marks = 0;
+  await waitUntil(
+    async () => {
+      marks = await markCount();
+      return marks === 2;
+    },
+    waitMs,
+    () =>
+      `the Cyrillic letter and the Greek question mark were marked ${String(marks)} times, not twice`,
   );
-  const revealed = await page.locator('[data-testid="diff"] .editor.modified .revealed').count();
-  assert.ok(revealed >= 2, `only ${String(revealed)} revealed runs drew in their own style`);
+  const revealedCount = () =>
+    page.locator('[data-testid="diff"] .editor.modified .revealed').count();
+  let revealed = 0;
+  await waitUntil(
+    async () => {
+      revealed = await revealedCount();
+      return revealed >= 2;
+    },
+    waitMs,
+    () => `only ${String(revealed)} revealed runs drew in their own style`,
+  );
   assert.equal(await page.locator(".editor-banner").count(), 0, "the editor showed its own banner");
   const lastLine = await page.evaluate(() =>
     Math.max(
@@ -403,6 +431,63 @@ async function revealsHiddenText(session: AppSession, folder: string): Promise<v
     gitLines,
     `the diff drew ${String(lastLine)} lines, git has ${String(gitLines)}`,
   );
+}
+
+async function typedAfter(session: AppSession, from: number, expected: string): Promise<void> {
+  let typed = "";
+  await waitUntil(
+    async () => {
+      typed = await standInInput(session, from);
+      return typed.length >= expected.length;
+    },
+    promptTimeoutMs,
+    () => `the prompt received ${JSON.stringify(typed)}`,
+  );
+  assert.equal(typed, expected, `the prompt received ${JSON.stringify(typed)}`);
+  assert.ok(!typed.includes("\r"), "the reference was submitted");
+}
+
+async function sendsLines(session: AppSession): Promise<void> {
+  const { page } = session;
+  await stateIs(session, "session-tab-1", "done", "before the lines were sent");
+  await page.getByTestId("changes-view-branch").click();
+
+  await select(session, "src/app.ts");
+  await page.locator('[data-testid="diff"] .editor.modified').waitFor();
+  let from = (await session.standInEvents()).length;
+  await session.selectDiffLines("modified", 2, 3);
+  await page.keyboard.press(shortcut);
+  await typedAfter(session, from, bracketed("Lines 2 to 3 of src/app.ts in this workspace. "));
+  await terminalFocused(session);
+
+  await select(session, "caf\u{e9} notes.md");
+  await page.locator('[data-testid="diff"] .editor.original').waitFor();
+  from = (await session.standInEvents()).length;
+  await session.selectDiffLines("original", 1, 1);
+  await page.keyboard.press(shortcut);
+  await typedAfter(
+    session,
+    from,
+    bracketed("Line 1 of notes.md at the merge base with origin/main. "),
+  );
+
+  await select(session, "report\u{202e}txt.md");
+  await page.locator('[data-testid="diff"][data-side="modified"]').waitFor();
+  from = (await session.standInEvents()).length;
+  await session.selectDiffLines("modified", 1, 1);
+  await page.keyboard.press(shortcut);
+  await toastReads(session, hiddenNameSentence, "after sending lines of a hidden name");
+  assert.equal(await standInInput(session, from), "", "a hidden name reached the prompt");
+
+  await select(session, "src/app.ts");
+  await page.locator('[data-testid="diff"] .editor.modified').waitFor();
+  await session.selectDiffLines("modified", 2, 3);
+  await page.getByTestId("new-session").click();
+  await stateIs(session, "session-tab-2", "idle", "for the second session");
+  from = (await session.standInEvents()).length;
+  await page.getByTestId("diff-send-lines").click();
+  await toastReads(session, notReadySentence, "after sending lines to a session not ready");
+  assert.equal(await standInInput(session, from), "", "lines reached a session not ready");
 }
 
 export const changesJourney: Journey = {
@@ -426,6 +511,7 @@ export const changesJourney: Journey = {
     await refreshesWhenATurnEnds(session, folder);
     await showsSentences(session, folder);
     await revealsHiddenText(session, folder);
+    await sendsLines(session);
     await session.screenshot("changes");
     assert.deepEqual(session.consoleErrors, [], "the window logged errors");
   },
