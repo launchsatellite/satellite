@@ -89,7 +89,7 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       const entry = table.find((candidate) => candidate.pid === targetPid);
       expect(entry).toBeDefined();
       if (entry === undefined) return;
-      await endSubtree(entry, table);
+      await endSubtree(entry);
       await delay(100);
       expect(isAlive(targetPid)).toBe(false);
       expect(isAlive(grandchild)).toBe(false);
@@ -103,6 +103,23 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
     }
   });
 
+  it("signals nothing when the process in the fresh table has another start", async () => {
+    const stranger = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60_000);"], {
+      stdio: "ignore",
+    });
+    const pid = stranger.pid ?? 0;
+    try {
+      const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
+      expect(found).toBeDefined();
+      if (found === undefined) return;
+      await endSubtree({ ...found, identity: `${String(pid)} an earlier start` });
+      await delay(100);
+      expect(isAlive(pid)).toBe(true);
+    } finally {
+      if (pid > 0 && isAlive(pid)) process.kill(pid, "SIGKILL");
+    }
+  });
+
   it("kills a child that ignores SIGTERM once the grace is over", async () => {
     const stubborn = "process.on('SIGTERM', () => {}); setTimeout(() => {}, 60_000);";
     const { child: target, grandchild } = await startedProcess(parentWithChild(stubborn));
@@ -113,7 +130,7 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       expect(entry).toBeDefined();
       if (entry === undefined) return;
       const began = performance.now();
-      await endSubtree(entry, table);
+      await endSubtree(entry);
       await delay(100);
       expect(isAlive(grandchild)).toBe(false);
       expect(performance.now() - began).toBeLessThan(subtreeStopBoundMs + 500);

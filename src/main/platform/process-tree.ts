@@ -92,15 +92,29 @@ function mayBeSignalled(entry: ProcessEntry): boolean {
   return entry.pid > 1 && entry.pid !== process.pid;
 }
 
-export async function endSubtree(
-  target: ProcessEntry,
+async function freshSubtree(target: ProcessEntry): Promise<ProcessEntry[]> {
+  const table = await readProcessTable();
+  const found = table.find((entry) => entry.identity === target.identity);
+  return found === undefined ? [] : subtreeOf(found, table).filter(mayBeSignalled);
+}
+
+function subtreeSurvivors(
+  known: ReadonlySet<string>,
   table: readonly ProcessEntry[],
-): Promise<void> {
-  const subtree = subtreeOf(target, table).filter(mayBeSignalled);
+): ProcessEntry[] {
+  const found = new Map<number, ProcessEntry>();
+  for (const entry of table.filter((candidate) => known.has(candidate.identity))) {
+    for (const member of subtreeOf(entry, table)) found.set(member.pid, member);
+  }
+  return [...found.values()].filter(mayBeSignalled);
+}
+
+export async function endSubtree(target: ProcessEntry): Promise<void> {
+  const subtree = await freshSubtree(target);
+  if (subtree.length === 0) return;
   if (process.platform === "win32") {
     const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
     const ids = subtree.flatMap((entry) => ["/PID", String(entry.pid)]);
-    if (ids.length === 0) return;
     await new Promise<void>((resolve) => {
       execFile(taskkill, ["/F", ...ids], { windowsHide: true, timeout: taskkillTimeoutMs }, () => {
         resolve();
@@ -112,9 +126,9 @@ export async function endSubtree(
   const known = new Set(subtree.map((entry) => entry.identity));
   for (const entry of subtree) signal(entry.pid, "SIGTERM");
   await delay(termCheckMs);
-  if (survivors(known, await readProcessTable()).length === 0) return;
+  if (subtreeSurvivors(known, await readProcessTable()).length === 0) return;
   await delay(Math.max(0, deadline - Date.now()));
-  for (const entry of survivors(known, await readProcessTable()).filter(mayBeSignalled)) {
+  for (const entry of subtreeSurvivors(known, await readProcessTable())) {
     signal(entry.pid, "SIGKILL");
   }
 }

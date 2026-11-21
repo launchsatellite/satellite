@@ -122,10 +122,14 @@ export function ownedProcess(
   roots: readonly SessionRoot[],
   pid: number,
   started: number,
+  now: number,
 ): OwnedProcess | undefined {
-  const position = positionsOf(entries, roots, null).find(
+  const position = positionsOf(entries, roots, now).find(
     (candidate) =>
-      candidate.owned && candidate.entry.pid === pid && candidate.entry.started === started,
+      candidate.owned &&
+      (candidate.listed || candidate.shadowed) &&
+      candidate.entry.pid === pid &&
+      candidate.entry.started === started,
   );
   return position === undefined ? undefined : ownedOf(position, entries);
 }

@@ -132,38 +132,43 @@ describe("listedProcesses", () => {
 });
 
 describe("ownedProcess", () => {
-  it("owns a listed process, its child and a young one", () => {
+  it("owns a listed process and its child, and refuses a young one", () => {
     const roots = [root(4100)];
-    for (const pid of [4201, 4203, 4301]) {
-      const owned = ownedProcess(macos, roots, pid, startOf(pid));
+    expect(ownedProcess(macos, roots, 4301, startOf(4301), fixtureNow)).toBeUndefined();
+    for (const pid of [4201, 4203]) {
+      const owned = ownedProcess(macos, roots, pid, startOf(pid), fixtureNow);
       expect(owned?.entry.pid).toBe(pid);
       expect(owned?.root.session).toBe("first");
     }
     expect(
-      ownedProcess(macos, roots, 4201, startOf(4201))?.subtree.map((entry) => entry.pid),
+      ownedProcess(macos, roots, 4201, startOf(4201), fixtureNow)?.subtree.map(
+        (entry) => entry.pid,
+      ),
     ).toEqual([4201, 4202, 4203]);
   });
 
   it("refuses the root, a helper, the agent's shell, a detached process and a stranger", () => {
     const roots = [root(4100)];
     for (const pid of [4100, 4110, 4111, 4200, 4300, 5000, 900, 5001, 1, 4401]) {
-      expect(ownedProcess(macos, roots, pid, startOf(pid))).toBeUndefined();
+      expect(ownedProcess(macos, roots, pid, startOf(pid), fixtureNow)).toBeUndefined();
     }
-    expect(ownedProcess(macos, roots, 0, 1)).toBeUndefined();
-    expect(ownedProcess(macos, roots, -4201, startOf(4201))).toBeUndefined();
-    expect(ownedProcess(macos, roots, process.pid, Date.now())).toBeUndefined();
-    expect(ownedProcess(macos, [], 4201, startOf(4201))).toBeUndefined();
+    expect(ownedProcess(macos, roots, 0, 1, fixtureNow)).toBeUndefined();
+    expect(ownedProcess(macos, roots, -4201, startOf(4201), fixtureNow)).toBeUndefined();
+    expect(ownedProcess(macos, roots, process.pid, Date.now(), fixtureNow)).toBeUndefined();
+    expect(ownedProcess(macos, [], 4201, startOf(4201), fixtureNow)).toBeUndefined();
     expect(
-      ownedProcess(macos, [root(4100, { spawnedAt: 0 })], 4201, startOf(4201)),
+      ownedProcess(macos, [root(4100, { spawnedAt: 0 })], 4201, startOf(4201), fixtureNow),
     ).toBeUndefined();
   });
 
   it("refuses a right id with another start time", () => {
-    expect(ownedProcess(macos, [root(4100)], 4201, startOf(4201) + 1000)).toBeUndefined();
-    expect(ownedProcess(macos, [root(4100)], 4201, startOf(4201))).toBeDefined();
+    expect(
+      ownedProcess(macos, [root(4100)], 4201, startOf(4201) + 1000, fixtureNow),
+    ).toBeUndefined();
+    expect(ownedProcess(macos, [root(4100)], 4201, startOf(4201), fixtureNow)).toBeDefined();
   });
 
   it("refuses an id owned by another session's root", () => {
-    expect(ownedProcess(macos, [root(8000)], 4201, startOf(4201))).toBeUndefined();
+    expect(ownedProcess(macos, [root(8000)], 4201, startOf(4201), fixtureNow)).toBeUndefined();
   });
 });

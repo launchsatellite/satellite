@@ -29,7 +29,7 @@ function setup(
   options: {
     table?: ProcessEntry[];
     roots?: RunningRoot[];
-    end?: (target: ProcessEntry, table: readonly ProcessEntry[]) => Promise<void>;
+    end?: (target: ProcessEntry) => Promise<void>;
   } = {},
 ) {
   let clock = fixtureNow;
@@ -156,12 +156,10 @@ describe("processes.stop", () => {
   it("stops a listed process from a fresh table and never the cached one", async () => {
     const { list, stop, end, readTable, table } = setup();
     await list();
-    const fresh = parsePsTable(psMacos);
-    readTable.mockResolvedValueOnce(fresh);
+    readTable.mockResolvedValueOnce(parsePsTable(psMacos));
     await stop(4201, startOf(table, 4201));
     expect(end).toHaveBeenCalledTimes(1);
     expect(end.mock.calls[0]?.[0].pid).toBe(4201);
-    expect(end.mock.calls[0]?.[1]).toBe(fresh);
     await list();
     expect(readTable).toHaveBeenCalledTimes(3);
   });
@@ -175,6 +173,7 @@ describe("processes.stop", () => {
     await expect(stop(5000, startOf(table, 5000))).rejects.toMatchObject({ code: "not-found" });
     await expect(stop(4100, startOf(table, 4100))).rejects.toMatchObject({ code: "not-found" });
     await expect(stop(4200, startOf(table, 4200))).rejects.toMatchObject({ code: "not-found" });
+    await expect(stop(4301, startOf(table, 4301))).rejects.toMatchObject({ code: "not-found" });
     await expect(stop(4201, startOf(table, 4201), pageTwo)).rejects.toMatchObject({
       code: "not-found",
     });
@@ -244,6 +243,7 @@ describe.skipIf(process.platform === "win32")("with real processes", () => {
       serverPid = server.pid;
       const { handlers } = createProcesses({
         roots: () => [{ owner: pageOne, root: root(sessionOne, programPid, spawnedAt) }],
+        now: () => Date.now() + 11_000,
       });
       const stop = (pid: number, started: number, owner = pageOne) =>
         handlers["processes.stop"]({ pid, started }, owner);

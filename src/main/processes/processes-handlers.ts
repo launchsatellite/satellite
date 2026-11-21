@@ -25,7 +25,7 @@ interface ProcessesOptions {
   roots: () => readonly RunningRoot[];
   readTable?: () => Promise<ProcessEntry[]>;
   readPorts?: (pids: readonly number[]) => Promise<ListeningPort[]>;
-  end?: (target: ProcessEntry, table: readonly ProcessEntry[]) => Promise<void>;
+  end?: (target: ProcessEntry) => Promise<void>;
   now?: () => number;
 }
 
@@ -156,10 +156,10 @@ export function createProcesses({
               "Satellite couldn't read the running processes, so it stopped nothing.",
             );
           }
-          const owned = ownedProcess(table, own, pid, started);
+          const owned = ownedProcess(table, own, pid, started, now());
           if (owned === undefined)
             throw new BridgeFailure("not-found", "That process already ended.");
-          await end(owned.entry, table);
+          await end(owned.entry);
           return {};
         } finally {
           stopping = false;
