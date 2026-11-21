@@ -75,6 +75,14 @@ Each row shows the file's Git letter, its name and how many lines it added and r
 
 The view refreshes by itself while Satellite is visible, and at once when a session in the workspace finishes a turn, so nothing needs a button. When the base has moved and files conflict with the branch, a calm grey banner names them and offers Send to Claude Code with a request to update from the base and resolve the conflicts. Conflicts do not enter the inbox. The check is a trial merge that touches nothing in the repository and needs git 2.38 or newer, and on an older git the banner says so instead of claiming there is no conflict. Selecting lines in a diff and pressing Send lines, or Cmd+L, or Ctrl+Shift+L on Windows and Linux with focus in the diff, types a reference to those lines into the Claude Code prompt in plain words, such as Lines 12 to 18 of src/app.ts in this workspace, and never presses enter.
 
+## Files
+
+Files is the second tab of a workspace and shows its folder as it is on disk, read only. The tree reads like a code editor's explorer. Every file and folder has an icon for its kind, ignored entries are dimmed and never hidden, and a changed file carries its Git letter. Only `.git` stays out. Folders load when opened, so a large repository opens as fast as a small one, and every folder starts closed.
+
+Clicking a file opens it in a tab with syntax shown in weight and grey and hidden characters written out. Several files stay open at once, and Satellite remembers each workspace's open files and the one in front, so they come back after a restart. Cmd+F, or Ctrl+Shift+F on Windows and Linux, or Find a file, opens a file by name with fuzzy matching, and finds files git does not ignore.
+
+The tree and the open file follow the disk by themselves while Satellite is visible, so an agent's change shows without a button. Selecting lines in a file and pressing Send lines, or Cmd+L, or Ctrl+Shift+L, types a reference to them into the Claude Code prompt in plain words and never presses enter. Images in PNG, JPEG, GIF and WebP up to 5 MB are drawn. Other binary files, files that are not UTF-8 text and files over 1 MB or 20,000 lines show one sentence in place of the file. Files has no editor and no file operations, because agents write.
+
 ## Decisions
 
 | Chosen | Rejected | Why |

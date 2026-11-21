@@ -1,6 +1,6 @@
 # 007 Files
 
-Status **In progress** · Depends on **003**
+Status **Done** · Depends on **003**
 
 ## Why
 
@@ -28,9 +28,9 @@ Diffs belong to spec 006.
 
 ## Acceptance
 
-- [ ] The tree shows tracked, untracked and ignored files, with ignored ones dimmed and an icon for each kind. Proof, scenario `mixed-changes`.
-- [ ] Open by name finds a file deep in the tree. Proof, the driver.
-- [ ] A file changed on disk updates in its open tab. Proof, a journey.
-- [ ] No path from the interface can read outside the workspace folder, including through a symlink. Proof, unit tests on the path check.
-- [ ] Selected lines arrive in the prompt as a reference. Proof, the driver.
-- [ ] Typing in an open file changes nothing. Proof, the driver.
+- [x] The tree shows tracked, untracked and ignored files, with ignored ones dimmed and an icon for each kind. Proof, scenario `mixed-changes`.
+- [x] Open by name finds a file deep in the tree. Proof, the driver.
+- [x] A file changed on disk updates in its open tab. Proof, a journey.
+- [x] No path from the interface can read outside the workspace folder, including through a symlink. Proof, unit tests on the path check.
+- [x] Selected lines arrive in the prompt as a reference. Proof, the driver.
+- [x] Typing in an open file changes nothing. Proof, the driver.
