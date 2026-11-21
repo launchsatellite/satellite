@@ -66,7 +66,7 @@ function revealAfterParse() {
 
 function opened(address: string | undefined): string | null {
   const url = address === undefined ? null : URL.parse(address);
-  if (url === null || url.protocol !== "https:" || url.username !== "" || url.password !== "") {
+  if (url?.protocol !== "https:" || url.username !== "" || url.password !== "") {
     return null;
   }
   return url.href;
