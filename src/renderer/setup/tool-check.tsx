@@ -103,11 +103,11 @@ function CheckRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="flex flex-wrap items-baseline gap-x-3">
           <span className="font-semibold">{name}</span>
-          <span className="text-[12.5px] text-dim">{row?.detail ?? "Checking"}</span>
+          <span className="text-[12px] text-dim">{row?.detail ?? "Checking"}</span>
         </p>
         {failing && row.fix !== undefined && (
           <>
-            <p className="text-[12.5px] text-fg2">{row.fix.lead}</p>
+            <p className="text-[12px] text-fg2">{row.fix.lead}</p>
             <code className="self-start rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all">
               {row.fix.text}
             </code>
@@ -172,7 +172,7 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
             className="overflow-hidden rounded-[10px] border border-line"
           >
             {result?.ok === false ? (
-              <p className="px-3 py-3 text-[12.5px] text-fg2">{result.error.message}</p>
+              <p className="px-3 py-3 text-[12px] text-fg2">{result.error.message}</p>
             ) : (
               tools.map(({ tool, name }, index) => (
                 <CheckRow
@@ -185,7 +185,7 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
               ))
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-[10px]">
+          <div className="flex flex-wrap items-center justify-end gap-[10px]">
             <span
               data-testid={settled ? "check-count" : undefined}
               className="mr-auto whitespace-nowrap"
@@ -195,7 +195,7 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
               </span>
               <span className="sr-only">{`${String(readyCount)} of 3 tools ready`}</span>
             </span>
-            <span className="ml-auto flex flex-wrap items-center justify-end gap-[10px]">
+            <span className="contents">
               <Button
                 variant="ghost"
                 icon="refresh"

@@ -57,7 +57,7 @@ export function Segmented<T extends string>({
             onClick={() => {
               onChange(option.value);
             }}
-            className={`h-[24px] rounded-[5px] px-2 text-[12.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${checked ? "bg-sel text-fg" : "text-fg2"}`}
+            className={`h-[24px] rounded-[5px] px-2 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${checked ? "bg-sel text-fg" : "text-fg2"}`}
           >
             {option.label}
           </button>

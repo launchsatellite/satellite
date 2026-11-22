@@ -82,7 +82,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
             <div
               key={tab.key}
               role="presentation"
-              className={`group flex h-[26px] flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+              className={`group flex h-7 flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
             >
               <button
                 type="button"

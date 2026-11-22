@@ -69,7 +69,7 @@ export function CentreTabs({
               onClick={() => {
                 onChange(view);
               }}
-              className={`flex h-[26px] flex-none items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+              className={`flex h-7 flex-none items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
             >
               {labelOf(view, pullRequest)}
             </button>
