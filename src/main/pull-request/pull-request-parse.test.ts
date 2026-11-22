@@ -391,6 +391,36 @@ describe("parseConversation", () => {
     ]);
   });
 
+  it("reads the newest commits and GitHub's count, and none when they are absent", () => {
+    const nodes = [
+      { commit: { oid: "c".repeat(40), messageHeadline: "older" } },
+      { commit: { oid: "bad", messageHeadline: "dropped" } },
+      { commit: { oid: head, messageHeadline: "newest" } },
+    ];
+    const text = JSON.stringify({
+      data: { repository: { pullRequest: { commits: { totalCount: 161, nodes } } } },
+    });
+    expect(parseConversation(text, place, false)?.commits).toEqual({
+      commits: [
+        { oid: "ccccccc", headline: "older" },
+        { oid: "aaaaaaa", headline: "newest" },
+      ],
+      moreCommits: 158,
+    });
+    expect(parseConversation(candidates([]), place, false)?.commits).toBeNull();
+  });
+
+  it("says when gh's list of commits stops before the head", () => {
+    const listed = (count: number, last: string) =>
+      Array.from({ length: count }, (_, index) => ({
+        oid: index === count - 1 ? last : "b".repeat(40),
+        headline: "x",
+      }));
+    expect(read(view({ commits: listed(100, "c".repeat(40)) }))?.commitsCut).toBe(true);
+    expect(read(view({ commits: listed(100, head) }))?.commitsCut).toBe(false);
+    expect(read(view({ commits: listed(99, "c".repeat(40)) }))?.commitsCut).toBe(false);
+  });
+
   it("reads the detail only when it was asked for", () => {
     const text = JSON.stringify({
       data: { repository: { pullRequests: { nodes: [] }, pullRequest: full() } },
@@ -729,7 +759,7 @@ describe("failedLines", () => {
 
   it("shows the lines that led to a bare exit code, not the cleanup after it", () => {
     const log = [
-      `﻿${prefix("0.0000000Z Current runner version: 2.330.0")}`,
+      `\uFEFF${prefix("0.0000000Z Current runner version: 2.330.0")}`,
       ...Array.from({ length: 50 }, (_, index) => prefix(`1.0000000Z setup ${String(index)}`)),
       prefix("2.0000000Z ##[group]Run npm run journeys"),
       prefix("2.1000000Z npm run journeys"),

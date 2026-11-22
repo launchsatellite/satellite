@@ -389,15 +389,23 @@ export function createPullRequests({
         }
       }
     }
+    if (conversation === null && parsed.commitsCut) {
+      const newest = await askConversation(parsed.place, head, false, folder, signal);
+      if ("failure" in newest) return nothing(unavailable(newest.failure));
+      conversation = newest;
+    }
+    const commits = conversation?.commits ?? null;
+    if (commits === null && parsed.commitsCut) return nothing(unavailable("failed"));
+    const found = commits === null ? parsed.found : { ...parsed.found, ...commits };
     const verified = addressKey(parsed.place);
     if (!detail) {
-      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified, branch };
+      return { answer: { ...found, detail: null }, place: parsed.place, verified, branch };
     }
     const read: PullRequestDetail = conversation?.detail ?? {
       kind: "unavailable",
       reason: "failed",
     };
-    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified, branch };
+    return { answer: { ...found, detail: read }, place: parsed.place, verified, branch };
   };
 
   const answerFrom = (
