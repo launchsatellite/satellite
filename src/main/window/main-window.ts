@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, nativeTheme } from "electron";
+import { quitButton, quitQuestion } from "./quit-question.ts";
 import { runsQuietly } from "./verification.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
@@ -25,19 +26,8 @@ export function windowInFront(): boolean {
 export async function askToQuit(sessions: number): Promise<boolean> {
   const window = mainWindow();
   if (sessions === 0 || window === undefined) return true;
-  const { response } = await dialog.showMessageBox(window, {
-    type: "warning",
-    message:
-      sessions === 1
-        ? "1 Claude Code session is running"
-        : `${String(sessions)} Claude Code sessions are running`,
-    detail:
-      "Quitting Satellite ends them and anything they started. Each workspace offers to resume its conversation next time.",
-    buttons: ["Quit Satellite", "Cancel"],
-    defaultId: 0,
-    cancelId: 1,
-  });
-  return response === 0;
+  const { response } = await dialog.showMessageBox(window, quitQuestion(sessions));
+  return response === quitButton;
 }
 
 export async function createMainWindow(
