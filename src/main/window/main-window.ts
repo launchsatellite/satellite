@@ -66,7 +66,8 @@ export async function createMainWindow(
   });
   if (titleBar.frame === "overlay") {
     const recolour = () => {
-      if (!window.isDestroyed()) window.setTitleBarOverlay(overlayStyle(nativeTheme.shouldUseDarkColors));
+      if (!window.isDestroyed())
+        window.setTitleBarOverlay(overlayStyle(nativeTheme.shouldUseDarkColors));
     };
     nativeTheme.on("updated", recolour);
     window.once("closed", () => {

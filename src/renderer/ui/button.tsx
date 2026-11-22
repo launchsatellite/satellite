@@ -15,6 +15,7 @@ export interface ButtonProps {
   shortcut?: string;
   disabled?: boolean;
   label?: string;
+  title?: string;
   autoFocus?: boolean;
   expanded?: boolean;
   controls?: string;
@@ -46,6 +47,7 @@ export function Button({
   shortcut,
   disabled = false,
   label,
+  title,
   autoFocus,
   expanded,
   controls,
@@ -61,7 +63,8 @@ export function Button({
       aria-expanded={expanded}
       aria-controls={controls}
       aria-disabled={disabled || undefined}
-      aria-label={iconOnly ? label : undefined}
+      aria-label={label}
+      title={title}
       onClick={disabled ? undefined : onClick}
       className={`${base} ${look} ${state} ${iconOnly ? sizes[size].square : sizes[size].text}`}
     >

@@ -13,7 +13,8 @@ export type IconName =
   | "bell"
   | "running"
   | "chevron-right"
-  | "chevron-down";
+  | "chevron-down"
+  | "sidebar";
 
 const shapes: Record<IconName, ReactNode> = {
   plus: <path d="M8 3v10M3 8h10" />,
@@ -53,6 +54,12 @@ const shapes: Record<IconName, ReactNode> = {
   running: <path d="M5.5 3.5v9l7-4.5z" />,
   "chevron-right": <path d="m6 3.5 4.5 4.5L6 12.5" />,
   "chevron-down": <path d="M3.5 6 8 10.5 12.5 6" />,
+  sidebar: (
+    <>
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+      <path d="M6.25 2.75v10.5" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {

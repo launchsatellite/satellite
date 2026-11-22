@@ -1,4 +1,5 @@
 import type { ProjectView, PullRequestFound, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
@@ -43,14 +44,9 @@ export function WorkspaceHeader({
       tabIndex={-1}
       className="@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
-      <h1 className="max-w-[45%] min-w-10 truncate text-[14px] font-semibold">
-        <VisibleName text={workspace.name ?? project.name} />
+      <h1 className="sr-only">
+        {visibleText(project.name)} / {visibleText(workspaceLabel(project, workspace))}
       </h1>
-      {workspace.name !== null && (
-        <span className="hidden min-w-[4ch] truncate text-[13px] text-dim @md:block">
-          <VisibleName text={project.name} />
-        </span>
-      )}
       {project.missing === null && (
         <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @xs:flex">
           <span className="flex-none">
