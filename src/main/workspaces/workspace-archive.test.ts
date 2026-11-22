@@ -409,11 +409,11 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     const project = await repository("repo", true);
     const record = await workspace(project, "unsure");
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
-    vi.mocked(runGit).mockImplementation((folder, args, ms, signal) => {
+    vi.mocked(runGit).mockImplementation((folder, args, ms, signal, extra) => {
       if (args[0] === "rev-parse" && args.includes("modules")) {
         return Promise.resolve({ exitCode: 128, stdout: "", stderr: "fatal: no\n" });
       }
-      return actual.runGit(folder, args, ms, signal);
+      return actual.runGit(folder, args, ms, signal, extra);
     });
     try {
       const { fingerprint, submodules } = await inspectWorkspace(home, project, record, 0);
@@ -460,8 +460,8 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     const record = await workspace(project, "reborn");
     const { fingerprint } = await inspectWorkspace(home, project, record, 0);
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
-    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
-      const answer = await actual.runGit(folder, args, ms, signal);
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
+      const answer = await actual.runGit(folder, args, ms, signal, extra);
       if (args[0] === "worktree" && args[1] === "remove") {
         await mkdir(record.path);
         await writeFile(join(record.path, "new.md"), "Made after git removed it.\n");
@@ -489,7 +489,7 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
       const parent = join(home, "worktrees", "repo");
       const elsewhere = join(base, "elsewhere");
       const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
-      vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
+      vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
         if (args[0] === "worktree" && args[1] === "remove") {
           await rm(join(project.path, ".git", "worktrees", "moved"), { recursive: true });
           await writeFile(join(record.path, "kept.md"), "Still mine.\n");
@@ -497,7 +497,7 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
           await symlink(elsewhere, parent);
           return { exitCode: 0, stdout: "", stderr: "" };
         }
-        return actual.runGit(folder, args, ms, signal);
+        return actual.runGit(folder, args, ms, signal, extra);
       });
       try {
         expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
@@ -515,11 +515,11 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     const record = await workspace(project, "tidy");
     const { fingerprint } = await inspectWorkspace(home, project, record, 0);
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
-    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
       if (args[0] === "worktree" && args[1] === "remove") {
         await writeFile(join(record.path, "written-late.txt"), "Saved as git looked.\n");
       }
-      return actual.runGit(folder, args, ms, signal);
+      return actual.runGit(folder, args, ms, signal, extra);
     });
     try {
       await expect(
@@ -647,11 +647,11 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     await writeFile(join(record.path, "notes.md"), "unclean\n");
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
     const answers: ({ exitCode: number; stdout: string; stderr: string } | undefined)[] = [];
-    vi.mocked(runGit).mockImplementation((folder, args, ms, signal) => {
+    vi.mocked(runGit).mockImplementation((folder, args, ms, signal, extra) => {
       if (args[0] === "worktree" && args[1] === "remove") {
         return Promise.resolve(answers.shift());
       }
-      return actual.runGit(folder, args, ms, signal);
+      return actual.runGit(folder, args, ms, signal, extra);
     });
     const unclean = {
       exitCode: 128,

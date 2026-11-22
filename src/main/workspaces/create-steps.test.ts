@@ -407,8 +407,8 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     const root = await repository();
     await commit(root, "a", "first commit\n");
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
-    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
-      const answer = await actual.runGit(folder, args, ms, signal);
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
+      const answer = await actual.runGit(folder, args, ms, signal, extra);
       return args[0] === "branch" && args[1] === "--no-track" ? undefined : answer;
     });
     try {
