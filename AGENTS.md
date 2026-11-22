@@ -19,7 +19,7 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | --- | --- |
 | `specs/` | numbered feature specs, the template and the index |
 | `.claude/skills/` | how to work here, one folder per skill |
-| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu, quiet verification and the interface's shortcut keys |
+| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu, quiet verification, the Windows case fold in a command's home folder and the interface's shortcut keys and image paste |
 | `src/preload/` | the preload that exposes `window.satellite` |
 | `src/renderer/` | the sandboxed interface, React and Tailwind, one folder per feature plus `ui/` |
 | `src/shared/` | the bridge contract and other code both processes import |

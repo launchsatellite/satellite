@@ -5,6 +5,7 @@ import { changesLimits } from "../../shared/bridge-contract.ts";
 import {
   isMissing,
   isSafeFileName,
+  isShortName,
   noFollow,
   nonBlocking,
   noTerminal,
@@ -34,7 +35,6 @@ export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const drivePrefix = /^[A-Za-z]:/;
 const ignorableInNames = /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g;
-const windowsShortName = /~\d/;
 const allZeros = /^0+$/;
 const sizeOutput = /^(\d{1,16})\n$/;
 const eolEntry = /^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*?)\s*\t/;
@@ -61,7 +61,7 @@ const objectFormatLengths = new Map([
 function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   if (!isSafeFileName(segment, platform)) return false;
   if (segment.replace(ignorableInNames, "").toLowerCase() === ".git") return false;
-  return platform !== "win32" || !windowsShortName.test(segment);
+  return !isShortName(segment, platform);
 }
 
 export function sameFolder(a: string, b: string): boolean {
