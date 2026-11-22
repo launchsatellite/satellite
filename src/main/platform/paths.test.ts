@@ -74,6 +74,8 @@ describe("samePath", () => {
     expect(samePath("/srv/Repo", "/srv/repo", "linux")).toBe(false);
     expect(samePath("/Users/<name>/Repo", "/users/<name>/repo/", "darwin")).toBe(true);
     expect(samePath("/Users/<name>/repo", "/Users/<name>/repo2", "darwin")).toBe(false);
+    expect(samePath("/Users/<name>/cafe\u0301", "/Users/<name>/caf\u00e9", "darwin")).toBe(true);
+    expect(samePath("/srv/cafe\u0301", "/srv/caf\u00e9", "linux")).toBe(false);
     expect(samePath("C:\\Users\\<name>\\Repo", "c:/users/<name>/repo/", "win32")).toBe(true);
     expect(samePath("C:\\Users\\<name>\\repo", "D:\\Users\\<name>\\repo", "win32")).toBe(false);
   });

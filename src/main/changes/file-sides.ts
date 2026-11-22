@@ -65,8 +65,7 @@ function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
 }
 
 export function sameFolder(a: string, b: string): boolean {
-  if (process.platform !== "darwin") return samePath(a, b);
-  return samePath(a.normalize("NFC"), b.normalize("NFC"));
+  return samePath(a, b);
 }
 
 function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
