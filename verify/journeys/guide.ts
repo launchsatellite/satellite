@@ -647,6 +647,11 @@ async function edgePass(session: AppSession): Promise<void> {
   try {
     await showGuide(session);
     await cardHidden(session, "with the control out of the window");
+    await toastReads(
+      session,
+      "The guide shows as soon as the control it explains is on screen.",
+      "after Show the guide with the control out of the window",
+    );
   } finally {
     await moveControl(session, 2, false);
   }

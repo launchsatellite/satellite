@@ -3,14 +3,14 @@ import { afterDismiss, withToast } from "./toast-queue.ts";
 
 describe("toast queue", () => {
   it("drops a toast that waited too long instead of showing it late", () => {
-    let queue = withToast([], "first", "info", 0);
+    let queue = withToast([], "first", "notice", 0);
     queue = withToast(queue, "stale", "info", 0);
     queue = withToast(queue, "fresh", "info", 9_000);
     expect(afterDismiss(queue, 12_000).map((toast) => toast.message)).toEqual(["fresh"]);
   });
 
   it("never drops a late notice, only a plain confirmation", () => {
-    let queue = withToast([], "first", "info", 0);
+    let queue = withToast([], "first", "notice", 0);
     queue = withToast(queue, "stale", "info", 0);
     queue = withToast(queue, "forgot a workspace", "notice", 0);
     queue = withToast(queue, "also stale", "info", 0);
@@ -34,6 +34,12 @@ describe("toast queue", () => {
       "forgot two",
       "forgot three",
     ]);
+  });
+
+  it("replaces a confirmation already showing with the newer one", () => {
+    let queue = withToast([], "Notifications are off", "info", 0);
+    queue = withToast(queue, "Notifications are on", "info", 500);
+    expect(queue.map((toast) => toast.message)).toEqual(["Notifications are on"]);
   });
 
   it("puts an error in front, replacing the error already shown", () => {

@@ -111,11 +111,12 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - One primary action per view.
 - An action that loses work is a danger button, signal text on the plain ground with a control border, never a signal fill. It replaces the primary action only while something would be lost, as Archive anyway.
 - A dialog opens over the window dimmed behind a scrim, takes the keyboard until it closes and ends in a footer on `side` with its actions on the right, Cancel beside the main action, and any note on the left. Escape and a click outside close it only while nothing runs.
+- A control's accessible name starts with the text it shows, for a file row its Git letter, path and counts, then says the rest in words, so voice control finds it by what is on screen. The repository column is the window's main landmark.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
 
 ## App
 
-The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops.
+The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops. Start Claude Code takes focus only after a session you ended, never after a crash or a failed start, so a key pressed while typing starts nothing.
 
 - Sessions are tabs in a 40px bar on `side` above the terminal, each named Session and its number, with its status pixel and a close button shown on the selected tab and on hover, so a tab cut off at the strip's edge never shows a lone one, and a plus at the end that starts another. The arrow keys, Home and End move between tabs and Delete closes one.
 - A session's pixel is ultraviolet while it works, signal while it needs you, lilac when it is done and grey while it is idle or stopped. A tab whose hooks seem off keeps its grey pixel and carries one sentence as its tooltip and accessible description, Claude Code's settings seem to keep its hooks off here, so this session never shows needs you., and Send to Claude Code there says the same before Type this one yourself. A workspace row shows the most urgent of its sessions, needs you before working before done.

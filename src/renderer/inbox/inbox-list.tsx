@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef } from "react";
-import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
-import { reasonSentence, type InboxRow, type InboxTarget } from "./inbox.ts";
+import { VisibleName } from "../ui/visible-name.tsx";
+import { reasonSentence, rowName, type InboxRow, type InboxTarget } from "./inbox.ts";
 
 interface InboxListProps {
   rows: readonly InboxRow[];
@@ -30,10 +31,6 @@ function countSentence(count: number): string {
   return count === 1 ? "1 workspace needs you." : `${String(count)} workspaces need you.`;
 }
 
-function rowLabel(project: ProjectView, workspace: WorkspaceView): string {
-  return project.missing === null ? workspaceLabel(project, workspace) : (workspace.name ?? "main");
-}
-
 function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]): ShownRow[] {
   const repeated = repeatedNames(projects);
   return withUniqueTestIds(
@@ -48,7 +45,7 @@ function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]):
           key: `${project.id}/${workspace.key}`,
           row,
           testId: `inbox-${project.name}-${workspace.name ?? "main"}`,
-          label: rowLabel(project, workspace),
+          label: workspaceLabel(project, workspace),
           project: shownProject(project, repeated),
           sentence: reasonSentence(row),
         },
@@ -116,7 +113,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
           {shown.map(({ key, row, testId, label, project, sentence }) => {
             const { projectId, workspace } = row.workspace;
             const current = selected?.projectId === projectId && selected.workspace === workspace;
-            const full = `${label}, ${project}. ${sentence}`;
+            const full = rowName(label, project, sentence);
             return (
               <li key={key}>
                 <button
@@ -145,7 +142,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                       data-testid={`${testId}-name`}
                       className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
                     >
-                      {label}
+                      <VisibleName text={label} />
                     </span>
                     <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
                       <span className="max-w-full min-w-0 truncate text-dim">{project}</span>

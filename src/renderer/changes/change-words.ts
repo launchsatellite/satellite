@@ -54,8 +54,16 @@ function submoduleSentence(from: string | null, to: string | null): string {
   return "This submodule changed.";
 }
 
+function shownCounts(file: ChangedFile): string[] {
+  return [
+    file.added !== null && file.added > 0 ? `+${String(file.added)}` : undefined,
+    file.removed !== null && file.removed > 0 ? `−${String(file.removed)}` : undefined,
+  ].filter((count) => count !== undefined);
+}
+
 export function rowName(file: ChangedFile): string {
-  return `${visibleText(file.path)}, ${rowState(file)}${rowCounts(file)}`;
+  const shown = [file.letter, visibleText(file.path), ...shownCounts(file)].join(" ");
+  return `${shown}, ${rowState(file)}${rowCounts(file)}`;
 }
 
 export function diffLabels(file: ChangedFile): { original: string; modified: string } {
@@ -105,7 +113,7 @@ export function unavailableSentence(reason: UnavailableReason, base: string | nu
     case "no-commits":
       return "This branch has no commits yet, so there is nothing to compare.";
     case "no-base":
-      return "Satellite found no base branch to compare with. Uncommitted shows the work here.";
+      return "Branch needs a base branch to compare with, and this workspace has none. Uncommitted shows everything here.";
     case "unrelated":
       return `This branch shares no history with ${baseName(base)}, so Branch has nothing to compare.`;
     case "not-local":

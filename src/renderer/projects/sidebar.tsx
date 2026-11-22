@@ -83,6 +83,10 @@ function counted(count: number | null): string | undefined {
   return count >= countCap ? `${String(countCap)}+` : String(count);
 }
 
+function uncommittedLabel(count: string): string {
+  return count === "1" ? "1 uncommitted file" : `${count} uncommitted files`;
+}
+
 function Readouts({
   workspace,
   pullRequest,
@@ -100,7 +104,7 @@ function Readouts({
   const parts = [
     ahead === undefined ? undefined : `${ahead} ahead`,
     behind === undefined ? undefined : `${behind} behind`,
-    changed === undefined ? undefined : `${changed} changed files`,
+    changed === undefined ? undefined : uncommittedLabel(changed),
     pullRequest === null ? undefined : readoutLabel(pullRequest),
     processes > 0 ? countLabel(processes) : undefined,
   ].filter((part) => part !== undefined);
@@ -116,7 +120,7 @@ function Readouts({
         {ahead !== undefined && <span>↑{ahead}</span>}
         {behind !== undefined && <span>↓{behind}</span>}
         {changed !== undefined && (
-          <span className="flex items-center gap-[3px]">
+          <span title={uncommittedLabel(changed)} className="flex items-center gap-[3px]">
             <Icon name="folder" size={12} />
             {changed}
           </span>

@@ -7,6 +7,7 @@ import {
   needsSince,
   noticeTarget,
   reasonSentence,
+  rowName,
   type InboxRow,
 } from "./inbox.ts";
 
@@ -206,5 +207,19 @@ describe("inbox", () => {
 
   it("a pull request reason leaves when its needs clear", () => {
     expect(inboxReasons([], [{ workspace: alpha, needs: [], since: 1 }])).toEqual([]);
+  });
+});
+
+describe("rowName", () => {
+  it("writes out the hidden characters of a workspace label", () => {
+    expect(rowName("fix\u202Egnp.exe", "repo", "Claude Code needs you.")).toBe(
+      "fix[U+202E]gnp.exe, repo. Claude Code needs you.",
+    );
+  });
+
+  it("leaves a plain label as it is", () => {
+    expect(rowName("alpha", "repo", "Checks failed on the pull request.")).toBe(
+      "alpha, repo. Checks failed on the pull request.",
+    );
   });
 });

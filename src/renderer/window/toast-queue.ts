@@ -27,6 +27,9 @@ export function withToast(
     if (replaced === undefined) return [shown, ...queue].slice(0, queueLimit);
     return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
   }
+  if (tone === "info" && queue[0]?.tone === "info") {
+    return [{ ...shown, id: queue[0].id }, ...queue.slice(1)];
+  }
   const [head, , ...rest] = queue;
   const room = queue.length < queueLimit || head === undefined ? [...queue] : [head, ...rest];
   const waiting = room.findIndex((queued, index) => index > 0 && queued.tone === "notice");

@@ -20,7 +20,11 @@ import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { GuideLayer } from "../guide/guide-layer.tsx";
-import { guideClosedSentence } from "../guide/guide-steps.ts";
+import {
+  guideClosedSentence,
+  guideWaitsForToolsSentence,
+  guideWaitsSentence,
+} from "../guide/guide-steps.ts";
 import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
@@ -47,6 +51,7 @@ import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
+import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
@@ -144,6 +149,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     project: ProjectView;
     workspace: WorkspaceView;
   } | null>(null);
+  const [removing, setRemoving] = useState<{
+    projectId: string;
+    name: string;
+    worktrees: string | undefined;
+    sessions: number;
+    processes: number;
+  } | null>(null);
   const [added, setAdded] = useState<string>();
   const [processesOpen, setProcessesOpen] = useState(false);
   const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
@@ -240,6 +252,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
+  const guideUnplaced = useCallback(() => {
+    notify(checking ? guideWaitsForToolsSentence : guideWaitsSentence, "info");
+  }, [notify, checking]);
   const closeCheck = useCallback(() => {
     setChecking(false);
   }, []);
@@ -307,7 +322,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const folderHere = selectedProject?.missing === null;
   const [centreView, setCentreView] = useState<CentreView>("changes");
-  const [changesView, setChangesView] = useState<ChangesShown>("branch");
+  const [pickedView, setPickedView] = useState<ChangesShown>("branch");
+  const [noBase, setNoBase] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [picked, setPicked] = useState<Picked | null>(null);
   const [diffInline, setDiffInline] = useState(false);
   const [diffNarrow, setDiffNarrow] = useState(true);
@@ -316,6 +332,23 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
+  const hereText =
+    changesHere === null ? null : `${changesHere.projectId}/${changesHere.workspace}`;
+  const changesView: ChangesShown =
+    pickedView === "branch" && hereText !== null && noBase.get(hereText) === false
+      ? "uncommitted"
+      : pickedView;
+  const setChangesView = useCallback(
+    (view: ChangesShown) => {
+      if (view === "branch" && hereText !== null) {
+        setNoBase((current) =>
+          current.has(hereText) ? new Map(current).set(hereText, true) : current,
+        );
+      }
+      setPickedView(view);
+    },
+    [hereText],
+  );
   const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
   const changesShown = shownHere && centreView === "changes";
   const filesShown = shownHere && centreView === "files";
@@ -384,6 +417,24 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownText?.path,
     pullRequestBase,
   );
+  const listedReason =
+    changes.list?.changes.kind === "unavailable" ? changes.list.changes.reason : undefined;
+  const listedBase = changes.header?.base;
+  const knownNoBase = hereText === null ? undefined : noBase.get(hereText);
+  if (hereText !== null) {
+    if (
+      knownNoBase === undefined &&
+      changesShown &&
+      changesView === "branch" &&
+      listedReason === "no-base"
+    ) {
+      setNoBase(new Map(noBase).set(hereText, false));
+    } else if (knownNoBase !== undefined && listedBase !== undefined && listedBase !== null) {
+      const next = new Map(noBase);
+      next.delete(hereText);
+      setNoBase(next);
+    }
+  }
   const uncommitted = useChanges(
     pullRequestFilesShown && shownPullRequest?.atHead === true ? changesHere : null,
     "uncommitted",
@@ -401,13 +452,41 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const fileSearch = useFileSearch(changesHere, palette === "files");
   const fileTabs = useFileTabs(state, update, changesHere, listedWorkspace);
   const openFileTab = fileTabs.open;
+  const openedByName = useRef<string | null>(null);
   const openFound = useCallback(
     (path: string) => {
+      openedByName.current = path;
       openFileTab(path);
       setCentreView("files");
     },
     [openFileTab],
   );
+  useEffect(() => {
+    if (fileShown === null) return;
+    if (openedByName.current !== fileShown.path) return;
+    openedByName.current = null;
+    let frame = 0;
+    let tries = 60;
+    const focusOpened = () => {
+      const viewer = document.querySelector<HTMLElement>("[data-testid='file-pane'] textarea");
+      if (viewer !== null) {
+        viewer.focus();
+        return;
+      }
+      tries -= 1;
+      if (fileShown.kind === "text" && tries > 0) {
+        frame = requestAnimationFrame(focusOpened);
+        return;
+      }
+      document
+        .querySelector<HTMLElement>("[data-testid='file-tabs'] [aria-selected='true']")
+        ?.focus();
+    };
+    frame = requestAnimationFrame(focusOpened);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [fileShown]);
   const shownPullRequestUrl = shownPullRequest?.url ?? null;
   const pullRequestFound = shownPullRequest !== null;
   const placeHere =
@@ -430,7 +509,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const showingProcesses = processesOpen && changesHere !== null;
   const modal =
-    dialogProject !== undefined || archiving !== null || asking !== null || showingProcesses;
+    dialogProject !== undefined ||
+    archiving !== null ||
+    removing !== null ||
+    asking !== null ||
+    showingProcesses;
   const liveTerminals = allSessions
     .filter((tab) => tab.status !== "stopped")
     .map((tab) => tab.terminalId)
@@ -452,6 +535,21 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
     [processes],
   );
+  const removableRunning = useMemo(() => {
+    if (removable === undefined || removable.workspaces.some(({ key }) => key !== "main")) {
+      return { sessions: 0, processes: 0 };
+    }
+    const refs = removable.workspaces.map(({ key }) => ({
+      projectId: removable.id,
+      workspace: key,
+    }));
+    return {
+      sessions: allSessions.filter(
+        (tab) => tab.workspace.projectId === removable.id && tab.status !== "stopped",
+      ).length,
+      processes: refs.reduce((total, ref) => total + processes.rowsOf(ref).length, 0),
+    };
+  }, [removable, allSessions, processes]);
   const sessionNumber = useCallback(
     (terminalId: string) => allSessions.find((tab) => tab.terminalId === terminalId)?.number,
     [allSessions],
@@ -557,6 +655,27 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       next?.focus();
     });
   }, []);
+  const removeProject = useCallback(
+    async (projectId: string, name: string, worktrees: string | undefined) => {
+      const forgot = await remove(projectId);
+      if (forgot === undefined) return;
+      forgetProject(projectId);
+      update(
+        (current) => ({
+          ...current,
+          selected: current.selected?.projectId === projectId ? null : current.selected,
+        }),
+        true,
+      );
+      refresh();
+      notify(forgotSentence(name, forgot, worktrees), "notice");
+      focusSidebarIfLost();
+    },
+    [remove, forgetProject, update, refresh, notify, focusSidebarIfLost],
+  );
+  const closeRemoving = useCallback(() => {
+    setRemoving(null);
+  }, []);
   const archived = (leftover: string | null) => {
     if (archiving === null) return;
     const projectId = archiving.project.id;
@@ -609,20 +728,17 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             title: "Remove this project",
             available: removableId !== undefined,
             run: async () => {
-              if (removableId === undefined) return;
-              const forgot = await remove(removableId);
-              if (forgot === undefined) return;
-              forgetProject(removableId);
-              update(
-                (current) => ({
-                  ...current,
-                  selected: current.selected?.projectId === removableId ? null : current.selected,
-                }),
-                true,
-              );
-              refresh();
-              notify(forgotSentence(String(removableName), forgot, removableWorktrees), "notice");
-              focusSidebarIfLost();
+              if (removableId === undefined || removableName === undefined) return;
+              if (removableRunning.sessions + removableRunning.processes > 0) {
+                setRemoving({
+                  projectId: removableId,
+                  name: removableName,
+                  worktrees: removableWorktrees,
+                  ...removableRunning,
+                });
+                return;
+              }
+              await removeProject(removableId, removableName, removableWorktrees);
             },
           },
           {
@@ -910,14 +1026,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     update,
     add,
     open,
-    remove,
-    refresh,
     removableId,
     removableName,
     removableWorktrees,
+    removableRunning,
+    removeProject,
     notify,
     dismissToast,
-    focusSidebarIfLost,
     sessionHere,
     folderHere,
     activeSession,
@@ -926,7 +1041,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     openSession,
     closeSession,
     activateSession,
-    forgetProject,
     newest,
     openFromInbox,
     changesShown,
@@ -934,6 +1048,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownHere,
     centreView,
     changesView,
+    setChangesView,
     layoutShown,
     diffInline,
     conflicting,
@@ -1077,6 +1192,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           onNext={guide.next}
           onDone={guide.done}
           onClose={guide.close}
+          onUnplaced={guideUnplaced}
         />
         <section
           ref={projectsRef}
@@ -1114,7 +1230,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             testId="divider-left"
           />
         </section>
-        <section
+        <main
           ref={repositoryRef}
           data-testid="column-repository"
           aria-label="Repository"
@@ -1130,7 +1246,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onCommit={setColumn("right", true)}
             testId="divider-right"
           />
-        </section>
+        </main>
         <section
           data-testid="column-sessions"
           aria-label="Sessions"
@@ -1189,6 +1305,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onClose={closeProcesses}
           />
         )}
+        {removing !== null && (
+          <RemoveProjectDialog
+            key={removing.projectId}
+            name={removing.name}
+            sessions={removing.sessions}
+            processes={removing.processes}
+            onClose={closeRemoving}
+            onRemove={() => {
+              setRemoving(null);
+              void removeProject(removing.projectId, removing.name, removing.worktrees);
+            }}
+          />
+        )}
         {asking !== null && (
           <LinkDialog
             key={asking.address}
@@ -1198,7 +1327,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             notify={notify}
           />
         )}
-        <div role="status" data-stays-live="">
+        <div role="status" data-stays-live="" className="absolute">
           {toast !== undefined && (
             <Toast
               key={toast.id}
