@@ -216,6 +216,20 @@ describe("parentName and shownProjectName", () => {
 });
 
 describe("createProjects", () => {
+  it("refuses to add a project over a file a newer Satellite saved, leaving it as it was", async () => {
+    const { base, home } = await repoWithWorkspace();
+    const other = join(base, "other");
+    await mkdir(other);
+    await run("git", ["init", "-q", "-b", "main", other]);
+    const saved = JSON.stringify({ version: 3, projects: [{ id: randomUUID(), future: true }] });
+    await writeFile(join(home, "projects.json"), saved);
+    const { handlers } = projectsIn(home);
+    await expect(handlers["projects.drop"]({ path: other }, owner)).rejects.toThrow(
+      "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.",
+    );
+    expect(await readFile(join(home, "projects.json"), "utf8")).toBe(saved);
+  });
+
   it("keeps healthy projects healthy while folders hang, and bounds the hung reads", async () => {
     const base = await mkdtemp(join(tmpdir(), "satellite-project-hung-"));
     const stuck = ["a", "b", "c"].map((name) => join(base, name));
@@ -355,20 +369,6 @@ describe("createProjects", () => {
       "Satellite is still waiting on a folder that didn't answer. Try again in a moment.",
     );
   });
-  it("refuses to add a project over a file a newer Satellite saved, leaving it as it was", async () => {
-    const { base, home } = await repoWithWorkspace();
-    const other = join(base, "other");
-    await mkdir(other);
-    await run("git", ["init", "-q", "-b", "main", other]);
-    const saved = JSON.stringify({ version: 3, projects: [{ id: randomUUID(), future: true }] });
-    await writeFile(join(home, "projects.json"), saved);
-    const { handlers } = projectsIn(home);
-    await expect(handlers["projects.drop"]({ path: other }, owner)).rejects.toThrow(
-      "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.",
-    );
-    expect(await readFile(join(home, "projects.json"), "utf8")).toBe(saved);
-  });
-
   it("lists a workspace with its branch and changed files", async () => {
     const { workspace, projects } = await repoWithWorkspace();
     await writeFile(join(workspace.path, "new"), "new\n");
