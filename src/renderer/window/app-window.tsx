@@ -282,21 +282,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [dismissToast, drop, open],
   );
   const dragging = useFolderDrop({ accepts: acceptsDrop, onFolder: dropFolder, notify });
-  const switcher = useMemo<SwitcherItem[]>(() => {
-    const listed = projects ?? [];
-    const repeated = repeatedNames(listed);
-    return listed
-      .filter((project) => project.missing === null)
-      .flatMap((project) =>
-        project.workspaces.map((workspace) => ({
-          ref: { projectId: project.id, workspace: workspace.key },
-          label: workspaceLabel(project, workspace),
-          testKey: workspace.name ?? "main",
-          project: project.name,
-          parent: shownParent(project, repeated),
-        })),
-      );
-  }, [projects]);
   const selectedProject = projects?.find((project) => project.id === selectedId);
   const selectedWorkspace = selectedProject?.workspaces.find(
     (workspace) => workspace.key === state.selected?.workspace,
@@ -505,6 +490,22 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         : sessions.pixelFor(projectId, workspace),
     [pullRequests, sessions],
   );
+  const switcher = useMemo<SwitcherItem[]>(() => {
+    const listed = projects ?? [];
+    const repeated = repeatedNames(listed);
+    return listed
+      .filter((project) => project.missing === null)
+      .flatMap((project) =>
+        project.workspaces.map((workspace) => ({
+          ref: { projectId: project.id, workspace: workspace.key },
+          label: workspaceLabel(project, workspace),
+          testKey: workspace.name ?? "main",
+          project: project.name,
+          parent: shownParent(project, repeated),
+          pixel: pixelFor(project.id, workspace.key),
+        })),
+      );
+  }, [pixelFor, projects]);
   const openFromInbox = useCallback(
     (target: InboxTarget) => {
       if (modal) return;

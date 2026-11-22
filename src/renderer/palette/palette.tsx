@@ -12,7 +12,8 @@ import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
-import { StatusPixel } from "../ui/status-pixel.tsx";
+import { pixelLabel } from "../sessions/session-pixel.ts";
+import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { rankMatches } from "../../shared/fuzzy-match.ts";
 import { visibleText } from "../../shared/visible-text.ts";
@@ -28,6 +29,7 @@ export interface SwitcherItem {
   testKey: string;
   project: string;
   parent?: string;
+  pixel: PixelState;
 }
 
 interface PaletteProps {
@@ -45,7 +47,7 @@ interface PaletteOption {
   title: string;
   hint?: string;
   detail?: string;
-  pixel?: boolean;
+  pixel?: PixelState;
   path?: string;
   run: () => void;
 }
@@ -104,7 +106,7 @@ function switcherOptions(
       detail: visibleText(
         item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       ),
-      pixel: true,
+      pixel: item.pixel,
       run: () => {
         onOpenWorkspace(item.ref);
       },
@@ -320,7 +322,9 @@ export function Palette({
                     runOption(option);
                   }}
                 >
-                  {option.pixel === true && <StatusPixel state="idle" size={6} />}
+                  {option.pixel !== undefined && (
+                    <StatusPixel state={option.pixel} size={6} label={pixelLabel(option.pixel)} />
+                  )}
                   {option.path !== undefined && <OptionIcon icons={icons} path={option.path} />}
                   <span
                     className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
