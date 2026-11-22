@@ -290,6 +290,7 @@ export const hiddenReason = z.enum([
 ]);
 const pullRequestComment = z.strictObject({
   author: shortName.nullable(),
+  outside: z.boolean(),
   at: moment,
   body: pullRequestBody,
   bodyCut: z.boolean(),

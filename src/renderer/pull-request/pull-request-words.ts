@@ -42,6 +42,7 @@ export const noConversationSentence = "Nobody has reviewed or commented yet.";
 export const conversationTroubleSentence =
   "The conversation could not be read. The overview above is current.";
 export const someone = "Someone";
+export const outsideWord = "outside the repo";
 export const sendLabel = "Send to Claude Code";
 
 const troubles: Record<PullRequestTrouble, string> = {

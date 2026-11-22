@@ -430,6 +430,46 @@ describe("parseThreads", () => {
     ).toBe(true);
   });
 
+  it("marks a review from someone without standing who is not the viewer as outside", () => {
+    const review = (login: string, authorAssociation?: string) => ({
+      url: null,
+      state: "CHANGES_REQUESTED",
+      submittedAt: "2026-01-01T00:00:00Z",
+      body: "No.",
+      author: { login },
+      authorAssociation,
+    });
+    const text = JSON.stringify({
+      data: {
+        viewer: { login: "fork-owner" },
+        repository: {
+          pullRequests: { nodes: [] },
+          pullRequest: {
+            ...full(),
+            reviews: {
+              totalCount: 4,
+              nodes: [
+                review("maintainer", "MEMBER"),
+                review("passer-by", "CONTRIBUTOR"),
+                review("fork-owner", "CONTRIBUTOR"),
+                review("unknown"),
+              ],
+            },
+          },
+        },
+      },
+    });
+    const detail = parseConversation(text, place, true)?.detail;
+    expect(
+      detail?.kind === "read" ? detail.reviews.map(({ author, outside }) => [author, outside]) : [],
+    ).toEqual([
+      ["maintainer", false],
+      ["passer-by", true],
+      ["fork-owner", false],
+      ["unknown", false],
+    ]);
+  });
+
   it("reads threads with a null line as listed and not placed", () => {
     const detail = parseThreads(
       threadsAnswer({

@@ -19,6 +19,7 @@ import {
   sendLabel,
   showMoreLabel,
   someone,
+  outsideWord,
   threadBadges,
 } from "./pull-request-words.ts";
 import { conversationItems, drawnBy, drawnCount, type ConversationItem } from "./thread-order.ts";
@@ -27,12 +28,14 @@ type Spoken = PullRequestThread["comments"][number];
 
 const drawnPage = 40_000;
 
-function Author({ name, at }: { name: string | null; at: string | null }) {
+function Author({ spoken }: { spoken: Spoken }) {
+  const { author: name, at, outside } = spoken;
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[12px]">
       <span dir="ltr" className="min-w-0 truncate font-medium text-fg [unicode-bidi:isolate]">
         {name === null || name === "" ? someone : visibleText(name)}
       </span>
+      {outside && <span className="text-dim">{outsideWord}</span>}
       {at !== null && <time className="text-dim">{at.slice(0, 10)}</time>}
     </span>
   );
@@ -95,7 +98,7 @@ export function ThreadBody({
     <div className="flex flex-col gap-3">
       {thread.comments.slice(0, drawn).map((spoken, at) => (
         <div key={at} className="flex flex-col gap-1">
-          <Author name={spoken.author} at={spoken.at} />
+          <Author spoken={spoken} />
           <Said spoken={spoken} onLink={onLink} />
         </div>
       ))}
@@ -223,7 +226,7 @@ function Item({
   return (
     <Frame id={id} kind={item.kind}>
       <div className="flex flex-wrap items-center gap-2">
-        <Author name={spoken.author} at={spoken.at} />
+        <Author spoken={spoken} />
         {item.kind === "review" && (
           <span className="font-pixel text-[11px] text-fg2 uppercase">
             {reviewWord(item.review.state)}

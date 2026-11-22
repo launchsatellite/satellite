@@ -62,6 +62,7 @@ const commentNode = z.object({
   isMinimized: looseFlag,
   minimizedReason: looseText,
   author,
+  authorAssociation: looseText,
 });
 const connection = z.object({
   totalCount: looseCount,
@@ -180,13 +181,19 @@ function commentOf(
   node: z.output<typeof commentNode>,
   at: string | null | undefined,
   host: string,
+  viewer: string | null,
 ): Comment {
+  const association = node.authorAssociation;
   const hidden = node.isMinimized === true;
   const body = hidden
     ? { text: "", cut: false }
     : cutText(node.body ?? "", pullRequestLimits.bodyChars);
   return {
     author: loginOf(node),
+    outside:
+      typeof association === "string" &&
+      !isOwnerMemberOrCollaborator(association) &&
+      (viewer === null || node.author?.login !== viewer),
     at: momentOf(at),
     body: body.text,
     bodyCut: body.cut,
@@ -218,6 +225,7 @@ function reviewsOf(
   list: z.output<typeof connection> | null | undefined,
   budget: Budget,
   host: string,
+  viewer: string | null,
 ): { reviews: Review[]; more: number } {
   const nodes = each(list?.nodes, commentNode);
   const real = nodes.flatMap((node): { node: typeof node; state: Review["state"] }[] => {
@@ -228,7 +236,7 @@ function reviewsOf(
   });
   const newest = lastOf(real, pullRequestLimits.reviews);
   const reviews = newest.flatMap(({ node, state }): Review[] => {
-    const comment = withinBudget(commentOf(node, node.submittedAt, host), budget);
+    const comment = withinBudget(commentOf(node, node.submittedAt, host, viewer), budget);
     return comment === null ? [] : [{ ...comment, state }];
   });
   const unseen = restOf(list?.totalCount, nodes.length);
@@ -243,6 +251,7 @@ function threadOf(
   node: z.output<typeof threadNode>,
   place: PullRequestPlace,
   budget: Budget,
+  viewer: string | null,
 ): Thread {
   const nodes = each(node.comments?.nodes, commentNode).slice(0, pullRequestLimits.threadComments);
   const line = node.line;
@@ -250,7 +259,7 @@ function threadOf(
   const discussion = `https://${place.host}/${place.owner}/${place.repo}/pull/${String(place.number)}#discussion_r`;
   const first = nodes[0]?.url;
   const comments = nodes.flatMap((comment) => {
-    const kept = withinBudget(commentOf(comment, comment.createdAt, place.host), budget);
+    const kept = withinBudget(commentOf(comment, comment.createdAt, place.host, viewer), budget);
     return kept === null ? [] : [kept];
   });
   return {
@@ -363,12 +372,15 @@ export interface Conversation {
   detail: ReadDetail | null;
 }
 
+function viewerOf(login: string | null | undefined): string | null {
+  return typeof login === "string" && login !== "" ? login : null;
+}
+
 function candidatesOf(
   list: readonly unknown[] | null | undefined,
-  viewer: string | null | undefined,
+  viewer: string | null,
 ): Candidate[] {
-  const own = (login: string | null | undefined) =>
-    typeof viewer === "string" && viewer !== "" && login === viewer;
+  const own = (login: string | null | undefined) => viewer !== null && login === viewer;
   return each(list, candidateNode).flatMap((node) =>
     typeof node.number === "number" && Number.isInteger(node.number)
       ? [
@@ -388,17 +400,18 @@ function detailOf(
     NonNullable<NonNullable<z.output<typeof threadsShape>["data"]>["repository"]>["pullRequest"]
   >,
   place: PullRequestPlace,
+  viewer: string | null,
 ): ReadDetail {
   const budget = { left: pullRequestLimits.detailChars };
   const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
     0,
     pullRequestLimits.threads,
   );
-  const threads = threadNodes.map((thread) => threadOf(thread, place, budget));
-  const reviews = reviewsOf(pullRequest.reviews, budget, place.host);
+  const threads = threadNodes.map((thread) => threadOf(thread, place, budget, viewer));
+  const reviews = reviewsOf(pullRequest.reviews, budget, place.host, viewer);
   const nodes = lastOf(each(pullRequest.comments?.nodes, commentNode), pullRequestLimits.comments);
   const comments = nodes.flatMap((node) => {
-    const kept = withinBudget(commentOf(node, node.createdAt, place.host), budget);
+    const kept = withinBudget(commentOf(node, node.createdAt, place.host, viewer), budget);
     return kept === null ? [] : [kept];
   });
   return {
@@ -424,10 +437,10 @@ export function parseConversation(
   if (repository === undefined || repository === null) return null;
   const pullRequest = repository.pullRequest;
   return {
-    candidates: candidatesOf(repository.pullRequests?.nodes, data?.viewer?.login),
+    candidates: candidatesOf(repository.pullRequests?.nodes, viewerOf(data?.viewer?.login)),
     detail:
       detail && pullRequest !== undefined && pullRequest !== null
-        ? detailOf(pullRequest, place)
+        ? detailOf(pullRequest, place, viewerOf(data?.viewer?.login))
         : null,
   };
 }
