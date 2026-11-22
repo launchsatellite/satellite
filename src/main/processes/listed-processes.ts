@@ -31,17 +31,7 @@ interface Position {
 export const minimumAgeMs = 10_000;
 export const rootSlackMs = 2000;
 const wholeSecondMs = 1000;
-const shellNames = new Set([
-  "sh",
-  "bash",
-  "zsh",
-  "dash",
-  "fish",
-  "ksh",
-  "cmd",
-  "powershell",
-  "pwsh",
-]);
+const shellNames = new Set(["sh", "bash", "zsh", "dash", "fish", "ksh", "powershell", "pwsh"]);
 
 function mayBeOwned(entry: ProcessEntry): boolean {
   return entry.pid > 1 && entry.pid !== process.pid && !entry.defunct && entry.started !== null;
