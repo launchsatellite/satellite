@@ -392,6 +392,20 @@ describe.skipIf(process.platform === "win32")("prepareLinux", () => {
     }
   });
 
+  it("never signals in a later round a member the first round recorded no ticks for", async () => {
+    const { child, entry } = await sleeperEntry();
+    try {
+      const first = await prepareLinux([entry], () => Promise.resolve(null));
+      const later = await prepareLinux([entry], () => Promise.resolve("100"), first);
+      expect(later.starts.has(entry.pid)).toBe(false);
+      await later.send("SIGKILL");
+      await delay(100);
+      expect(isAlive(entry.pid)).toBe(true);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  });
+
   it("is not ready, and signals nothing, where the start ticks cannot be read", async () => {
     const { child, entry } = await sleeperEntry();
     try {

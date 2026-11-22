@@ -190,7 +190,10 @@ export async function prepareLinux(
 ): Promise<Delivery> {
   const recorded = new Map<number, string>();
   for (const member of members) {
-    const ticks = earlier?.starts.get(member.pid) ?? (await startTicks(member.pid));
+    const ticks =
+      earlier === undefined
+        ? await startTicks(member.pid)
+        : (earlier.starts.get(member.pid) ?? null);
     if (ticks !== null) recorded.set(member.pid, ticks);
   }
   return {
