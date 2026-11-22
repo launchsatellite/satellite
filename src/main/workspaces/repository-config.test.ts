@@ -7,6 +7,8 @@ import {
   realpath,
   rename,
   stat,
+  symlink,
+  unlink,
   utimes,
   writeFile,
 } from "node:fs/promises";
@@ -249,6 +251,23 @@ describe.skipIf(process.platform === "win32")(
       await rename(join(base, "other"), place);
       await dirty(place);
       expect((await readStatus(place))?.entries).toEqual([{ code: " M", path: "a.txt" }]);
+      expect(await marked()).toBe("");
+    });
+
+    it("reads a config that is a link again every time, so a rewritten target is blanked", async () => {
+      const { base, repository, marker, dirty, marked } = await scene();
+      const { repo } = await repository("repo", false);
+      const file = join(repo, ".git", "config");
+      const target = join(base, "linked-config");
+      const plain = await readFile(file, "utf8");
+      await writeFile(target, plain);
+      await unlink(file);
+      await symlink(target, file);
+      await dirty(repo);
+      expect(await readStatus(repo)).toBeDefined();
+      await writeFile(target, `${plain}[filter "x"]\n\tclean = ${marker} clean\n`);
+      await dirty(repo);
+      expect((await readStatus(repo))?.entries).toEqual([{ code: " M", path: "a.txt" }]);
       expect(await marked()).toBe("");
     });
 

@@ -170,6 +170,7 @@ async function identityOf(path: string, withContent: boolean): Promise<string> {
     if (isMissing(error)) return "-";
     throw error;
   }
+  if (info.isSymbolicLink()) throw new Error("a link is never stamped, its target can change");
   const place = [info.dev, info.ino, info.mode];
   if (info.isDirectory()) return place.map(String).join(":");
   const identity = [...place, info.size, info.mtimeNs, info.ctimeNs].map(String).join(":");
