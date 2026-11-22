@@ -353,6 +353,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
+  const listedBranches = useMemo(
+    () =>
+      new Map(
+        (projects ?? []).flatMap((project) =>
+          project.workspaces.map((workspace) => [
+            `${project.id}/${workspace.key}`,
+            workspace.branch,
+          ]),
+        ),
+      ),
+    [projects],
+  );
   const listedRefs = useMemo(
     () =>
       (projects ?? [])
@@ -376,6 +388,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, [allSessions]);
   const pullRequests = usePullRequests({
     listed: listedRefs,
+    branches: listedBranches,
     shown: changesHere,
     detail: pullRequestShown,
     finished: finishedHere,
@@ -471,34 +484,25 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const askProcessPort = useCallback((url: string) => {
     setAsking({ address: url, description: portLinkSentence });
   }, []);
-  const pullRequestNeeding = useMemo(
-    () =>
-      listedRefs.flatMap((workspace) => {
-        const entry = pullRequests.of(workspace);
-        const needs = entry?.last?.needs ?? [];
-        return entry?.needsSince === null || entry === undefined || needs.length === 0
-          ? []
-          : [{ workspace, needs, since: entry.needsSince }];
-      }),
-    [listedRefs, pullRequests],
-  );
   const inbox = useMemo(
     () =>
-      inboxRows(inboxReasons(allSessions, pullRequestNeeding), ({ projectId, workspace }) =>
+      inboxRows(inboxReasons(allSessions, pullRequests.needing), ({ projectId, workspace }) =>
         (projects ?? []).some(
           (project) =>
             project.id === projectId &&
             project.workspaces.some((listed) => listed.key === workspace),
         ),
       ),
-    [allSessions, pullRequestNeeding, projects],
+    [allSessions, pullRequests.needing, projects],
   );
   const newest = inbox[0]?.reasons[0];
   const pixelFor = useCallback(
     (projectId: string, workspace: WorkspaceKey) =>
-      pullRequests.of({ projectId, workspace })?.needsSince == null
-        ? sessions.pixelFor(projectId, workspace)
-        : "needs-you",
+      pullRequests.needing.some(
+        (need) => need.workspace.projectId === projectId && need.workspace.workspace === workspace,
+      )
+        ? "needs-you"
+        : sessions.pixelFor(projectId, workspace),
     [pullRequests, sessions],
   );
   const openFromInbox = useCallback(

@@ -189,9 +189,10 @@ describe("system notices", () => {
   it("clamps the count, shows none on Windows and gives Windows the installer's identity", async () => {
     const notices = await freshModule();
     notices.setAppBadge(40);
+    notices.setAppBadge(5000);
     notices.setAppBadge(-2);
     notices.setAppBadge(Number.NaN);
-    expect(fakes.app.setBadgeCount.mock.calls).toEqual([[16], [0], [0]]);
+    expect(fakes.app.setBadgeCount.mock.calls).toEqual([[40], [4200], [0], [0]]);
     fakes.app.setBadgeCount.mockImplementation(() => {
       throw new Error("no dock");
     });

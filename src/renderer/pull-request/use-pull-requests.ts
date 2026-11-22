@@ -1,23 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   PullRequestAnswer,
   PullRequestFound,
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
-import { invoke } from "../bridge/bridge-client.ts";
+import { invoke, subscribe } from "../bridge/bridge-client.ts";
+import type { PullRequestNeeding } from "../inbox/inbox.ts";
 import { nextNeed } from "../inbox/need-order.ts";
 import { createSchedule, type Pace } from "../ui/refresh-schedule.ts";
 
 export interface PullRequestEntry {
   answer: PullRequestAnswer | null;
   last: PullRequestFound | null;
-  needsSince: number | null;
+  branch: string | null;
 }
 export interface PullRequests {
   of: (ref: WorkspaceRef) => PullRequestEntry | undefined;
+  needing: readonly PullRequestNeeding[];
 }
 interface PullRequestsInput {
   listed: readonly WorkspaceRef[];
+  branches: ReadonlyMap<string, string | null>;
   shown: WorkspaceRef | null;
   detail: boolean;
   finished: string;
@@ -49,11 +52,11 @@ function keeps(answer: PullRequestAnswer): boolean {
 function settled(
   previous: PullRequestEntry | undefined,
   answer: PullRequestAnswer,
+  branch: string | null,
 ): PullRequestEntry {
-  const last = answer.kind === "found" ? answer : keeps(answer) ? (previous?.last ?? null) : null;
-  const needing = last !== null && last.needs.length > 0;
-  const needsSince = needing ? (previous?.needsSince ?? nextNeed()) : null;
-  const next = { answer, last, needsSince };
+  const found = answer.kind === "found";
+  const last = found ? answer : keeps(answer) ? (previous?.last ?? null) : null;
+  const next = { answer, last, branch: found ? branch : (previous?.branch ?? null) };
   return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next)
     ? previous
     : next;
@@ -70,12 +73,15 @@ async function read(
 
 export function usePullRequests({
   listed,
+  branches,
   shown,
   detail,
   finished,
   finishedElsewhere,
 }: PullRequestsInput): PullRequests {
   const [entries, setEntries] = useState<ReadonlyMap<string, PullRequestEntry>>(new Map());
+  const [told, setTold] = useState<ReadonlyMap<string, PullRequestNeeding>>(new Map());
+  const branchesNow = useRef(branches);
   const refreshShown = useRef<() => void>(() => undefined);
   const askOther = useRef<(place: string, fresh?: boolean) => void>(() => undefined);
   const freshNext = useRef(false);
@@ -90,13 +96,29 @@ export function usePullRequests({
     setEntries((current) => {
       const place = placeOf(ref);
       const previous = current.get(place);
-      const next = settled(previous, answer);
+      const next = settled(previous, answer, branchesNow.current.get(place) ?? null);
       if (next === previous) return current;
       return new Map(current).set(place, next);
     });
   }, []);
 
+  useEffect(
+    () =>
+      subscribe("pullRequests.needing", ({ needing }) => {
+        setTold((current) => {
+          const next = new Map<string, PullRequestNeeding>();
+          for (const { workspace, needs } of needing) {
+            const place = placeOf(workspace);
+            next.set(place, { workspace, needs, since: current.get(place)?.since ?? nextNeed() });
+          }
+          return next;
+        });
+      }),
+    [],
+  );
+
   useEffect(() => {
+    branchesNow.current = branches;
     detailNow.current = detail;
     listedNow.current = listed;
     shownNow.current = shownPlace;
@@ -238,6 +260,18 @@ export function usePullRequests({
     seenDone.current = new Map(finishedElsewhere);
   }, [finishedElsewhere]);
 
-  const of = useCallback((ref: WorkspaceRef) => entries.get(placeOf(ref)), [entries]);
-  return { of };
+  const of = useCallback(
+    (ref: WorkspaceRef) => {
+      const place = placeOf(ref);
+      const entry = entries.get(place);
+      if (entry?.answer?.kind === "found" || entry?.last == null) return entry;
+      return branches.get(place) === entry.branch ? entry : { ...entry, last: null };
+    },
+    [entries, branches],
+  );
+  const needing = useMemo(() => {
+    const live = new Set(listed.map(placeOf));
+    return [...told].flatMap(([place, need]) => (live.has(place) ? [need] : []));
+  }, [told, listed]);
+  return { of, needing };
 }

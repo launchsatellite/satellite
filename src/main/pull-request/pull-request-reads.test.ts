@@ -25,7 +25,8 @@ vi.mock("../platform/user-environment.ts", () => ({
 
 const run = promisify(execFile);
 const recorded = z.strictObject({ args: z.array(z.string()), cwd: z.string() });
-const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
+const emitted = vi.fn<BridgeOwner["emit"]>();
+const owner: BridgeOwner = { id: 1, emit: emitted, onGone: () => undefined };
 const headOid = "a".repeat(40);
 const jobAddress = "https://github.com/example-org/verify-repo/actions/runs/1001/job/2001";
 const place = { host: "github.com", owner: "example-org", repo: "verify-repo", number: 12 };
@@ -563,11 +564,15 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
     await read(first);
     expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+    expect(emitted).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
     await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
     advance(10_000);
     await read(first);
     expect(needing).toHaveBeenLastCalledWith([]);
     expect(needing).toHaveBeenCalledTimes(2);
+    expect(emitted).toHaveBeenLastCalledWith("pullRequests.needing", { needing: [] });
   });
 
   it("keeps needing through an offline answer and drops it when signed out", async () => {
@@ -580,6 +585,20 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(needing).toHaveBeenCalledTimes(1);
     await answer("view", { exitCode: 4, stderr: "gh auth login" });
     expect(await read(first, true)).toEqual({ kind: "unavailable", reason: "signed-out" });
+    expect(needing).toHaveBeenLastCalledWith([]);
+  });
+
+  it("lets the old branch's pull request go when a read fails after a branch switch", async () => {
+    const { answer, read, needing, advance, repo } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+    await inRepo(repo, "checkout", "-q", "-b", "other");
+    await inRepo(repo, "config", "branch.other.remote", "origin");
+    await inRepo(repo, "config", "branch.other.merge", "refs/heads/other");
+    await answer("view", { exitCode: 1, stderr: "dial tcp: no such host" });
+    advance(10_000);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "offline" });
     expect(needing).toHaveBeenLastCalledWith([]);
   });
 

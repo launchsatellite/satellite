@@ -4,6 +4,7 @@ import type {
   PullRequestAnswer,
   PullRequestDetail,
   PullRequestFound,
+  PullRequestNeed,
   PullRequestTrouble,
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
@@ -54,6 +55,7 @@ interface Remembered {
   workspace: WorkspaceRef;
   owner: BridgeOwner;
   kept: PullRequestFound | null;
+  branch: string | null;
   place: PullRequestPlace | null;
   verified: string | null;
   jobs: ReadonlySet<string>;
@@ -169,32 +171,55 @@ export function createPullRequests({
   const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
   const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
   let told = "";
+  const toldPages = new Map<BridgeOwner, string>();
+
+  const tellPages = (needing: readonly (Needing & { needs: readonly PullRequestNeed[] })[]) => {
+    const pages = new Set([...toldPages.keys(), ...needing.map(({ owner }) => owner)]);
+    for (const page of pages) {
+      const own = needing
+        .filter(({ owner }) => owner === page)
+        .map(({ workspace, needs }) => ({ workspace, needs: [...needs] }));
+      const signature = JSON.stringify(own);
+      if (toldPages.get(page) === signature) continue;
+      if (own.length === 0) toldPages.delete(page);
+      else toldPages.set(page, signature);
+      page.emit("pullRequests.needing", { needing: own });
+    }
+  };
 
   const tellNeeding = () => {
     const needing = [...memory.values()].flatMap(({ kept, workspace, owner }) =>
       kept !== null && kept.needs.length > 0
-        ? [{ workspace, owner, reason: "pull-request" as const }]
+        ? [{ workspace, owner, reason: "pull-request" as const, needs: kept.needs }]
         : [],
     );
+    tellPages(needing);
     const signature = needing
       .map(({ workspace, owner }) => `${keyOf(workspace)}@${String(owner.id)}`)
       .join("\n");
     if (signature === told) return;
     told = signature;
-    onNeeding(needing);
+    onNeeding(needing.map(({ workspace, owner, reason }) => ({ workspace, owner, reason })));
   };
 
   const remember = (
     key: string,
     base: Pick<Remembered, "folder" | "workspace" | "owner">,
-    answer: PullRequestAnswer,
-    place: PullRequestPlace | null,
-    verified: string | null,
+    {
+      answer,
+      place,
+      verified,
+      branch,
+    }: Pick<Remembered, "answer" | "place" | "verified" | "branch">,
   ) => {
     const before = memory.get(key);
     const failed = answer.kind === "unavailable";
-    const keeps = answer.kind === "unavailable" && transient.has(answer.reason);
-    const kept = answer.kind === "found" ? answer : keeps ? (before?.kept ?? null) : null;
+    const keeps =
+      answer.kind === "unavailable" &&
+      transient.has(answer.reason) &&
+      branch !== null &&
+      before?.branch === branch;
+    const kept = answer.kind === "found" ? answer : keeps ? before.kept : null;
     const failures = failed ? (before?.failures ?? 0) + 1 : 0;
     const hold = Math.min(firstHoldMs * 2 ** (failures - 1), longestHoldMs);
     memory.set(key, {
@@ -202,13 +227,14 @@ export function createPullRequests({
       answer,
       at: now(),
       kept,
-      place: answer.kind === "found" ? place : keeps ? (before?.place ?? null) : null,
-      verified: answer.kind === "found" ? verified : keeps ? (before?.verified ?? null) : null,
+      branch,
+      place: answer.kind === "found" ? place : keeps ? before.place : null,
+      verified: answer.kind === "found" ? verified : keeps ? before.verified : null,
       jobs:
         answer.kind === "found"
           ? new Set(answer.checks.flatMap((check) => (check.job === null ? [] : [check.job])))
           : keeps
-            ? (before?.jobs ?? new Set())
+            ? before.jobs
             : new Set(),
       failures,
       holdUntil: failed ? now() + hold : 0,
@@ -279,13 +305,21 @@ export function createPullRequests({
     answer: PullRequestAnswer;
     place: PullRequestPlace | null;
     verified: string | null;
+    branch: string | null;
   }> => {
-    const nothing = (answer: PullRequestAnswer) => ({ answer, place: null, verified: null });
+    let branch: string | null = null;
+    const nothing = (answer: PullRequestAnswer) => ({
+      answer,
+      place: null,
+      verified: null,
+      branch,
+    });
     const viewed = await pace.run(
       async () => {
         if (pace.paused()) return { failure: "rate-limited" as const };
-        const branch = await currentBranch(folder, signal);
-        if (branch === undefined) return { failure: "failed" as const };
+        const current = await currentBranch(folder, signal);
+        if (current === undefined) return { failure: "failed" as const };
+        branch = current;
         const pushed = await isPushed(folder, branch, signal);
         if (pushed === undefined) return { failure: "failed" as const };
         if (!pushed) return { failure: "not-pushed" as const };
@@ -356,13 +390,13 @@ export function createPullRequests({
     }
     const verified = addressKey(parsed.place);
     if (!detail) {
-      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified };
+      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified, branch };
     }
     const read: PullRequestDetail = conversation?.detail ?? {
       kind: "unavailable",
       reason: "failed",
     };
-    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified };
+    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified, branch };
   };
 
   const answerFrom = (
@@ -400,7 +434,7 @@ export function createPullRequests({
         memory.get(key)?.verified ?? null,
       );
       controller.signal.throwIfAborted();
-      remember(key, { folder, workspace, owner }, result.answer, result.place, result.verified);
+      remember(key, { folder, workspace, owner }, result);
       return result.answer;
     })().finally(() => {
       active.delete(read);
