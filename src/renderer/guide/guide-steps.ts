@@ -47,7 +47,8 @@ export const guideLegend: readonly { state: PixelState; word: string }[] = [
   { state: "needs-you", word: "needs you" },
   { state: "done", word: "done" },
 ];
-export const guideWaitsForToolsSentence = "The guide shows once you close your tools.";
+export const guideWaitsForToolsSentence =
+  "The guide shows once you close the check of git, gh and Claude Code.";
 export const guideWaitsSentence =
   "The guide shows as soon as the control it explains is on screen.";
 export const guideClosedSentence =

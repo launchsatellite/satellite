@@ -52,6 +52,7 @@ import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
+import { runningHere } from "../projects/running-here.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
@@ -535,21 +536,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
     [processes],
   );
-  const removableRunning = useMemo(() => {
-    if (removable === undefined || removable.workspaces.some(({ key }) => key !== "main")) {
-      return { sessions: 0, processes: 0 };
-    }
-    const refs = removable.workspaces.map(({ key }) => ({
-      projectId: removable.id,
-      workspace: key,
-    }));
-    return {
-      sessions: allSessions.filter(
-        (tab) => tab.workspace.projectId === removable.id && tab.status !== "stopped",
-      ).length,
-      processes: refs.reduce((total, ref) => total + processes.rowsOf(ref).length, 0),
-    };
-  }, [removable, allSessions, processes]);
+  const removableRunning = useMemo(
+    () =>
+      removable === undefined
+        ? { sessions: 0, processes: 0 }
+        : runningHere(removable, allSessions, (ref) => processes.rowsOf(ref).length),
+    [removable, allSessions, processes],
+  );
   const sessionNumber = useCallback(
     (terminalId: string) => allSessions.find((tab) => tab.terminalId === terminalId)?.number,
     [allSessions],
