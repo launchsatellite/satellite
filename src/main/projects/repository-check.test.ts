@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { readStatus } from "../workspaces/changed-files.ts";
 import { checkRepository, parseRevParse } from "./repository-check.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -58,8 +59,9 @@ beforeAll(async () => {
   await git(join(base, "repo"), ["worktree", "add", "-q", join(base, "linked")]);
   await git(base, ["clone", "-q", "--bare", join(base, "repo"), "shared.git"]);
   await git(join(base, "shared.git"), ["worktree", "add", "-q", join(base, "from-bare")]);
-  await mkdir(join(base, "borrower"));
-  await writeFile(join(base, "borrower", ".git"), "gitdir: ../repo/.git\n");
+  await mkdir(join(base, "cw"));
+  await makeRepository(join(base, "cw", "inner"));
+  await git(join(base, "cw", "inner"), ["config", "core.worktree", join(base, "cw")]);
   await makeRepository(join(base, "aimed"));
   await git(join(base, "aimed"), ["config", "core.worktree", join(base, "plain")]);
 }, 30_000);
@@ -207,8 +209,8 @@ describe("checkRepository", () => {
         "linked is a worktree of another repository. Add the repository's main folder instead.",
       ],
       [
-        join(base, "borrower"),
-        "borrower uses a .git folder from somewhere else. Satellite needs a repository with its own .git folder inside it.",
+        join(base, "cw", "inner"),
+        "inner keeps its working files in another folder. Satellite needs a repository with its own checkout.",
       ],
       [
         join(base, "aimed"),
@@ -250,6 +252,44 @@ describe("checkRepository", () => {
     await writeFile(join(dotfiles, ".gitignore"), "/config/.satellite/\n");
     expect(await checkRepository(dotfiles, inner)).toEqual({ ok: true, root: dotfiles });
   });
+
+  it.skipIf(isWindows)(
+    "adds a submodule checkout and blanks a filter its own config names",
+    { timeout: 30_000 },
+    async () => {
+      const sup = join(base, "sup");
+      await makeRepository(sup);
+      await git(sup, [
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        "-q",
+        join(base, "repo"),
+        "sub",
+      ]);
+      const sub = join(sup, "sub");
+      const hits = join(base, "submodule-hits");
+      const marker = join(base, "submodule-marker.sh");
+      await writeFile(marker, `#!/bin/sh\necho ran >> "${hits}"\ncat\n`);
+      await chmod(marker, 0o755);
+      await writeFile(join(sub, "a.txt"), "a\n");
+      await git(sub, ["add", "a.txt"]);
+      await git(sub, ["commit", "-q", "-m", "a"]);
+      await git(sub, ["config", "filter.x.clean", marker]);
+      await writeFile(join(sup, ".git", "modules", "sub", "info", "attributes"), "* filter=x\n");
+      await writeFile(join(sub, "a.txt"), "b\n");
+      const later = new Date(Date.now() + 10_000);
+      await utimes(join(sub, "a.txt"), later, later);
+      await git(sub, ["--no-optional-locks", "status", "--porcelain"]);
+      expect(await readFile(hits, "utf8")).not.toBe("");
+      await writeFile(hits, "");
+      await utimes(join(sub, "a.txt"), later, later);
+      expect(await checkRepository(sub, home)).toEqual({ ok: true, root: await realpath(sub) });
+      expect((await readStatus(sub))?.entries.map((entry) => entry.path)).toContain("a.txt");
+      expect(await readFile(hits, "utf8")).toBe("");
+    },
+  );
 
   it("refuses a plain folder with its sentence under a German locale", async () => {
     vi.stubEnv("LANG", "de_DE.UTF-8");

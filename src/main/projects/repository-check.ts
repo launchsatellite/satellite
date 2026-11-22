@@ -1,5 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, dirname, join, relative, sep } from "node:path";
+import { basename, dirname, relative, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
@@ -41,7 +41,6 @@ const revParseArgs = [
 const ownFolder = "That folder belongs to Satellite itself. Add a repository from somewhere else.";
 const missingFolder = "That folder no longer exists. Choose another one.";
 const ownCheckout = "Satellite needs a repository with its own checkout.";
-const ownGitFolder = "Satellite needs a repository with its own .git folder inside it.";
 const slowFolder =
   "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.";
 const stillWaiting =
@@ -201,7 +200,9 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   const root = await realFolder(parsed.toplevel);
   if (root === undefined) return refuse(missingFolder);
   if (isInsidePath(read.home, root)) return refuse(ownFolder);
-  if (!isInsidePath(root, real)) {
+  const gitFolder = await realFolder(parsed.gitDir);
+  const holdsItsGit = gitFolder !== undefined && isInsidePath(real, gitFolder);
+  if (!isInsidePath(root, real) || (!samePath(root, real) && holdsItsGit)) {
     return refuse(`${name} keeps its working files in another folder. ${ownCheckout}`);
   }
   if (!samePath(root, real)) {
@@ -210,10 +211,6 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   }
   if (isInsidePath(root, read.home) && !(await ignoresHome(root, read.home))) {
     return refuse(homeInside(root, read.home));
-  }
-  const gitFolder = await realFolder(parsed.gitDir);
-  if (gitFolder === undefined || !samePath(gitFolder, join(root, ".git"))) {
-    return refuse(`${name} uses a .git folder from somewhere else. ${ownGitFolder}`);
   }
   if (
     !(await honoursNoLazyFetch()) &&
