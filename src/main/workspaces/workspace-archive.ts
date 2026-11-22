@@ -164,7 +164,18 @@ async function readInspection(
   record: StoredWorkspace,
 ): Promise<Inspection> {
   const failure = unreadable(record.name);
-  if (!(await isConfined(home, project, record))) throw failure;
+  const folder = leftoverFolder(project, record);
+  if (!(await isConfined(home, project, record))) {
+    const gone = await lstat(record.path).then(
+      () => false,
+      (error: unknown) => isMissing(error),
+    );
+    if (!gone) throw failure;
+    throw new BridgeFailure(
+      "refused",
+      `Satellite can't find ${record.name}'s folder ${folder} in the Satellite home, so it won't archive it.`,
+    );
+  }
   const identity = await folderIdentity(record.path);
   if (identity === undefined) throw failure;
   const listing = await listWorktrees(project.path);
@@ -173,7 +184,13 @@ async function readInspection(
   const listed = listing.worktrees
     .slice(1)
     .find((worktree) => samePath(worktree.path, record.path));
-  if (listed === undefined || listed.bare || listed.prunable) throw failure;
+  if (listed === undefined || listed.prunable) {
+    throw new BridgeFailure(
+      "refused",
+      `git no longer counts ${record.name} as a worktree, so Satellite won't archive it. Its folder stays in ${folder} in the Satellite home, and once you move it out of there Satellite forgets the workspace.`,
+    );
+  }
+  if (listed.bare) throw failure;
   if (!(await sharesRepository(project.path, record.path))) throw failure;
   const status = await readStatus(record.path);
   if (status === undefined) throw failure;

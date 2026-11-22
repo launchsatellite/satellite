@@ -9,6 +9,8 @@ import {
   readdir,
   readFile,
   realpath,
+  rename,
+  rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -284,6 +286,53 @@ describe("inspectWorkspace", { timeout: realGitMs }, () => {
       code: "refused",
       message:
         "Satellite archives a workspace only with git 2.36 or newer, which lists worktrees safely. Update git, then try again.",
+    });
+  });
+});
+
+describe("inspectWorkspace on a workspace git no longer counts", { timeout: realGitMs }, () => {
+  const notCounted =
+    "git no longer counts lost as a worktree, so Satellite won't archive it. Its folder stays in worktrees/repo/lost in the Satellite home, and once you move it out of there Satellite forgets the workspace.";
+
+  it("names the folder when the worktree's .git file is gone", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rm(join(record.path, ".git"));
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("names the folder when the repository no longer knows the worktree", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rm(join(project.path, ".git", "worktrees", "lost"), { recursive: true });
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("names the folder when another repository took the project's place", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rename(project.path, join(base, "repo-aside"));
+    await repository("repo", false);
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("says the folder is gone when the Satellite home moved", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rename(home, join(base, "home-moved"));
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message:
+        "Satellite can't find lost's folder worktrees/repo/lost in the Satellite home, so it won't archive it.",
     });
   });
 });

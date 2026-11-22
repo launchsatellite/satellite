@@ -1,7 +1,17 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -481,6 +491,36 @@ describe("createProjects", () => {
       projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
     ).rejects.toThrow("repo still has 1 workspace. Archive it first, then remove the project.");
     expect(await storedWorkspaceIds(home)).toHaveLength(1);
+  });
+
+  it.each([
+    ["the worktree's .git file is gone", (repo: string, folder: string) => [join(folder, ".git")]],
+    [
+      "the repository no longer knows the worktree",
+      (repo: string) => [join(repo, ".git", "worktrees", "fix-login")],
+    ],
+  ])("forgets workspaces git no longer counts when %s, and keeps their folders", async (_, gone) => {
+    const { home, repo, workspace, projects } = await repoWithWorkspace();
+    for (const path of gone(repo, workspace.path)) await rm(path, { recursive: true });
+    const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
+    expect(
+      await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
+    ).toEqual({ forgotWorkspaces: 1 });
+    expect(await storedWorkspaceIds(home)).toEqual([]);
+    expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
+  });
+
+  it("forgets workspaces of a repository another one replaced, and keeps their folders", async () => {
+    const { base, home, repo, gitIn, workspace, projects } = await repoWithWorkspace();
+    const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
+    await rename(repo, join(base, "repo-aside"));
+    await mkdir(repo);
+    await gitIn(repo, ["init", "-q", "-b", "main"]);
+    expect(
+      await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
+    ).toEqual({ forgotWorkspaces: 1 });
+    expect(await storedWorkspaceIds(home)).toEqual([]);
+    expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
   });
 
   it("forgets a missing project with its workspaces and stops the sessions in each", async () => {

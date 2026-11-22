@@ -16,6 +16,7 @@ import {
   type HalfMade,
 } from "../workspaces/workspace-reads.ts";
 import { projectSegment } from "../workspaces/worktree-folders.ts";
+import { listWorktrees } from "../workspaces/worktree-list.ts";
 import {
   createProjectsFile,
   projectLimit,
@@ -136,6 +137,14 @@ function stillHas(name: string, count: number): string {
   return count === 1
     ? `${name} still has 1 workspace. Archive it first, then remove the project.`
     : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+}
+
+async function liveWorkspaces(project: StoredProject): Promise<number> {
+  const listed = await listWorktrees(project.path).catch(() => undefined);
+  if (listed?.separator !== "\0") return project.workspaces.length;
+  return project.workspaces.filter((record) =>
+    listed.worktrees.some((worktree) => !worktree.prunable && samePath(worktree.path, record.path)),
+  ).length;
 }
 
 function realOrSame(path: string): string {
@@ -359,10 +368,10 @@ export function createProjects({
         ...view,
         workspaces: view.workspaces.filter((workspace) => !ids.has(workspace.key)),
       })),
-      dropped: [
-        ...droppedSentences(forgotten),
-        ...halfMade.map(({ sentence }) => sentence),
-      ].slice(0, droppedLimit),
+      dropped: [...droppedSentences(forgotten), ...halfMade.map(({ sentence }) => sentence)].slice(
+        0,
+        droppedLimit,
+      ),
     };
   };
   const refuseWhileCreating = (project: StoredProject) => {
@@ -474,7 +483,9 @@ export function createProjects({
         refuseWhileCreating(removed);
         const count = removed.workspaces.length;
         if (count > 0 && (await checkedWithin(removed)).checked === null) {
-          throw new BridgeFailure("refused", stillHas(projectName(removed.path), count));
+          const live = await liveWorkspaces(removed);
+          if (live > 0)
+            throw new BridgeFailure("refused", stillHas(projectName(removed.path), live));
         }
         let forgotWorkspaces = 0;
         let forgotten: string[] = [];
