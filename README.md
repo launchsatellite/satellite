@@ -29,14 +29,18 @@ xattr -dr com.apple.quarantine /Applications/Satellite.app
 
 **Windows.** Run the installer. SmartScreen shows "Windows protected your PC", so choose More info, then Run anyway. With Smart App Control on, Windows blocks an unsigned app it cannot vouch for and offers no way to allow that one app, only to turn Smart App Control off in Windows Security.
 
-**Linux.** The deb installs with `sudo apt install ./<package>.deb` and sets up everything the sandbox needs. The AppImage needs its executable bit first.
+**Linux.** Pick the package by distribution. Ubuntu and other Debian-family systems take the deb. Every other distribution takes the AppImage.
+
+The deb installs with `sudo apt install ./<package>.deb` and sets up everything the sandbox needs, an AppArmor profile for Satellite included.
+
+The AppImage needs its executable bit and FUSE 2, which newer distributions leave out by default. The [AppImage guide](https://docs.appimage.org/user-guide/troubleshooting/fuse.html) names the package for each one.
 
 ```sh
 chmod +x <package>.AppImage
 ./<package>.AppImage
 ```
 
-The Linux build needs a distribution at least as new as Ubuntu 24.04. Ubuntu 24.04 limits unprivileged user namespaces, which Chromium's sandbox relies on, so the AppImage stops at start there. Install the deb instead, which adds an AppArmor profile for Satellite. Never run Satellite with `--no-sandbox`.
+Ubuntu 24.04 and newer limit unprivileged user namespaces, which Chromium's sandbox relies on, so the AppImage stops at start there and the deb is the way in. Never run Satellite with `--no-sandbox`. Linux builds are made and tested on Ubuntu 24.04 and need glibc 2.34 or newer.
 
 **Update.** Satellite never checks for updates. Install the new package over the old one, the way you installed it, and your projects and workspaces stay.
 
