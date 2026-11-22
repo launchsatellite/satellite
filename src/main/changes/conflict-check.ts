@@ -6,7 +6,7 @@ import { isMissing } from "../platform/file-system.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 import {
   gitReadMs,
-  noLazyFetch,
+  storedObjects,
   readGit,
   runGit,
   whenGitExits,
@@ -83,7 +83,7 @@ async function gitPath(
     ["rev-parse", "--path-format=absolute", "--git-path", name],
     gitReadMs,
     signal,
-    { gitVariables: noLazyFetch },
+    { gitVariables: storedObjects },
   );
   if (run?.exitCode !== 0 || !run.stdout.endsWith("\n")) return undefined;
   return run.stdout.slice(0, -1);

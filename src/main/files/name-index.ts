@@ -3,7 +3,7 @@ import { join, posix } from "node:path";
 import { filesLimits } from "../../shared/bridge-contract.ts";
 import { fuzzyScore } from "../../shared/fuzzy-match.ts";
 import { confinedFolder, isChangePath } from "../changes/file-sides.ts";
-import { noLazyFetch, readGit } from "../workspaces/git-command.ts";
+import { storedObjects, readGit } from "../workspaces/git-command.ts";
 
 type NameIndex = { kind: "names"; names: string[] } | { kind: "too-many" | "hung" | "failed" };
 
@@ -33,7 +33,7 @@ export async function readNames(
     ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
     timeoutMs,
     signal,
-    { gitVariables: noLazyFetch },
+    { gitVariables: storedObjects },
   );
   if (run === "output") return { kind: "too-many" };
   if (run === "time" || run === "stuck") return { kind: "hung" };

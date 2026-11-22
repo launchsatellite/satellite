@@ -1,4 +1,4 @@
-import { gitReadMs, noLazyFetch, readGit } from "../workspaces/git-command.ts";
+import { gitReadMs, storedObjects, readGit } from "../workspaces/git-command.ts";
 
 type IgnoreCheck =
   { kind: "checked"; ignored: ReadonlySet<string> } | { kind: "hung" } | { kind: "failed" };
@@ -18,7 +18,7 @@ export async function checkIgnored(
     return failed;
   }
   const run = await readGit(folder, ["check-ignore", "-z", "--stdin"], timeoutMs, signal, {
-    gitVariables: noLazyFetch,
+    gitVariables: storedObjects,
     input: `${paths.join("\0")}\0`,
   });
   if (run === "time" || run === "stuck") return hung;

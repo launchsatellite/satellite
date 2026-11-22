@@ -10,7 +10,7 @@ import {
   noTerminal,
 } from "../platform/file-system.ts";
 import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { gitReadMs, noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
+import { gitReadMs, storedObjects, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
   | { kind: "text"; text: string }
@@ -243,7 +243,10 @@ async function gitOutput(
   signal?: AbortSignal,
   bytes = false,
 ): Promise<{ stdout: string } | GitStop | undefined> {
-  const run = await readGit(folder, args, gitReadMs, signal, { gitVariables: noLazyFetch, bytes });
+  const run = await readGit(folder, args, gitReadMs, signal, {
+    gitVariables: storedObjects,
+    bytes,
+  });
   if (typeof run === "string") return run;
   return run.exitCode === 0 ? run : undefined;
 }

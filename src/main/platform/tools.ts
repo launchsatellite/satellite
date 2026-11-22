@@ -103,6 +103,8 @@ const ghQuiet = {
 const gitQuiet = { LC_ALL: "C", ...gitPromptless };
 const gitVariables = [
   "GIT_NO_LAZY_FETCH",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_GRAFT_FILE",
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   "GIT_CONFIG_GLOBAL",
   "GIT_CONFIG_SYSTEM",

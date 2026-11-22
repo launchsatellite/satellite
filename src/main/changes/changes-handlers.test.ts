@@ -292,6 +292,43 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     expect(await sides("data.bin")).toEqual({ kind: "binary" });
   });
 
+  it("reads the objects git stores, whatever a replace ref says", async () => {
+    const { repo, git, changes } = await repository();
+    const stored = (await git("rev-parse", "HEAD:edit.txt")).stdout.trim();
+    await writeFile(join(repo, "..", "evil.txt"), "EVIL\n");
+    const evil = (await git("hash-object", "-w", join(repo, "..", "evil.txt"))).stdout.trim();
+    await git("replace", stored, evil);
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    const listed = await changes.handlers["changes.list"]({ workspace, view }, page);
+    expect(listed).toMatchObject({ changes: { files: [{ path: "edit.txt", letter: "M" }] } });
+    expect(
+      await changes.handlers["changes.file"]({ workspace, view, path: "edit.txt" }, page),
+    ).toEqual({ kind: "text", original: "one\n", modified: "two\n" });
+  });
+
+  it("compares a branch with its real base, whatever a graft file says", async () => {
+    const { repo, git, changes } = await repository();
+    await git("checkout", "-q", "-b", "work");
+    await writeFile(join(repo, "work.txt"), "work\n");
+    await git("add", "work.txt");
+    await git("commit", "-q", "-m", "work");
+    const head = (await git("rev-parse", "HEAD")).stdout.trim();
+    const base = (
+      await git("commit-tree", "-p", "main", "-m", "base moved", "main^{tree}")
+    ).stdout.trim();
+    await git("remote", "add", "origin", join(repo, "..", "elsewhere"));
+    await git("update-ref", "refs/remotes/origin/main", base);
+    await git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+    await mkdir(join(repo, ".git", "info"), { recursive: true });
+    await writeFile(join(repo, ".git", "info", "grafts"), `${base} ${head}\n`);
+    const listed = await changes.handlers["changes.list"](
+      { workspace, view: "branch" },
+      ownerOf(1),
+    );
+    expect(JSON.stringify(listed)).toContain("work.txt");
+  });
+
   it("waits a bounded time for a read inside a folder that is going away", async () => {
     const { repo, home } = await repository();
     const { promise: reached, resolve: reach } = Promise.withResolvers<undefined>();

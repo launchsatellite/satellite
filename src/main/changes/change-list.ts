@@ -1,5 +1,5 @@
 import { changeLetter, changesLimits, type ChangeLetter } from "../../shared/bridge-contract.ts";
-import { noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
+import { storedObjects, readGit, type GitStop } from "../workspaces/git-command.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import { isObjectName, lineCount, readWorktreeSide, worktreeStamps } from "./file-sides.ts";
 
@@ -212,7 +212,7 @@ function withUnmerged(changes: ListedChange[], unmerged: readonly string[]): Lis
 }
 
 async function gitOutput(folder: string, args: string[], signal: AbortSignal) {
-  return readGit(folder, args, changesReadMs, signal, { gitVariables: noLazyFetch });
+  return readGit(folder, args, changesReadMs, signal, { gitVariables: storedObjects });
 }
 
 function stdoutOf(run: ToolRun | GitStop): string | undefined {
