@@ -83,6 +83,20 @@ describe("readConfigEntries", () => {
     expect(read).toMatchObject({ partial: false, includes: false });
   });
 
+  it("turns the LFS driver off when the repository's own config adds an LFS extension", () => {
+    const read = (scope: string) =>
+      readConfigEntries([
+        { scope: "global", key: "filter.lfs.process", value: "git-lfs filter-process" },
+        { scope, key: "lfs.extension.x.clean", value: "marker %f" },
+      ]).blanks.map(([key]) => key);
+    expect(read("local")).toEqual([
+      "filter.lfs.clean",
+      "filter.lfs.process",
+      "filter.lfs.required",
+    ]);
+    expect(read("global")).toEqual([]);
+  });
+
   it("names a partial clone by either key, whatever the scope", () => {
     const partial = (key: string, value: string | null) =>
       readConfigEntries([{ scope: "global", key, value }]).partial;
@@ -190,6 +204,10 @@ describe.skipIf(process.platform === "win32")(
       const changed = await repositoryConfig(repo);
       expect(changed).not.toBe(first);
       expect(changed?.blanks.map(([key]) => key)).toContain("filter.other.clean");
+      await git("config", "lfs.extension.x.clean", "x %f");
+      expect((await repositoryConfig(repo))?.blanks.map(([key]) => key)).toContain(
+        "filter.lfs.process",
+      );
       await git("config", "include.path", join(repo, "..", "gitconfig"));
       const included = await repositoryConfig(repo);
       expect(included?.includes).toBe(true);

@@ -33,9 +33,10 @@ const contentBytes = 4096;
 const probeOid = "1".repeat(40);
 const probeRemote = "satellite-lazy-fetch-probe";
 const filterKey = /^filter\.(.+)\.(clean|process)$/s;
+const lfsExtensionKey = /^lfs\.extension\..+\.(clean|smudge)$/s;
 const includeKey = /^(include|includeif\..+)\.path$/s;
 const configPattern =
-  "^(filter\\..+\\.(clean|process)|include\\.path|includeif\\..+\\.path|remote\\..+\\.promisor|extensions\\.partialclone)$";
+  "^(filter\\..+\\.(clean|process)|lfs\\.extension\\..+\\.(clean|smudge)|include\\.path|includeif\\..+\\.path|remote\\..+\\.promisor|extensions\\.partialclone)$";
 const ownScopes = new Set(["local", "worktree"]);
 const falseWords = new Set(["false", "no", "off", "0", ""]);
 export type LazyFetch = "honoured" | "ignored" | "unchecked";
@@ -76,6 +77,7 @@ export function readConfigEntries(entries: readonly ConfigEntry[]): RepositoryCo
     const own = ownScopes.has(scope);
     const driver = filterKey.exec(key)?.[1];
     if (own && driver !== undefined) drivers.add(driver);
+    if (own && lfsExtensionKey.test(key)) drivers.add("lfs");
     if (own && includeKey.test(key)) includes = true;
     if (key === "extensions.partialclone") partial = true;
     if (/^remote\..+\.promisor$/s.test(key) && !falseWords.has((value ?? "true").toLowerCase())) {
