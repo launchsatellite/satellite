@@ -34,6 +34,15 @@ describe("pacedStatus", () => {
     expect(readGit).toHaveBeenCalledTimes(2);
   });
 
+  it("reads again on time when the wall clock steps back", async () => {
+    vi.useFakeTimers();
+    answers(" M a\0", " M a\0?? b\0");
+    expect((await pacedStatus("/paced/stepped"))?.entries).toHaveLength(1);
+    vi.advanceTimersByTime(4000);
+    vi.setSystemTime(Date.now() - 3_600_000);
+    expect((await pacedStatus("/paced/stepped"))?.entries).toHaveLength(2);
+  });
+
   it("keeps the last count when a read runs out of time", async () => {
     vi.useFakeTimers();
     answers(" M a\0", "time");

@@ -54,12 +54,13 @@ function remember(folder: string, read: PacedRead): void {
 
 export async function pacedStatus(folder: string): Promise<StatusRead> {
   const last = paced.get(folder);
-  if (last !== undefined && Date.now() - last.at < Math.max(2000, 4 * last.cost)) {
+  if (last !== undefined && performance.now() - last.at < Math.max(2000, 4 * last.cost)) {
     return last.answer;
   }
-  const started = Date.now();
+  const started = performance.now();
   const run = await readGit(folder, statusArgs, gitReadMs, undefined, { filtersOf: folder });
-  const ran = { at: Date.now(), cost: Date.now() - started };
+  const now = performance.now();
+  const ran = { at: now, cost: now - started };
   if (run === "time" || run === "stuck") {
     remember(folder, { answer: last?.answer, ...ran });
     return last?.answer;
