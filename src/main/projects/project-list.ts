@@ -13,6 +13,7 @@ import {
   readWorkspaces,
   type Adoption,
   type Drop,
+  type HalfMade,
 } from "../workspaces/workspace-reads.ts";
 import {
   createProjectsFile,
@@ -37,6 +38,7 @@ interface ProjectAnswer {
   view: ProjectView;
   drops: Drop[];
   adoptions: Adoption[];
+  halfMade?: HalfMade[];
 }
 interface ProjectRead {
   checked: Promise<Missing | null>;
@@ -190,6 +192,7 @@ export function createProjects({
   const timedOut = new Set<string>();
   const busy = new Set<string>();
   const creating = new Set<string>();
+  const toldHalfMade = new Set<string>();
   const startRead = (project: StoredProject): ProjectRead => {
     const checked = folderChecks(project, timedOut.has(project.id) ? inHungSlot : direct);
     const answer = checked.then(async (missing): Promise<ProjectAnswer> => {
@@ -203,6 +206,7 @@ export function createProjects({
         view: { ...unread(project, null), workspaces: read.workspaces },
         drops: read.drops,
         adoptions: read.adoptions,
+        halfMade: read.halfMade,
       };
     });
     const read = { checked, answer };
@@ -342,12 +346,19 @@ export function createProjects({
       ...forgotten.map((drop) => drop.workspaceId),
       ...adoptions.map(({ workspace }) => workspace.id).filter((id) => !adopted.has(id)),
     ]);
+    const halfMade = answers
+      .flatMap((answer) => answer.halfMade ?? [])
+      .filter(({ path }) => !toldHalfMade.has(path));
+    for (const { path } of halfMade) toldHalfMade.add(path);
     return {
       projects: answers.map(({ view }) => ({
         ...view,
         workspaces: view.workspaces.filter((workspace) => !ids.has(workspace.key)),
       })),
-      dropped: droppedSentences(forgotten).slice(0, droppedLimit),
+      dropped: [
+        ...droppedSentences(forgotten),
+        ...halfMade.map(({ sentence }) => sentence),
+      ].slice(0, droppedLimit),
     };
   };
   const refuseWhileCreating = (project: StoredProject) => {

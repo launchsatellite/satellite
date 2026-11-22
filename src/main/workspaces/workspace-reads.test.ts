@@ -12,6 +12,7 @@ function worktree(path: string, branch: string | null, extra: Partial<ListedWork
     detached: branch === null,
     bare: false,
     locked: false,
+    initializing: false,
     prunable: false,
     ...extra,
   };
@@ -39,6 +40,7 @@ describe("adoptable", () => {
     const skipped = [
       worktree(`${segment}/recorded`, "recorded"),
       worktree(`${segment}/gone`, "gone", { prunable: true }),
+      worktree(`${segment}/half`, "half", { locked: true, initializing: true }),
       worktree(`${segment}/loose`, null),
       worktree(`${segment}/Upper`, "upper"),
       worktree(`${segment}/odd`, "bad..name"),
