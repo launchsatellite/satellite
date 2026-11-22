@@ -111,6 +111,7 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - One primary action per view.
 - An action that loses work is a danger button, signal text on the plain ground with a control border, never a signal fill. It replaces the primary action only while something would be lost, as Archive anyway.
 - A dialog opens over the window dimmed behind a scrim, takes the keyboard until it closes and ends in a footer on `side` with its actions on the right, Cancel beside the main action, and any note on the left. Escape and a click outside close it only while nothing runs.
+- A control's accessible name starts with the text it shows, for a file row its Git letter, path and counts, then says the rest in words, so voice control finds it by what is on screen. The repository column is the window's main landmark.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
 
 ## App

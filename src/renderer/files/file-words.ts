@@ -96,5 +96,7 @@ export function rowLabel(
     kind === "link" ? "link" : undefined,
     ignored ? "ignored by git" : undefined,
   ].filter((state) => typeof state === "string");
-  return [visibleText(path), ...states].join(", ");
+  const shown =
+    letter === undefined || ignored ? visibleText(path) : `${visibleText(path)} ${letter}`;
+  return [shown, ...states].join(", ");
 }

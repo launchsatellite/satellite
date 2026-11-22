@@ -1214,7 +1214,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             testId="divider-left"
           />
         </section>
-        <section
+        <main
           ref={repositoryRef}
           data-testid="column-repository"
           aria-label="Repository"
@@ -1230,7 +1230,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onCommit={setColumn("right", true)}
             testId="divider-right"
           />
-        </section>
+        </main>
         <section
           data-testid="column-sessions"
           aria-label="Sessions"

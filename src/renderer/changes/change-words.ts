@@ -54,8 +54,16 @@ function submoduleSentence(from: string | null, to: string | null): string {
   return "This submodule changed.";
 }
 
+function shownCounts(file: ChangedFile): string[] {
+  return [
+    file.added !== null && file.added > 0 ? `+${String(file.added)}` : undefined,
+    file.removed !== null && file.removed > 0 ? `−${String(file.removed)}` : undefined,
+  ].filter((count) => count !== undefined);
+}
+
 export function rowName(file: ChangedFile): string {
-  return `${visibleText(file.path)}, ${rowState(file)}${rowCounts(file)}`;
+  const shown = [file.letter, visibleText(file.path), ...shownCounts(file)].join(" ");
+  return `${shown}, ${rowState(file)}${rowCounts(file)}`;
 }
 
 export function diffLabels(file: ChangedFile): { original: string; modified: string } {
