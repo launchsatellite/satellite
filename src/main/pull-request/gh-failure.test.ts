@@ -32,6 +32,9 @@ describe("ghFailure", () => {
         undefined,
       ),
     ).toBe("other-host");
+    expect(ghFailure(run(1, "could not find any host configurations"), undefined)).toBe(
+      "other-host",
+    );
     expect(ghFailure(run(1, "API rate limit exceeded for user"), undefined)).toBe("rate-limited");
     for (const line of [
       "dial tcp: lookup api.github.com: no such host",
