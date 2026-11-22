@@ -214,6 +214,28 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     }
   });
 
+  it("leaves out a file the new worktree does not ignore, so git never sees it as new", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["branch", "old"]);
+    await writeFile(join(root, ".gitignore"), "secret.local\n.env\n");
+    await writeFile(join(root, ".worktreeinclude"), "secret.local\n.env\n");
+    await commit(root, "b", "second commit\n");
+    await writeFile(join(root, "secret.local"), "TOKEN=1\n");
+    await writeFile(join(root, ".env"), "KEY=1\n");
+    const { result, path, detail } = await create(root, "from-old", {
+      kind: "ref",
+      ref: "refs/heads/old",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(await exists(join(path, "secret.local"))).toBe(false);
+    expect(await exists(join(path, ".env"))).toBe(false);
+    expect(await git(path, ["status", "--porcelain"])).toBe("");
+    expect(detail("files")).toBe(
+      "Copied 0 files. Left out 2 that this workspace's branch doesn't ignore, so git could commit them, .env and secret.local.",
+    );
+  });
+
   it.skipIf(!onUnix)("refuses a .worktreeinclude that is a link and undoes", async () => {
     const root = await repository();
     await commit(root, "a", "first commit\n");

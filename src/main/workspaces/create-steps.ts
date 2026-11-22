@@ -26,6 +26,7 @@ import {
   runGit,
   worktreeAddMs,
 } from "./git-command.ts";
+import { checkIgnored } from "../files/ignore-check.ts";
 import { collectIncludedFiles, copyIncludedFiles } from "./include-copy.ts";
 import { createIncludeMatcher, parseWorktreeInclude } from "./worktree-include.ts";
 import {
@@ -75,6 +76,8 @@ const signInPattern =
 const remoteHeadPattern = /^refs\/remotes\/[^/]+\/HEAD$/;
 const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const includeLimit = 65536;
+const ignoreCheckBatch = 5000;
+const leftOutNamed = 3;
 const branchListLimit = 200;
 const branchLabelLimit = 255;
 const excerptLines = 6;
@@ -87,6 +90,8 @@ const quitSentence = "Satellite stopped making the workspace because it is quitt
 const checkoutSentence =
   "git couldn't check out the worktree, or one of the repository's hooks failed.";
 const copySentence = "Satellite couldn't copy the files .worktreeinclude lists.";
+const includeUnchecked =
+  "git couldn't say which of the files .worktreeinclude lists the new workspace ignores.";
 const includeUnreadable =
   ".worktreeinclude isn't a plain file of at most 64 KiB, so Satellite won't read it.";
 const includeTooMuch =
@@ -495,11 +500,46 @@ async function beforeDeadline<T>(
   return Promise.race([work, late]);
 }
 
-function copiedDetail(copied: number, skipped: number): string {
+function namedList(names: readonly string[]): string {
+  const shown = [...names].sort().slice(0, leftOutNamed);
+  const more = names.length - shown.length;
+  if (more > 0) return `${shown.join(", ")} and ${String(more)} more`;
+  return shown.length === 1
+    ? (shown[0] ?? "")
+    : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1) ?? ""}`;
+}
+
+function copiedDetail(copied: number, skipped: number, leftOut: readonly string[]): string {
   const count = copied === 1 ? "Copied 1 file." : `Copied ${String(copied)} files.`;
-  return skipped > 0
-    ? `${count} Skipped ${String(skipped)} that were links or already in the checkout.`
-    : count;
+  const parts = [count];
+  if (skipped > 0)
+    parts.push(`Skipped ${String(skipped)} that were links or already in the checkout.`);
+  if (leftOut.length > 0) {
+    parts.push(
+      `Left out ${String(leftOut.length)} that this workspace's branch doesn't ignore, so git could commit them, ${namedList(leftOut)}.`,
+    );
+  }
+  return parts.join(" ");
+}
+
+async function ignoredInWorktree(
+  worktree: string,
+  files: readonly string[],
+  signal: AbortSignal,
+): Promise<Set<string>> {
+  const ignored = new Set<string>();
+  for (let at = 0; at < files.length; at += ignoreCheckBatch) {
+    const check = await checkIgnored(
+      worktree,
+      files.slice(at, at + ignoreCheckBatch),
+      signal,
+      ignoredListMs,
+    );
+    stopIfQuitting(signal);
+    if (check.kind !== "checked") throw new StepFailure(includeUnchecked);
+    for (const path of check.ignored) ignored.add(path);
+  }
+  return ignored;
 }
 
 function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
@@ -546,14 +586,21 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
       }
+      const ignoredThere = await ignoredInWorktree(folder.path, selection.files, signal);
       const copy = await beforeDeadline(
-        copyIncludedFiles(root, folder.path, selection.files, limit),
+        copyIncludedFiles(
+          root,
+          folder.path,
+          selection.files.filter((file) => ignoredThere.has(file)),
+          limit,
+        ),
         deadline,
         signal,
       );
       stopIfQuitting(signal);
       if (copy === "late" || copy === "too-slow") throw new StepFailure(includeTooSlow);
-      return copiedDetail(copy.copied, copy.skipped + selection.links);
+      const leftOut = selection.files.filter((file) => !ignoredThere.has(file));
+      return copiedDetail(copy.copied, copy.skipped + selection.links, leftOut);
     },
     undo: () => Promise.resolve(true),
   };
