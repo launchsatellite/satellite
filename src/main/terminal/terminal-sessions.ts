@@ -107,6 +107,10 @@ function endingOf(session: Session, exitCode: number, signal: number | undefined
     : "unexpected";
 }
 
+function isEnded(session: Session): boolean {
+  return session.ended;
+}
+
 function hookUrl(port: number, launchId: string): string {
   return `http://127.0.0.1:${String(port)}/hook/${launchId}`;
 }
@@ -304,7 +308,7 @@ export function createTerminalSessions({
 
   const launch = async (session: Session, size: { cols: number; rows: number }) => {
     const cwd = await folder(session.workspace);
-    if (session.ended) return;
+    if (isEnded(session)) return;
     session.cwd = cwd;
     const start = await startOf(session);
     const command = await resolveTool("claude");
@@ -314,10 +318,10 @@ export function createTerminalSessions({
         "Satellite can't find Claude Code. Install it, then start it again.",
       );
     }
-    if (session.ended) return;
+    if (isEnded(session)) return;
     const settingsFile = await prepareHooks(session);
     const env = claudeEnvironment(await childEnvironment());
-    if (session.ended) return;
+    if (isEnded(session)) return;
     let pty: PtyProcess;
     try {
       pty = spawnPty(command, claudeArgs(start, settingsFile), { cwd, env, ...size });
