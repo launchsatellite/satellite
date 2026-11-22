@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BridgeFailure } from "../bridge/registry.ts";
@@ -16,13 +16,20 @@ export interface RepositoryConfig {
   partial: boolean;
   includes: boolean;
 }
+interface Folders {
+  common: string;
+  own: string;
+}
 interface Known {
-  stamp: string;
-  config: RepositoryConfig;
+  outer: string;
+  folders: Folders;
+  stamp: string | undefined;
+  config: RepositoryConfig | undefined;
 }
 
 const configReadMs = 5000;
 const cachedFolders = 512;
+const contentBytes = 4096;
 const probeOid = "1".repeat(40);
 const probeRemote = "satellite-lazy-fetch-probe";
 const filterKey = /^filter\.(.+)\.(clean|process)$/s;
@@ -35,7 +42,6 @@ export const partialCloneRefusal =
   "This git can't safely open a partial clone. Update git to 2.45 or newer, then try again.";
 
 const verdicts = new Map<string, Promise<boolean>>();
-const configFiles = new Map<string, Promise<string[] | undefined>>();
 const known = new Map<string, Known>();
 
 export function parseConfigEntries(stdout: string): ConfigEntry[] | undefined {
@@ -145,7 +151,7 @@ export async function honoursNoLazyFetch(): Promise<boolean> {
   return verdict;
 }
 
-async function readFiles(folder: string): Promise<string[] | undefined> {
+async function resolveFolders(folder: string): Promise<Folders | undefined> {
   const run = await runTool(
     "git",
     ["-C", folder, "rev-parse", "--path-format=absolute", "--git-common-dir", "--git-dir"],
@@ -153,22 +159,36 @@ async function readFiles(folder: string): Promise<string[] | undefined> {
   ).catch(unlessAbandoned);
   const [common, own, rest] = run?.exitCode === 0 ? run.stdout.split("\n") : [];
   if (common === undefined || own === undefined || rest !== "") return undefined;
-  return [join(common, "config"), join(own, "config.worktree")];
+  return { common, own };
 }
 
-async function stampOf(files: readonly string[]): Promise<string | undefined> {
-  const parts: string[] = [];
-  for (const file of files) {
-    try {
-      const info = await stat(file, { bigint: true });
-      parts.push(
-        `${String(info.ino)}:${String(info.size)}:${String(info.mtimeNs)}:${String(info.ctimeNs)}`,
-      );
-    } catch (error) {
-      if (!isMissing(error)) return undefined;
-      parts.push("-");
-    }
+async function identityOf(path: string, withContent: boolean): Promise<string> {
+  let info;
+  try {
+    info = await lstat(path, { bigint: true });
+  } catch (error) {
+    if (isMissing(error)) return "-";
+    throw error;
   }
+  const place = [info.dev, info.ino, info.mode];
+  if (info.isDirectory()) return place.map(String).join(":");
+  const identity = [...place, info.size, info.mtimeNs, info.ctimeNs].map(String).join(":");
+  if (!withContent || !info.isFile()) return identity;
+  if (info.size > contentBytes) throw new Error("the file is too big to stamp by content");
+  return `${identity}:${JSON.stringify(await readFile(path, "utf8"))}`;
+}
+
+async function outerOf(folder: string): Promise<string> {
+  return `${await identityOf(folder, false)} ${await identityOf(join(folder, ".git"), true)}`;
+}
+
+async function stampOf({ common, own }: Folders): Promise<string> {
+  const parts = await Promise.all([
+    identityOf(join(common, "config"), false),
+    identityOf(join(own, "config.worktree"), false),
+    identityOf(join(own, "commondir"), true),
+    identityOf(join(own, "gitdir"), true),
+  ]);
   return parts.join(" ");
 }
 
@@ -186,27 +206,27 @@ async function readConfig(folder: string): Promise<RepositoryConfig | undefined>
 }
 
 export async function repositoryConfig(folder: string): Promise<RepositoryConfig | undefined> {
-  let files = configFiles.get(folder);
-  if (files === undefined) {
-    if (configFiles.size >= cachedFolders) configFiles.clear();
-    files = readFiles(folder);
-    configFiles.set(folder, files);
-    const forget = () => {
-      if (configFiles.get(folder) === files) configFiles.delete(folder);
-    };
-    void files.then((found) => {
-      if (found === undefined) forget();
-    }, forget);
-  }
-  const found = await files;
-  const stamp = found === undefined ? undefined : await stampOf(found);
   const cached = known.get(folder);
-  if (stamp !== undefined && cached?.stamp === stamp) return cached.config;
+  known.delete(folder);
+  const outer = await outerOf(folder).catch(() => undefined);
+  const same = outer !== undefined && cached?.outer === outer;
+  const folders = same ? cached.folders : await resolveFolders(folder);
+  if (folders === undefined) return undefined;
+  const stamp = outer === undefined ? undefined : await stampOf(folders).catch(() => undefined);
+  if (same && stamp !== undefined && cached.stamp === stamp && cached.config !== undefined) {
+    known.set(folder, cached);
+    return cached.config;
+  }
   const config = await readConfig(folder);
-  if (config === undefined || stamp === undefined || config.includes) known.delete(folder);
-  else {
+  if (outer !== undefined) {
+    const kept = config !== undefined && stamp !== undefined && !config.includes;
     if (known.size >= cachedFolders) known.clear();
-    known.set(folder, { stamp, config });
+    known.set(folder, {
+      outer,
+      folders,
+      stamp: kept ? stamp : undefined,
+      config: kept ? config : undefined,
+    });
   }
   return config;
 }

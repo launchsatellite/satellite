@@ -1,5 +1,15 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdtemp, readFile, realpath, utimes, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -171,6 +181,97 @@ describe.skipIf(process.platform === "win32")(
       const included = await repositoryConfig(repo);
       expect(included?.includes).toBe(true);
       expect(await repositoryConfig(repo)).not.toBe(included);
+    });
+  },
+);
+
+describe.skipIf(process.platform === "win32")(
+  "the filter answer never outlives its repository",
+  { timeout: 60_000 },
+  () => {
+    async function scene() {
+      const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-swap-")));
+      const config = join(base, "gitconfig");
+      await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+      process.env["GIT_CONFIG_GLOBAL"] = config;
+      process.env["GIT_CONFIG_NOSYSTEM"] = "1";
+      const hits = join(base, "hits");
+      const marker = join(base, "marker.sh");
+      await writeFile(marker, `#!/bin/sh\necho "$1" >> "${hits}"\ncat\n`);
+      await chmod(marker, 0o755);
+      await writeFile(hits, "");
+      const repository = async (name: string, hostile: boolean) => {
+        const repo = join(base, name);
+        const git = (...args: string[]) => run("git", ["-C", repo, ...args]);
+        await run("git", ["init", "-q", "-b", "main", repo]);
+        await writeFile(join(repo, ".gitattributes"), "* filter=x\n");
+        await writeFile(join(repo, "a.txt"), "a\n");
+        await git("add", ".");
+        await git("commit", "-q", "-m", "one");
+        if (hostile) await git("config", "filter.x.clean", `${marker} clean`);
+        return { repo, git };
+      };
+      const dirty = async (folder: string) => {
+        await writeFile(join(folder, "a.txt"), "b\n");
+        const later = new Date(Date.now() + 10_000);
+        await utimes(join(folder, "a.txt"), later, later);
+        await utimes(join(folder, ".gitattributes"), later, later);
+      };
+      return { base, marker, repository, dirty, marked: () => readFile(hits, "utf8") };
+    }
+
+    it("blanks the drivers of the repository a repointed .git file now names", async () => {
+      const { base, repository, dirty, marked } = await scene();
+      await repository("repo-a", false);
+      await repository("repo-b", true);
+      const pointer = join(base, "pointer");
+      await mkdir(pointer);
+      await writeFile(join(pointer, ".git"), `gitdir: ${join(base, "repo-a", ".git")}\n`);
+      await writeFile(join(pointer, ".gitattributes"), "* filter=x\n");
+      await dirty(pointer);
+      expect(await readStatus(pointer)).toBeDefined();
+      await writeFile(join(pointer, ".git"), `gitdir: ${join(base, "repo-b", ".git")}\n`);
+      await dirty(pointer);
+      expect((await readStatus(pointer))?.entries).toEqual([{ code: " M", path: "a.txt" }]);
+      expect(await marked()).toBe("");
+    });
+
+    it("blanks the drivers of a worktree swapped in at the same path", async () => {
+      const { base, repository, dirty, marked } = await scene();
+      const a = await repository("repo-a", false);
+      const b = await repository("repo-b", true);
+      const place = join(base, "place");
+      await a.git("worktree", "add", "-q", "-b", "wa", place);
+      await b.git("worktree", "add", "-q", "-b", "wb", join(base, "other"));
+      await dirty(place);
+      expect(await readStatus(place)).toBeDefined();
+      await rename(place, join(base, "place-before"));
+      await rename(join(base, "other"), place);
+      await dirty(place);
+      expect((await readStatus(place))?.entries).toEqual([{ code: " M", path: "a.txt" }]);
+      expect(await marked()).toBe("");
+    });
+
+    it("reads again a config rewritten to the same size and modification time", async () => {
+      const { repository, marker, dirty, marked } = await scene();
+      const { repo } = await repository("repo", false);
+      const file = join(repo, ".git", "config");
+      const plain = await readFile(file, "utf8");
+      const driver = `[filter "x"]\n\tclean = ${marker} clean\n`;
+      const padding = "x".repeat(driver.length - "[pad]\n\tv = \n".length);
+      await writeFile(file, `${plain}[pad]\n\tv = ${padding}\n`);
+      const fixed = new Date(1_700_000_000_000);
+      await utimes(file, fixed, fixed);
+      const before = await stat(file);
+      await dirty(repo);
+      expect(await readStatus(repo)).toBeDefined();
+      await writeFile(file, `${plain}${driver}`);
+      await utimes(file, fixed, fixed);
+      expect((await stat(file)).size).toBe(before.size);
+      expect((await stat(file)).mtimeMs).toBe(before.mtimeMs);
+      await dirty(repo);
+      expect((await readStatus(repo))?.entries).toEqual([{ code: " M", path: "a.txt" }]);
+      expect(await marked()).toBe("");
     });
   },
 );
