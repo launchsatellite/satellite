@@ -15,6 +15,7 @@ import {
   type Drop,
   type HalfMade,
 } from "../workspaces/workspace-reads.ts";
+import { projectSegment } from "../workspaces/worktree-folders.ts";
 import {
   createProjectsFile,
   projectLimit,
@@ -109,6 +110,9 @@ function unread(project: StoredProject, missing: Missing | null): ProjectView {
     name: shownProjectName(project.path),
     parent: parentName(project.path),
     missing,
+    ...(project.workspaces.length === 0
+      ? {}
+      : { worktrees: `worktrees/${projectSegment(project.path)}` }),
     workspaces: [
       blankWorkspace("main", null),
       ...project.workspaces.map((workspace) => blankWorkspace(workspace.id, workspace.name)),

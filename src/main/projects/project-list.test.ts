@@ -493,6 +493,7 @@ describe("createProjects", () => {
     await rm(repo, { recursive: true, force: true });
     const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
     expect(project?.missing).toBe("folder");
+    expect(project?.worktrees).toBe("worktrees/repo");
     expect(
       await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
     ).toEqual({ forgotWorkspaces: 1 });

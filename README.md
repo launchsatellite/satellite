@@ -44,6 +44,8 @@ Ubuntu 24.04 and newer limit unprivileged user namespaces, which Chromium's sand
 
 **Update.** Satellite never checks for updates. Install the new package over the old one, the way you installed it, and your projects and workspaces stay.
 
+**Move a repository.** A project whose folder moved shows as missing, and its workspaces stay in `~/.satellite/worktrees/<project>`. Put the folder back and everything returns. To move it for good, remove the project in Satellite, run `git worktree repair` in the repository's new place, which reconnects its worktrees, and add it again. Satellite finds its workspaces once more when the folder kept its name.
+
 **Uninstall.** Archive your workspaces in Satellite first. `~/.satellite` holds their worktrees with any uncommitted work, so deleting that folder loses the work, and each repository keeps a record of those worktrees until `git worktree prune`.
 
 ## Run from source
