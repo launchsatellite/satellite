@@ -1,4 +1,4 @@
-import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkIgnored } from "./ignore-check.ts";
@@ -76,7 +76,7 @@ describe("checkIgnored", () => {
     expect(await ignoredAmong(root, [])).toEqual([]);
   });
 
-  it("answers failed for a path inside a submodule and checked for the folder itself", async () => {
+  it("answers refused for a path inside a submodule and checked for the folder itself", async () => {
     const root = await makeRepository();
     const inner = join(await scratch(), "inner");
     await mkdir(inner);
@@ -87,9 +87,20 @@ describe("checkIgnored", () => {
     await git(inner, "add", "s.txt");
     await git(inner, "commit", "-qm", "s");
     await git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", inner, "subm");
-    expect(await ignoredAmong(root, ["subm/s.txt"])).toBe("failed");
+    expect(await ignoredAmong(root, ["subm/s.txt"])).toBe("refused");
     expect(await ignoredAmong(root, ["subm"])).toEqual([]);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "answers refused for a path behind a tracked link, and failed outside a repository",
+    async () => {
+      const root = await makeRepository();
+      await symlink("elsewhere", join(root, "config"));
+      await git(root, "add", "config");
+      expect(await ignoredAmong(root, ["config/dev.json"])).toBe("refused");
+      expect(await ignoredAmong(await scratch(), ["a"])).toBe("failed");
+    },
+  );
 
   it.skipIf(process.platform === "win32")("starts no program the repository chose", async () => {
     const root = await makeRepository();

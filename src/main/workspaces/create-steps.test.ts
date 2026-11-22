@@ -18,8 +18,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StartChoice } from "../../shared/bridge-contract.ts";
 import type { StoredWorkspace } from "../projects/projects-file.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
+import * as ignoreCheck from "../files/ignore-check.ts";
 import { creationSteps, prepareWorkspace } from "./create-steps.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
+
+vi.mock("../files/ignore-check.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof ignoreCheck>();
+  return { checkIgnored: vi.fn(actual.checkIgnored) };
+});
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -284,7 +290,38 @@ describe("creationSteps", { timeout: 30_000 }, () => {
       expect(result).toEqual({ ok: true });
       expect(await readFile(join(path, ".env"), "utf8")).toBe("TOKEN=1\n");
       expect(detail("files")).toBe(
-        "Copied 1 file. Left out 1 that git couldn't check in this workspace, such as a path behind a link or inside a submodule, config/dev.local.json.",
+        "Copied 1 file. Left out 1 that git wouldn't check in this workspace, because each sits behind a link or inside a submodule or was asked together with one, config/dev.local.json.",
+      );
+    },
+  );
+
+  it.skipIf(!onUnix)(
+    "asks git a bounded number of times when many paths sit behind a link",
+    async () => {
+      const root = await repository();
+      await writeFile(join(root, ".gitignore"), "config/\n");
+      await writeFile(join(root, ".worktreeinclude"), "config/\n");
+      await commit(root, "a", "first commit\n");
+      await git(root, ["checkout", "-q", "-b", "linked"]);
+      await symlink("elsewhere", join(root, "config"));
+      await git(root, ["add", "config"]);
+      await git(root, ["commit", "-q", "-m", "config is a link"]);
+      await git(root, ["checkout", "-q", "main"]);
+      await mkdir(join(root, "config"));
+      for (let at = 0; at < 400; at += 1) {
+        await writeFile(join(root, "config", `f${String(at)}.json`), "{}\n");
+      }
+      const asked = vi.mocked(ignoreCheck.checkIgnored);
+      asked.mockClear();
+      const { result, detail } = await create(root, "many-behind", {
+        kind: "ref",
+        ref: "refs/heads/linked",
+      });
+      const checks = asked.mock.calls.length;
+      expect(result).toEqual({ ok: true });
+      expect(checks).toBeLessThanOrEqual(20);
+      expect(detail("files")).toMatch(
+        /^Copied 0 files\. Left out 400 that git wouldn't check in this workspace, because each sits behind a link or inside a submodule or was asked together with one, /,
       );
     },
   );

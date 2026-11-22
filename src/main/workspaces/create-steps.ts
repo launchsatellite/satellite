@@ -78,6 +78,7 @@ const remoteHeadPattern = /^refs\/remotes\/[^/]+\/HEAD$/;
 const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const includeLimit = 65536;
 const ignoreCheckBatch = 5000;
+const ignoreSplitRuns = 16;
 const leftOutNamed = 3;
 const branchListLimit = 200;
 const branchLabelLimit = 255;
@@ -566,7 +567,7 @@ function copiedDetail(
   }
   if (unchecked.length > 0) {
     parts.push(
-      `Left out ${String(unchecked.length)} that git couldn't check in this workspace, such as a path behind a link or inside a submodule, ${namedList(unchecked)}.`,
+      `Left out ${String(unchecked.length)} that git wouldn't check in this workspace, because each sits behind a link or inside a submodule or was asked together with one, ${namedList(unchecked)}.`,
     );
   }
   return parts.join(" ");
@@ -582,34 +583,35 @@ async function judgeIgnored(
   files: readonly string[],
   signal: AbortSignal,
   judged: IgnoreJudgement,
-  deadline: number,
+  splits: { left: number },
 ): Promise<void> {
-  if (Date.now() > deadline) throw new StepFailure(includeTooSlow);
   const check = await checkIgnored(worktree, files, signal, ignoredListMs);
   stopIfQuitting(signal);
-  if (check.kind === "hung") throw new StepFailure(includeUnchecked);
+  if (check.kind === "hung" || check.kind === "failed") throw new StepFailure(includeUnchecked);
   if (check.kind === "checked") {
     for (const path of check.ignored) judged.ignored.add(path);
     return;
   }
-  if (files.length === 1) {
+  if (files.length === 1 || splits.left < 2) {
     judged.unchecked.push(...files);
     return;
   }
+  splits.left -= 2;
   const half = Math.ceil(files.length / 2);
-  await judgeIgnored(worktree, files.slice(0, half), signal, judged, deadline);
-  await judgeIgnored(worktree, files.slice(half), signal, judged, deadline);
+  await judgeIgnored(worktree, files.slice(0, half), signal, judged, splits);
+  await judgeIgnored(worktree, files.slice(half), signal, judged, splits);
 }
 
 async function ignoredInWorktree(
   worktree: string,
   files: readonly string[],
   signal: AbortSignal,
-  deadline: number,
 ): Promise<IgnoreJudgement> {
   const judged: IgnoreJudgement = { ignored: new Set(), unchecked: [] };
   for (let at = 0; at < files.length; at += ignoreCheckBatch) {
-    await judgeIgnored(worktree, files.slice(at, at + ignoreCheckBatch), signal, judged, deadline);
+    await judgeIgnored(worktree, files.slice(at, at + ignoreCheckBatch), signal, judged, {
+      left: ignoreSplitRuns,
+    });
   }
   return judged;
 }
@@ -669,7 +671,6 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
         folder.path,
         selection.files,
         signal,
-        deadline,
       );
       const copy = await beforeDeadline(
         copyIncludedFiles(
