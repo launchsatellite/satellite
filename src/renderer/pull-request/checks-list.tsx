@@ -116,7 +116,7 @@ function CheckRow({
         <span className="font-pixel text-[11px] text-fg2 uppercase">
           {resultWord(check.result)}
         </span>
-        <span className="ml-auto flex flex-wrap items-center gap-[6px]">
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-[6px]">
           {failed && job !== null && (
             <Button
               variant="secondary"
