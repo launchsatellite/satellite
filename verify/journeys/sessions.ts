@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import { z } from "zod";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
@@ -540,6 +541,19 @@ async function endings(session: AppSession, resumedPid: number, sendFrom: number
   process.kill(resumedPid, "SIGKILL");
   await terminalShows(session, unexpected, "after the stand-in was killed");
   await stateIs(session, "session-tab-1", "stopped", "in alpha after the kill");
+  assert.notEqual(
+    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
+    "start-claude",
+    "a crash moved focus to Start Claude Code",
+  );
+  const before = (await claudePids(session)).length;
+  await page.keyboard.press("Enter");
+  await delay(1500);
+  assert.equal(
+    (await claudePids(session)).length,
+    before,
+    "Enter pressed after a crash started a new session",
+  );
   await session.screenshot("sessions-endings");
 }
 

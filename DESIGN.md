@@ -115,7 +115,7 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 
 ## App
 
-The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops.
+The agent pane always shows the real Claude Code, untouched. Satellite draws only the moments around it, before it is installed, after a session ends or when it stops. Start Claude Code takes focus only after a session you ended, never after a crash or a failed start, so a key pressed while typing starts nothing.
 
 - Sessions are tabs in a 40px bar on `side` above the terminal, each named Session and its number, with its status pixel and a close button shown on the selected tab and on hover, so a tab cut off at the strip's edge never shows a lone one, and a plus at the end that starts another. The arrow keys, Home and End move between tabs and Delete closes one.
 - A session's pixel is ultraviolet while it works, signal while it needs you, lilac when it is done and grey while it is idle or stopped. A workspace row shows the most urgent of its sessions, needs you before working before done.
