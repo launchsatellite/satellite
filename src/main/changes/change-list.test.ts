@@ -20,6 +20,8 @@ import { gitReadMs } from "../workspaces/git-command.ts";
 import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
 import { readWorktreeSide } from "./file-sides.ts";
 
+const stampedByGit = vi.hoisted(() => /(?:\/repo|\/\.git(?:\/.*)?)$/s);
+
 const fileCalls = vi.hoisted(() => {
   const calls: { lstat?: ((path: string) => Promise<BigIntStats> | undefined) | undefined } = {};
   return calls;
@@ -30,7 +32,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     lstat: (path: string, options: { bigint: true }) =>
-      fileCalls.lstat?.(path) ?? actual.lstat(path, options),
+      (stampedByGit.test(path) ? undefined : fileCalls.lstat?.(path)) ??
+      actual.lstat(path, options),
   };
 });
 
