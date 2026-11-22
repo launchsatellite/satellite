@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   interfaceLimits,
   type ChangesView as ChangesShown,
@@ -846,10 +847,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             title: "Focus the sidebar",
             available: true,
             run: () => {
-              if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
-              requestAnimationFrame(() => {
-                focusColumn("column-projects", '[aria-current="true"]');
-              });
+              if (!sidebarShown) {
+                flushSync(() => {
+                  update((current) => ({ ...current, sidebar: "shown" }), true);
+                });
+              }
+              focusColumn("column-projects", '[aria-current="true"]');
             },
           },
           {
