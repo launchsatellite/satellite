@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, nativeTheme, session } from "electron";
+import { app, dialog, nativeTheme, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
@@ -8,7 +8,7 @@ import { createFiles, type Files } from "./files/files-handlers.ts";
 import { noticeSubject } from "./inbox/notice-subject.ts";
 import { createNotices, type Needing, type Notices } from "./inbox/notices.ts";
 import { chooseFolder } from "./platform/folder-dialog.ts";
-import { prepareSatelliteHome } from "./platform/satellite-home.ts";
+import { prepareSatelliteHome, satelliteHome } from "./platform/satellite-home.ts";
 import {
   prepareSystemNotices,
   recordedLines,
@@ -53,7 +53,7 @@ import {
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
-import { prepareVerification, startedByDriver } from "./window/verification.ts";
+import { prepareVerification, startedByDriver, underVerification } from "./window/verification.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -100,7 +100,7 @@ async function start({
   applyInterface((await interfaceFile.load()).state);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
-  hardenSession(session.defaultSession);
+  await hardenSession(session.defaultSession, entryUrl);
   hardenWebContents(entryUrl);
   handleAppProtocol(join(app.getAppPath(), "out/renderer"));
   registerBridge(
@@ -141,11 +141,19 @@ function failStart(error: unknown): void {
 }
 
 function prepareHome(): string | undefined {
+  let folder = process.env["SATELLITE_HOME"] ?? "";
   try {
-    const home = prepareSatelliteHome();
+    folder = satelliteHome();
+    const home = prepareSatelliteHome(folder);
     app.setPath("userData", join(home, "app-data"));
     return home;
   } catch (error) {
+    if (!underVerification()) {
+      dialog.showErrorBox(
+        "Satellite couldn't prepare its home",
+        `Satellite keeps your projects and workspaces in ${folder} and couldn't make that folder ready, so it is quitting.\n\n${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     failStart(error);
     return undefined;
   }

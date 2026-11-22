@@ -105,6 +105,7 @@ describe("fileStateOf", () => {
     files: list,
     more,
     longPaths,
+    untrackedLeftOut: false,
   });
   const unavailable: ChangesList["changes"] = { kind: "unavailable", reason: "hung" };
 

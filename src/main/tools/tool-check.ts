@@ -1,14 +1,18 @@
-import type { GhState, ToolCheck, ToolState } from "../../shared/bridge-contract.ts";
+import type { ClaudeState, GhState, ToolCheck, ToolState } from "../../shared/bridge-contract.ts";
+import { stat } from "node:fs/promises";
 import { installCommand } from "../platform/install-commands.ts";
-import { runTool, type Tool } from "../platform/tools.ts";
+import { runTool, type ResolvedCommand, type Tool } from "../platform/tools.ts";
 import { parseGhAuthStatus, type GhSignIn } from "./gh-auth.ts";
 
 const versionTimeoutMs = 5000;
 const authTimeoutMs = 10_000;
 const versionLimit = 200;
 const firstWithActive = [2, 40, 0];
+const claudeMinimum = [2, 1, 78];
+export const claudeAnswerMs = 60_000;
 
 let running: Promise<ToolCheck> | undefined;
+let claudeAnswer: { key: string; at: number; state: Promise<ClaudeState> } | undefined;
 
 function logFailure(error: unknown, fallback: string): void {
   console.error(error instanceof Error ? error.message : fallback);
@@ -47,16 +51,45 @@ async function checkGh(): Promise<GhState> {
   return { state: "signed-out", reason: signIn.state };
 }
 
+export async function checkClaude(): Promise<ClaudeState> {
+  const version = await versionOf("claude");
+  if (version.state !== "ready" || atLeast(version.version, claudeMinimum)) return version;
+  return { state: "too-old", version: version.version, minimum: claudeMinimum.join(".") };
+}
+
+async function fileKey(file: string): Promise<string | undefined> {
+  try {
+    const { size, mtimeMs } = await stat(file);
+    return JSON.stringify([file, size, mtimeMs]);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function launchableClaude(command: ResolvedCommand): Promise<ClaudeState> {
+  const key = await fileKey(command.file);
+  const now = performance.now();
+  if (key !== undefined && claudeAnswer?.key === key && now - claudeAnswer.at < claudeAnswerMs) {
+    return claudeAnswer.state;
+  }
+  const state = checkClaude();
+  if (key !== undefined) claudeAnswer = { key, at: now, state };
+  return state;
+}
+
 async function readTools(): Promise<ToolCheck> {
-  const [git, gh, claude] = await Promise.all([versionOf("git"), checkGh(), versionOf("claude")]);
+  const [git, gh, claude] = await Promise.all([versionOf("git"), checkGh(), checkClaude()]);
   return { git, gh, claude };
 }
 
+function atLeast(version: string, minimum: readonly number[]): boolean {
+  const parts = version.split(".").map(Number);
+  const index = minimum.findIndex((part, at) => (parts[at] ?? 0) !== part);
+  return index === -1 || (parts[index] ?? 0) > (minimum[index] ?? 0);
+}
+
 export function authStatusArguments(ghVersion: string): string[] {
-  const parts = ghVersion.split(".").map(Number);
-  const index = firstWithActive.findIndex((part, at) => (parts[at] ?? 0) !== part);
-  const supported = index === -1 || (parts[index] ?? 0) > (firstWithActive[index] ?? 0);
-  return supported ? ["auth", "status", "--active"] : ["auth", "status"];
+  return atLeast(ghVersion, firstWithActive) ? ["auth", "status", "--active"] : ["auth", "status"];
 }
 
 export function versionNumber(line: string): string {

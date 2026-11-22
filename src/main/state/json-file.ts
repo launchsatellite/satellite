@@ -67,25 +67,28 @@ function setAsideTime(candidate: string, name: string): number | undefined {
   return /^\d+$/.test(time) ? Number(time) : undefined;
 }
 
-async function keepNewestSetAside(dir: string, name: string): Promise<void> {
+async function keepNewestSetAside(dir: string, name: string, kept: string): Promise<void> {
   const names = await readdir(dir).catch(() => []);
   const setAside = names
     .flatMap((candidate) => {
-      const time = setAsideTime(candidate, name);
+      const time = candidate === kept ? undefined : setAsideTime(candidate, name);
       return time === undefined ? [] : [{ candidate, time }];
     })
     .sort((a, b) => b.time - a.time);
-  for (const { candidate } of setAside.slice(keptSetAside)) {
+  for (const { candidate } of setAside.slice(keptSetAside - 1)) {
     await unlink(join(dir, candidate)).catch(() => undefined);
   }
 }
 
 async function setAside(file: string): Promise<JsonReadOutcome> {
   const { dir, name } = parse(file);
-  const aside = `${name}.unreadable-${String(Date.now())}.json`;
+  const taken = new Set(await readdir(dir).catch(() => []));
+  let time = Date.now();
+  while (taken.has(`${name}.unreadable-${String(time)}.json`)) time += 1;
+  const aside = `${name}.unreadable-${String(time)}.json`;
   try {
     await renameWithRetry(file, join(dir, aside));
-    await keepNewestSetAside(dir, name);
+    await keepNewestSetAside(dir, name, aside);
     return { kind: "set-aside", name: aside };
   } catch {
     return { kind: "not-moved" };
@@ -94,7 +97,7 @@ async function setAside(file: string): Promise<JsonReadOutcome> {
 
 function parseJson(text: string): { ok: true; json: unknown } | { ok: false } {
   try {
-    return { ok: true, json: JSON.parse(text) };
+    return { ok: true, json: JSON.parse(text.startsWith("﻿") ? text.slice(1) : text) };
   } catch {
     return { ok: false };
   }

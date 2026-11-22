@@ -1,5 +1,5 @@
 import { isBranchName } from "../../shared/workspace-name.ts";
-import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, runGit } from "../workspaces/git-command.ts";
 
 const remoteRef = /^refs\/remotes\/[^/]+\/(.+)$/;
 
@@ -10,13 +10,11 @@ export async function isPushed(
 ): Promise<boolean | undefined> {
   if (branch === null) return false;
   if (!isBranchName(branch)) return undefined;
-  const options = { gitVariables: noLazyFetch };
   const refs = await runGit(
     folder,
     ["for-each-ref", "--format=%(refname)", `refs/remotes/*/${branch}`],
     gitReadMs,
     signal,
-    options,
   );
   if (refs?.exitCode !== 0) return undefined;
   if (refs.stdout.split("\n").some((line) => remoteRef.exec(line)?.[1] === branch)) return true;
@@ -25,7 +23,6 @@ export async function isPushed(
     ["config", "--get", `branch.${branch}.merge`],
     gitReadMs,
     signal,
-    options,
   );
   if (upstream === undefined || upstream.exitCode > 1) return undefined;
   return upstream.exitCode === 0 && upstream.stdout.trim() !== "";
@@ -48,9 +45,7 @@ async function configValue(
   key: string,
   signal: AbortSignal,
 ): Promise<string | null | undefined> {
-  const run = await runGit(folder, ["config", "--get", key], gitReadMs, signal, {
-    gitVariables: noLazyFetch,
-  });
+  const run = await runGit(folder, ["config", "--get", key], gitReadMs, signal);
   if (run === undefined || run.exitCode > 1) return undefined;
   return run.exitCode === 0 ? run.stdout.trim() : null;
 }
@@ -62,13 +57,11 @@ export async function branchFacts(
 ): Promise<BranchFacts | undefined> {
   if (branch === null) return { upstream: null, upstreamRepository: null, isDefault: false };
   if (!isBranchName(branch)) return undefined;
-  const options = { gitVariables: noLazyFetch };
   const merge = await runGit(
     folder,
     ["config", "--get", `branch.${branch}.merge`],
     gitReadMs,
     signal,
-    options,
   );
   if (merge === undefined || merge.exitCode > 1) return undefined;
   const named = upstreamRef.exec(merge.stdout.trim())?.[1];
@@ -87,7 +80,6 @@ export async function branchFacts(
     ["for-each-ref", "--format=%(symref)", "refs/remotes/*/HEAD"],
     gitReadMs,
     signal,
-    options,
   );
   if (heads?.exitCode !== 0) return undefined;
   const isDefault = heads.stdout.split("\n").some((line) => defaultRef.exec(line)?.[1] === branch);

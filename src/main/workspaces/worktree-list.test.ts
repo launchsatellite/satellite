@@ -71,13 +71,19 @@ const manualExample = [
     "locked reason why is locked",
   ],
   [
+    "worktree /path/to/linked-worktree-being-made",
+    "HEAD 2345def2345def2345def2345def2345def2345b",
+    "branch refs/heads/being-made",
+    "locked initializing",
+  ],
+  [
     "worktree /path/to/linked-worktree-prunable",
     "HEAD 1233def1234def1234def1234def1234def1234b",
     "detached",
     "prunable gitdir file points to non-existent location",
   ],
 ];
-const plain = { detached: false, bare: false, locked: false, prunable: false };
+const plain = { detached: false, bare: false, locked: false, initializing: false, prunable: false };
 const manualParsed = [
   { ...plain, path: "/path/to/bare-source", head: null, branch: null, bare: true },
   {
@@ -106,6 +112,14 @@ const manualParsed = [
     head: "3456def3456def3456def3456def3456def3456b",
     branch: "locked-with-reason",
     locked: true,
+  },
+  {
+    ...plain,
+    path: "/path/to/linked-worktree-being-made",
+    head: "2345def2345def2345def2345def2345def2345b",
+    branch: "being-made",
+    locked: true,
+    initializing: true,
   },
   {
     ...plain,

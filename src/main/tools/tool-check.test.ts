@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { runTool } from "../platform/tools.ts";
-import { authStatusArguments, checkTools, versionNumber } from "./tool-check.ts";
+import { mkdtemp, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  authStatusArguments,
+  checkClaude,
+  checkTools,
+  claudeAnswerMs,
+  launchableClaude,
+  versionNumber,
+} from "./tool-check.ts";
 
 vi.mock("../platform/tools.ts", () => ({ runTool: vi.fn() }));
 
@@ -21,6 +31,62 @@ describe("authStatusArguments", () => {
     expect(authStatusArguments("2.40.0")).toEqual(["auth", "status", "--active"]);
     expect(authStatusArguments("2.80.0")).toEqual(["auth", "status", "--active"]);
     expect(authStatusArguments("3.0")).toEqual(["auth", "status", "--active"]);
+  });
+});
+
+describe("checkClaude", () => {
+  it("asks for an update below the first Claude Code with every hook event Satellite listens to", async () => {
+    const run = vi.mocked(runTool);
+    const answer = async (version: string) => {
+      run.mockReset();
+      run.mockResolvedValue({ exitCode: 0, stdout: `${version} (Claude Code)\n`, stderr: "" });
+      return checkClaude();
+    };
+    expect(await answer("2.1.77")).toEqual({
+      state: "too-old",
+      version: "2.1.77",
+      minimum: "2.1.78",
+    });
+    expect(await answer("2.0.99")).toMatchObject({ state: "too-old" });
+    expect(await answer("2.1.78")).toEqual({ state: "ready", version: "2.1.78" });
+    expect(await answer("2.1.330")).toEqual({ state: "ready", version: "2.1.330" });
+    expect(await answer("3.0")).toEqual({ state: "ready", version: "3.0" });
+  });
+});
+
+describe("launchableClaude", () => {
+  it("reuses its answer for the same claude for a minute, and checks again once the file changes", async () => {
+    const run = vi.mocked(runTool);
+    run.mockReset();
+    run.mockResolvedValue({ exitCode: 0, stdout: "2.1.10 (Claude Code)\n", stderr: "" });
+    const file = join(await mkdtemp(join(tmpdir(), "satellite-claude-")), "claude");
+    await writeFile(file, "one");
+    const command = { file, args: [] };
+    const clock = vi.spyOn(performance, "now").mockReturnValue(1000);
+    const answers = await Promise.all([launchableClaude(command), launchableClaude(command)]);
+    expect(answers[1]).toMatchObject({ state: "too-old" });
+    expect(run).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(1000 + claudeAnswerMs - 1);
+    await launchableClaude(command);
+    expect(run).toHaveBeenCalledTimes(1);
+    await utimes(file, new Date(), new Date(Date.now() + 5000));
+    await launchableClaude(command);
+    expect(run).toHaveBeenCalledTimes(2);
+    clock.mockReturnValue(1000 + claudeAnswerMs * 3);
+    await launchableClaude(command);
+    expect(run).toHaveBeenCalledTimes(3);
+    clock.mockRestore();
+  });
+
+  it("answers broken, never too old, when the check runs out of time", async () => {
+    const run = vi.mocked(runTool);
+    run.mockReset();
+    run.mockRejectedValue(new Error("claude did not finish in time"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const file = join(await mkdtemp(join(tmpdir(), "satellite-claude-")), "claude");
+    await writeFile(file, "two");
+    expect(await launchableClaude({ file, args: [] })).toEqual({ state: "broken" });
+    logged.mockRestore();
   });
 });
 

@@ -151,7 +151,12 @@ export function PullRequestFiles({
         </Sentence>
       );
     }
-    if (files.length === 0 && changes.more === 0 && changes.longPaths === 0) {
+    if (
+      files.length === 0 &&
+      changes.more === 0 &&
+      changes.longPaths === 0 &&
+      !changes.untrackedLeftOut
+    ) {
       return (
         <Sentence
           testId="pull-request-files-empty"
@@ -167,6 +172,7 @@ export function PullRequestFiles({
               files={files}
               more={changes.more}
               longPaths={changes.longPaths}
+              untrackedLeftOut={changes.untrackedLeftOut}
               selected={file?.path}
               onSelect={select}
             />

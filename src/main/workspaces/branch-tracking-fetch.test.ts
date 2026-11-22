@@ -1,10 +1,13 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
+import { readStatus } from "./changed-files.ts";
+import { prepareWorkspace } from "./create-steps.ts";
+import { listWorktrees } from "./worktree-list.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -61,6 +64,16 @@ describe.skipIf(process.platform === "win32" || !hasSwitch)(
       expect(await readdir(join(repo, ".git")).then((names) => names.includes("FETCH_HEAD"))).toBe(
         false,
       );
+    });
+
+    it("reads status, worktrees and the dialog's branches without reaching a promisor remote", async () => {
+      const { repo, marker } = await partialClone();
+      const tree = (await run("git", ["-C", repo, "rev-parse", "HEAD^{tree}"])).stdout.trim();
+      await unlink(join(repo, ".git", "objects", tree.slice(0, 2), tree.slice(2)));
+      await readStatus(repo);
+      await listWorktrees(repo);
+      await prepareWorkspace(repo, await mkdtemp(join(tmpdir(), "satellite-lazy-home-")));
+      expect(await exists(marker)).toBe(false);
     });
   },
 );

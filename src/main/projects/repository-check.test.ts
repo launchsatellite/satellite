@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { readStatus } from "../workspaces/changed-files.ts";
 import { checkRepository, parseRevParse } from "./repository-check.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -58,6 +59,11 @@ beforeAll(async () => {
   await git(join(base, "repo"), ["worktree", "add", "-q", join(base, "linked")]);
   await git(base, ["clone", "-q", "--bare", join(base, "repo"), "shared.git"]);
   await git(join(base, "shared.git"), ["worktree", "add", "-q", join(base, "from-bare")]);
+  await mkdir(join(base, "cw"));
+  await makeRepository(join(base, "cw", "inner"));
+  await git(join(base, "cw", "inner"), ["config", "core.worktree", join(base, "cw")]);
+  await makeRepository(join(base, "aimed"));
+  await git(join(base, "aimed"), ["config", "core.worktree", join(base, "plain")]);
 }, 30_000);
 
 afterEach(() => {
@@ -80,6 +86,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "/Users/<name>/repo",
+      gitDir: "/Users/<name>/repo/.git",
       commonDir: "/Users/<name>/repo/.git",
       linked: false,
     });
@@ -127,6 +134,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "/Users/<name>/linked",
+      gitDir: "/Users/<name>/repo/.git/worktrees/linked",
       commonDir: "/Users/<name>/repo/.git",
       linked: true,
     });
@@ -169,6 +177,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "C:/Users/<name>/repo",
+      gitDir: "C:/Users/<name>/repo/.git",
       commonDir: "C:/Users/<name>/repo/.git",
       linked: false,
     });
@@ -199,6 +208,14 @@ describe("checkRepository", () => {
         join(base, "linked"),
         "linked is a worktree of another repository. Add the repository's main folder instead.",
       ],
+      [
+        join(base, "cw", "inner"),
+        "inner keeps its working files in another folder. Satellite needs a repository with its own checkout.",
+      ],
+      [
+        join(base, "aimed"),
+        "aimed keeps its working files in another folder. Satellite needs a repository with its own checkout.",
+      ],
       [join(base, "gone"), "That folder no longer exists. Choose another one."],
       [join(base, "notes.txt"), "Drop a folder, not a file."],
       [parse(base).root, "That's a whole drive. Choose the folder a repository was cloned into."],
@@ -221,6 +238,58 @@ describe("checkRepository", () => {
       root: await realpath(join(base, "-dash repo")),
     });
   });
+
+  it("adds a repository holding Satellite's home only once git ignores the home", async () => {
+    const dotfiles = join(base, "dotfiles");
+    await makeRepository(dotfiles);
+    const inner = join(dotfiles, "config", ".satellite");
+    await mkdir(inner, { recursive: true });
+    expect(await checkRepository(dotfiles, inner)).toEqual({
+      ok: false,
+      refusal:
+        "dotfiles holds Satellite's home, config/.satellite, and git doesn't ignore it there. Add config/.satellite/ to the .gitignore in dotfiles, then add it again.",
+    });
+    await writeFile(join(dotfiles, ".gitignore"), "/config/.satellite/\n");
+    expect(await checkRepository(dotfiles, inner)).toEqual({ ok: true, root: dotfiles });
+  });
+
+  it.skipIf(isWindows)(
+    "adds a submodule checkout and blanks a filter its own config names",
+    { timeout: 30_000 },
+    async () => {
+      const sup = join(base, "sup");
+      await makeRepository(sup);
+      await git(sup, [
+        "-c",
+        "protocol.file.allow=always",
+        "submodule",
+        "add",
+        "-q",
+        join(base, "repo"),
+        "sub",
+      ]);
+      const sub = join(sup, "sub");
+      const hits = join(base, "submodule-hits");
+      const marker = join(base, "submodule-marker.sh");
+      await writeFile(marker, `#!/bin/sh\necho ran >> "${hits}"\ncat\n`);
+      await chmod(marker, 0o755);
+      await writeFile(join(sub, "a.txt"), "a\n");
+      await git(sub, ["add", "a.txt"]);
+      await git(sub, ["commit", "-q", "-m", "a"]);
+      await git(sub, ["config", "filter.x.clean", marker]);
+      await writeFile(join(sup, ".git", "modules", "sub", "info", "attributes"), "* filter=x\n");
+      await writeFile(join(sub, "a.txt"), "b\n");
+      const later = new Date(Date.now() + 10_000);
+      await utimes(join(sub, "a.txt"), later, later);
+      await git(sub, ["--no-optional-locks", "status", "--porcelain"]);
+      expect(await readFile(hits, "utf8")).not.toBe("");
+      await writeFile(hits, "");
+      await utimes(join(sub, "a.txt"), later, later);
+      expect(await checkRepository(sub, home)).toEqual({ ok: true, root: await realpath(sub) });
+      expect((await readStatus(sub))?.entries.map((entry) => entry.path)).toContain("a.txt");
+      expect(await readFile(hits, "utf8")).toBe("");
+    },
+  );
 
   it("refuses a plain folder with its sentence under a German locale", async () => {
     vi.stubEnv("LANG", "de_DE.UTF-8");

@@ -22,12 +22,11 @@ import {
   gitReadMs,
   ignoredListMs,
   lsRemoteMs,
-  noLazyFetch,
   runGit,
   worktreeAddMs,
 } from "./git-command.ts";
 import { checkIgnored } from "../files/ignore-check.ts";
-import { collectIncludedFiles, copyIncludedFiles } from "./include-copy.ts";
+import { collectIncludedFiles, copyIncludedFiles, type IncludeSelection } from "./include-copy.ts";
 import { createIncludeMatcher, parseWorktreeInclude } from "./worktree-include.ts";
 import {
   isWorktreeFolder,
@@ -63,6 +62,7 @@ interface Shared {
   branchMade: boolean;
   folder: MadeFolder | null;
   worktreeLeft: boolean;
+  included: IncludeSelection | string | null;
 }
 export type DefaultStart =
   { remote: null; remotes: number } | { remote: string; branch: string | null; unread?: true };
@@ -170,7 +170,6 @@ async function cachedDefault(
     ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`],
     gitReadMs,
     signal,
-    { gitVariables: noLazyFetch },
   );
   if (run === undefined || (run.exitCode !== 0 && run.exitCode !== 1)) return undefined;
   const prefix = `refs/remotes/${remote}/`;
@@ -181,9 +180,7 @@ async function cachedDefault(
 
 export async function defaultStart(
   root: string,
-  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs, undefined, {
-    gitVariables: noLazyFetch,
-  }),
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
   signal?: AbortSignal,
 ): Promise<DefaultStart | undefined> {
   const run = await listed;
@@ -356,6 +353,7 @@ function startStep(context: CreationContext, shared: Shared): CreationStepRun {
     id: "start",
     async run() {
       const { start, root, project } = context;
+      shared.included = await selectIncluded(context);
       if (start.kind === "default") return startFromDefault(context, shared);
       shared.oid = await refOid(root, start.ref);
       if (shared.oid === null) {
@@ -436,11 +434,16 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
       stopIfQuitting(signal);
       const folder = await makeLeafFolder(prepared.path, name, prepared.segment);
       shared.folder = folder;
-      const added = await git(
-        root,
-        ["worktree", "add", "--end-of-options", folder.path, name],
-        worktreeAddMs,
-        signal,
+      const added = await inStep(() =>
+        runGit(
+          root,
+          ["worktree", "add", "--end-of-options", folder.path, name],
+          worktreeAddMs,
+          signal,
+          {
+            lazyFetch: true,
+          },
+        ),
       );
       stopIfQuitting(signal);
       if (added?.exitCode !== 0) {
@@ -623,46 +626,55 @@ async function inCheckout(worktree: string, file: string): Promise<boolean> {
   );
 }
 
+async function selectIncluded(context: CreationContext): Promise<IncludeSelection | string> {
+  const { root, signal } = context;
+  const text = await readInclude(root);
+  if (text === null) return "No .worktreeinclude, so nothing to copy.";
+  const deadline = Date.now() + includeFilesMs;
+  const ignored = await git(
+    root,
+    [
+      "ls-files",
+      "-z",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "--directory",
+      "--no-empty-directory",
+    ],
+    ignoredListMs,
+    signal,
+  );
+  stopIfQuitting(signal);
+  if (ignored?.exitCode !== 0) throw new StepFailure("git couldn't list the ignored files.");
+  const matcher = createIncludeMatcher(parseWorktreeInclude(text));
+  const entries = ignored.stdout.split("\0").filter((entry) => entry !== "");
+  const selection = await beforeDeadline(
+    collectIncludedFiles(root, entries, matcher, { deadline, signal }),
+    deadline,
+    signal,
+  );
+  stopIfQuitting(signal);
+  if (selection === "late" || selection === "too-slow") throw new StepFailure(includeTooSlow);
+  if (selection === "too-many" || selection === "too-large") {
+    throw new StepFailure(includeTooMuch);
+  }
+  if (selection.files.length === 0 && selection.links === 0) {
+    return "Nothing in .worktreeinclude matched an ignored file.";
+  }
+  return selection;
+}
+
 function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
   const { home, root, signal } = context;
   return {
     id: "files",
     async run() {
-      const text = await readInclude(root);
-      if (text === null) return "No .worktreeinclude, so nothing to copy.";
+      const selection = shared.included;
+      if (selection === null) throw new Error("the start step chose no included files");
+      if (typeof selection === "string") return selection;
       const deadline = Date.now() + includeFilesMs;
-      const ignored = await git(
-        root,
-        [
-          "ls-files",
-          "-z",
-          "--others",
-          "--ignored",
-          "--exclude-standard",
-          "--directory",
-          "--no-empty-directory",
-        ],
-        ignoredListMs,
-        signal,
-      );
-      stopIfQuitting(signal);
-      if (ignored?.exitCode !== 0) throw new StepFailure("git couldn't list the ignored files.");
-      const matcher = createIncludeMatcher(parseWorktreeInclude(text));
-      const entries = ignored.stdout.split("\0").filter((entry) => entry !== "");
       const limit = { deadline, signal };
-      const selection = await beforeDeadline(
-        collectIncludedFiles(root, entries, matcher, limit),
-        deadline,
-        signal,
-      );
-      stopIfQuitting(signal);
-      if (selection === "late" || selection === "too-slow") throw new StepFailure(includeTooSlow);
-      if (selection === "too-many" || selection === "too-large") {
-        throw new StepFailure(includeTooMuch);
-      }
-      if (selection.files.length === 0 && selection.links === 0) {
-        return "Nothing in .worktreeinclude matched an ignored file.";
-      }
       const folder = shared.folder;
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
@@ -783,7 +795,13 @@ export function failureSentence(
 }
 
 export function creationSteps(context: CreationContext): CreationStepRun[] {
-  const shared: Shared = { oid: null, branchMade: false, folder: null, worktreeLeft: false };
+  const shared: Shared = {
+    oid: null,
+    branchMade: false,
+    folder: null,
+    worktreeLeft: false,
+    included: null,
+  };
   return [
     startStep(context, shared),
     branchStep(context, shared),

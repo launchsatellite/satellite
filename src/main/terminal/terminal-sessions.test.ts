@@ -7,13 +7,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { createPageOwners } from "../bridge/page-owners.ts";
 import { spawnPty } from "../platform/pty.ts";
+import { launchableClaude } from "../tools/tool-check.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
 import type { Needing } from "../inbox/notices.ts";
-import { createTerminalSessions, exitGraceMs, quitBoundMs } from "./terminal-sessions.ts";
+import type { SessionEvent } from "../sessions/session-status.ts";
+import {
+  createTerminalSessions,
+  exitGraceMs,
+  hooksOffAfterMs,
+  interruptQuietMs,
+  outputGapMs,
+  quitBoundMs,
+  writeCharsPerSecond,
+} from "./terminal-sessions.ts";
 
 vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn(), windowsPty: () => null }));
+vi.mock("../tools/tool-check.ts", () => ({
+  launchableClaude: vi.fn(() => Promise.resolve({ state: "ready", version: "2.1.78" })),
+}));
 vi.mock("../platform/tools.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../platform/tools.ts")>();
   return {
@@ -75,6 +88,7 @@ describe("createTerminalSessions", () => {
     write: ReturnType<typeof vi.fn>;
     kill: ReturnType<typeof vi.fn<() => Promise<void>>>;
     exit: (exitCode: number, signal?: number) => void;
+    print: (data: string) => void;
   }[];
   let home: string;
   let folders: Map<string, string>;
@@ -114,6 +128,7 @@ describe("createTerminalSessions", () => {
         exit: (exitCode: number) => {
           expect(exitCode).toBeTypeOf("number");
         },
+        print: () => undefined,
       };
       ptys.push(fake);
       return {
@@ -121,7 +136,9 @@ describe("createTerminalSessions", () => {
         resize: vi.fn(),
         pause: vi.fn(),
         resume: vi.fn(),
-        onData: vi.fn(),
+        onData: (listener: (data: string) => void) => {
+          fake.print = listener;
+        },
         onExit: (listener: (exitCode: number, signal: number | undefined) => void) => {
           fake.exit = (exitCode, signal) => {
             listener(exitCode, signal);
@@ -313,17 +330,17 @@ describe("createTerminalSessions", () => {
     expect(last.set).toHaveBeenCalledWith(main, started);
     sessions.hookEvent("4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", { name: "Stop" }, null);
     await vi.waitFor(() => {
-      expect(statuses()).toEqual([{ id, status: "working", ready: true }]);
+      expect(statuses()).toEqual([{ id, status: "working", ready: true, hooksOff: false }]);
     });
     sessions.hookEvent(launchId, { name: "PermissionRequest", agent: "" }, null);
     await vi.waitFor(() => {
-      expect(statuses().at(-1)).toEqual({ id, status: "needs-you", ready: true });
+      expect(statuses().at(-1)).toEqual({ id, status: "needs-you", ready: true, hooksOff: false });
     });
     expect(statuses()).toHaveLength(2);
     ptys[0]?.exit(0);
-    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
+    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true, hooksOff: false });
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" }, null);
-    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true });
+    expect(statuses().at(-1)).toEqual({ id, status: "stopped", ready: true, hooksOff: false });
     expect(last.set).toHaveBeenCalledTimes(1);
   });
 
@@ -383,10 +400,10 @@ describe("createTerminalSessions", () => {
     sessions.hookEvent("4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c", { name: "Stop" }, null);
     expect(statuses()).toEqual([]);
     sessions.hookEvent(launchId, { name: "Notification", type: "idle_prompt", agent: null }, null);
-    expect(statuses()).toEqual([{ id, status: "idle", ready: true }]);
+    expect(statuses()).toEqual([{ id, status: "idle", ready: true, hooksOff: false }]);
     sessions.hookEvent(launchId, { name: "UserPromptSubmit" }, null);
     await vi.waitFor(() => {
-      expect(statuses().at(-1)).toEqual({ id, status: "working", ready: true });
+      expect(statuses().at(-1)).toEqual({ id, status: "working", ready: true, hooksOff: false });
     });
   });
 
@@ -407,9 +424,130 @@ describe("createTerminalSessions", () => {
     sessions.hookEvent(launchId, { name: "Stop" }, null);
     expect(statuses()).toHaveLength(1);
     await vi.waitFor(() => {
-      expect(statuses().at(-1)).toEqual({ id: terminalId(1), status: "done", ready: true });
+      expect(statuses().at(-1)).toEqual({
+        id: terminalId(1),
+        status: "done",
+        ready: true,
+        hooksOff: false,
+      });
     });
     expect(statuses()).toHaveLength(2);
+  });
+
+  describe("keys and quiet", () => {
+    const started = async () => {
+      const listener = fakeListener();
+      const sessions = create({ listener });
+      const { mine, sent } = owners();
+      const id = terminalId(1);
+      await sessions.handlers["terminal.start"]({ id, ...size }, mine);
+      const launchId = listener.open.mock.calls[0]?.[0] ?? "";
+      const latest = () =>
+        sent.mock.calls
+          .flatMap(([, event, payload]) => (event === "sessions.status" ? [payload] : []))
+          .at(-1);
+      const write = (data: string) => sessions.handlers["terminal.write"]({ id, data }, mine);
+      const hook = (event: SessionEvent) => {
+        sessions.hookEvent(launchId, event, null);
+      };
+      return { id, latest, write, hook };
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      return () => {
+        vi.useRealTimers();
+      };
+    });
+
+    it("answers on a digit, rests on Escape and types every key through", async () => {
+      const { id, latest, write, hook } = await started();
+      hook({ name: "PermissionRequest", agent: "" });
+      await write("1");
+      await vi.advanceTimersByTimeAsync(200);
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+      hook({ name: "PermissionRequest", agent: "" });
+      await write("\u001b");
+      await vi.advanceTimersByTimeAsync(200);
+      expect(latest()).toEqual({ id, status: "idle", ready: true, hooksOff: false });
+      expect(ptys[0]?.write.mock.calls).toEqual([["1"], ["\u001b"]]);
+    });
+
+    it("rests once a turn stays quiet after an interrupt, and a tool finishing waits it out", async () => {
+      const { id, latest, write, hook } = await started();
+      hook({ name: "UserPromptSubmit" });
+      await write("\u0003");
+      await vi.advanceTimersByTimeAsync(interruptQuietMs - 1000);
+      hook({ name: "PostToolUse", agent: "" });
+      await vi.advanceTimersByTimeAsync(interruptQuietMs - 1000);
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(latest()).toEqual({ id, status: "idle", ready: true, hooksOff: false });
+    });
+
+    it("keeps working through an Escape while Claude Code keeps drawing, and rests once it stops", async () => {
+      const { id, latest, write, hook } = await started();
+      hook({ name: "UserPromptSubmit" });
+      await write("\u001b");
+      for (let tick = 0; tick < 40; tick += 1) {
+        ptys[0]?.print("spinning");
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+      await vi.advanceTimersByTimeAsync(interruptQuietMs * 2);
+      expect(latest()).toEqual({ id, status: "idle", ready: true, hooksOff: false });
+    });
+
+    it("keeps working when a hook follows the interrupt", async () => {
+      const { id, latest, write, hook } = await started();
+      hook({ name: "UserPromptSubmit" });
+      await write("\u001b");
+      hook({ name: "UserPromptSubmit" });
+      await vi.advanceTimersByTimeAsync(interruptQuietMs * 2);
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+    });
+
+    it("says hooks are off once Claude Code works on after Enter without any hook", async () => {
+      const { id, latest, write, hook } = await started();
+      await write("\r");
+      ptys[0]?.print("Do you trust this folder");
+      await vi.advanceTimersByTimeAsync(outputGapMs + 1);
+      ptys[0]?.print("Welcome");
+      await vi.advanceTimersByTimeAsync(hooksOffAfterMs);
+      ptys[0]?.print("> ");
+      expect(latest()).toBeUndefined();
+      await write("/");
+      await write("\u001b");
+      await write("\r");
+      for (let tick = 0; tick <= hooksOffAfterMs / 500; tick += 1) {
+        ptys[0]?.print("compacting");
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      expect(latest()).toBeUndefined();
+      await write("o");
+      await write("\r");
+      for (let tick = 0; tick <= hooksOffAfterMs / 500; tick += 1) {
+        ptys[0]?.print("spinning");
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      expect(latest()).toEqual({ id, status: "idle", ready: false, hooksOff: true });
+      hook({ name: "UserPromptSubmit" });
+      await vi.advanceTimersByTimeAsync(200);
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+    });
+
+    it("paces a flood of input and refuses a write while another one waits", async () => {
+      const { write } = await started();
+      const chunk = "x".repeat(65_536);
+      for (let index = 0; index < writeCharsPerSecond / chunk.length; index += 1)
+        await write(chunk);
+      const waiting = write(chunk);
+      await expect(write("y")).rejects.toMatchObject({ code: "limit" });
+      expect(ptys[0]?.write).toHaveBeenCalledTimes(16);
+      await vi.advanceTimersByTimeAsync(100);
+      await waiting;
+      expect(ptys[0]?.write).toHaveBeenCalledTimes(17);
+    });
   });
 
   it("refuses write, resize and close from a page that does not own the terminal", async () => {
@@ -566,6 +704,32 @@ describe("createTerminalSessions", () => {
     expect(sessions.roots()).toHaveLength(1);
     await sessions.handlers["terminal.close"]({ id: terminalId(2) }, mine);
     expect(sessions.roots()).toEqual([]);
+  });
+
+  it("starts Claude Code when its version check could not answer", async () => {
+    vi.mocked(launchableClaude).mockResolvedValueOnce({ state: "broken" });
+    const { handlers } = create({ listener: fakeListener() });
+    const { mine } = owners();
+    await handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+  });
+
+  it("never runs a Claude Code older than Satellite needs", async () => {
+    vi.mocked(launchableClaude).mockResolvedValueOnce({
+      state: "too-old",
+      version: "2.1.10",
+      minimum: "2.1.78",
+    });
+    const { handlers } = create({ listener: fakeListener() });
+    const { mine } = owners();
+    await expect(
+      handlers["terminal.start"]({ id: terminalId(1), ...size }, mine),
+    ).rejects.toMatchObject({
+      code: "tool-missing",
+      message:
+        "Claude Code 2.1.10 is older than the 2.1.78 Satellite needs. Update it, then start it again.",
+    });
+    expect(spawnPty).not.toHaveBeenCalled();
   });
 
   it("answers a spawn failure with a sentence the user can act on and frees the id", async () => {

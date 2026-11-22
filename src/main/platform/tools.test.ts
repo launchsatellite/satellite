@@ -122,6 +122,7 @@ describe("toolEnvironment", () => {
     });
     expect(git).toEqual({
       LC_ALL: "C",
+      GIT_NO_LAZY_FETCH: "1",
       GIT_TERMINAL_PROMPT: "0",
       GCM_INTERACTIVE: "false",
       SSH_ASKPASS_REQUIRE: "never",

@@ -11,7 +11,7 @@ function isVisible(): boolean {
 }
 
 export function workspaceLabel(project: ProjectView, workspace: WorkspaceView): string {
-  if (project.missing !== null) return "unavailable";
+  if (project.missing !== null) return workspace.branch ?? workspace.name ?? "main";
   return workspace.branch ?? workspace.name ?? "detached";
 }
 
@@ -60,6 +60,7 @@ export function useProjects(notify: Notify): {
     };
     const schedule = createSchedule({
       visible: isVisible,
+      focused: () => document.hasFocus(),
       now: () => performance.now(),
       after: (ms, run) => {
         const timer = setTimeout(run, ms);

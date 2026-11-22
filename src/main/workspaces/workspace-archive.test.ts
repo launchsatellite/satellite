@@ -9,6 +9,8 @@ import {
   readdir,
   readFile,
   realpath,
+  rename,
+  rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -288,6 +290,53 @@ describe("inspectWorkspace", { timeout: realGitMs }, () => {
   });
 });
 
+describe("inspectWorkspace on a workspace git no longer counts", { timeout: realGitMs }, () => {
+  const notCounted =
+    "git no longer counts lost as a worktree, so Satellite won't archive it. Its folder stays in worktrees/repo/lost in the Satellite home, and once you move it out of there Satellite forgets the workspace.";
+
+  it("names the folder when the worktree's .git file is gone", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rm(join(record.path, ".git"));
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("names the folder when the repository no longer knows the worktree", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rm(join(project.path, ".git", "worktrees", "lost"), { recursive: true });
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("names the folder when another repository took the project's place", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rename(project.path, join(base, "repo-aside"));
+    await repository("repo", false);
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message: notCounted,
+    });
+  });
+
+  it("says the folder is gone when the Satellite home moved", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "lost");
+    await rename(home, join(base, "home-moved"));
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject({
+      code: "refused",
+      message:
+        "Satellite can't find lost's folder worktrees/repo/lost in the Satellite home, so it won't archive it.",
+    });
+  });
+});
+
 describe("archiveWorkspace", { timeout: realGitMs }, () => {
   it("refuses when the workspace changed since it was inspected", async () => {
     const project = await repository("repo", true);
@@ -354,6 +403,138 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     await archiveWorkspace(home, project, record, fingerprint, sessionsStub());
     expect(removeCalls()).toEqual([["worktree", "remove", "--end-of-options", record.path]]);
     expect(await exists(record.path)).toBe(false);
+  });
+
+  it("refuses when it can't tell whether submodules are checked out", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "unsure");
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    vi.mocked(runGit).mockImplementation((folder, args, ms, signal, extra) => {
+      if (args[0] === "rev-parse" && args.includes("modules")) {
+        return Promise.resolve({ exitCode: 128, stdout: "", stderr: "fatal: no\n" });
+      }
+      return actual.runGit(folder, args, ms, signal, extra);
+    });
+    try {
+      const { fingerprint, submodules } = await inspectWorkspace(home, project, record, 0);
+      expect(submodules).toBe("unknown");
+      await expect(
+        archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+      ).rejects.toMatchObject({
+        code: "refused",
+        message:
+          "Satellite couldn't check whether unsure has submodules checked out, so it won't archive it.",
+      });
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+    }
+    expect(removeCalls()).toEqual([]);
+    expect(await listed(project)).toContain(asGitPrints(record.path));
+  });
+
+  it("refuses when a file past the fiftieth one listed changed since it was inspected", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "many");
+    const names = Array.from(
+      { length: 60 },
+      (_, index) => `f${String(index).padStart(2, "0")}.txt`,
+    );
+    for (const name of names) await writeFile(join(record.path, name), "first\n");
+    await git(record.path, ["add", "-A"]);
+    await git(record.path, ["commit", "-q", "-m", "sixty files"]);
+    for (const name of names) await writeFile(join(record.path, name), "edited\n");
+    const { fingerprint, moreFiles } = await inspectWorkspace(home, project, record, 0);
+    expect(moreFiles).toBe(10);
+    await rm(join(record.path, "f55.txt"));
+    await expect(
+      archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+    ).rejects.toMatchObject({
+      code: "refused",
+      message: "Something changed in many since you looked. Here is the latest.",
+    });
+    expect(removeCalls()).toEqual([]);
+  });
+
+  it("leaves a folder made again at the same path after git removed the worktree", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "reborn");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
+      const answer = await actual.runGit(folder, args, ms, signal, extra);
+      if (args[0] === "worktree" && args[1] === "remove") {
+        await mkdir(record.path);
+        await writeFile(join(record.path, "new.md"), "Made after git removed it.\n");
+      }
+      return answer;
+    });
+    try {
+      expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
+        leftover: "worktrees/repo/reborn",
+      });
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+    }
+    expect(await readFile(join(record.path, "new.md"), "utf8")).toBe(
+      "Made after git removed it.\n",
+    );
+  });
+
+  it.runIf(onUnix)(
+    "never deletes through a worktrees folder swapped for a link after git let go",
+    async () => {
+      const project = await repository("repo", true);
+      const record = await workspace(project, "moved");
+      const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+      const parent = join(home, "worktrees", "repo");
+      const elsewhere = join(base, "elsewhere");
+      const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+      vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
+        if (args[0] === "worktree" && args[1] === "remove") {
+          await rm(join(project.path, ".git", "worktrees", "moved"), { recursive: true });
+          await writeFile(join(record.path, "kept.md"), "Still mine.\n");
+          await rename(parent, elsewhere);
+          await symlink(elsewhere, parent);
+          return { exitCode: 0, stdout: "", stderr: "" };
+        }
+        return actual.runGit(folder, args, ms, signal, extra);
+      });
+      try {
+        expect(await archiveWorkspace(home, project, record, fingerprint, sessionsStub())).toEqual({
+          leftover: "worktrees/repo/moved",
+        });
+      } finally {
+        vi.mocked(runGit).mockImplementation(actual.runGit);
+      }
+      expect(await readFile(join(elsewhere, "moved", "kept.md"), "utf8")).toBe("Still mine.\n");
+    },
+  );
+
+  it("stops instead of forcing when a file appears in a clean worktree as git removes it", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "tidy");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal, extra) => {
+      if (args[0] === "worktree" && args[1] === "remove") {
+        await writeFile(join(record.path, "written-late.txt"), "Saved as git looked.\n");
+      }
+      return actual.runGit(folder, args, ms, signal, extra);
+    });
+    try {
+      await expect(
+        archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+      ).rejects.toMatchObject({
+        code: "refused",
+        message: "Something changed in tidy since you looked. Here is the latest.",
+      });
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+    }
+    expect(removeCalls()).toEqual([["worktree", "remove", "--end-of-options", record.path]]);
+    expect(await readFile(join(record.path, "written-late.txt"), "utf8")).toBe(
+      "Saved as git looked.\n",
+    );
   });
 
   it("refuses a worktree with a submodule checked out, so its history stays", async () => {
@@ -466,11 +647,11 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     await writeFile(join(record.path, "notes.md"), "unclean\n");
     const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
     const answers: ({ exitCode: number; stdout: string; stderr: string } | undefined)[] = [];
-    vi.mocked(runGit).mockImplementation((folder, args, ms, signal) => {
+    vi.mocked(runGit).mockImplementation((folder, args, ms, signal, extra) => {
       if (args[0] === "worktree" && args[1] === "remove") {
         return Promise.resolve(answers.shift());
       }
-      return actual.runGit(folder, args, ms, signal);
+      return actual.runGit(folder, args, ms, signal, extra);
     });
     const unclean = {
       exitCode: 128,

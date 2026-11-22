@@ -56,6 +56,10 @@ describe("resolveInside", () => {
     expect(await resolveInside(root, "inner")).toBe(await realpath(join(root, "a.txt")));
   });
 
+  it("refuses the root's own parent", async () => {
+    expect(await resolveInside(root, "..")).toBeUndefined();
+  });
+
   it("returns undefined for a missing file", async () => {
     expect(await resolveInside(root, "missing.txt")).toBeUndefined();
   });
@@ -108,5 +112,12 @@ describe("samePath", () => {
     expect(isInsidePath("C:\\Home", "c:/home/app", "win32")).toBe(true);
     expect(isInsidePath("/srv/home", "/srv/home-2", "linux")).toBe(false);
     expect(isInsidePath("/srv/home", "/srv/home", "linux")).toBe(true);
+  });
+});
+
+describe("Windows paths", () => {
+  it("never counts a folder on another drive as inside, and names a forward-slash share as network", () => {
+    expect(isInsidePath("C:\\Users\\u\\.satellite", "D:\\repo", "win32")).toBe(false);
+    expect(isNetworkPath("//server/share/repo", "win32")).toBe(true);
   });
 });

@@ -100,7 +100,7 @@ const ghQuiet = {
   GIT_CONFIG_KEY_0: "core.fsmonitor",
   GIT_CONFIG_VALUE_0: "",
 };
-const gitQuiet = { LC_ALL: "C", ...gitPromptless };
+const gitQuiet = { LC_ALL: "C", GIT_NO_LAZY_FETCH: "1", ...gitPromptless };
 const gitVariables = [
   "GIT_NO_LAZY_FETCH",
   "GIT_NO_REPLACE_OBJECTS",
@@ -261,6 +261,7 @@ export async function runTool(
     timeoutMs?: number;
     signal?: AbortSignal;
     gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
+    gitConfig?: readonly (readonly [string, string])[];
     bytes?: boolean;
     input?: string;
     cwd?: string;
@@ -273,6 +274,12 @@ export async function runTool(
     const value = options.gitVariables?.[name];
     if (value !== undefined) env[name] = value;
   }
+  const config = tool === "git" ? (options.gitConfig ?? []) : [];
+  if (config.length > 0) env["GIT_CONFIG_COUNT"] = String(config.length);
+  config.forEach(([key, value], index) => {
+    env[`GIT_CONFIG_KEY_${String(index)}`] = key;
+    env[`GIT_CONFIG_VALUE_${String(index)}`] = value;
+  });
   return new Promise((resolve, reject) => {
     const launch = {
       env,

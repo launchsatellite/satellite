@@ -1,5 +1,6 @@
 import type { PullRequestNeed, SessionStatus, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { needsYou } from "../../shared/needs-you.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import type { SessionTab } from "../sessions/use-sessions.ts";
 
 interface SessionReason {
@@ -124,4 +125,8 @@ export function noticeTarget(
   workspace: WorkspaceRef,
 ): InboxTarget | undefined {
   return rows.find((row) => placeOf(row.workspace) === placeOf(workspace))?.reasons[0];
+}
+
+export function rowName(label: string, project: string, sentence: string): string {
+  return `${visibleText(label)}, ${project}. ${sentence}`;
 }

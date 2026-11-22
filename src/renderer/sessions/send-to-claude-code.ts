@@ -24,3 +24,6 @@ export function leavesFocusAlone(focused: Element | null, pane: Element | null):
 export function sendToClaudeCode(text: string): void {
   window.dispatchEvent(new CustomEvent(sendToClaudeCodeEvent, { detail: { text } }));
 }
+
+export const hooksOffNote =
+  "Claude Code's settings seem to keep its hooks off here, so this session never shows needs you.";

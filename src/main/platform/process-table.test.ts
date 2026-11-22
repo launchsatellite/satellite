@@ -9,6 +9,7 @@ import {
   parseWindowsTable,
   readCommands,
   readProcessTable,
+  sameProcess,
   startsMatch,
   subtreeOf,
 } from "./process-table.ts";
@@ -206,5 +207,13 @@ describe("startsMatch", () => {
     expect(startsMatch(10_000, 10_001, 0)).toBe(false);
     expect(startsMatch(10_000, 10_000, 0)).toBe(true);
     expect(startsMatch(null, 10_000, 1000)).toBe(false);
+    expect(startsMatch(null, null)).toBe(false);
+  });
+});
+
+describe("sameProcess", () => {
+  it("never takes two ids for one process, even when they started in the same second", () => {
+    expect(sameProcess(entry(10, 1, 5000), entry(11, 1, 5000))).toBe(false);
+    expect(sameProcess(entry(10, 1, 5000), entry(10, 1, 5000))).toBe(true);
   });
 });

@@ -49,7 +49,7 @@ const troubles: Record<PullRequestTrouble, string> = {
   "signed-out": "The GitHub CLI is signed out. Run gh auth login in a terminal and come back.",
   "gh-missing":
     "Satellite reads pull requests through the GitHub CLI, and it is not installed. Install it and come back.",
-  "gh-old": "This GitHub CLI is too old to read pull requests. Update it to 2.18 or newer.",
+  "gh-old": "This GitHub CLI is too old to read pull requests. Update it to 2.21 or newer.",
   offline: "GitHub is out of reach. Satellite tries again when you are back online.",
   "other-host":
     "This repository's remote is on a host the GitHub CLI is not signed in to. Run gh auth login for that host and come back.",

@@ -292,7 +292,11 @@ export function TerminalView({
               {notice}
             </p>
             {noticed && (
-              <Button testId="start-claude" onClick={onRestart} autoFocus>
+              <Button
+                testId="start-claude"
+                onClick={onRestart}
+                autoFocus={notice === endings.ended}
+              >
                 Start Claude Code
               </Button>
             )}

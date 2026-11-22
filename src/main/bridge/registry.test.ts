@@ -93,7 +93,7 @@ function spies() {
         ahead: null,
         behind: null,
         conflict: null,
-        changes: { kind: "files", files: [], more: 0, longPaths: 0 },
+        changes: { kind: "files", files: [], more: 0, longPaths: 0, untrackedLeftOut: false },
       }),
     ),
     "changes.file": vi.fn<BridgeHandler<"changes.file">>(() =>

@@ -52,18 +52,21 @@ export function WorkspaceHeader({
         </span>
       )}
       {project.missing === null && (
-        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @sm:flex">
+        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @xs:flex">
           <span className="flex-none">
             <Icon name="branch" size={13} />
           </span>
-          <span dir="ltr" className="min-w-0 truncate font-mono text-[12px] [unicode-bidi:isolate]">
+          <span
+            dir="ltr"
+            className="min-w-[6ch] truncate font-mono text-[12px] [unicode-bidi:isolate]"
+          >
             <VisibleName text={workspaceLabel(project, workspace)} />
           </span>
           {base !== null && (
             <span
               data-testid="workspace-base"
               dir="ltr"
-              className="min-w-[6ch] truncate font-mono text-[12px] [unicode-bidi:isolate]"
+              className="hidden min-w-0 shrink-[1000] truncate font-mono text-[12px] [unicode-bidi:isolate] @lg:block"
             >
               from <VisibleName text={base} />
             </span>
@@ -126,7 +129,7 @@ export function WorkspaceHeader({
             Archive
           </CommandButton>
         )}
-        <span className={project.missing === null ? "hidden @md:flex" : "flex"}>
+        <span className={project.missing === null ? "hidden @3xl:flex" : "flex"}>
           <CommandButton
             command="project.remove"
             variant="ghost"

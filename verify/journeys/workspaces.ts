@@ -208,6 +208,8 @@ async function undoAfterHookLinked(session: AppSession): Promise<void> {
   try {
     await openNewWorkspace(session, () => page.getByTestId("new-workspace-repo").click());
     await page.getByTestId("workspace-name").fill("hooked");
+    const size = page.viewportSize();
+    await page.setViewportSize({ width: 960, height: 600 });
     await page.keyboard.press("Enter");
     await visible(session, "workspace-failure", "after the hook linked a folder and failed");
     const failure = await textOf(session, "workspace-failure");
@@ -216,7 +218,24 @@ async function undoAfterHookLinked(session: AppSession): Promise<void> {
       `the undone creation said "${failure}"`,
     );
     await session.screenshot("workspaces-undone");
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
+      "close-workspace-dialog",
+      "a failed creation did not focus Close",
+    );
+    await waitUntil(
+      () =>
+        page.evaluate(() => {
+          const sentence = document.querySelector("[data-testid='workspace-failure']");
+          const close = document.querySelector("[data-testid='close-workspace-dialog']");
+          if (sentence === null || close === null) return false;
+          return sentence.getBoundingClientRect().bottom <= close.getBoundingClientRect().top;
+        }),
+      waitMs,
+      "the failure sentence was out of view at 960 by 600",
+    );
     await page.getByTestId("close-workspace-dialog").click();
+    if (size !== null) await page.setViewportSize(size);
   } finally {
     await unlink(hook);
   }

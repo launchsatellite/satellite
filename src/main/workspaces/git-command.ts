@@ -11,18 +11,19 @@ import {
   type ToolRun,
 } from "../platform/tools.ts";
 import { gitReadTimeoutMs } from "../projects/repository-check.ts";
+import { refusePartialClone, repositoryConfig } from "./repository-config.ts";
 
 export type GitStop = StopReason | "stuck" | "failed";
 interface GitExtra {
   gitVariables?: Readonly<Partial<Record<GitVariable, string>>>;
+  filtersOf?: string;
+  lazyFetch?: boolean;
   bytes?: boolean;
   input?: string;
 }
 
 export const gitReadMs = gitReadTimeoutMs;
-export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
 export const storedObjects = {
-  ...noLazyFetch,
   GIT_NO_REPLACE_OBJECTS: "1",
   GIT_GRAFT_FILE: join(devNull, "satellite-no-grafts"),
 };
@@ -68,10 +69,24 @@ export async function readGit(
   extra: GitExtra = {},
 ): Promise<ToolRun | GitStop> {
   if (foldersWithStuckGit.has(folder)) return "stuck";
+  const { filtersOf, lazyFetch = false, ...options } = extra;
+  const gitVariables = lazyFetch
+    ? { ...options.gitVariables, GIT_NO_LAZY_FETCH: "0" }
+    : options.gitVariables;
   let run: ToolRun | undefined;
   try {
-    run = await runTool("git", gitArgs(folder, args), { timeoutMs, signal, ...extra });
+    const gitConfig = filtersOf === undefined ? [] : (await repositoryConfig(filtersOf))?.blanks;
+    if (gitConfig === undefined) return "failed";
+    if (!lazyFetch) await refusePartialClone(folder);
+    run = await runTool("git", gitArgs(folder, args), {
+      timeoutMs,
+      signal,
+      ...options,
+      gitVariables,
+      gitConfig,
+    });
   } catch (error) {
+    if (error instanceof BridgeFailure) throw error;
     if (error instanceof AbandonedRun) {
       const release = () => {
         foldersWithStuckGit.delete(folder);

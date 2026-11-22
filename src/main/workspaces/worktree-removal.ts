@@ -22,6 +22,7 @@ export type Walked =
 interface RemovalOptions {
   force: boolean;
   locked: boolean;
+  forceWhenUnclean?: boolean;
   read?: ReadEntry;
 }
 
@@ -83,10 +84,14 @@ export async function walkForRemoval(path: string, read?: ReadEntry): Promise<Wa
   return { kind: "walked", path, links: found.links };
 }
 
+export function refusedAsUnclean(run: ToolRun | undefined): boolean {
+  return run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer);
+}
+
 export async function removeWalked(
   root: string,
   { path, links }: Extract<Walked, { kind: "walked" }>,
-  { force, locked }: Omit<RemovalOptions, "read">,
+  { force, locked, forceWhenUnclean = false }: Omit<RemovalOptions, "read">,
 ): Promise<Removal> {
   let linksRemoved = 0;
   for (const link of links) {
@@ -101,13 +106,17 @@ export async function removeWalked(
     root,
     ["worktree", "remove", ...first, "--end-of-options", path],
     worktreeRemoveMs,
+    undefined,
+    { filtersOf: path },
   );
-  if (!forced && run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer)) {
+  if (!forced && forceWhenUnclean && refusedAsUnclean(run)) {
     forced = true;
     run = await runGit(
       root,
       ["worktree", "remove", "--force", "--end-of-options", path],
       worktreeRemoveMs,
+      undefined,
+      { filtersOf: path },
     );
   }
   return { kind: "ran", run, forced, linksRemoved };

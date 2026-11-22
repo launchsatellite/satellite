@@ -19,6 +19,25 @@ vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),
 }));
 
+const folderChecks = vi.hoisted(() => {
+  const checks: { after: string | undefined; calls: number } = { after: undefined, calls: 0 };
+  return checks;
+});
+
+vi.mock("../changes/file-sides.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../changes/file-sides.ts")>();
+  return {
+    ...actual,
+    confinedFolder: async (...args: Parameters<typeof actual.confinedFolder>) => {
+      const answer = await actual.confinedFolder(...args);
+      folderChecks.calls += 1;
+      return folderChecks.after !== undefined && folderChecks.calls > 1
+        ? folderChecks.after
+        : answer;
+    },
+  };
+});
+
 beforeEach(isolateGit);
 afterEach(() => {
   protectHome(undefined);
@@ -74,6 +93,19 @@ describe("readFileForViewing when it is replaced", () => {
     expect(await readFileForViewing(root, "a.txt", null, controller.signal)).toEqual({
       kind: "unreadable",
     });
+  });
+
+  it("refuses what it read when the parent folder is another one by the end of the read", async () => {
+    const root = await makeRepository();
+    await put(root, { "d/a.txt": "a\n" });
+    folderChecks.calls = 0;
+    folderChecks.after = join(root, "elsewhere");
+    try {
+      expect(await readFileForViewing(root, "d/a.txt", null)).toEqual({ kind: "unreadable" });
+    } finally {
+      folderChecks.after = undefined;
+    }
+    expect(await seen(root, "d/a.txt")).toMatchObject({ kind: "text" });
   });
 
   it("answers same for an image whose stamp is unchanged", async () => {

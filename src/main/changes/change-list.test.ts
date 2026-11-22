@@ -20,6 +20,8 @@ import { gitReadMs } from "../workspaces/git-command.ts";
 import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
 import { readWorktreeSide } from "./file-sides.ts";
 
+const stampedByGit = vi.hoisted(() => /(?:[\\/]repo|[\\/]\.git(?:[\\/].*)?)$/s);
+
 const fileCalls = vi.hoisted(() => {
   const calls: { lstat?: ((path: string) => Promise<BigIntStats> | undefined) | undefined } = {};
   return calls;
@@ -30,7 +32,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     lstat: (path: string, options: { bigint: true }) =>
-      fileCalls.lstat?.(path) ?? actual.lstat(path, options),
+      (stampedByGit.test(path) ? undefined : fileCalls.lstat?.(path)) ??
+      actual.lstat(path, options),
   };
 });
 
@@ -38,6 +41,7 @@ const gitCalls = vi.hoisted(() => {
   const calls: {
     stop?: "time" | "stuck" | undefined;
     diff?: string | undefined;
+    untrackedOverflow?: boolean;
     seen: string[][];
   } = { seen: [] };
   return calls;
@@ -51,6 +55,9 @@ vi.mock("../workspaces/git-command.ts", async (importOriginal) => {
       gitCalls.seen.push([...args[1]]);
       if (gitCalls.diff !== undefined && args[1].includes("--raw")) {
         return Promise.resolve({ exitCode: 0, stdout: gitCalls.diff, stderr: "" });
+      }
+      if (gitCalls.untrackedOverflow === true && args[1].includes("--others")) {
+        return Promise.resolve("output" as const);
       }
       return gitCalls.stop === undefined ? actual.readGit(...args) : Promise.resolve(gitCalls.stop);
     },
@@ -572,6 +579,43 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     expect(list.longPaths).toBe(1);
   });
 
+  it("keeps every edited tracked file when untracked files pass the cap", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "z.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "z.txt"), "two\n");
+    await mkdir(join(repo, "a"));
+    for (let at = 0; at < changesLimits.files; at += 1) {
+      await writeFile(join(repo, "a", `${String(at).padStart(4, "0")}.out`), "");
+    }
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records).toHaveLength(changesLimits.files);
+    expect(list.records.at(-1)?.path).toBe("z.txt");
+    expect(list.records[0]?.path).toBe("a/0000.out");
+    expect(list.more).toBe(1);
+  });
+
+  it("keeps the tracked edits when the untracked names are too many to read", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "edited.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "edited.txt"), "two\n");
+    await writeFile(join(repo, "new.txt"), "new\n");
+    gitCalls.untrackedOverflow = true;
+    try {
+      const list = await listed(repo, await git("rev-parse", "HEAD"));
+      expect(list.records.map((record) => [record.path, record.letter])).toEqual([
+        ["edited.txt", "M"],
+      ]);
+      expect(list.untrackedLeftOut).toBe(true);
+    } finally {
+      gitCalls.untrackedOverflow = false;
+    }
+    expect((await listed(repo, await git("rev-parse", "HEAD"))).untrackedLeftOut).toBe(false);
+  });
+
   it("answers too-many for a list longer than Satellite reads", async () => {
     const { repo, git, index } = await repository();
     await writeFile(join(repo, "short.txt"), "short\n");
@@ -602,6 +646,22 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     const list = await listed(repo, await git("rev-parse", "HEAD"));
     expect(list.records.map((record) => [record.path, record.letter, record.kind])).toEqual([
       ["other.dat", "M", "binary"],
+    ]);
+  });
+
+  it("lists a text file bigger than a side as binary, so git never loads it whole", async () => {
+    const { repo, git } = await repository();
+    const lines = (count: number, word: string) => `${word}\n`.repeat(count);
+    await writeFile(join(repo, "big.txt"), lines(300_000, "line"));
+    await writeFile(join(repo, "small.txt"), lines(10, "line"));
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "big.txt"), lines(300_000, "edit"));
+    await writeFile(join(repo, "small.txt"), lines(10, "edit"));
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.kind, record.added])).toEqual([
+      ["big.txt", "binary", null],
+      ["small.txt", "text", 10],
     ]);
   });
 

@@ -32,10 +32,10 @@ describe("file words", () => {
   it("counts unlisted entries and names a row's state", () => {
     expect(moreEntries(1)).toBe("1 more entry is not listed.");
     expect(moreEntries(1200)).toBe("1,200 more entries are not listed.");
-    expect(rowLabel("a/b.ts", "file", "A", false, false)).toBe("a/b.ts, added, not tracked yet");
+    expect(rowLabel("a/b.ts", "file", "A", false, false)).toBe("a/b.ts A, added, not tracked yet");
     expect(rowLabel("a/b.ts", "file", undefined, true, true)).toBe("a/b.ts, ignored by git");
     expect(rowLabel("a", "repository", "M", true, false)).toBe(
-      "a, modified, repository of its own",
+      "a M, modified, repository of its own",
     );
   });
 });

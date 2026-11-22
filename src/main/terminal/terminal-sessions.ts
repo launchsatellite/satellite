@@ -17,8 +17,11 @@ import { claudeArgs, hookSettings, type ClaudeStart } from "../sessions/claude-l
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import type { RunningRoot } from "../processes/processes-handlers.ts";
+import { launchableClaude } from "../tools/tool-check.ts";
 import {
   answersQuestion,
+  declinesQuestion,
+  interruptsTurn,
   nextState,
   type SessionEvent,
   type SessionState,
@@ -78,8 +81,16 @@ interface Session {
   state: SessionState;
   shown: SessionStatus;
   shownReady: boolean;
+  shownHooksOff: boolean;
   statusTimer?: NodeJS.Timeout;
+  quietTimer?: NodeJS.Timeout;
   hooked: boolean;
+  hooksOff: boolean;
+  typed: boolean;
+  submittedAt?: number;
+  outputAt: number;
+  writesFreeAt: number;
+  writeWaiting: boolean;
   ended: boolean;
   endedBySatellite: boolean;
   closedByPage: boolean;
@@ -88,6 +99,13 @@ interface Session {
 const spawnFailed =
   "Claude Code couldn't start. Nothing in your project changed. Start it again, and reinstall Claude Code if it keeps failing.";
 const statusGapMs = 100;
+const pasteStart = "\u001b[200~";
+export const interruptQuietMs = 3000;
+export const hooksOffAfterMs = 8000;
+export const outputGapMs = 1500;
+export const writeCharsPerSecond = 1_048_576;
+const writesTooFast =
+  "Satellite is still typing the last paste into Claude Code. Wait a moment, then paste again.";
 export const exitGraceMs = 1000;
 const stopBoundMs = treeKillBoundMs + exitGraceMs + 500;
 export const quitBoundMs = stopBoundMs + 500;
@@ -139,13 +157,21 @@ export function createTerminalSessions({
 
   const showStatus = (session: Session) => {
     if (session.closedByPage || session.statusTimer !== undefined) return;
-    if (session.shown === session.state.status && session.shownReady === session.hooked) return;
+    if (
+      session.shown === session.state.status &&
+      session.shownReady === session.hooked &&
+      session.shownHooksOff === session.hooksOff
+    ) {
+      return;
+    }
     session.shown = session.state.status;
     session.shownReady = session.hooked;
+    session.shownHooksOff = session.hooksOff;
     session.owner.emit("sessions.status", {
       id: session.id,
       status: session.shown,
       ready: session.shownReady,
+      hooksOff: session.shownHooksOff,
     });
     session.statusTimer = setTimeout(() => {
       session.statusTimer = undefined;
@@ -159,6 +185,60 @@ export function createTerminalSessions({
         !ended && needsYou(state.status) ? [{ workspace, owner, reason: "session" as const }] : [],
       ),
     );
+  };
+
+  const move = (session: Session, event: SessionEvent) => {
+    session.state = nextState(session.state, event);
+    tellNeeding();
+    showStatus(session);
+  };
+
+  const awaitQuiet = (session: Session) => {
+    clearTimeout(session.quietTimer);
+    session.quietTimer = setTimeout(() => {
+      session.quietTimer = undefined;
+      if (session.ended || session.state.status !== "working") return;
+      if (performance.now() - session.outputAt < interruptQuietMs) awaitQuiet(session);
+      else move(session, { name: "Interrupted" });
+    }, interruptQuietMs);
+  };
+
+  const heardKeys = (session: Session, data: string) => {
+    if (!session.hooked && data === "\r" && session.typed) {
+      session.submittedAt = performance.now();
+      session.outputAt = session.submittedAt;
+    }
+    session.typed = data !== "\r" && (!data.startsWith("\u001b") || data.startsWith(pasteStart));
+    const { status } = session.state;
+    if (status === "needs-you" && declinesQuestion(data)) move(session, { name: "DeclineKey" });
+    else if (status === "needs-you" && answersQuestion(data)) move(session, { name: "AnswerKey" });
+    else if (status === "working" && interruptsTurn(data)) awaitQuiet(session);
+  };
+
+  const heardOutput = (session: Session) => {
+    const now = performance.now();
+    const since = session.submittedAt;
+    if (since !== undefined && !session.hooked) {
+      if (now - session.outputAt > outputGapMs) session.submittedAt = undefined;
+      else if (now - since >= hooksOffAfterMs) {
+        session.submittedAt = undefined;
+        session.hooksOff = true;
+        showStatus(session);
+      }
+    }
+    session.outputAt = now;
+  };
+
+  const paced = async (session: Session, chars: number) => {
+    if (session.writeWaiting) throw new BridgeFailure("limit", writesTooFast);
+    const now = performance.now();
+    session.writesFreeAt =
+      Math.max(session.writesFreeAt, now) + (chars / writeCharsPerSecond) * 1000;
+    const wait = session.writesFreeAt - now - 1000;
+    if (wait <= 0) return;
+    session.writeWaiting = true;
+    await delay(wait);
+    session.writeWaiting = false;
   };
 
   const release = (session: Session) => {
@@ -196,6 +276,7 @@ export function createTerminalSessions({
     if (sessions.get(id) === session) sessions.delete(id);
     if (session.ended) return;
     session.ended = true;
+    clearTimeout(session.quietTimer);
     tellNeeding();
     session.endedBySatellite = true;
     session.output?.stop();
@@ -290,6 +371,7 @@ export function createTerminalSessions({
     session.output?.finish();
     if (sessions.get(session.id) === session) sessions.delete(session.id);
     session.ended = true;
+    clearTimeout(session.quietTimer);
     session.state = nextState(session.state, { name: "Exit" });
     tellNeeding();
     clearTimeout(session.statusTimer);
@@ -316,6 +398,13 @@ export function createTerminalSessions({
       throw new BridgeFailure(
         "tool-missing",
         "Satellite can't find Claude Code. Install it, then start it again.",
+      );
+    }
+    const installed = await launchableClaude(command);
+    if (installed.state === "too-old") {
+      throw new BridgeFailure(
+        "tool-missing",
+        `Claude Code ${installed.version} is older than the ${installed.minimum} Satellite needs. Update it, then start it again.`,
       );
     }
     if (isEnded(session)) return;
@@ -345,6 +434,7 @@ export function createTerminalSessions({
     session.output = output;
     running.add(session);
     pty.onData((data) => {
+      heardOutput(session);
       output.push(data);
     });
     pty.onExit((exitCode, signal) => {
@@ -373,7 +463,13 @@ export function createTerminalSessions({
       state: { status: "idle", askers: [] },
       shown: "idle",
       shownReady: false,
+      shownHooksOff: false,
       hooked: false,
+      hooksOff: false,
+      typed: false,
+      outputAt: 0,
+      writesFreeAt: 0,
+      writeWaiting: false,
       ended: false,
       endedBySatellite: false,
       closedByPage: false,
@@ -411,17 +507,14 @@ export function createTerminalSessions({
         return { resumable: !holds(recorded) && (await last.get(workspace)) === recorded };
       },
       "terminal.start": start,
-      "terminal.write": ({ id, data }, owner) =>
-        answered(() => {
-          const session = held(id, owner);
-          if (session.pty === undefined) return;
-          if (needsYou(session.state.status) && answersQuestion(data)) {
-            session.state = nextState(session.state, { name: "AnswerKey" });
-            tellNeeding();
-            showStatus(session);
-          }
-          session.pty.write(data);
-        }),
+      "terminal.write": async ({ id, data }, owner) => {
+        const session = held(id, owner);
+        await paced(session, data.length);
+        if (session.pty === undefined || session.ended) return {};
+        heardKeys(session, data);
+        session.pty.write(data);
+        return {};
+      },
       "terminal.resize": ({ id, cols, rows }, owner) =>
         answered(() => {
           held(id, owner).pty?.resize(cols, rows);
@@ -449,13 +542,21 @@ export function createTerminalSessions({
       const session = launches.get(launchId);
       if (session === undefined || session.ended) return;
       session.hooked = true;
+      session.hooksOff = false;
+      session.submittedAt = undefined;
+      if (session.quietTimer !== undefined) {
+        if (event.name === "PostToolUse" || event.name === "PostToolUseFailure") {
+          awaitQuiet(session);
+        } else {
+          clearTimeout(session.quietTimer);
+          session.quietTimer = undefined;
+        }
+      }
       if (sessionId !== null) session.sessionId = sessionId;
       if (event.name === "UserPromptSubmit" && session.sessionId !== undefined) {
         void last.set(session.workspace, session.sessionId);
       }
-      session.state = nextState(session.state, event);
-      tellNeeding();
-      showStatus(session);
+      move(session, event);
     },
     roots() {
       return [...running].flatMap(({ ended, owner, id, workspace, pty, spawnedAt }) =>

@@ -1,12 +1,13 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { basename, dirname, relative, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
+import { partialCloneProblem, unreadableConfig } from "../workspaces/repository-config.ts";
 
 export type RevParse =
-  | { kind: "work-tree"; toplevel: string; commonDir: string; linked: boolean }
+  | { kind: "work-tree"; toplevel: string; gitDir: string; commonDir: string; linked: boolean }
   | { kind: "bare" }
   | { kind: "git-dir" }
   | { kind: "not-a-repository" }
@@ -92,6 +93,23 @@ async function revParse(folder: string): Promise<RevParse> {
   return parseRevParse(run);
 }
 
+async function ignoresHome(root: string, home: string): Promise<boolean> {
+  const run = await runTool(
+    "git",
+    ["-C", root, "-c", "core.fsmonitor=", "check-ignore", "-q", "--", home],
+    {
+      timeoutMs: gitReadTimeoutMs,
+    },
+  ).catch(() => undefined);
+  return run?.exitCode === 0;
+}
+
+function homeInside(root: string, home: string): string {
+  const name = folderName(root);
+  const inside = relative(root, home).split(sep).join("/");
+  return `${name} holds Satellite's home, ${inside}, and git doesn't ignore it there. Add ${inside}/ to the .gitignore in ${name}, then add it again.`;
+}
+
 function refuse(refusal: string): RepositoryCheck {
   return { ok: false, refusal };
 }
@@ -123,7 +141,7 @@ export function parseRevParse(run: ToolRun): RevParse {
     commonDir !== undefined &&
     toplevel !== undefined
   ) {
-    return { kind: "work-tree", toplevel, commonDir, linked: !samePath(gitDir, commonDir) };
+    return { kind: "work-tree", toplevel, gitDir, commonDir, linked: !samePath(gitDir, commonDir) };
   }
   if (run.stderr.includes("dubious ownership")) return { kind: "untrusted" };
   if (run.stderr.includes("not a git repository")) return { kind: "not-a-repository" };
@@ -177,9 +195,19 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   const root = await realFolder(parsed.toplevel);
   if (root === undefined) return refuse(missingFolder);
   if (isInsidePath(read.home, root)) return refuse(ownFolder);
+  const gitFolder = await realFolder(parsed.gitDir);
+  const holdsItsGit = gitFolder !== undefined && isInsidePath(real, gitFolder);
+  if (!isInsidePath(root, real) || (!samePath(root, real) && holdsItsGit)) {
+    return refuse(`${name} keeps its working files in another folder. ${ownCheckout}`);
+  }
   if (!samePath(root, real)) {
     const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
   }
+  if (isInsidePath(root, read.home) && !(await ignoresHome(root, read.home))) {
+    return refuse(homeInside(root, read.home));
+  }
+  const problem = await partialCloneProblem(root).catch(() => unreadableConfig);
+  if (problem !== undefined) return refuse(problem);
   return { ok: true, root };
 }
