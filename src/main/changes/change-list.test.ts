@@ -20,7 +20,7 @@ import { gitReadMs } from "../workspaces/git-command.ts";
 import { parseDiff, parseUnmerged, parseUntracked, readChangeList } from "./change-list.ts";
 import { readWorktreeSide } from "./file-sides.ts";
 
-const stampedByGit = vi.hoisted(() => /(?:\/repo|\/\.git(?:\/.*)?)$/s);
+const stampedByGit = vi.hoisted(() => /(?:[\\/]repo|[\\/]\.git(?:[\\/].*)?)$/s);
 
 const fileCalls = vi.hoisted(() => {
   const calls: { lstat?: ((path: string) => Promise<BigIntStats> | undefined) | undefined } = {};

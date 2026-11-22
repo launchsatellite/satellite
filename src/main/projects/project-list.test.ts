@@ -641,39 +641,42 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toEqual(stored);
   });
 
-  it("never adopts a worktree whose checkout was cut off, and names its folder once", async () => {
-    const { home, repo, gitIn, projects } = await repoWithWorkspace();
-    await writeFile(join(repo, ".gitattributes"), "cut.txt filter=cut\n");
-    await writeFile(join(repo, "cut.txt"), "cut\n");
-    await gitIn(repo, ["add", ".gitattributes", "cut.txt"]);
-    await gitIn(repo, ["commit", "-q", "-m", "two"]);
-    await gitIn(repo, ["config", "filter.cut.smudge", "kill -9 0"]);
-    const half = join(home, "worktrees", "repo", "half-made");
-    const cut = spawn("git", ["-C", repo, "worktree", "add", "-q", "-b", "half-made", half], {
-      detached: true,
-      stdio: "ignore",
-      env: { ...process.env, LC_ALL: "C" },
-    });
-    const signal = await new Promise<NodeJS.Signals | null>((resolve) => {
-      cut.on("exit", (_code, killedBy) => {
-        resolve(killedBy);
+  it.skipIf(process.platform === "win32")(
+    "never adopts a worktree whose checkout was cut off, and names its folder once",
+    async () => {
+      const { home, repo, gitIn, projects } = await repoWithWorkspace();
+      await writeFile(join(repo, ".gitattributes"), "cut.txt filter=cut\n");
+      await writeFile(join(repo, "cut.txt"), "cut\n");
+      await gitIn(repo, ["add", ".gitattributes", "cut.txt"]);
+      await gitIn(repo, ["commit", "-q", "-m", "two"]);
+      await gitIn(repo, ["config", "filter.cut.smudge", "kill -9 0"]);
+      const half = join(home, "worktrees", "repo", "half-made");
+      const cut = spawn("git", ["-C", repo, "worktree", "add", "-q", "-b", "half-made", half], {
+        detached: true,
+        stdio: "ignore",
+        env: { ...process.env, LC_ALL: "C" },
       });
-    });
-    expect(signal).toBe("SIGKILL");
-    const lock = await readFile(join(repo, ".git", "worktrees", "half-made", "locked"), "utf8");
-    expect(lock.trim()).toBe("initializing");
-    const first = await projects.handlers["projects.list"]({}, owner);
-    expect(first.projects[0]?.workspaces.map((workspace) => workspace.name)).toEqual([
-      null,
-      "fix-login",
-    ]);
-    expect(first.dropped).toEqual([
-      "Making half-made in repo stopped halfway, so Satellite leaves worktrees/repo/half-made in the Satellite home out of the list. git worktree remove --force --force on it clears it.",
-    ]);
-    expect(await storedWorkspaceIds(home)).toHaveLength(1);
-    expect((await projects.handlers["projects.list"]({}, owner)).dropped).toEqual([]);
-    expect(await stat(half).then((entry) => entry.isDirectory())).toBe(true);
-  });
+      const signal = await new Promise<NodeJS.Signals | null>((resolve) => {
+        cut.on("exit", (_code, killedBy) => {
+          resolve(killedBy);
+        });
+      });
+      expect(signal).toBe("SIGKILL");
+      const lock = await readFile(join(repo, ".git", "worktrees", "half-made", "locked"), "utf8");
+      expect(lock.trim()).toBe("initializing");
+      const first = await projects.handlers["projects.list"]({}, owner);
+      expect(first.projects[0]?.workspaces.map((workspace) => workspace.name)).toEqual([
+        null,
+        "fix-login",
+      ]);
+      expect(first.dropped).toEqual([
+        "Making half-made in repo stopped halfway, so Satellite leaves worktrees/repo/half-made in the Satellite home out of the list. git worktree remove --force --force on it clears it.",
+      ]);
+      expect(await storedWorkspaceIds(home)).toHaveLength(1);
+      expect((await projects.handlers["projects.list"]({}, owner)).dropped).toEqual([]);
+      expect(await stat(half).then((entry) => entry.isDirectory())).toBe(true);
+    },
+  );
 
   it("shows a dropped workspace again when its record could not be forgotten", async () => {
     const { home, workspace, projects } = await repoWithWorkspace();
