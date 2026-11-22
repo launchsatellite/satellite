@@ -45,7 +45,9 @@ export function WorkspaceHeader({
       className="@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
       <h1 className="sr-only">
-        {visibleText(project.name)} / {visibleText(workspaceLabel(project, workspace))}
+        {workspace.name === null
+          ? visibleText(project.name)
+          : `${visibleText(project.name)} / ${workspace.name}`}
       </h1>
       {project.missing === null && (
         <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @xs:flex">

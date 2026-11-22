@@ -77,7 +77,7 @@ type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
 interface AppWindowProps {
   initial: InterfaceState;
-  frame: WindowFrame;
+  frame: WindowFrame | null;
   notice: string | null;
 }
 
@@ -265,6 +265,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     openGuide();
   }, [openGuide]);
   const sidebarShown = state.sidebar === "shown";
+  const showSidebar = useCallback(() => {
+    if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
+  }, [sidebarShown, update]);
   const { left, right } = fitColumns(state.columns, width, sidebarShown);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
@@ -300,9 +303,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const dropFolder = useCallback(
     (path: string) => {
       dismissToast();
+      showSidebar();
       void drop(path).then(open);
     },
-    [dismissToast, drop, open],
+    [dismissToast, showSidebar, drop, open],
   );
   const dragging = useFolderDrop({ accepts: acceptsDrop, onFolder: dropFolder, notify });
   const selectedProject = projects?.find((project) => project.id === selectedId);
@@ -728,6 +732,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: async () => {
               dismissToast();
+              showSidebar();
               open(await add());
             },
           },
@@ -883,7 +888,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             id: "guide.show",
             title: "Show the guide",
             available: guideListed,
-            run: showGuide,
+            run: () => {
+              showSidebar();
+              showGuide();
+            },
           },
           {
             id: "theme.system",
@@ -1097,6 +1105,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     guideListed,
     showGuide,
     sidebarShown,
+    showSidebar,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -1227,7 +1236,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               ? null
               : {
                   project: selectedProject.name,
-                  workspace: workspaceLabel(selectedProject, selectedWorkspace),
+                  workspace: selectedWorkspace.name,
                 }
           }
           waiting={inbox.length}
