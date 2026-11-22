@@ -27,6 +27,9 @@ export function Toast({ message, tone, onDismiss }: ToastProps) {
   return (
     <div
       data-testid="toast"
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
       onMouseEnter={() => {
         setHovered(true);
       }}
