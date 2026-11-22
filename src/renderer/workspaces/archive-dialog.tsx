@@ -2,10 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import type { BridgeResponse, ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
+import { letterColours } from "../changes/change-words.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
+import { porcelainLetter } from "./porcelain-letter.ts";
 
 type Inspected = BridgeResponse<"workspaces.inspect">;
 type Phase =
@@ -65,7 +67,10 @@ function Files({ view }: { view: Inspected }) {
       <ul className={list}>
         {view.files.map((file) => (
           <li key={file.path} className="break-all whitespace-pre-wrap">
-            {file.code} <VisibleName text={file.path} />
+            <span className={letterColours[porcelainLetter(file.code)] ?? "text-dim"}>
+              {porcelainLetter(file.code)}
+            </span>{" "}
+            <VisibleName text={file.path} />
           </li>
         ))}
         {view.moreFiles > 0 && <li>and {String(view.moreFiles)} more</li>}
@@ -348,11 +353,9 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
     const archiving = phase.kind === "archiving";
     return (
       <>
-        <span className="mr-auto">
-          <Button variant="ghost" onClick={onClose} disabled={archiving} testId="archive-cancel">
-            Cancel
-          </Button>
-        </span>
+        <Button variant="ghost" onClick={onClose} disabled={archiving} testId="archive-cancel">
+          Cancel
+        </Button>
         {view !== undefined && (
           <Button
             variant={losesWork(view) ? "danger" : "primary"}

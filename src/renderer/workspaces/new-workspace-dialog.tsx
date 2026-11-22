@@ -12,7 +12,6 @@ import { workspaceNameLimit, workspaceNameProblem } from "../../shared/workspace
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
-import { KeyHint } from "../ui/key-hint.tsx";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { visibleLabel } from "../ui/visible-name.tsx";
 
@@ -433,10 +432,6 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     }
     return (
       <>
-        <span className="mr-auto inline-flex items-center gap-[5px] text-[12px] text-dim">
-          <KeyHint keys="Esc" plain />
-          to close
-        </span>
         <Button variant="ghost" onClick={onClose} testId="cancel-workspace">
           Cancel
         </Button>
