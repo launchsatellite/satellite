@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import { z } from "zod";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
+import { bridgeRequestChars, oversizeRefusal } from "../../src/shared/satellite-api.ts";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
@@ -815,6 +816,19 @@ async function checkBridge(page: Page): Promise<void> {
     invalid,
     "invalid-request",
     `terminal.resize with a bad payload answered ${invalid}, not invalid-request`,
+  );
+  const oversize = await page.evaluate(async (chars) => {
+    const api: unknown = Reflect.get(window, "satellite");
+    const invoke: unknown =
+      typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+    if (typeof invoke !== "function") return "window.satellite.invoke is missing";
+    const payload = { id: crypto.randomUUID(), data: "x".repeat(chars + 1) };
+    const answer: unknown = await Reflect.apply(invoke, api, ["terminal.write", payload]);
+    return JSON.stringify(answer);
+  }, bridgeRequestChars);
+  assert.ok(
+    oversize.includes(oversizeRefusal),
+    `a request past the preload's cap answered ${oversize.slice(0, 200)}`,
   );
   const unknown = await bridgeCode(page, "__proto__", {});
   assert.equal(
