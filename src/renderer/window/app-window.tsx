@@ -47,6 +47,7 @@ import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
+import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
@@ -137,6 +138,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
     workspace: WorkspaceView;
+  } | null>(null);
+  const [removing, setRemoving] = useState<{
+    projectId: string;
+    name: string;
+    sessions: number;
+    processes: number;
   } | null>(null);
   const [added, setAdded] = useState<string>();
   const [processesOpen, setProcessesOpen] = useState(false);
@@ -423,7 +430,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const dialogProject = projects?.find((project) => project.id === creatingIn);
   const showingProcesses = processesOpen && changesHere !== null;
   const modal =
-    dialogProject !== undefined || archiving !== null || asking !== null || showingProcesses;
+    dialogProject !== undefined ||
+    archiving !== null ||
+    removing !== null ||
+    asking !== null ||
+    showingProcesses;
   const liveTerminals = allSessions
     .filter((tab) => tab.status !== "stopped")
     .map((tab) => tab.terminalId)
@@ -445,6 +456,21 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
     [processes],
   );
+  const removableRunning = useMemo(() => {
+    if (removable === undefined || removable.workspaces.some(({ key }) => key !== "main")) {
+      return { sessions: 0, processes: 0 };
+    }
+    const refs = removable.workspaces.map(({ key }) => ({
+      projectId: removable.id,
+      workspace: key,
+    }));
+    return {
+      sessions: allSessions.filter(
+        (tab) => tab.workspace.projectId === removable.id && tab.status !== "stopped",
+      ).length,
+      processes: refs.reduce((total, ref) => total + processes.rowsOf(ref).length, 0),
+    };
+  }, [removable, allSessions, processes]);
   const sessionNumber = useCallback(
     (terminalId: string) => allSessions.find((tab) => tab.terminalId === terminalId)?.number,
     [allSessions],
@@ -550,6 +576,27 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       next?.focus();
     });
   }, []);
+  const removeProject = useCallback(
+    async (projectId: string, name: string) => {
+      const forgot = await remove(projectId);
+      if (forgot === undefined) return;
+      forgetProject(projectId);
+      update(
+        (current) => ({
+          ...current,
+          selected: current.selected?.projectId === projectId ? null : current.selected,
+        }),
+        true,
+      );
+      refresh();
+      notify(forgotSentence(name, forgot), "notice");
+      focusSidebarIfLost();
+    },
+    [remove, forgetProject, update, refresh, notify, focusSidebarIfLost],
+  );
+  const closeRemoving = useCallback(() => {
+    setRemoving(null);
+  }, []);
   const archived = (leftover: string | null) => {
     if (archiving === null) return;
     const projectId = archiving.project.id;
@@ -602,20 +649,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             title: "Remove this project",
             available: removableId !== undefined,
             run: async () => {
-              if (removableId === undefined) return;
-              const forgot = await remove(removableId);
-              if (forgot === undefined) return;
-              forgetProject(removableId);
-              update(
-                (current) => ({
-                  ...current,
-                  selected: current.selected?.projectId === removableId ? null : current.selected,
-                }),
-                true,
-              );
-              refresh();
-              notify(forgotSentence(String(removableName), forgot), "notice");
-              focusSidebarIfLost();
+              if (removableId === undefined || removableName === undefined) return;
+              if (removableRunning.sessions + removableRunning.processes > 0) {
+                setRemoving({ projectId: removableId, name: removableName, ...removableRunning });
+                return;
+              }
+              await removeProject(removableId, removableName);
             },
           },
           {
@@ -903,13 +942,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     update,
     add,
     open,
-    remove,
-    refresh,
     removableId,
     removableName,
+    removableRunning,
+    removeProject,
     notify,
     dismissToast,
-    focusSidebarIfLost,
     sessionHere,
     folderHere,
     activeSession,
@@ -918,7 +956,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     openSession,
     closeSession,
     activateSession,
-    forgetProject,
     newest,
     openFromInbox,
     changesShown,
@@ -952,21 +989,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     }
     return (
       <>
-        <WorkspaceHeader
-          project={selectedProject}
-          workspace={selectedWorkspace}
-          base={changes.header?.base ?? null}
-          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
-          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
-          pullRequest={shownPullRequest}
-          processes={processesHere.length}
-          onShowProcesses={() => {
-            setProcessesOpen(true);
-          }}
-          onShowPullRequest={() => {
-            setCentreView("pull-request");
-          }}
-        />
         {selectedProject.missing !== null ? (
           <FolderMissing
             name={visibleText(selectedProject.name)}
@@ -1048,6 +1070,21 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             />
           ))
         )}
+        <WorkspaceHeader
+          project={selectedProject}
+          workspace={selectedWorkspace}
+          base={changes.header?.base ?? null}
+          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
+          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
+          pullRequest={shownPullRequest}
+          processes={processesHere.length}
+          onShowProcesses={() => {
+            setProcessesOpen(true);
+          }}
+          onShowPullRequest={() => {
+            setCentreView("pull-request");
+          }}
+        />
       </>
     );
   };
@@ -1177,6 +1214,19 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             onStop={processes.stop}
             onPort={askProcessPort}
             onClose={closeProcesses}
+          />
+        )}
+        {removing !== null && (
+          <RemoveProjectDialog
+            key={removing.projectId}
+            name={removing.name}
+            sessions={removing.sessions}
+            processes={removing.processes}
+            onClose={closeRemoving}
+            onRemove={() => {
+              setRemoving(null);
+              void removeProject(removing.projectId, removing.name);
+            }}
           />
         )}
         {asking !== null && (

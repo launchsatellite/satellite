@@ -25,6 +25,7 @@ interface Server {
 
 const minimumAgeMs = 10_000;
 const stopWaitMs = goneTimeoutMs + 3000;
+const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const detachedSentence =
   "A process that detached from the session that started it keeps running and isn't listed here.";
 
@@ -107,6 +108,47 @@ async function forged(
   assert.ok(!processGone(stranger.pid), "the unrelated process was ended by a forged request");
   assert.ok(!processGone(process.pid), "the driver was gone after the forged requests");
   assert.ok(!processGone(claudePid), "the stand-in was gone after the forged requests");
+}
+
+async function removeAsks(session: AppSession, claudePid: number): Promise<void> {
+  const { page } = session;
+  const openRemove = async () => {
+    await page.keyboard.press(`${commandModifier}+K`);
+    await visible(session, "palette", "before removing the project");
+    await page.getByTestId("palette-input").fill("remove this project");
+    await visible(session, "command-project-remove", "in the command menu for remove");
+    await page.keyboard.press("Enter");
+    await visible(
+      session,
+      "remove-project-dialog",
+      "after Remove this project with a session running",
+    );
+  };
+  await openRemove();
+  assert.equal(
+    (await textOf(session, "remove-project-sessions")).trim(),
+    "1 Claude Code session running here stops first.",
+  );
+  assert.equal(await page.getByTestId("remove-project-processes").count(), 0);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
+    "remove-project-cancel",
+    "the remove question did not start with focus on Cancel",
+  );
+  await session.screenshot("processes-remove");
+  await page.keyboard.press("Enter");
+  await gone(session, "remove-project-dialog", "after Enter on the remove question");
+  await visible(session, "project-repo", "after the remove question was cancelled");
+  assert.ok(!processGone(claudePid), "cancelling the remove question ended Claude Code");
+
+  await openRemove();
+  await page.getByTestId("remove-project-confirm").click();
+  await visible(session, "no-projects", "after the project was removed");
+  await waitUntil(
+    () => processGone(claudePid),
+    stopWaitMs,
+    "Claude Code still ran after its project was removed",
+  );
 }
 
 async function run(session: AppSession): Promise<void> {
@@ -227,6 +269,7 @@ async function run(session: AppSession): Promise<void> {
   } finally {
     stranger.kill();
   }
+  await removeAsks(session, claudePid);
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
 
