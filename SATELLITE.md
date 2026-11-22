@@ -53,7 +53,7 @@ Once the first project is added a small guide walks through the four things nobo
 
 ## Projects
 
-Add a project with Add a project, through the folder dialog, or by dropping a folder on the window. The folder must be the working folder of a git repository, and Satellite records its path and writes nothing into it. It refuses its own home, a whole drive, a bare repository, a folder inside `.git`, a worktree of another repository, a folder another user owns, and a folder inside a repository, naming the repository to add instead. A network folder cannot be dropped, and Add a project still takes it. Satellite holds up to 200 projects.
+Add a project with Add a project, through the folder dialog, or by dropping a folder on the window. The folder must be the working folder of a git repository, and Satellite records its path and writes nothing into it. It refuses the Satellite home folder, a whole drive, a bare repository, a folder inside `.git`, a worktree of another repository, a folder another user owns, and a folder inside a repository, naming the repository to add instead. On Windows a network folder cannot be dropped, and Add a project still takes it. Satellite holds up to 200 projects.
 
 Remove this project forgets a project and leaves its folder untouched. While the project still has workspaces Satellite refuses and asks you to archive them first, unless the folder is gone or no longer a repository. Then it forgets the project with its workspaces and every folder stays where it is. A project whose folder moved says so and comes back by itself once the folder is back where it was, and one that is no longer a git repository says that instead.
 
