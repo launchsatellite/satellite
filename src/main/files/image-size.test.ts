@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gif, jpeg, png, webpExtended, webpLossless, webpLossy, ascii } from "./image-fixture.ts";
+import { gif, jpeg, png, webpExtended, webpLossless, webpLossy, ascii } from "./image.test-fixture.ts";
 import { hasImageSignature, readImageHeader } from "./image-size.ts";
 
 describe("readImageHeader", () => {

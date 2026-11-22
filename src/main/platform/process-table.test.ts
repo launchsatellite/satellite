@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { psBusybox, psLinux, psMacos, tableWindows } from "./process-fixtures.ts";
+import { psBusybox, psLinux, psMacos, tableWindows } from "./process.test-fixture.ts";
 import {
   type ProcessEntry,
   parsePsCommands,

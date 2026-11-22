@@ -6,14 +6,14 @@ import { filesLimits } from "../../shared/bridge-contract.ts";
 import { protectHome, worktreeStamps } from "../changes/file-sides.ts";
 import { listFolders } from "./folder-listing.ts";
 import { readFileForViewing } from "./file-read.ts";
-import { gif, jpeg, png, webpExtended, webpLossless, webpLossy } from "./image-fixture.ts";
+import { gif, jpeg, png, webpExtended, webpLossless, webpLossy } from "./image.test-fixture.ts";
 import {
   isolateGit,
   makeRepository,
   mockedEnvironment,
   put,
   scratch,
-} from "./repository-fixture.ts";
+} from "./repository.test-fixture.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),

@@ -10,7 +10,7 @@ import {
   mockedEnvironment,
   put,
   scratch,
-} from "./repository-fixture.ts";
+} from "./repository.test-fixture.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),

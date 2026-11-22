@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureNow, psMacos, tableWindows } from "../platform/process-fixtures.ts";
+import { fixtureNow, psMacos, tableWindows } from "../platform/process.test-fixture.ts";
 import { parsePsTable, parseWindowsTable } from "../platform/process-table.ts";
 import {
   listedProcesses,

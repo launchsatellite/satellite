@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { lsofMacos, portsWindows, ssLinux } from "./process-fixtures.ts";
+import { lsofMacos, portsWindows, ssLinux } from "./process.test-fixture.ts";
 import {
   type ListeningPort,
   parseLsof,

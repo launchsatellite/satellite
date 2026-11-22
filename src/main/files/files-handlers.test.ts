@@ -11,7 +11,7 @@ import {
   mockedEnvironment,
   put,
   scratch,
-} from "./repository-fixture.ts";
+} from "./repository.test-fixture.ts";
 
 const held = vi.hoisted(() => ({ reads: 0 }));
 

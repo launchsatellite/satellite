@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { processRow } from "../../shared/bridge-contract.ts";
 import type { BridgeOwner } from "../bridge/registry.ts";
 import { parseLsof } from "../platform/listening-ports.ts";
-import { fixtureNow, lsofMacos, psMacos } from "../platform/process-fixtures.ts";
+import { fixtureNow, lsofMacos, psMacos } from "../platform/process.test-fixture.ts";
 import { type ProcessEntry, parsePsTable, readProcessTable } from "../platform/process-table.ts";
 import type { SessionRoot } from "./listed-processes.ts";
 import { StopNotConfirmed, StopRefused } from "../platform/process-tree.ts";

@@ -16,7 +16,7 @@ import {
   put,
   scratch,
   snapshot,
-} from "./repository-fixture.ts";
+} from "./repository.test-fixture.ts";
 
 vi.mock("./ignore-check.ts", async (original) => {
   const real = await original<typeof import("./ignore-check.ts")>();
