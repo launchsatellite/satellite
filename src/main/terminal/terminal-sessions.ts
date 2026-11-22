@@ -17,7 +17,7 @@ import { claudeArgs, hookSettings, type ClaudeStart } from "../sessions/claude-l
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import type { RunningRoot } from "../processes/processes-handlers.ts";
-import { checkClaude } from "../tools/tool-check.ts";
+import { launchableClaude } from "../tools/tool-check.ts";
 import {
   answersQuestion,
   declinesQuestion,
@@ -86,6 +86,7 @@ interface Session {
   quietTimer?: NodeJS.Timeout;
   hooked: boolean;
   hooksOff: boolean;
+  typed: boolean;
   submittedAt?: number;
   outputAt: number;
   writesFreeAt: number;
@@ -98,6 +99,7 @@ interface Session {
 const spawnFailed =
   "Claude Code couldn't start. Nothing in your project changed. Start it again, and reinstall Claude Code if it keeps failing.";
 const statusGapMs = 100;
+const pasteStart = "\u001b[200~";
 export const interruptQuietMs = 3000;
 export const hooksOffAfterMs = 8000;
 export const outputGapMs = 1500;
@@ -195,15 +197,18 @@ export function createTerminalSessions({
     clearTimeout(session.quietTimer);
     session.quietTimer = setTimeout(() => {
       session.quietTimer = undefined;
-      if (!session.ended) move(session, { name: "Interrupted" });
+      if (session.ended || session.state.status !== "working") return;
+      if (performance.now() - session.outputAt < interruptQuietMs) awaitQuiet(session);
+      else move(session, { name: "Interrupted" });
     }, interruptQuietMs);
   };
 
   const heardKeys = (session: Session, data: string) => {
-    if (!session.hooked && data === "\r") {
+    if (!session.hooked && data === "\r" && session.typed) {
       session.submittedAt = performance.now();
       session.outputAt = session.submittedAt;
     }
+    session.typed = data !== "\r" && (!data.startsWith("\u001b") || data.startsWith(pasteStart));
     const { status } = session.state;
     if (status === "needs-you" && declinesQuestion(data)) move(session, { name: "DeclineKey" });
     else if (status === "needs-you" && answersQuestion(data)) move(session, { name: "AnswerKey" });
@@ -395,7 +400,7 @@ export function createTerminalSessions({
         "Satellite can't find Claude Code. Install it, then start it again.",
       );
     }
-    const installed = await checkClaude();
+    const installed = await launchableClaude(command);
     if (installed.state === "too-old") {
       throw new BridgeFailure(
         "tool-missing",
@@ -461,6 +466,7 @@ export function createTerminalSessions({
       shownHooksOff: false,
       hooked: false,
       hooksOff: false,
+      typed: false,
       outputAt: 0,
       writesFreeAt: 0,
       writeWaiting: false,

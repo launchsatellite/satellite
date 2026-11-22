@@ -29,9 +29,12 @@ const answerFirst = "Answer Claude Code first, then send this again.";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const hooksOffSend = `${hooksOffNote} Type this one yourself.`;
-const updateFix: InstallFix = { kind: "command", text: "claude update" };
+const updateFix: InstallFix = {
+  kind: "address",
+  text: "https://code.claude.com/docs/en/setup#update-claude-code",
+};
 const missingLeads: Record<InstallFix["kind"] | "update", string> = {
-  update: "Run this in a terminal to update it.",
+  update: "Follow the steps at this address for the way you installed it.",
   command: "Run this in a terminal to install it.",
   address: "Follow the steps at this address to install it.",
 };

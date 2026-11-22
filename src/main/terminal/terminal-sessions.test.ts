@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { createPageOwners } from "../bridge/page-owners.ts";
 import { spawnPty } from "../platform/pty.ts";
-import { checkClaude } from "../tools/tool-check.ts";
+import { launchableClaude } from "../tools/tool-check.ts";
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import { treeKillBoundMs } from "../platform/process-tree.ts";
@@ -25,7 +25,7 @@ import {
 
 vi.mock("../platform/pty.ts", () => ({ spawnPty: vi.fn(), windowsPty: () => null }));
 vi.mock("../tools/tool-check.ts", () => ({
-  checkClaude: vi.fn(() => Promise.resolve({ state: "ready", version: "2.1.78" })),
+  launchableClaude: vi.fn(() => Promise.resolve({ state: "ready", version: "2.1.78" })),
 }));
 vi.mock("../platform/tools.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../platform/tools.ts")>();
@@ -485,6 +485,19 @@ describe("createTerminalSessions", () => {
       expect(latest()).toEqual({ id, status: "idle", ready: true, hooksOff: false });
     });
 
+    it("keeps working through an Escape while Claude Code keeps drawing, and rests once it stops", async () => {
+      const { id, latest, write, hook } = await started();
+      hook({ name: "UserPromptSubmit" });
+      await write("\u001b");
+      for (let tick = 0; tick < 40; tick += 1) {
+        ptys[0]?.print("spinning");
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
+      await vi.advanceTimersByTimeAsync(interruptQuietMs * 2);
+      expect(latest()).toEqual({ id, status: "idle", ready: true, hooksOff: false });
+    });
+
     it("keeps working when a hook follows the interrupt", async () => {
       const { id, latest, write, hook } = await started();
       hook({ name: "UserPromptSubmit" });
@@ -503,6 +516,15 @@ describe("createTerminalSessions", () => {
       await vi.advanceTimersByTimeAsync(hooksOffAfterMs);
       ptys[0]?.print("> ");
       expect(latest()).toBeUndefined();
+      await write("/");
+      await write("\u001b");
+      await write("\r");
+      for (let tick = 0; tick <= hooksOffAfterMs / 500; tick += 1) {
+        ptys[0]?.print("compacting");
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      expect(latest()).toBeUndefined();
+      await write("o");
       await write("\r");
       for (let tick = 0; tick <= hooksOffAfterMs / 500; tick += 1) {
         ptys[0]?.print("spinning");
@@ -684,8 +706,16 @@ describe("createTerminalSessions", () => {
     expect(sessions.roots()).toEqual([]);
   });
 
+  it("starts Claude Code when its version check could not answer", async () => {
+    vi.mocked(launchableClaude).mockResolvedValueOnce({ state: "broken" });
+    const { handlers } = create({ listener: fakeListener() });
+    const { mine } = owners();
+    await handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+  });
+
   it("never runs a Claude Code older than Satellite needs", async () => {
-    vi.mocked(checkClaude).mockResolvedValueOnce({
+    vi.mocked(launchableClaude).mockResolvedValueOnce({
       state: "too-old",
       version: "2.1.10",
       minimum: "2.1.78",
