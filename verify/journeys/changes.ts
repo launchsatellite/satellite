@@ -317,7 +317,7 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
   );
 
   await setHidden(page, true);
-  await delay(quickMs / 4);
+  await delay(settleMs);
   await writeFile(join(folder, "unseen.txt"), "written while hidden\n");
   await delay(settleMs);
   const hiddenRows = await rows(page);
