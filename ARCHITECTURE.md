@@ -132,7 +132,7 @@ The theme is Electron's `nativeTheme.themeSource`, set to the saved choice at st
 
 ## Platform
 
-`src/main/platform/` is the only code that knows about executables, shells and platform differences.
+`src/main/platform/` is the only code that knows about executables and shells, and it holds every platform difference apart from the five small branches skill `satellite-stack` names in The platform module.
 
 - **File system rules.** `file-system.ts` holds the file name rule for copied files, which on Windows refuses a `:`, a trailing dot or space and device names, the 150 character limit on a workspace folder on Windows, a folder whose real path differs from its own counting as a link on Windows, the Windows short name test the change path rule adds and the owner-only mode of the sessions folder, plus the error code, folder identity and open flag helpers the features share.
 
