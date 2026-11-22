@@ -5,7 +5,8 @@ import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
-import { reasonSentence, type InboxRow, type InboxTarget } from "./inbox.ts";
+import { VisibleName } from "../ui/visible-name.tsx";
+import { reasonSentence, rowName, type InboxRow, type InboxTarget } from "./inbox.ts";
 
 interface InboxListProps {
   rows: readonly InboxRow[];
@@ -116,7 +117,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
           {shown.map(({ key, row, testId, label, project, sentence }) => {
             const { projectId, workspace } = row.workspace;
             const current = selected?.projectId === projectId && selected.workspace === workspace;
-            const full = `${label}, ${project}. ${sentence}`;
+            const full = rowName(label, project, sentence);
             return (
               <li key={key}>
                 <button
@@ -145,7 +146,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                       data-testid={`${testId}-name`}
                       className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
                     >
-                      {label}
+                      <VisibleName text={label} />
                     </span>
                     <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
                       <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
