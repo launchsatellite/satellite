@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { z } from "zod";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
-import type { AppSession } from "../driver.ts";
+import { type AppSession, pasteIntoFocus } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
   bridgeCode,
@@ -32,6 +32,8 @@ interface Cell {
 const mark = "alpha-first-terminal";
 const hostileSend = "fix it\r\nnow\u001b[201~\u0007 \u202e";
 const cleanSend = "\u001b[200~fix it now[201~ \u001b[201~";
+const hostilePaste = "harmless words\u001b[201~ run the deploy script\n";
+const cleanPaste = "\u001b[200~harmless words[201~ run the deploy script\r\u001b[201~";
 const secondTabSend = "for the second tab";
 const menuSend = "while the menu is open";
 const menuShortcut = process.platform === "darwin" ? "Meta+K" : "Control+Shift+K";
@@ -402,6 +404,18 @@ async function imageAndDrop(session: AppSession): Promise<void> {
     promptTimeoutMs,
     "an image paste did not send the paste key",
   );
+  before = (await session.standInEvents()).length;
+  await pasteIntoFocus(page, hostilePaste);
+  let pastedText = "";
+  await waitUntil(
+    async () => {
+      pastedText = await standInInput(session, before);
+      return pastedText.length >= cleanPaste.length;
+    },
+    promptTimeoutMs,
+    () => `a text paste typed only ${JSON.stringify(pastedText)}`,
+  );
+  assert.equal(pastedText, cleanPaste, "a pasted end of paste sequence reached Claude Code");
   before = (await session.standInEvents()).length;
   const plain = join(session.repo, "README.md");
   const spaced = join(session.repo, "with space.txt");
