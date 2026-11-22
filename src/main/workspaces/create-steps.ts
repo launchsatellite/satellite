@@ -549,7 +549,12 @@ function namedList(names: readonly string[]): string {
     : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1) ?? ""}`;
 }
 
-function copiedDetail(copied: number, skipped: number, leftOut: readonly string[]): string {
+function copiedDetail(
+  copied: number,
+  skipped: number,
+  leftOut: readonly string[],
+  unchecked: readonly string[],
+): string {
   const count = copied === 1 ? "Copied 1 file." : `Copied ${String(copied)} files.`;
   const parts = [count];
   if (skipped > 0)
@@ -559,27 +564,61 @@ function copiedDetail(copied: number, skipped: number, leftOut: readonly string[
       `Left out ${String(leftOut.length)} that this workspace's branch doesn't ignore, so git could commit them, ${namedList(leftOut)}.`,
     );
   }
+  if (unchecked.length > 0) {
+    parts.push(
+      `Left out ${String(unchecked.length)} that git couldn't check in this workspace, such as a path behind a link or inside a submodule, ${namedList(unchecked)}.`,
+    );
+  }
   return parts.join(" ");
+}
+
+interface IgnoreJudgement {
+  ignored: Set<string>;
+  unchecked: string[];
+}
+
+async function judgeIgnored(
+  worktree: string,
+  files: readonly string[],
+  signal: AbortSignal,
+  judged: IgnoreJudgement,
+  deadline: number,
+): Promise<void> {
+  if (Date.now() > deadline) throw new StepFailure(includeTooSlow);
+  const check = await checkIgnored(worktree, files, signal, ignoredListMs);
+  stopIfQuitting(signal);
+  if (check.kind === "hung") throw new StepFailure(includeUnchecked);
+  if (check.kind === "checked") {
+    for (const path of check.ignored) judged.ignored.add(path);
+    return;
+  }
+  if (files.length === 1) {
+    judged.unchecked.push(...files);
+    return;
+  }
+  const half = Math.ceil(files.length / 2);
+  await judgeIgnored(worktree, files.slice(0, half), signal, judged, deadline);
+  await judgeIgnored(worktree, files.slice(half), signal, judged, deadline);
 }
 
 async function ignoredInWorktree(
   worktree: string,
   files: readonly string[],
   signal: AbortSignal,
-): Promise<Set<string>> {
-  const ignored = new Set<string>();
+  deadline: number,
+): Promise<IgnoreJudgement> {
+  const judged: IgnoreJudgement = { ignored: new Set(), unchecked: [] };
   for (let at = 0; at < files.length; at += ignoreCheckBatch) {
-    const check = await checkIgnored(
-      worktree,
-      files.slice(at, at + ignoreCheckBatch),
-      signal,
-      ignoredListMs,
-    );
-    stopIfQuitting(signal);
-    if (check.kind !== "checked") throw new StepFailure(includeUnchecked);
-    for (const path of check.ignored) ignored.add(path);
+    await judgeIgnored(worktree, files.slice(at, at + ignoreCheckBatch), signal, judged, deadline);
   }
-  return ignored;
+  return judged;
+}
+
+async function inCheckout(worktree: string, file: string): Promise<boolean> {
+  return lstat(join(worktree, file)).then(
+    () => true,
+    () => false,
+  );
 }
 
 function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
@@ -626,7 +665,12 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       if (folder === null || !(await isSafeWorktree(home, folder))) {
         throw new StepFailure(copySentence);
       }
-      const ignoredThere = await ignoredInWorktree(folder.path, selection.files, signal);
+      const { ignored: ignoredThere, unchecked } = await ignoredInWorktree(
+        folder.path,
+        selection.files,
+        signal,
+        deadline,
+      );
       const copy = await beforeDeadline(
         copyIncludedFiles(
           root,
@@ -639,8 +683,22 @@ function filesStep(context: CreationContext, shared: Shared): CreationStepRun {
       );
       stopIfQuitting(signal);
       if (copy === "late" || copy === "too-slow") throw new StepFailure(includeTooSlow);
-      const leftOut = selection.files.filter((file) => !ignoredThere.has(file));
-      return copiedDetail(copy.copied, copy.skipped + selection.links, leftOut);
+      const uncheckedSet = new Set(unchecked);
+      const unignored = selection.files.filter(
+        (file) => !ignoredThere.has(file) && !uncheckedSet.has(file),
+      );
+      const leftOut: string[] = [];
+      let present = 0;
+      for (const file of unignored) {
+        if (await inCheckout(folder.path, file)) present += 1;
+        else leftOut.push(file);
+      }
+      return copiedDetail(
+        copy.copied,
+        copy.skipped + selection.links + present,
+        leftOut,
+        unchecked,
+      );
     },
     undo: () => Promise.resolve(true),
   };

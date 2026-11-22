@@ -262,6 +262,56 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     );
   });
 
+  it.skipIf(!onUnix)(
+    "leaves out a path git cannot check behind a link of the new branch and copies the rest",
+    async () => {
+      const root = await repository();
+      await writeFile(join(root, ".gitignore"), ".env\nconfig/*.local.json\n");
+      await writeFile(join(root, ".worktreeinclude"), ".env\nconfig/dev.local.json\n");
+      await commit(root, "a", "first commit\n");
+      await git(root, ["checkout", "-q", "-b", "linked"]);
+      await symlink("elsewhere", join(root, "config"));
+      await git(root, ["add", "config"]);
+      await git(root, ["commit", "-q", "-m", "config is a link"]);
+      await git(root, ["checkout", "-q", "main"]);
+      await mkdir(join(root, "config"));
+      await writeFile(join(root, "config", "dev.local.json"), "{}\n");
+      await writeFile(join(root, ".env"), "TOKEN=1\n");
+      const { result, path, detail } = await create(root, "behind-link", {
+        kind: "ref",
+        ref: "refs/heads/linked",
+      });
+      expect(result).toEqual({ ok: true });
+      expect(await readFile(join(path, ".env"), "utf8")).toBe("TOKEN=1\n");
+      expect(detail("files")).toBe(
+        "Copied 1 file. Left out 1 that git couldn't check in this workspace, such as a path behind a link or inside a submodule, config/dev.local.json.",
+      );
+    },
+  );
+
+  it("counts a file the new branch tracks as already in the checkout", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["checkout", "-q", "-b", "tracks"]);
+    await writeFile(join(root, "notes.local"), "tracked\n");
+    await git(root, ["add", "notes.local"]);
+    await git(root, ["commit", "-q", "-m", "track notes"]);
+    await git(root, ["checkout", "-q", "main"]);
+    await writeFile(join(root, ".gitignore"), "notes.local\n");
+    await writeFile(join(root, ".worktreeinclude"), "notes.local\n");
+    await commit(root, "b", "second commit\n");
+    await writeFile(join(root, "notes.local"), "mine\n");
+    const { result, path, detail } = await create(root, "tracking", {
+      kind: "ref",
+      ref: "refs/heads/tracks",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(await readFile(join(path, "notes.local"), "utf8")).toBe("tracked\n");
+    expect(detail("files")).toBe(
+      "Copied 0 files. Skipped 1 that were links or already in the checkout.",
+    );
+  });
+
   it.skipIf(!onUnix)("refuses a .worktreeinclude that is a link and undoes", async () => {
     const root = await repository();
     await commit(root, "a", "first commit\n");
