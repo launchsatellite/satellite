@@ -19,7 +19,7 @@ Every spec is checked against these. When two conflict, the earlier one wins.
 3. **Embed real tools, never redraw them.** The agent pane is your own Claude Code in a terminal. Git is `git` and GitHub is `gh`. Every feature those tools ship works the day it ships, and there is no copy to maintain.
 4. **One text box.** The Claude Code prompt is the only place you type instructions. Satellite has no commit box, no reply form and no editor. When something needs words, Satellite prepares the request in the prompt and you press enter.
 5. **Hold no credentials.** Sign-in stays with `gh` and `claude`. Satellite never reads, stores or forwards a token, and it loads no remote web content.
-6. **Leave the repo alone.** Satellite writes nothing into a project's files. A workspace adds only its branch, its worktree and the remote-tracking branch its fetch updates to git, and everything Satellite owns lives in `~/.satellite`.
+6. **Leave the repo alone.** Satellite writes nothing into a project's files. A workspace adds only its branch, its worktree and the remote-tracking branch its fetch updates to git, and everything Satellite owns lives in `~/.satellite`, apart from what the system keeps for every app.
 7. **Local first.** Everything runs on your machine, with no account, no server and no telemetry.
 8. **Quiet until you are needed.** Greys carry the interface. Signal orange means an agent cannot go on without you, and nothing else.
 9. **Simple first.** The smallest thing that works, in the product, the code and the process.
@@ -50,6 +50,24 @@ Selecting a workspace switches the centre and the right column together. Session
 Every action is one command, reached from its button, its shortcut or the command menu on Cmd+K, or Ctrl+Shift+K on Windows and Linux. The quick switcher on Cmd+P, or Ctrl+Shift+P, jumps to any workspace in any project. The command menu opens from inside the terminal too, and Focus the sidebar, Focus the repository and Focus the terminal move the keyboard between the three columns, so Claude Code never holds it. They have no shortcut, since no set of keys is free in the terminal, the diff and every system at once. On first run Satellite checks `git`, `gh` and `claude` for real and names the step that fixes whatever is missing.
 
 Once the first project is added a small guide walks through the four things nobody guesses, one card at a time beside the real control it explains, with a grey ring around that control. Make a workspace, start Claude Code, read what it did and orange means you. A step passes when the user does what it describes, or on Next, and the last one ends on Done. Nothing is dimmed, nothing is blocked and the card takes no focus by itself, so Escape in the terminal still reaches Claude Code. Only Show the guide moves focus into it, and the card then draws the focus ring, and the card steps aside while a dialog or the command menu is open. The close control, or Escape while focus is in the card, ends the guide with one toast, and finishing it leaves nothing behind. It never returns by itself, and Show the guide in the command menu starts it again from the first step that still applies. Someone who updates from an earlier build is not a new user, so they meet the guide only through that command.
+
+## Projects
+
+Add a project with Add a project, through the folder dialog, or by dropping a folder on the window. The folder must be the working folder of a git repository, and Satellite records its path and writes nothing into it. It refuses its own home, a whole drive, a bare repository, a folder inside `.git`, a worktree of another repository, a folder another user owns, and a folder inside a repository, naming the repository to add instead. A network folder cannot be dropped, and Add a project still takes it. Satellite holds up to 200 projects.
+
+Remove this project forgets a project and leaves its folder untouched. While the project still has workspaces Satellite refuses and asks you to archive them first, unless the folder is gone or no longer a repository. Then it forgets the project with its workspaces and every folder stays where it is. A project whose folder moved says so and comes back by itself once the folder is back where it was, and one that is no longer a git repository says that instead.
+
+The left and right columns resize within limits. Projects, the selected workspace and the column widths come back after a restart. The look follows the system, and Use the light theme, Use the dark theme and Follow the system theme in the command menu change it. A project list saved by a newer Satellite stays untouched, so an older build shows no projects and adds or removes none.
+
+## Workspaces
+
+New workspace, on Cmd+N or Ctrl+Shift+N on Windows and Linux, makes one in a single action. The name is generated and can be changed first, and the branch takes the same name. It starts from the latest default branch on the remote, fetched for the purpose, or as a new branch at a branch chosen from a list. Every step shows as it runs, the repository's own hooks run as they would in a terminal, and Cancel stops a creation and undoes it. A step that fails says what happened and leaves nothing half made. The worktree lives in `~/.satellite/worktrees/<project>/<workspace>`, and the ignored files that the project's `.worktreeinclude` names, and the new worktree ignores too, are copied into it. A project holds at most 20 workspaces besides its main one, with one creation per project and four at once.
+
+Each workspace row shows its branch, how far it is ahead of and behind its remote and how many files changed. In a repository with a remote, a branch that was never pushed counts the commits that are on no remote.
+
+Archive this workspace first shows what would be lost, uncommitted changes, commits that are not pushed and anything Satellite cannot rule out, then stops Satellite's terminals there and removes the worktree with its ignored files. The branch stays. A worktree git has locked, one with submodules checked out, one holding a folder from another drive or one Satellite cannot check whole is never archived, and when anything changed since the dialog opened it shows the latest instead. A project's main workspace is never archived.
+
+On every list Satellite compares its records with what git reports. A workspace whose worktree was removed outside Satellite leaves the list with a sentence that says why, and a worktree in the project's own worktrees folder with no record shows up as a workspace.
 
 ## Sessions
 
@@ -100,6 +118,10 @@ Agents start dev servers, watchers and builds, and then you lose track of what i
 A port that listens on this machine only, or on every address, is a link. It asks before it opens, naming the address, and only ever opens an address on your own machine. A port bound to another address shows as plain text. Stop ends the process and everything it started, with a polite request first and a forced end after two seconds, or a forced end at once on Windows, and tells you when something still runs. Satellite only ever stops processes that descend from its own sessions.
 
 The list holds the processes that last at least 10 seconds, started by the workspace's running sessions, and it follows them while Satellite is visible, when a session finishes a turn and when you open it, and an age counts up while the list is open. When Satellite cannot read the processes it says so and keeps the last list. Running processes starts nothing and shows no output, since Claude Code already shows what it runs. A process that detached from the session that started it keeps running and is not listed, and the list says so. Nothing about processes is saved.
+
+## Install and updates
+
+Satellite never checks for updates, since it loads nothing remote. A new version is a new package installed over the old one, which keeps `~/.satellite`. That folder holds every workspace's worktree with its uncommitted work, so deleting it loses that work, and archiving the workspaces in Satellite first is the safe way to leave. Builds carry no paid signature, so macOS and Windows warn before the first open, and Windows with Smart App Control on can block them with no way to allow just Satellite. [README.md](README.md) has the steps.
 
 ## Decisions
 

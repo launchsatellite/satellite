@@ -6,11 +6,11 @@ Agents stay in orbit and do the work. You stay at the centre.
 
 ## Status
 
-Early. Satellite holds your projects in one window. Add a repository from a folder dialog or by dropping it on the window, switch between them from the sidebar or the quick switcher, and run the real Claude Code in a terminal on the right. Give each piece of work its own workspace, a worktree and branch made in one step, and archive it once you no longer need it, after seeing what would be lost. [SATELLITE.md](SATELLITE.md) says what the product is, and the [specs index](specs/README.md) shows what is built.
+Early. Satellite holds your projects in one window and gives each piece of work a workspace, a worktree and branch made in one step and archived once you have seen what would be lost. The real Claude Code runs in a terminal on the right, the inbox says when an agent needs you, and the centre reads the workspace's changes, files, pull request and running processes. A short guide walks a first project through it. [SATELLITE.md](SATELLITE.md) says what the product is, and the [specs index](specs/README.md) shows what is built.
 
 ## Install
 
-A Satellite build is a dmg or zip for macOS (arm64 and x64), an installer for Windows (x64), or an AppImage or deb for Linux (x64), with a `SHA256SUMS.txt` and `third-party-licenses.md` beside it. Builds carry no paid signature, so macOS and Windows each ask once before they open one.
+A Satellite build is a dmg or zip for macOS (arm64 and x64), an installer for Windows (x64), or an AppImage or deb for Linux (x64), with a `SHA256SUMS.txt` and `third-party-licenses.md` beside it. Builds carry no paid signature, so macOS and Windows warn before the first open.
 
 **Check the download.** Run the check in the folder that holds the package and `SHA256SUMS.txt`. Each line it prints must end in `OK`.
 
@@ -27,7 +27,7 @@ On Windows, `Get-FileHash .\<installer>.exe` in PowerShell prints the hash to co
 xattr -dr com.apple.quarantine /Applications/Satellite.app
 ```
 
-**Windows.** Run the installer. SmartScreen shows "Windows protected your PC", so choose More info, then Run anyway.
+**Windows.** Run the installer. SmartScreen shows "Windows protected your PC", so choose More info, then Run anyway. With Smart App Control on, Windows blocks an unsigned app it cannot vouch for and offers no way to allow that one app, only to turn Smart App Control off in Windows Security.
 
 **Linux.** The deb installs with `sudo apt install ./<package>.deb` and sets up everything the sandbox needs. The AppImage needs its executable bit first.
 
@@ -38,9 +38,13 @@ chmod +x <package>.AppImage
 
 The Linux build needs a distribution at least as new as Ubuntu 24.04. Ubuntu 24.04 limits unprivileged user namespaces, which Chromium's sandbox relies on, so the AppImage stops at start there. Install the deb instead, which adds an AppArmor profile for Satellite. Never run Satellite with `--no-sandbox`.
 
+**Update.** Satellite never checks for updates. Install the new package over the old one, the way you installed it, and your projects and workspaces stay.
+
+**Uninstall.** Archive your workspaces in Satellite first. `~/.satellite` holds their worktrees with any uncommitted work, so deleting that folder loses the work, and each repository keeps a record of those worktrees until `git worktree prune`.
+
 ## Run from source
 
-With Node 24, the version in `.nvmrc`, install and start. `npm ci` also fetches Electron and readies the terminal's native module.
+With Node 24, the version in `.nvmrc`, install and start. `npm ci` also fetches Electron and readies the terminal's native module, which on Linux it compiles, so Linux also needs python3, make and a C++ compiler.
 
 ```sh
 npm ci
