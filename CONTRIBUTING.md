@@ -43,3 +43,5 @@ The guards run on the machine the agent controls and match patterns, so they cat
 ## Maintainer only
 
 Guard files (`guards/`, `.githooks/`, `.claude/settings.json`) belong to the maintainer. Agents read and run them but never change them. To let an agent change one, move `.claude/settings.json` aside for that session and put it back afterwards. In a real emergency a maintainer can commit or push with `--no-verify`. Agents cannot.
+
+To release, bump `version` in `package.json` and `package-lock.json` in a pull request and merge it. Then tag that commit on `main` as `v` plus the version and push the tag. The release workflow refuses a tag that differs from the version, runs the green checkpoint, checks the fuses and proves each packaged app, then drafts the release. Read the draft, its notes and its checksums, and publish it by hand.
