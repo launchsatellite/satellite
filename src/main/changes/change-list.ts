@@ -18,7 +18,13 @@ export interface ChangeRecord {
 }
 type ListedChange = Omit<ChangeRecord, "stamp"> & { statDirty?: true };
 type ChangeListRead =
-  | { kind: "files"; records: ChangeRecord[]; more: number; longPaths: number }
+  | {
+      kind: "files";
+      records: ChangeRecord[];
+      more: number;
+      longPaths: number;
+      untrackedLeftOut: boolean;
+    }
   | { kind: "unavailable"; reason: "not-local" | "too-many" | "hung" | "failed" };
 interface ParsedList {
   records: ListedChange[];
@@ -397,7 +403,8 @@ export async function readChangeList(
     gitOutput(folder, untrackedArgs, signal),
     gitOutput(folder, unmergedArgs, signal),
   ]);
-  const runs = [diff, others, conflicted];
+  const untrackedLeftOut = others === "output";
+  const runs = [diff, untrackedLeftOut ? "" : others, conflicted];
   if (runs.includes("output")) return tooMany;
   if (runs.includes("time") || runs.includes("stuck")) return hung;
   if (typeof diff === "object" && diff.exitCode !== 0) {
@@ -407,7 +414,7 @@ export async function readChangeList(
     return missing ? notLocal : failed;
   }
   const diffOut = stdoutOf(diff);
-  const othersOut = stdoutOf(others);
+  const othersOut = untrackedLeftOut ? "" : stdoutOf(others);
   const conflictedOut = stdoutOf(conflicted);
   const parsed = diffOut === undefined ? undefined : parseDiff(diffOut);
   const fields = othersOut === undefined ? undefined : parseUntracked(othersOut);
@@ -425,5 +432,6 @@ export async function readChangeList(
     records: await stamped(folder, kept, signal),
     more: named.length - kept.length + parsed.more + once.collapsed,
     longPaths: merged.length - named.length,
+    untrackedLeftOut,
   };
 }

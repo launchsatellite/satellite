@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runTool } from "../platform/tools.ts";
-import { authStatusArguments, checkTools, versionNumber } from "./tool-check.ts";
+import { authStatusArguments, checkClaude, checkTools, versionNumber } from "./tool-check.ts";
 
 vi.mock("../platform/tools.ts", () => ({ runTool: vi.fn() }));
 
@@ -21,6 +21,26 @@ describe("authStatusArguments", () => {
     expect(authStatusArguments("2.40.0")).toEqual(["auth", "status", "--active"]);
     expect(authStatusArguments("2.80.0")).toEqual(["auth", "status", "--active"]);
     expect(authStatusArguments("3.0")).toEqual(["auth", "status", "--active"]);
+  });
+});
+
+describe("checkClaude", () => {
+  it("asks for an update below the Claude Code release with every hook Satellite reads", async () => {
+    const run = vi.mocked(runTool);
+    const answer = async (version: string) => {
+      run.mockReset();
+      run.mockResolvedValue({ exitCode: 0, stdout: `${version} (Claude Code)\n`, stderr: "" });
+      return checkClaude();
+    };
+    expect(await answer("2.1.77")).toEqual({
+      state: "too-old",
+      version: "2.1.77",
+      minimum: "2.1.78",
+    });
+    expect(await answer("2.0.99")).toMatchObject({ state: "too-old" });
+    expect(await answer("2.1.78")).toEqual({ state: "ready", version: "2.1.78" });
+    expect(await answer("2.1.330")).toEqual({ state: "ready", version: "2.1.330" });
+    expect(await answer("3.0")).toEqual({ state: "ready", version: "3.0" });
   });
 });
 

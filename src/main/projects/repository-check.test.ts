@@ -237,6 +237,20 @@ describe("checkRepository", () => {
     });
   });
 
+  it("adds a repository holding Satellite's home only once git ignores the home", async () => {
+    const dotfiles = join(base, "dotfiles");
+    await makeRepository(dotfiles);
+    const inner = join(dotfiles, "config", ".satellite");
+    await mkdir(inner, { recursive: true });
+    expect(await checkRepository(dotfiles, inner)).toEqual({
+      ok: false,
+      refusal:
+        "dotfiles holds Satellite's home, config/.satellite, and git doesn't ignore it there. Add config/.satellite/ to the .gitignore in dotfiles, then add it again.",
+    });
+    await writeFile(join(dotfiles, ".gitignore"), "/config/.satellite/\n");
+    expect(await checkRepository(dotfiles, inner)).toEqual({ ok: true, root: dotfiles });
+  });
+
   it("refuses a plain folder with its sentence under a German locale", async () => {
     vi.stubEnv("LANG", "de_DE.UTF-8");
     vi.stubEnv("LC_ALL", "de_DE.UTF-8");

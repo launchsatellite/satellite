@@ -234,6 +234,39 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(made[3]?.args).toEqual(threadsArguments(place, "main", true));
   });
 
+  it("shows the newest commits and GitHub's count when gh lists only the oldest 100", async () => {
+    const { answer, read, calls, advance } = await setup();
+    const view = z.record(z.string(), z.unknown()).parse(JSON.parse(viewJson()));
+    const oldest = Array.from({ length: 100 }, (_, index) => ({
+      oid: String(index % 10).repeat(40),
+      headline: `old ${String(index)}`,
+    }));
+    await answer("view", { stdout: JSON.stringify({ ...view, commits: oldest }) });
+    const newest = Array.from({ length: 100 }, (_, index) => ({
+      commit: {
+        oid: index === 99 ? headOid : "b".repeat(40),
+        messageHeadline: `new ${String(index)}`,
+      },
+    }));
+    const threads = z.record(z.string(), z.unknown()).parse(JSON.parse(threadsJson()));
+    const withCommits = JSON.stringify(threads).replace(
+      '"pullRequest":{',
+      `"pullRequest":{"commits":${JSON.stringify({ totalCount: 161, nodes: newest })},`,
+    );
+    await answer("threads", { stdout: withCommits });
+    expect(await read(first)).toMatchObject({ kind: "found", moreCommits: 61 });
+    advance(10_000);
+    const again = await read(first);
+    expect(again).toMatchObject({ kind: "found", moreCommits: 61 });
+    const commits = again.kind === "found" ? again.commits : [];
+    expect(commits).toHaveLength(100);
+    expect(commits.at(-1)).toEqual({ oid: "aaaaaaa", headline: "new 99" });
+    expect((await calls()).map(({ args }) => args[0])).toEqual(["pr", "api", "pr", "api"]);
+    advance(10_000);
+    await answer("threads", { stdout: threadsJson() });
+    expect(await read(first)).toMatchObject({ kind: "unavailable", reason: "failed" });
+  });
+
   it("shows no pull request whose head branch is not the workspace branch", async () => {
     const { answer, read } = await setup();
     await answer("view", { stdout: viewJson([], "topic") });

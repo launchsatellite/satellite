@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BridgeResult,
+  ClaudeState,
   GhState,
   InstallFix,
   ToolCheck,
@@ -46,8 +47,14 @@ function installRow(fix: InstallFix): Row {
   };
 }
 
-function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
+function rowOf(tool: CheckedTool, state: ToolState | GhState | ClaudeState): Row {
   switch (state.state) {
+    case "too-old":
+      return {
+        ready: false,
+        detail: `${state.version} found. Satellite needs ${state.minimum} or newer.`,
+        fix: { lead: leads.command, text: "claude update" },
+      };
     case "missing":
       return installRow(state.fix);
     case "broken":
@@ -65,7 +72,7 @@ function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
     case "token-refused":
       return {
         ready: false,
-        detail: `Refused the token in ${state.variable}. Replace it, or remove it from your environment, then check again.`,
+        detail: `GitHub refused the token in ${state.variable}, or couldn't be reached. Check the connection, then the token.`,
       };
     case "ready":
       if (!("account" in state)) return { ready: true, detail: `${state.version} found` };

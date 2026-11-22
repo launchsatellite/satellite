@@ -19,6 +19,7 @@ type ReadDetail = Extract<PullRequestDetail, { kind: "read" }>;
 type Comment = ReadDetail["comments"][number];
 type Review = ReadDetail["reviews"][number];
 type Thread = ReadDetail["threads"][number];
+type Commit = Found["commits"][number];
 
 const looseText = z.string().nullish().catch(undefined);
 const looseCount = z.number().nullish().catch(undefined);
@@ -52,6 +53,9 @@ const reviewFactShape = z.object({
   at: looseText,
 });
 const commitShape = z.object({ oid: looseText, headline: looseText });
+const pullRequestCommit = z.object({
+  commit: looseNode(z.object({ oid: looseText, messageHeadline: looseText })),
+});
 const author = looseNode(z.object({ login: looseText }));
 const commentNode = z.object({
   url: looseText,
@@ -92,6 +96,7 @@ const threadsShape = z.object({
           pullRequests: looseNode(z.object({ nodes: looseList })),
           pullRequest: looseNode(
             z.object({
+              commits: looseNode(connection),
               reviews: looseNode(connection),
               comments: looseNode(connection),
               reviewThreads: looseNode(connection),
@@ -126,6 +131,9 @@ const terminalEscape = new RegExp(
 );
 const timestamp = /^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/;
 const errorMarker = "##[error]";
+const groupMarker = "##[group]";
+const groupEnd = "##[endgroup]";
+const exitLine = /^Process completed with exit code -?\d+\.$/;
 
 function parseJson(text: string): unknown {
   try {
@@ -292,6 +300,12 @@ function reviewFactsOf(list: readonly unknown[] | null | undefined): ReviewFact[
   }));
 }
 
+function commitOf(oid: string | null | undefined, headline: string | null | undefined): Commit[] {
+  return oid !== undefined && oid !== null && oidPattern.test(oid)
+    ? [{ oid: oid.slice(0, 7), headline: cutText(headline ?? "", 256).text }]
+    : [];
+}
+
 function stateOf(
   state: string | null | undefined,
   draft: boolean | null | undefined,
@@ -304,7 +318,12 @@ function stateOf(
 export function parseView(
   stdout: string,
   localHead: string | null,
-): { place: PullRequestPlace; found: Found; headOid: string | null } | null {
+): {
+  place: PullRequestPlace;
+  found: Found;
+  headOid: string | null;
+  commitsCut: boolean;
+} | null {
   const parsed = viewShape.safeParse(parseJson(stdout));
   if (!parsed.success) return null;
   const view = parsed.data;
@@ -321,11 +340,10 @@ export function parseView(
   const checks = checksOf(view.checks, place);
   const counts = countsOf(checks);
   const body = cutText(view.body ?? "", pullRequestLimits.bodyChars);
-  const commits = each(view.commits, commitShape).flatMap((commit) =>
-    commit.oid !== undefined && commit.oid !== null && oidPattern.test(commit.oid)
-      ? [{ oid: commit.oid.slice(0, 7), headline: cutText(commit.headline ?? "", 256).text }]
-      : [],
-  );
+  const listed = each(view.commits, commitShape);
+  const commits = listed.flatMap((commit) => commitOf(commit.oid, commit.headline));
+  const commitsCut =
+    listed.length >= pullRequestLimits.commits && listed.at(-1)?.oid !== view.headRefOid;
   const found: Found = {
     kind: "found",
     number,
@@ -357,7 +375,7 @@ export function parseView(
     reviews: reviewFactsOf(view.reviews),
     headOid,
   });
-  return { place, found, headOid };
+  return { place, found, headOid, commitsCut };
 }
 
 export interface Candidate {
@@ -369,7 +387,19 @@ export interface Candidate {
 
 export interface Conversation {
   candidates: Candidate[];
+  commits: Pick<Found, "commits" | "moreCommits"> | null;
   detail: ReadDetail | null;
+}
+
+function newestCommits(
+  list: z.output<typeof connection> | null | undefined,
+): Conversation["commits"] {
+  if (list?.nodes === undefined || list.nodes === null) return null;
+  const nodes = lastOf(each(list.nodes, pullRequestCommit), pullRequestLimits.commits);
+  return {
+    commits: nodes.flatMap(({ commit }) => commitOf(commit?.oid, commit?.messageHeadline)),
+    moreCommits: restOf(list.totalCount, nodes.length),
+  };
 }
 
 function viewerOf(login: string | null | undefined): string | null {
@@ -438,6 +468,7 @@ export function parseConversation(
   const pullRequest = repository.pullRequest;
   return {
     candidates: candidatesOf(repository.pullRequests?.nodes, viewerOf(data?.viewer?.login)),
+    commits: newestCommits(pullRequest?.commits),
     detail:
       detail && pullRequest !== undefined && pullRequest !== null
         ? detailOf(pullRequest, place, viewerOf(data?.viewer?.login))
@@ -446,19 +477,28 @@ export function parseConversation(
 }
 
 function lineOf(raw: string): string {
-  return visibleText(raw.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " "));
+  const text = raw.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " ");
+  return visibleText(text.startsWith(groupMarker) ? text.slice(groupMarker.length) : text);
 }
 
 export function failedLines(stdout: string): { lines: string[]; more: boolean } {
   const lines = stdout
     .split(/\r?\n/)
     .map(lineOf)
-    .filter((line) => line.trim() !== "");
-  const errors = lines.filter((line) => line.includes(errorMarker));
+    .filter((line) => line.trim() !== "" && line !== groupEnd);
+  const marked = lines.map((line) =>
+    line.includes(errorMarker) ? line.replace(errorMarker, "").trim() : null,
+  );
+  const told = marked.filter((text): text is string => text !== null && !exitLine.test(text));
+  const exit = marked.findIndex((text) => text !== null && exitLine.test(text));
   const chosen =
-    errors.length > 0 ? errors.map((line) => line.replace(errorMarker, "").trim()) : lines;
+    told.length > 0
+      ? told
+      : lines
+          .slice(0, exit === -1 ? lines.length : exit + 1)
+          .map((line, index) => marked[index] ?? line);
   const picked =
-    errors.length > 0
+    told.length > 0
       ? chosen.slice(0, pullRequestLimits.logLines)
       : chosen.slice(-pullRequestLimits.logLines);
   const cuts = picked.map((line) => cutText(line, pullRequestLimits.logLineChars));

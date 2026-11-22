@@ -29,6 +29,7 @@ function tab(
     resume: false,
     status,
     ready: true,
+    hooksOff: false,
     needsSince,
   };
 }

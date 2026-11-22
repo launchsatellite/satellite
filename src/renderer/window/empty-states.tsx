@@ -39,24 +39,34 @@ export function FolderMissing({
   name,
   parent,
   missing,
+  worktrees,
+  workspaces,
 }: {
   name: string;
   parent: string;
   missing: NonNullable<ProjectView["missing"]>;
+  worktrees: string | undefined;
+  workspaces: number;
 }) {
+  const kept =
+    worktrees === undefined || workspaces === 0
+      ? ""
+      : workspaces === 1
+        ? ` Its workspace's folder stays in ${worktrees} in the Satellite home.`
+        : ` Its workspaces' folders stay in ${worktrees} in the Satellite home.`;
   return missing === "folder" ? (
     <Centred testId="folder-missing" title={`${name} isn't where it was`}>
       <p className="mt-1 text-[13px] text-fg2">
         {parent === ""
-          ? "Put the folder back and Satellite finds it again, or remove the project."
-          : `Put it back in ${parent} and Satellite finds it again, or remove the project.`}
+          ? `Put the folder back and Satellite finds it again, or remove the project.${kept}`
+          : `Put it back in ${parent} and Satellite finds it again, or remove the project.${kept}`}
       </p>
     </Centred>
   ) : (
     <Centred testId="folder-missing" title={`${name} isn't a repository anymore`}>
       <p className="mt-1 text-[13px] text-fg2">
         The folder is still there, but it is no longer a git repository. Make it one again and
-        Satellite finds it, or remove the project.
+        Satellite finds it, or remove the project.{kept}
       </p>
     </Centred>
   );

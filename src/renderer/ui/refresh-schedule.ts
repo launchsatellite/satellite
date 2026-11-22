@@ -5,6 +5,7 @@ export interface ScheduleAnswer {
 interface ScheduleHooks {
   read(): Promise<ScheduleAnswer>;
   visible(): boolean;
+  focused?: () => boolean;
   now(): number;
   after(ms: number, run: () => void): () => void;
 }
@@ -23,6 +24,7 @@ export interface Pace {
 }
 
 const defaultPace: Pace = { firstMs: 2000, maxMs: 30_000, factor: 4 };
+export const unfocusedMaxMs = 120_000;
 
 export function pollDelay(elapsedMs: number, steps: number, pace: Pace = defaultPace): number {
   const backoff = pace.firstMs * 2 ** steps;
@@ -62,7 +64,8 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
         again = false;
         ask();
       } else if (hooks.visible()) {
-        cancel = hooks.after(pollDelay(hooks.now() - began, steps, pace), ask);
+        const idle = hooks.focused?.() === false ? { ...pace, maxMs: unfocusedMaxMs } : pace;
+        cancel = hooks.after(pollDelay(hooks.now() - began, steps, idle), ask);
       }
     });
   };

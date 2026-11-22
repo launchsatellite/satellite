@@ -49,5 +49,7 @@ export function fileStateOf(
   if (changes.files.some((changed) => changed.path === path || changed.from === path)) {
     return "changed";
   }
-  return changes.more > 0 || changes.longPaths > 0 ? "unknown" : "clean";
+  return changes.more > 0 || changes.longPaths > 0 || changes.untrackedLeftOut
+    ? "unknown"
+    : "clean";
 }

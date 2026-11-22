@@ -13,8 +13,7 @@ import {
 } from "../projects/projects-file.ts";
 import type { Slot } from "../projects/slots.ts";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
-import { readStatus } from "./changed-files.ts";
-import { pacedStatus } from "./status-pacing.ts";
+import { pacedStatus, type readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
@@ -41,6 +40,10 @@ export interface AdoptionInput {
   room: number;
   segmentFolder: string;
   blocked: boolean;
+}
+export interface HalfMade {
+  path: string;
+  sentence: string;
 }
 interface RecordRead {
   record: StoredWorkspace;
@@ -154,30 +157,38 @@ async function readUnpushed(
   return new Map(counts);
 }
 
+function halfMadeSentence(project: StoredProject, projectName: string, path: string): string {
+  const name = basename(path);
+  return bounded(
+    `Making ${name} in ${projectName} stopped halfway, so Satellite leaves worktrees/${projectSegment(project.path)}/${name} in the Satellite home out of the list. git worktree remove --force --force on it clears it.`,
+  );
+}
+
 async function adoptedWorkspaces(
   project: StoredProject,
+  projectName: string,
   listed: Listed,
   busy: ReadonlySet<string>,
   rule: AdoptionRule,
-): Promise<StoredWorkspace[]> {
+): Promise<{ adopted: StoredWorkspace[]; halfMade: HalfMade[] }> {
   let realHome: string;
   try {
     realHome = await realpath(rule.home);
   } catch {
-    return [];
+    return { adopted: [], halfMade: [] };
   }
   const realRecords = await Promise.all(
     project.workspaces.map((record) => realpath(record.path).catch(() => record.path)),
   );
-  const candidates = adoptable({
+  const input = {
     listed,
     recorded: [...project.workspaces.map((record) => record.path), ...realRecords],
     room: workspaceLimit - project.workspaces.length,
     segmentFolder: join(worktreesRoot(realHome), projectSegment(project.path)),
     blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
-  });
+  };
   const adopted: StoredWorkspace[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of adoptable(input)) {
     if (
       (await isWorktreeFolder(rule.home, candidate.path)) &&
       (await sharesRepository(project.path, candidate.path))
@@ -185,29 +196,49 @@ async function adoptedWorkspaces(
       adopted.push({ id: randomUUID(), ...candidate });
     }
   }
-  return rule.blocked() ? [] : adopted;
+  if (rule.blocked()) return { adopted: [], halfMade: [] };
+  const halfMade = stoppedHalfway(input).map((path) => ({
+    path,
+    sentence: halfMadeSentence(project, projectName, path),
+  }));
+  return { adopted, halfMade };
+}
+
+function inOwnFolder(worktree: ListedWorktree, input: AdoptionInput): boolean {
+  return (
+    !worktree.bare &&
+    samePath(dirname(worktree.path), input.segmentFolder) &&
+    workspaceNameProblem(basename(worktree.path)) === null &&
+    !input.recorded.some((recordedPath) => samePath(recordedPath, worktree.path))
+  );
+}
+
+export function stoppedHalfway(input: AdoptionInput): string[] {
+  const { listed, blocked } = input;
+  if (blocked || listed?.separator !== "\0") return [];
+  return listed.worktrees
+    .slice(1)
+    .filter((worktree) => worktree.initializing && inOwnFolder(worktree, input))
+    .map((worktree) => worktree.path);
 }
 
 export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
-  const { listed, recorded, room, segmentFolder, blocked } = input;
+  const { listed, room, blocked } = input;
   if (blocked || listed?.separator !== "\0" || room <= 0) return [];
   const found: Omit<StoredWorkspace, "id">[] = [];
   for (const worktree of listed.worktrees.slice(1)) {
     const { path, branch } = worktree;
-    const name = basename(path);
     if (
-      worktree.bare ||
       worktree.prunable ||
+      worktree.initializing ||
       branch === null ||
       !isBranchName(branch) ||
-      !samePath(dirname(path), segmentFolder) ||
-      workspaceNameProblem(name) !== null ||
-      recorded.some((recordedPath) => samePath(recordedPath, path))
+      !inOwnFolder(worktree, input)
     ) {
       continue;
     }
     if (found.some((kept) => samePath(kept.path, path))) continue;
-    found.push({ name, path, branch });
+    found.push({ name: basename(path), path, branch });
   }
   return found.slice(0, room);
 }
@@ -264,7 +295,12 @@ export async function readWorkspaces(
   busy: ReadonlySet<string>,
   inStatusSlot: Slot,
   rule: AdoptionRule,
-): Promise<{ workspaces: WorkspaceView[]; drops: Drop[]; adoptions: Adoption[] }> {
+): Promise<{
+  workspaces: WorkspaceView[];
+  drops: Drop[];
+  adoptions: Adoption[];
+  halfMade: HalfMade[];
+}> {
   const listed = await whenGitRuns(listWorktrees(project.path));
   const mainBranch =
     listed === undefined
@@ -298,7 +334,7 @@ export async function readWorkspaces(
       ),
     });
   }
-  const adopted = await adoptedWorkspaces(project, listed, busy, rule);
+  const { adopted, halfMade } = await adoptedWorkspaces(project, projectName, listed, busy, rule);
   for (const record of adopted) reads.push({ record, branch: record.branch, listed: true });
   const live = reads.filter((entry) => entry.listed);
   const branches = [mainBranch, ...live.map((entry) => entry.branch)].filter(
@@ -328,5 +364,6 @@ export async function readWorkspaces(
     ],
     drops,
     adoptions: adopted.map((workspace) => ({ projectId: project.id, workspace })),
+    halfMade,
   };
 }

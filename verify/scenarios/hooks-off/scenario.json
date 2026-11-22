@@ -1,0 +1,65 @@
+{
+  "description": "A repo with one workspace alpha, a stand-in gh, and a stand-in Claude Code whose settings keep hooks off, so it works on a prompt for 12 seconds without one hook, with Satellite set to the light theme.",
+  "repo": [
+    {
+      "write": {
+        "path": "README.md",
+        "content": "# Verify repo\n"
+      }
+    },
+    {
+      "git": ["init", "-b", "main"]
+    },
+    {
+      "git": ["add", "."]
+    },
+    {
+      "git": ["commit", "-m", "first commit"]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": []
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.1.78 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "spin": 12000
+      },
+      {
+        "print": "Done.\r\n> "
+      },
+      {
+        "await": "\r"
+      }
+    ]
+  }
+}

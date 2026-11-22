@@ -114,7 +114,7 @@ describe("createPace", () => {
     await expect(pace.run(named("never"), { signal: already.signal })).rejects.toThrow("late");
   });
 
-  it("keeps logs to a small bound and serves every read before them", async () => {
+  it("keeps logs to a small bound on their own spacing beside reads", async () => {
     const time = clock();
     const pace = createPace(time);
     const order: string[] = [];
@@ -146,7 +146,36 @@ describe("createPace", () => {
       time.advance(2000);
     }
     await Promise.all([read, ...queuedLogs]);
-    expect(order).toEqual(["read@2000", "a1@4000", "a2@6000", "b1@8000", "b2@10000"]);
+    expect(order).toEqual(["read@0", "a1@2000", "a2@4000", "b1@6000", "b2@8000"]);
+  });
+
+  it("starts a clicked log and the shown tab's reads ahead of background reads, each kind two seconds apart", async () => {
+    const time = clock();
+    const pace = createPace(time);
+    const order: string[] = [];
+    const job = (name: string) => () => {
+      order.push(`${name}@${String(time.now())}`);
+      return Promise.resolve();
+    };
+    const runs = [pace.run(job("r1")), pace.run(job("r2")), pace.run(job("r3"))];
+    await settled();
+    time.advance(500);
+    runs.push(pace.run(job("click1"), { lane: "log" }));
+    runs.push(pace.run(job("shown1"), { asked: true }));
+    runs.push(pace.run(job("shown2"), { asked: true }));
+    for (let step = 0; step < 8; step += 1) {
+      await settled();
+      time.advance(500);
+    }
+    await Promise.all(runs);
+    expect(order).toEqual([
+      "r1@0",
+      "click1@500",
+      "shown1@500",
+      "r2@2000",
+      "shown2@2500",
+      "r3@4000",
+    ]);
   });
 
   it("never waits more than one gap when the clock steps back", async () => {

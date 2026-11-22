@@ -276,7 +276,7 @@ describe("startHookListener", () => {
   });
 
   it("refuses a launch that sends too many events at once", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    vi.spyOn(performance, "now").mockReturnValue(1_000_000);
     const answers: Answer[] = [];
     for (let sent = 0; sent < 101; sent += 1) answers.push(await send({}));
     expect(answers.filter((answer) => answer.status === 204)).toHaveLength(100);
@@ -284,8 +284,17 @@ describe("startHookListener", () => {
     expect(events).toHaveLength(100);
   });
 
+  it("counts events on a clock that never steps back, so a changed system clock silences nothing", async () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValue(5000);
+    expect((await send({})).status).toBe(204);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() - 3_600_000);
+    for (let sent = 0; sent < 99; sent += 1) await send({});
+    clock.mockReturnValue(6000);
+    expect((await send({})).status).toBe(204);
+  });
+
   it("closes every answer and lets no outsider use up a launch's events", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    vi.spyOn(performance, "now").mockReturnValue(1_000_000);
     for (let sent = 0; sent < 101; sent += 1) {
       const answer = await send({
         headers: { Authorization: `Bearer ${"0".repeat(64)}`, Connection: "keep-alive" },

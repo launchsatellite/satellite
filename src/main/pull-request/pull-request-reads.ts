@@ -266,7 +266,7 @@ export function createPullRequests({
         pace.paused()
           ? Promise.resolve({ failure: "rate-limited" as const })
           : runGh(threadsArguments(place, head, detail), folder, threadsMs, signal),
-      { signal },
+      { signal, asked: detail },
     );
     if ("failure" in result) {
       const reason = troubleOf(result.failure);
@@ -281,13 +281,14 @@ export function createPullRequests({
     local: string | null,
     folder: string,
     signal: AbortSignal,
+    asked: boolean,
   ): Promise<ReturnType<typeof parseView> | { failure: PullRequestTrouble }> => {
     const result = await pace.run(
       () =>
         pace.paused()
           ? Promise.resolve({ failure: "rate-limited" as const })
           : runGh(viewArguments(number), folder, viewMs, signal),
-      { signal },
+      { signal, asked },
     );
     if ("failure" in result) {
       const reason = troubleOf(result.failure);
@@ -331,7 +332,7 @@ export function createPullRequests({
         if ("failure" in result) return result;
         return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch, facts };
       },
-      { signal },
+      { signal, asked: detail },
     );
     if ("failure" in viewed) {
       if (viewed.failure === "rate-limited") pace.pause();
@@ -370,7 +371,7 @@ export function createPullRequests({
           trusted.find((candidate) => candidate.open) ??
           trusted[0];
         if (better === undefined) return nothing({ kind: "absent", reason: "none" });
-        const again = await readNumber(better.number, viewed.head, folder, signal);
+        const again = await readNumber(better.number, viewed.head, folder, signal, detail);
         if (again === null) return nothing(unavailable("failed"));
         if ("failure" in again) return nothing(unavailable(again.failure));
         if (
@@ -389,15 +390,23 @@ export function createPullRequests({
         }
       }
     }
+    if (conversation === null && parsed.commitsCut) {
+      const newest = await askConversation(parsed.place, head, false, folder, signal);
+      if ("failure" in newest) return nothing(unavailable(newest.failure));
+      conversation = newest;
+    }
+    const commits = conversation?.commits ?? null;
+    if (commits === null && parsed.commitsCut) return nothing(unavailable("failed"));
+    const found = commits === null ? parsed.found : { ...parsed.found, ...commits };
     const verified = addressKey(parsed.place);
     if (!detail) {
-      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified, branch };
+      return { answer: { ...found, detail: null }, place: parsed.place, verified, branch };
     }
     const read: PullRequestDetail = conversation?.detail ?? {
       kind: "unavailable",
       reason: "failed",
     };
-    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified, branch };
+    return { answer: { ...found, detail: read }, place: parsed.place, verified, branch };
   };
 
   const answerFrom = (

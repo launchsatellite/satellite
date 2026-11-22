@@ -72,6 +72,24 @@ describe("ghFailure", () => {
     ).toBe("rate-limited");
   });
 
+  it("reads the errors gh api prints after its own prefix", () => {
+    expect(ghFailure(run(1, "gh: Bad credentials (HTTP 401)\n"), undefined)).toBe("signed-out");
+    expect(
+      ghFailure(run(1, "gh: API rate limit already exceeded for user ID 1.\n"), undefined),
+    ).toBe("rate-limited");
+    expect(
+      ghFailure(
+        run(1, "gh: You have exceeded a secondary rate limit. Please wait. (HTTP 403)\n"),
+        undefined,
+      ),
+    ).toBe("rate-limited");
+    expect(ghFailure(run(1, "gh: Too Many Requests (HTTP 429)\n"), undefined)).toBe("rate-limited");
+    expect(ghFailure(run(1, "gh: Not Found (HTTP 404)\n"), undefined)).toBe("failed");
+    expect(
+      ghFailure(run(1, "gh: Field 'bogusField' doesn't exist on type 'User'\n"), undefined),
+    ).toBe("failed");
+  });
+
   it("matches a no pull requests line only at the start", () => {
     expect(ghFailure(run(1, 'x no pull requests found for branch "x"'), undefined)).toBe("failed");
   });

@@ -62,6 +62,27 @@ describe("readJsonFile", { timeout: 20_000 }, () => {
     );
   });
 
+  it("reads past a byte-order mark at the start", async () => {
+    const { dir, file } = await folder();
+    await writeFile(file, '﻿{"version":1,"names":["a"]}');
+    expect(await readJsonFile(file, schema, fallback)).toEqual({
+      value: { version: 1, names: ["a"] },
+      outcome: { kind: "read" },
+    });
+    expect(await readdir(dir)).toEqual(["state.json"]);
+  });
+
+  it("keeps the copy it sets aside even when the clock is behind the others", async () => {
+    const { dir, file } = await folder();
+    const ahead = Date.now() + 86_400_000;
+    const later = [1, 2, 3, 4, 5].map((step) => `state.unreadable-${String(ahead + step)}.json`);
+    for (const name of later) await writeFile(join(dir, name), "{");
+    await writeFile(file, "{");
+    const { outcome } = await readJsonFile(file, schema, fallback);
+    if (outcome.kind !== "set-aside") throw new Error(`expected a set-aside, got ${outcome.kind}`);
+    expect((await readdir(dir)).sort()).toEqual([outcome.name, ...later.slice(1)].sort());
+  });
+
   it("sets aside truncated JSON and answers the fallback", async () => {
     await expectSetAside('{"version":1,"names":["a"');
   });

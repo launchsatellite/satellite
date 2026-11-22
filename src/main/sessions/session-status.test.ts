@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { SessionStatus } from "../../shared/bridge-contract.ts";
 import {
   answersQuestion,
+  declinesQuestion,
+  interruptsTurn,
   mainThread,
   nextState,
   type SessionEvent,
@@ -39,6 +41,8 @@ const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
   { label: "idle prompt", events: [notification("idle_prompt")] },
   { label: "resumed", events: [notification("quota_auto_resume_fired")] },
   { label: "answer key", events: [{ name: "AnswerKey" }] },
+  { label: "decline key", events: [{ name: "DeclineKey" }] },
+  { label: "quiet after an interrupt", events: [{ name: "Interrupted" }] },
   {
     label: "other",
     events: ["auth_success", "agent_completed", "", "PERMISSION_PROMPT", null].map(notification),
@@ -58,6 +62,8 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "working",
     "idle",
     "idle",
+    "idle",
+    "idle",
     "done",
     "stopped",
   ],
@@ -71,6 +77,8 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "working",
     "working",
     "working",
+    "idle",
+    "working",
     "done",
     "stopped",
   ],
@@ -83,6 +91,8 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "done",
     "working",
     "working",
+    "idle",
+    "needs-you",
     "needs-you",
     "done",
     "stopped",
@@ -98,9 +108,13 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "done",
     "done",
     "done",
+    "done",
+    "done",
     "stopped",
   ],
   stopped: [
+    "stopped",
+    "stopped",
     "stopped",
     "stopped",
     "stopped",
@@ -137,14 +151,24 @@ function run(start: SessionStatus, events: readonly SessionEvent[]): SessionStat
 }
 
 describe("answersQuestion", () => {
-  it("takes Enter, Escape and a digit pressed alone as an answer", () => {
-    expect(["\r", "\u001b", "1", "3"].map(answersQuestion)).toEqual([true, true, true, true]);
+  it("takes Enter and a digit pressed alone as an answer", () => {
+    expect(["\r", "1", "3"].map(answersQuestion)).toEqual([true, true, true]);
   });
 
-  it("takes no arrow, letter, paste or typed text as an answer", () => {
+  it("takes no Escape, arrow, letter, paste or typed text as an answer", () => {
     expect(
-      ["\u001b[B", "y", "12", "\u001b[200~1\u001b[201~", "fix it\r", ""].map(answersQuestion),
-    ).toEqual([false, false, false, false, false, false]);
+      ["\u001b", "\u001b[B", "y", "12", "\u001b[200~1\u001b[201~", "fix it\r", ""].map(
+        answersQuestion,
+      ),
+    ).toEqual([false, false, false, false, false, false, false]);
+  });
+});
+
+describe("declinesQuestion and interruptsTurn", () => {
+  it("takes Escape alone as a decline, and Escape or Ctrl+C alone as an interrupt", () => {
+    const keys = ["\u001b", "\u0003", "\r", "\u001b[A", "\u001b\r", "x"];
+    expect(keys.map(declinesQuestion)).toEqual([true, false, false, false, false, false]);
+    expect(keys.map(interruptsTurn)).toEqual([true, true, false, false, false, false]);
   });
 });
 
@@ -178,6 +202,21 @@ describe("nextState", () => {
         toolDone(mainThread),
       ]),
     ).toEqual(["working", "needs-you", "needs-you", "working", "working"]);
+  });
+
+  it("rests at once when Escape declines, and after a quiet interrupt, until the next hook", () => {
+    expect(
+      run("idle", [
+        { name: "UserPromptSubmit" },
+        asked(mainThread),
+        asked("helper"),
+        { name: "DeclineKey" },
+        { name: "UserPromptSubmit" },
+        { name: "Interrupted" },
+        toolDone(mainThread),
+        { name: "Stop" },
+      ]),
+    ).toEqual(["working", "needs-you", "needs-you", "idle", "working", "idle", "working", "done"]);
   });
 
   it("lets go of a declined permission once the turn has gone quiet", () => {

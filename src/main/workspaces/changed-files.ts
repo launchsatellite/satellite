@@ -1,4 +1,4 @@
-import { gitReadMs, runGit } from "./git-command.ts";
+import { gitReadMs, readGit, runGit } from "./git-command.ts";
 
 export interface StatusEntry {
   code: string;
@@ -33,4 +33,41 @@ export async function readStatus(
   const run = await runGit(folder, statusArgs, gitReadMs, undefined, { filtersOf: folder });
   if (run?.exitCode !== 0) return undefined;
   return { entries: parseStatus(run.stdout), raw: run.stdout };
+}
+
+type StatusRead = Awaited<ReturnType<typeof readStatus>>;
+interface PacedRead {
+  answer: StatusRead;
+  at: number;
+  cost: number;
+}
+
+const pacedLimit = 4400;
+const paced = new Map<string, PacedRead>();
+
+function remember(folder: string, read: PacedRead): void {
+  paced.delete(folder);
+  paced.set(folder, read);
+  const oldest = paced.keys().next().value;
+  if (paced.size > pacedLimit && oldest !== undefined) paced.delete(oldest);
+}
+
+export async function pacedStatus(folder: string): Promise<StatusRead> {
+  const last = paced.get(folder);
+  if (last !== undefined && Date.now() - last.at < Math.max(2000, 4 * last.cost)) {
+    return last.answer;
+  }
+  const started = Date.now();
+  const run = await readGit(folder, statusArgs, gitReadMs, undefined, { filtersOf: folder });
+  const ran = { at: Date.now(), cost: Date.now() - started };
+  if (run === "time" || run === "stuck") {
+    remember(folder, { answer: last?.answer, ...ran });
+    return last?.answer;
+  }
+  const answer =
+    typeof run === "object" && run.exitCode === 0
+      ? { entries: parseStatus(run.stdout), raw: run.stdout }
+      : undefined;
+  remember(folder, { answer, ...ran });
+  return answer;
 }
