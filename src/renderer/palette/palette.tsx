@@ -100,8 +100,10 @@ function switcherOptions(
     ranked.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
       testId: `switch-${item.project}-${item.testKey}`,
-      title: item.label,
-      detail: item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
+      title: visibleText(item.label),
+      detail: visibleText(
+        item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
+      ),
       pixel: true,
       run: () => {
         onOpenWorkspace(item.ref);

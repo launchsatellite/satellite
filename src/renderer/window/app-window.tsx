@@ -44,6 +44,7 @@ import { linkSentence } from "../pull-request/pull-request-words.ts";
 import { useThreadJump } from "../pull-request/use-thread-jump.ts";
 import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
@@ -305,9 +306,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const removableParent =
     removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
-    removable === undefined || removableParent === undefined
-      ? removable?.name
-      : `${removable.name} in ${removableParent}`;
+    removable === undefined
+      ? undefined
+      : visibleText(
+          removableParent === undefined
+            ? removable.name
+            : `${removable.name} in ${removableParent}`,
+        );
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
@@ -952,8 +957,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         />
         {selectedProject.missing !== null ? (
           <FolderMissing
-            name={selectedProject.name}
-            parent={selectedProject.parent}
+            name={visibleText(selectedProject.name)}
+            parent={visibleText(selectedProject.parent)}
             missing={selectedProject.missing}
           />
         ) : (

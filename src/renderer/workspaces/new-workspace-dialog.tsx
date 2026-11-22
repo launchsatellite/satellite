@@ -7,12 +7,14 @@ import type {
   StartView,
   WorkspaceView,
 } from "../../shared/bridge-contract.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { workspaceNameLimit, workspaceNameProblem } from "../../shared/workspace-name.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
+import { visibleLabel } from "../ui/visible-name.tsx";
 
 type Prepared = BridgeResponse<"workspaces.prepare">;
 type StepState = "pending" | "running" | "done" | "failed" | "undone";
@@ -117,7 +119,9 @@ function StepRows({ steps, name }: { steps: Steps; name: string }) {
             <span className="flex min-w-0 flex-col py-2">
               <span className="break-words">{stepTitle(step, name)}</span>
               {detail !== null && state !== "failed" && (
-                <span className="text-[12px] font-normal break-words text-dim">{detail}</span>
+                <span className="text-[12px] font-normal break-words text-dim">
+                  {visibleText(detail)}
+                </span>
               )}
             </span>
             {shown === "✓" ? (
@@ -151,7 +155,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
   const [refusal, setRefusal] = useState<string | null>(null);
   const [steps, setSteps] = useState<Steps>(pendingSteps);
   const projectId = project.id;
-  const projectName = project.name;
+  const projectName = visibleText(project.name);
 
   useEffect(() => {
     alive.current = true;
@@ -275,7 +279,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     if (phase.kind === "unavailable") {
       return (
         <p role="alert" data-testid="workspace-failure" className="text-[13px] text-sigfg">
-          {phase.message}
+          {visibleText(phase.message)}
         </p>
       );
     }
@@ -314,7 +318,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
             role={refusal === null ? undefined : "alert"}
             className={`text-[12px] ${shownProblem === null ? "text-dim" : "text-sigfg"}`}
           >
-            {shownProblem ?? "The branch takes the same name."}
+            {visibleText(shownProblem ?? "The branch takes the same name.")}
           </p>
         </div>
         {startView.kind === "empty" ? (
@@ -336,10 +340,12 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
                 setStart(event.target.value);
               }}
             >
-              <option value={defaultStart}>{defaultLabel(startView, projectName)}</option>
+              <option value={defaultStart}>
+                {visibleLabel(defaultLabel(startView, project.name))}
+              </option>
               {phase.prepared.branches.map((branch) => (
                 <option key={branch.ref} value={branch.ref}>
-                  {branch.label}
+                  {visibleLabel(branch.label)}
                 </option>
               ))}
             </select>
@@ -360,7 +366,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
               data-testid="workspace-failure"
               className={`text-[13px] ${phase.stopped ? "text-fg2" : "text-sigfg"}`}
             >
-              {phase.message}
+              {visibleText(phase.message)}
             </p>
             {failedDetail !== undefined && (
               <pre

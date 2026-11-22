@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { BridgeResponse, ProjectView, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
+import { VisibleName } from "../ui/visible-name.tsx";
 
 type Inspected = BridgeResponse<"workspaces.inspect">;
 type Phase =
@@ -63,7 +65,7 @@ function Files({ view }: { view: Inspected }) {
       <ul className={list}>
         {view.files.map((file) => (
           <li key={file.path} className="break-all whitespace-pre-wrap">
-            {file.code} {file.path}
+            {file.code} <VisibleName text={file.path} />
           </li>
         ))}
         {view.moreFiles > 0 && <li>and {String(view.moreFiles)} more</li>}
@@ -121,12 +123,12 @@ function Commits({ view }: { view: Inspected }) {
   const { pixel, text, subjects } = commitsRow(view);
   return (
     <div data-testid="archive-commits">
-      <Row pixel={pixel}>{text}</Row>
+      <Row pixel={pixel}>{visibleText(text)}</Row>
       {subjects.length > 0 && (
         <ul className={list}>
           {subjects.map((subject, index) => (
             <li key={index} className="break-words">
-              {subject}
+              <VisibleName text={subject} />
             </li>
           ))}
         </ul>
@@ -259,7 +261,9 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
     if (phase.kind === "unreadable") {
       return (
         <p role="alert" data-testid="archive-failure" className="text-[13px] text-sigfg">
-          {phase.failure === null ? phase.message : `${phase.failure} ${phase.message}`}
+          {visibleText(
+            phase.failure === null ? phase.message : `${phase.failure} ${phase.message}`,
+          )}
         </p>
       );
     }
@@ -302,7 +306,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
           )}
           {view.boundary.kind !== "clear" && (
             <Row pixel="needs-you" testId="archive-boundary">
-              {boundarySentence(name, view.boundary)}
+              {visibleText(boundarySentence(name, view.boundary))}
             </Row>
           )}
           {view.locked && (
@@ -314,7 +318,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
         </div>
         {phase.kind === "ready" && phase.failure !== null && (
           <p role="alert" data-testid="archive-failure" className="text-[13px] text-sigfg">
-            {phase.failure}
+            {visibleText(phase.failure)}
           </p>
         )}
       </>
