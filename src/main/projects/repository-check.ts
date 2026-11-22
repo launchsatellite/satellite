@@ -1,5 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
@@ -12,7 +12,7 @@ import {
 } from "../workspaces/repository-config.ts";
 
 export type RevParse =
-  | { kind: "work-tree"; toplevel: string; commonDir: string; linked: boolean }
+  | { kind: "work-tree"; toplevel: string; gitDir: string; commonDir: string; linked: boolean }
   | { kind: "bare" }
   | { kind: "git-dir" }
   | { kind: "not-a-repository" }
@@ -41,6 +41,7 @@ const revParseArgs = [
 const ownFolder = "That folder belongs to Satellite itself. Add a repository from somewhere else.";
 const missingFolder = "That folder no longer exists. Choose another one.";
 const ownCheckout = "Satellite needs a repository with its own checkout.";
+const ownGitFolder = "Satellite needs a repository with its own .git folder inside it.";
 const slowFolder =
   "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.";
 const stillWaiting =
@@ -129,7 +130,7 @@ export function parseRevParse(run: ToolRun): RevParse {
     commonDir !== undefined &&
     toplevel !== undefined
   ) {
-    return { kind: "work-tree", toplevel, commonDir, linked: !samePath(gitDir, commonDir) };
+    return { kind: "work-tree", toplevel, gitDir, commonDir, linked: !samePath(gitDir, commonDir) };
   }
   if (run.stderr.includes("dubious ownership")) return { kind: "untrusted" };
   if (run.stderr.includes("not a git repository")) return { kind: "not-a-repository" };
@@ -183,9 +184,16 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   const root = await realFolder(parsed.toplevel);
   if (root === undefined) return refuse(missingFolder);
   if (isInsidePath(read.home, root)) return refuse(ownFolder);
+  if (!isInsidePath(root, real)) {
+    return refuse(`${name} keeps its working files in another folder. ${ownCheckout}`);
+  }
   if (!samePath(root, real)) {
     const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
+  }
+  const gitFolder = await realFolder(parsed.gitDir);
+  if (gitFolder === undefined || !samePath(gitFolder, join(root, ".git"))) {
+    return refuse(`${name} uses a .git folder from somewhere else. ${ownGitFolder}`);
   }
   if (
     !(await honoursNoLazyFetch()) &&

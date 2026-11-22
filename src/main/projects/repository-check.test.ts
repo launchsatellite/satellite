@@ -58,6 +58,10 @@ beforeAll(async () => {
   await git(join(base, "repo"), ["worktree", "add", "-q", join(base, "linked")]);
   await git(base, ["clone", "-q", "--bare", join(base, "repo"), "shared.git"]);
   await git(join(base, "shared.git"), ["worktree", "add", "-q", join(base, "from-bare")]);
+  await mkdir(join(base, "borrower"));
+  await writeFile(join(base, "borrower", ".git"), "gitdir: ../repo/.git\n");
+  await makeRepository(join(base, "aimed"));
+  await git(join(base, "aimed"), ["config", "core.worktree", join(base, "plain")]);
 }, 30_000);
 
 afterEach(() => {
@@ -80,6 +84,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "/Users/<name>/repo",
+      gitDir: "/Users/<name>/repo/.git",
       commonDir: "/Users/<name>/repo/.git",
       linked: false,
     });
@@ -127,6 +132,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "/Users/<name>/linked",
+      gitDir: "/Users/<name>/repo/.git/worktrees/linked",
       commonDir: "/Users/<name>/repo/.git",
       linked: true,
     });
@@ -169,6 +175,7 @@ describe("parseRevParse", () => {
     ).toEqual({
       kind: "work-tree",
       toplevel: "C:/Users/<name>/repo",
+      gitDir: "C:/Users/<name>/repo/.git",
       commonDir: "C:/Users/<name>/repo/.git",
       linked: false,
     });
@@ -198,6 +205,14 @@ describe("checkRepository", () => {
       [
         join(base, "linked"),
         "linked is a worktree of another repository. Add the repository's main folder instead.",
+      ],
+      [
+        join(base, "borrower"),
+        "borrower uses a .git folder from somewhere else. Satellite needs a repository with its own .git folder inside it.",
+      ],
+      [
+        join(base, "aimed"),
+        "aimed keeps its working files in another folder. Satellite needs a repository with its own checkout.",
       ],
       [join(base, "gone"), "That folder no longer exists. Choose another one."],
       [join(base, "notes.txt"), "Drop a folder, not a file."],
