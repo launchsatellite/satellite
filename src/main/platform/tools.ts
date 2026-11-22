@@ -4,7 +4,7 @@ import { posix, win32 } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
 import { isFullyQualified, samePath } from "./paths.ts";
-import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
+import { endUnixTree, endWindowsChild, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -153,7 +153,7 @@ function stopChild(child: ChildProcess, exited: Promise<void>): void {
   if (pid === undefined) return;
   const gone = child.exitCode !== null || child.signalCode !== null;
   if (process.platform !== "win32") void endUnixTree(pid, exited, forceKillGraceMs, gone);
-  else if (!gone) void endWindowsTree(pid);
+  else void endWindowsChild(child);
 }
 
 function without(env: Record<string, string>, keys: Set<string>): Record<string, string> {

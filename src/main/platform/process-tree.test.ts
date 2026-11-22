@@ -8,6 +8,7 @@ import {
   prepareLinux,
   windowsStopChunks,
   endUnixTree,
+  endWindowsChild,
   endWindowsTree,
   subtreeStopBoundMs,
   StopNotConfirmed,
@@ -295,6 +296,44 @@ describe("endWindowsTree", () => {
 
   it("ends nothing when the root is no longer in the table", async () => {
     expect(await ended(50, [entry(10, 1, 5_000), entry(60, 50, 4_000)])).toBeUndefined();
+  });
+});
+
+describe("endWindowsChild", () => {
+  function child(exitCode: number | null = null) {
+    let kills = 0;
+    return {
+      own: { pid: 50, exitCode, signalCode: null, kill: () => ++kills > 0 },
+      kills: () => kills,
+    };
+  }
+
+  it("ends a running child through its own handle when the tree stop could not", async () => {
+    const running = child();
+    const asked: number[] = [];
+    await endWindowsChild(running.own, (pid) => {
+      asked.push(pid);
+      return Promise.resolve();
+    });
+    expect(asked).toEqual([50]);
+    expect(running.kills()).toBe(1);
+  });
+
+  it("ends a running child even when the tree stop throws", async () => {
+    const running = child();
+    await endWindowsChild(running.own, () => Promise.reject(new Error("no table")));
+    expect(running.kills()).toBe(1);
+  });
+
+  it("never touches a child that already exited, since its id may be another process's", async () => {
+    const exited = child(0);
+    let asked = false;
+    await endWindowsChild(exited.own, () => {
+      asked = true;
+      return Promise.resolve();
+    });
+    expect(asked).toBe(false);
+    expect(exited.kills()).toBe(0);
   });
 });
 

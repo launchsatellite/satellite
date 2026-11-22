@@ -26,6 +26,8 @@ const windowsCommandRow = z.object({
   c: z.string().nullable(),
 });
 
+export const windowsStartOf = (row: string) =>
+  `([DateTimeOffset]${row}.CreationDate).ToUnixTimeMilliseconds()`;
 export const psTimeoutMs = 1000;
 export const windowsReadTimeoutMs = 5000;
 const outputLimit = 16 * 1024 * 1024;
@@ -51,9 +53,8 @@ const commandLengthLimit = 2000;
 const psCommandRow =
   /^\s*(\d+) +\w{3} +(\w{3}) +(\d{1,2}) +(\d\d):(\d\d):(\d\d) +(\d{4})(?: (.*))?$/;
 const commandIdsVariable = "SATELLITE_PROCESS_IDS";
-const windowsTableScript =
-  "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;pp=[int64]$_.ParentProcessId;s=$(if($_.CreationDate){([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}else{$null});n=$_.Name}})";
-const windowsCommandScript = `$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$ids=@($env:${commandIdsVariable}.Split(',')|ForEach-Object{[int64]$_});ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,CreationDate,CommandLine|Where-Object{$ids -contains $_.ProcessId}|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;s=$(if($_.CreationDate){([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}else{$null});c=$(if($_.CommandLine){$_.CommandLine.Substring(0,[Math]::Min(${String(commandLengthLimit)},$_.CommandLine.Length))}else{$null})}})`;
+const windowsTableScript = `$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CreationDate,Name|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;pp=[int64]$_.ParentProcessId;s=$(if($_.CreationDate){${windowsStartOf("$_")}}else{$null});n=$_.Name}})`;
+const windowsCommandScript = `$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$ids=@($env:${commandIdsVariable}.Split(',')|ForEach-Object{[int64]$_});ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,CreationDate,CommandLine|Where-Object{$ids -contains $_.ProcessId}|ForEach-Object{[pscustomobject]@{p=[int64]$_.ProcessId;s=$(if($_.CreationDate){${windowsStartOf("$_")}}else{$null});c=$(if($_.CommandLine){$_.CommandLine.Substring(0,[Math]::Min(${String(commandLengthLimit)},$_.CommandLine.Length))}else{$null})}})`;
 const psRow =
   /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}) +(\w{3}) +(\d{1,2}) +(\d\d):(\d\d):(\d\d) +(\d{4})(?: +(.*))?$/;
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

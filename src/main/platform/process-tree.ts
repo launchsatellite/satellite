@@ -9,6 +9,7 @@ import {
   subtreeOf,
   windowsPowerShell,
   windowsReadTimeoutMs,
+  windowsStartOf,
 } from "./process-table.ts";
 
 const windowsStopTimeoutMs = 5000;
@@ -22,7 +23,7 @@ const termCheckMs = 300;
 const killCheckMs = 200;
 const windowsStopChunk = 200;
 const windowsStopVariable = "SATELLITE_STOP";
-const windowsStopScript = `$ErrorActionPreference='Continue';foreach($pair in $env:${windowsStopVariable}.Split(',')){$id,$start=$pair.Split(':');try{$p=[Diagnostics.Process]::GetProcessById([int]$id);$null=$p.Handle;if([Math]::Abs(([DateTimeOffset]$p.StartTime).ToUnixTimeMilliseconds()-[int64]$start) -eq 0){$p.Kill()}}catch{}}`;
+const windowsStopScript = `$ErrorActionPreference='Continue';$held=@{};foreach($pair in $env:${windowsStopVariable}.Split(',')){$id,$start=$pair.Split(':');try{$p=[Diagnostics.Process]::GetProcessById([int]$id);$null=$p.Handle;$held[[int64]$id]=@($p,[int64]$start)}catch{}};if($held.Count -gt 0){foreach($c in @(Get-CimInstance -ClassName Win32_Process -Property ProcessId,CreationDate)){$h=$held[[int64]$c.ProcessId];if($h -and $c.CreationDate -and ${windowsStartOf("$c")} -eq $h[1]){try{$h[0].Kill()}catch{}}}}`;
 
 export class StopRefused extends Error {}
 export class StopNotConfirmed extends Error {}
@@ -96,6 +97,23 @@ export async function endWindowsTree(
   const root = table.find((entry) => entry.pid === pid);
   if (root === undefined) return;
   await (await prepare(subtreeOf(root, table).filter(mayBeSignalled))).send("SIGKILL");
+}
+
+export interface OwnChild {
+  readonly pid?: number | undefined;
+  readonly exitCode: number | null;
+  readonly signalCode: NodeJS.Signals | null;
+  kill: () => boolean;
+}
+
+export async function endWindowsChild(
+  child: OwnChild,
+  endTree: (pid: number) => Promise<void> = endWindowsTree,
+): Promise<void> {
+  const running = () => child.exitCode === null && child.signalCode === null;
+  if (child.pid === undefined || !running()) return;
+  await endTree(child.pid).catch(() => undefined);
+  if (running()) child.kill();
 }
 
 export async function endUnixTree(
