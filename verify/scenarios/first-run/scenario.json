@@ -1,0 +1,26 @@
+{
+  "description": "A fresh Satellite home with no saved layout, so the first-run guide starts once the repo is added. The repo is a clone of a local upstream with one commit, with a stand-in gh and a stand-in Claude Code at its prompt. It seeds no interface.json, so the window follows the system theme until a theme step sets one.",
+  "folders": [
+    {
+      "name": "upstream",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    }
+  ],
+  "repo": [{ "git": ["clone", "../folders/upstream", "."] }],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

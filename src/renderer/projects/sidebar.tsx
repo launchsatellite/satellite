@@ -170,6 +170,7 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
 
 function ProjectRows({
   row: { project, testId, newWorkspaceTestId, workspaceTestIds, showParent },
+  guided,
   selected,
   onSelect,
   onNewWorkspace,
@@ -179,6 +180,7 @@ function ProjectRows({
   processesFor,
 }: {
   row: ProjectRow;
+  guided: boolean;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
@@ -203,7 +205,7 @@ function ProjectRows({
         {project.missing !== null ? (
           <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
         ) : (
-          <span className="ml-auto flex-none">
+          <span className="ml-auto flex flex-none" data-guide={guided ? "workspace" : undefined}>
             <Button
               variant="ghost"
               size="small"
@@ -259,6 +261,15 @@ function ProjectRows({
   );
 }
 
+function guidedProject(
+  projects: readonly ProjectView[],
+  selected: WorkspaceRef | null,
+): string | undefined {
+  const present = projects.filter((project) => project.missing === null);
+  const own = present.find((project) => project.id === selected?.projectId);
+  return (own ?? present[0])?.id;
+}
+
 export function Sidebar({
   projects,
   selected,
@@ -270,6 +281,7 @@ export function Sidebar({
   processesFor,
   inbox,
 }: SidebarProps) {
+  const guided = guidedProject(projects ?? [], selected);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
       <CommandRow
@@ -307,6 +319,7 @@ export function Sidebar({
             <ProjectRows
               key={row.project.id}
               row={row}
+              guided={row.project.id === guided}
               selected={selected}
               onSelect={onSelect}
               onNewWorkspace={onNewWorkspace}

@@ -85,7 +85,10 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
       data-testid="inbox"
       className={`flex flex-none flex-col gap-px rounded-[6px] ${focusRing}`}
     >
-      <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
+      <div
+        data-guide="inbox"
+        className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase"
+      >
         <span aria-hidden="true" className="flex items-center gap-[6px]">
           <Icon name="bell" size={12} />
           Inbox

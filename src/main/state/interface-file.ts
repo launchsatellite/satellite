@@ -22,21 +22,31 @@ interface LoadedInterface {
   writable: boolean;
 }
 
-const version3 = interfaceState.extend({ version: z.literal(3) });
+const version4 = interfaceState.extend({ version: z.literal(4) });
+const version3 = interfaceState
+  .omit({ guideSeen: true })
+  .extend({ version: z.literal(3) })
+  .transform((file): z.output<typeof version4> => ({ ...file, version: 4, guideSeen: true }));
 const version2 = interfaceState
-  .omit({ files: true })
+  .omit({ files: true, guideSeen: true })
   .extend({ version: z.literal(2) })
-  .transform((file): z.output<typeof version3> => ({ ...file, version: 3, files: [] }));
-const version1 = interfaceState
-  .omit({ notifications: true, files: true })
-  .extend({ version: z.literal(1) })
-  .transform((file): z.output<typeof version3> => ({
+  .transform((file): z.output<typeof version4> => ({
     ...file,
-    version: 3,
+    version: 4,
+    files: [],
+    guideSeen: true,
+  }));
+const version1 = interfaceState
+  .omit({ notifications: true, files: true, guideSeen: true })
+  .extend({ version: z.literal(1) })
+  .transform((file): z.output<typeof version4> => ({
+    ...file,
+    version: 4,
     notifications: true,
     files: [],
+    guideSeen: true,
   }));
-const fileSchema = z.union([version1, version2, version3]);
+const fileSchema = z.union([version1, version2, version3, version4]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -53,7 +63,7 @@ const saveFailure =
 async function readInterfaceFile(file: string): Promise<LoadedInterface> {
   const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
-    version: 3,
+    version: 4,
   });
   return {
     state: {
@@ -62,6 +72,7 @@ async function readInterfaceFile(file: string): Promise<LoadedInterface> {
       theme: value.theme,
       notifications: value.notifications,
       files: value.files,
+      guideSeen: outcome.kind === "read" || outcome.kind === "missing" ? value.guideSeen : true,
     },
     notice: notices[outcome.kind],
     writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
@@ -73,7 +84,12 @@ export function createInterfaceFile(home: string): InterfaceFile {
   const writer = createJsonWriter(file);
   let cached: Promise<LoadedInterface> | undefined;
   const load = () => {
-    cached ??= readInterfaceFile(file);
+    cached ??= readInterfaceFile(file).then(async (loaded) => {
+      if (loaded.notice !== null && loaded.writable) {
+        await writer.write({ version: 4, ...loaded.state }).catch(() => undefined);
+      }
+      return loaded;
+    });
     return cached;
   };
   return {
@@ -84,7 +100,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
     async save(state) {
       const loaded = await load();
       cached = Promise.resolve({ ...loaded, state });
-      if (loaded.writable) await writer.write({ version: 3, ...state });
+      if (loaded.writable) await writer.write({ version: 4, ...state });
     },
     flush: () => writer.flush(),
   };

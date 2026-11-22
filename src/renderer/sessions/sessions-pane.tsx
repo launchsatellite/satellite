@@ -104,7 +104,11 @@ function EmptyWorkspace({
             : "No Claude Code session here yet.")}
       </p>
       {missing !== undefined && <InstallStep />}
-      <div ref={actions} className="flex flex-wrap items-center justify-center gap-[10px]">
+      <div
+        ref={actions}
+        data-guide="session"
+        className="flex flex-wrap items-center justify-center gap-[10px]"
+      >
         {resumable ? (
           <>
             <Button

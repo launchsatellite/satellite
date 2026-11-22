@@ -143,6 +143,28 @@ function parseStep(raw: string): Step {
         (await session.page.getByTestId(testId).innerText()).slice(0, textLimit),
       );
     }
+    case "box": {
+      const testId = needsValue();
+      return step(async ({ session }) => {
+        const element = session.page.getByTestId(testId);
+        const box = (await element.isVisible()) ? await element.boundingBox() : null;
+        if (box === null) throw new Error(`${testId} is not on screen`);
+        return {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+        };
+      });
+    }
+    case "focused":
+      return step(({ session }) =>
+        session.page.evaluate(() => {
+          const active = document.activeElement;
+          if (active === null || active === document.body) return null;
+          return active.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
+        }),
+      );
     case "click": {
       const testId = needsValue();
       return step(({ session }) => session.page.getByTestId(testId).click());

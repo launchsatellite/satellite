@@ -19,6 +19,9 @@ import { FilesView } from "../files/files-view.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
+import { GuideLayer } from "../guide/guide-layer.tsx";
+import { guideClosedSentence } from "../guide/guide-steps.ts";
+import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { fileLinesRequest } from "../files/file-lines.ts";
@@ -214,6 +217,33 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     listedNames.current = listed;
     if (gone.size > 0) forgetGone([...gone.values()]);
   }, [projects, allSessions, forgetGone]);
+  const guideFacts = useMemo(
+    () => ({
+      workspaces: (projects ?? []).reduce(
+        (count, project) =>
+          count + project.workspaces.filter((workspace) => workspace.key !== "main").length,
+        0,
+      ),
+      sessions: allSessions.length,
+    }),
+    [projects, allSessions],
+  );
+  const guideListed = projects !== undefined && projects.length > 0;
+  const markGuideSeen = useCallback(() => {
+    update((current) => ({ ...current, guideSeen: true }), true);
+  }, [update]);
+  const guide = useGuide({
+    seen: state.guideSeen,
+    listed: guideListed,
+    facts: guideFacts,
+    onSeen: markGuideSeen,
+    notify,
+  });
+  const openGuide = guide.show;
+  const showGuide = useCallback(() => {
+    setToasts((queue) => queue.filter((queued) => queued.message !== guideClosedSentence));
+    openGuide();
+  }, [openGuide]);
   const { left, right } = fitColumns(state.columns, width);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
@@ -673,6 +703,12 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "guide.show",
+            title: "Show the guide",
+            available: guideListed,
+            run: showGuide,
+          },
+          {
             id: "theme.system",
             title: "Follow the system theme",
             available: true,
@@ -884,6 +920,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     pullRequestFound,
     jumpToThread,
     askPullRequestLink,
+    guideListed,
+    showGuide,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -1005,6 +1043,14 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         className="relative grid h-full bg-bg text-fg"
         style={{ gridTemplateColumns: `${String(left)}px minmax(0,1fr) ${String(right)}px` }}
       >
+        <GuideLayer
+          step={guide.step}
+          covered={modal || palette !== null}
+          focusAsk={guide.focusAsk}
+          onNext={guide.next}
+          onDone={guide.done}
+          onClose={guide.close}
+        />
         <section
           ref={projectsRef}
           data-testid="column-projects"

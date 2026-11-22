@@ -380,6 +380,7 @@ describe("createBridgeRouter", () => {
       { ...defaultInterfaceState, selected: { projectId: terminalId, workspace: "other" } },
       { ...defaultInterfaceState, extra: true },
       { ...defaultInterfaceState, notifications: "yes" },
+      { ...defaultInterfaceState, guideSeen: "yes" },
       { selected: null, columns, theme: "system" },
     ];
     for (const state of states) {
