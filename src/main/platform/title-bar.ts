@@ -16,7 +16,7 @@ export const overlayColours = {
 };
 
 export function overlayStyle(dark: boolean): TitleBarOverlayOptions {
-  return { ...overlayColours[dark ? "dark" : "light"], height: titleBar.height };
+  return { ...overlayColours[dark ? "dark" : "light"], height: titleBar.height - 1 };
 }
 
 export function titleBarFor(platform: NodeJS.Platform, dark: boolean): TitleBarSetup {
