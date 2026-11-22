@@ -1045,6 +1045,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       >
         <GuideLayer
           step={guide.step}
+          covered={modal || palette !== null}
           focusAsk={guide.focusAsk}
           onNext={guide.next}
           onDone={guide.done}

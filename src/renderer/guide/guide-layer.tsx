@@ -15,13 +15,15 @@ import { guideSteps, stepSpoken, type GuideSide, type GuideStep } from "./guide-
 
 interface GuideLayerProps {
   step: GuideStep | null;
+  covered: boolean;
   focusAsk: number;
   onNext: () => void;
   onDone: () => void;
   onClose: () => void;
 }
 
-const fallbackFocus = "[data-testid='add-first-project'], [data-testid='column-projects'] button";
+const fallbackFocus =
+  "[aria-label='Sidebar'] nav button, [aria-label='Sidebar'] button[aria-label='Add a project']";
 const tailStyles: Record<GuideSide, (tail: number) => CSSProperties> = {
   right: (tail) => ({ left: -25, top: tail - 3 }),
   left: (tail) => ({ right: -25, top: tail - 3 }),
@@ -41,14 +43,36 @@ function samePlacement(a: Placement | null, b: Placement | null): boolean {
   );
 }
 
-function controlOf(step: GuideStep): Element | null {
-  return document.querySelector(`[data-guide="${guideSteps[step].anchor}"]`);
+function controlOf(step: GuideStep, held: Element | null): Element | null {
+  const { anchor } = guideSteps[step];
+  if (held?.isConnected === true && held.getAttribute("data-guide") === anchor) return held;
+  return document.querySelector(`[data-guide="${anchor}"]`);
 }
 
-export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLayerProps) {
+function carries(node: Node, anchor: string): boolean {
+  if (!(node instanceof Element)) return false;
+  const selector = `[data-guide="${anchor}"]`;
+  return node.matches(selector) || node.querySelector(selector) !== null;
+}
+
+function anchorTurnedUp(records: MutationRecord[], anchor: string): boolean {
+  return records.some(
+    (record) =>
+      (record.type === "attributes" &&
+        record.target instanceof Element &&
+        record.target.getAttribute("data-guide") === anchor) ||
+      [...record.addedNodes].some((node) => carries(node, anchor)),
+  );
+}
+
+export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }: GuideLayerProps) {
   const card = useRef<HTMLDivElement>(null);
   const cameFrom = useRef<HTMLElement | null>(null);
   const held = useRef<Placement | null>(null);
+  const found = useRef<Element | null>(null);
+  const watcher = useRef<ResizeObserver | null>(null);
+  const placeable = useRef(false);
+  const byMouse = useRef(false);
   const asked = useRef(0);
   const wantFocus = useRef(false);
   const inside = useRef(false);
@@ -57,10 +81,6 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   const titleId = useId();
   const textId = useId();
 
-  if (step === null ? announced !== null : placement !== null && announced !== step) {
-    setAnnounced(step);
-  }
-
   const moveFocusOut = useCallback(() => {
     const from = cameFrom.current;
     cameFrom.current = null;
@@ -68,7 +88,7 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
       from.focus({ preventScroll: true });
       return;
     }
-    const control = step === null ? null : controlOf(step);
+    const control = step === null ? null : controlOf(step, found.current);
     const button = control?.querySelector<HTMLElement>("button:not([tabindex='-1'])");
     const place =
       button ??
@@ -82,9 +102,15 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   }, [moveFocusOut]);
 
   const measure = useCallback(() => {
+    if (document.hidden) return;
     const element = card.current;
-    const control = step === null ? null : controlOf(step);
-    const next =
+    const control = step === null ? null : controlOf(step, found.current);
+    if (control !== found.current) {
+      if (found.current !== null) watcher.current?.unobserve(found.current);
+      if (control !== null) watcher.current?.observe(control);
+      found.current = control;
+    }
+    const fits =
       step === null || element === null || control === null
         ? null
         : placeGuide(
@@ -93,21 +119,54 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
             { width: window.innerWidth, height: window.innerHeight },
             guideSteps[step].side,
           );
-    if (next === null) {
+    placeable.current = fits !== null;
+    if (fits === null) {
       wantFocus.current = false;
-      returnFocus();
+      if (!covered) returnFocus();
     }
+    const next = covered ? null : fits;
+    if (step === null) setAnnounced(null);
+    else if (next !== null) setAnnounced(step);
     if (samePlacement(held.current, next)) return;
     held.current = next;
     setPlacement(next);
-  }, [step, returnFocus]);
+  }, [step, covered, returnFocus]);
 
   useLayoutEffect(() => {
     measure();
-  }, [measure]);
+  });
 
   useEffect(() => {
     if (step === null) return;
+    const { anchor } = guideSteps[step];
+    const resizes = new ResizeObserver(measure);
+    watcher.current = resizes;
+    if (found.current !== null) resizes.observe(found.current);
+    const appears = new MutationObserver((records) => {
+      if (anchorTurnedUp(records, anchor)) measure();
+    });
+    appears.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-guide"],
+    });
+    window.addEventListener("resize", measure);
+    document.addEventListener("scroll", measure, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", measure);
+    return () => {
+      resizes.disconnect();
+      appears.disconnect();
+      watcher.current = null;
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("scroll", measure, { capture: true });
+      document.removeEventListener("visibilitychange", measure);
+    };
+  }, [step, measure]);
+
+  const onScreen = placement !== null;
+  useEffect(() => {
+    if (!onScreen) return;
     let frame = requestAnimationFrame(function loop() {
       measure();
       frame = requestAnimationFrame(loop);
@@ -115,15 +174,16 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [step, measure]);
+  }, [onScreen, measure]);
 
   useLayoutEffect(() => {
     if (focusAsk > asked.current) {
       asked.current = focusAsk;
-      wantFocus.current = held.current !== null;
+      wantFocus.current = placeable.current;
     }
     if (wantFocus.current && placement !== null) {
       wantFocus.current = false;
+      byMouse.current = false;
       card.current?.focus({ preventScroll: true });
     }
   }, [focusAsk, placement]);
@@ -131,18 +191,19 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
   useLayoutEffect(() => {
     if (step !== null || !inside.current) return;
     inside.current = false;
-    moveFocusOut();
+    const active = document.activeElement;
+    if (!byMouse.current && (active === null || active === document.body)) moveFocusOut();
   }, [step, moveFocusOut]);
 
   const ending = (end: () => void) => () => {
-    returnFocus();
+    if (!byMouse.current) returnFocus();
     end();
   };
   const remember = (event: FocusEvent<HTMLDivElement>) => {
     const from = event.relatedTarget;
     inside.current = true;
-    if (!event.currentTarget.contains(from instanceof Node ? from : null)) {
-      cameFrom.current = from instanceof HTMLElement ? from : null;
+    if (from instanceof HTMLElement && !event.currentTarget.contains(from)) {
+      cameFrom.current = from;
     }
   };
   const leave = (event: FocusEvent<HTMLDivElement>) => {
@@ -150,6 +211,7 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
     if (!event.currentTarget.contains(to instanceof Node ? to : null)) inside.current = false;
   };
   const escape = (event: KeyboardEvent<HTMLDivElement>) => {
+    byMouse.current = false;
     if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
@@ -182,6 +244,9 @@ export function GuideLayer({ step, focusAsk, onNext, onDone, onClose }: GuideLay
             data-side={guideSteps[step].side}
             aria-labelledby={titleId}
             aria-describedby={textId}
+            onPointerDown={() => {
+              byMouse.current = true;
+            }}
             onMouseDown={(event) => {
               event.preventDefault();
             }}
