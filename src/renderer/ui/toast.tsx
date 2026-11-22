@@ -27,7 +27,6 @@ export function Toast({ message, tone, onDismiss }: ToastProps) {
   return (
     <div
       data-testid="toast"
-      role={tone === "error" ? "alert" : "status"}
       onMouseEnter={() => {
         setHovered(true);
       }}

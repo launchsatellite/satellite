@@ -53,7 +53,8 @@ import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
-import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
+import { Toast, type Notify } from "../ui/toast.tsx";
+import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
 import type { CentreView } from "./centre-tabs.tsx";
@@ -69,14 +70,8 @@ interface AppWindowProps {
   initial: InterfaceState;
   notice: string | null;
 }
-interface ShownToast {
-  id: number;
-  message: string;
-  tone: ToastTone;
-}
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
-const toastQueueLimit = 32;
 const terminalLinkSentence =
   "The text Claude Code showed points to this address. Check it before you open it.";
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
@@ -116,25 +111,14 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
 }
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
-  const [toasts, setToasts] = useState<ShownToast[]>(() =>
-    notice === null ? [] : [{ id: 1, message: notice, tone: "info" }],
+  const [toasts, setToasts] = useState<QueuedToast[]>(() =>
+    notice === null ? [] : [{ id: 1, message: notice, tone: "info", queuedAt: Date.now() }],
   );
   const notify = useCallback<Notify>((message, tone) => {
-    setToasts((queue) => {
-      const shown = { id: Math.max(0, ...queue.map((queued) => queued.id)) + 1, message, tone };
-      if (tone === "error") {
-        const replaced = queue[0]?.tone === "error" ? queue[0] : undefined;
-        if (replaced === undefined) return [shown, ...queue].slice(0, toastQueueLimit);
-        return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
-      }
-      const [head, , ...rest] = queue;
-      return queue.length < toastQueueLimit || head === undefined
-        ? [...queue, shown]
-        : [head, ...rest, shown];
-    });
+    setToasts((queue) => withToast(queue, message, tone, Date.now()));
   }, []);
   const dismissToast = useCallback(() => {
-    setToasts((queue) => queue.slice(1));
+    setToasts((queue) => afterDismiss(queue, Date.now()));
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
@@ -1208,14 +1192,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             notify={notify}
           />
         )}
-        {toast !== undefined && (
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            tone={toast.tone}
-            onDismiss={dismissToast}
-          />
-        )}
+        <div role="status">
+          {toast !== undefined && (
+            <Toast
+              key={toast.id}
+              message={toast.message}
+              tone={toast.tone}
+              onDismiss={dismissToast}
+            />
+          )}
+        </div>
       </div>
     </CommandsProvider>
   );
