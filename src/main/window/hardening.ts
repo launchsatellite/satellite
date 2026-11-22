@@ -21,6 +21,9 @@ export function hardenSession(session: Session): void {
   session.setDisplayMediaRequestHandler((_request, callback) => {
     callback({});
   });
+  session.on("will-download", (event) => {
+    event.preventDefault();
+  });
 }
 
 export function hardenWebContents(entryUrl: string): void {
@@ -34,6 +37,10 @@ export function hardenWebContents(entryUrl: string): void {
     });
     contents.on("will-attach-webview", (event) => {
       event.preventDefault();
+    });
+    contents.on("select-bluetooth-device", (event, _devices, callback) => {
+      event.preventDefault();
+      callback("");
     });
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
   });

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { BrowserWindow, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, nativeTheme } from "electron";
 import { runsQuietly } from "./verification.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 
@@ -43,6 +43,25 @@ export async function createMainWindow(entryUrl: string): Promise<BrowserWindow>
       window.show();
     });
   }
+  let reloaded = false;
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason === "clean-exit" || window.isDestroyed()) return;
+    if (!reloaded) {
+      reloaded = true;
+      void window.loadURL(entryUrl);
+      return;
+    }
+    void dialog
+      .showMessageBox(window, {
+        type: "error",
+        message: "Satellite's window stopped working again",
+        detail: "Your Claude Code sessions ended with it. Quit, then open Satellite again.",
+        buttons: ["Quit Satellite"],
+      })
+      .then(() => {
+        app.quit();
+      });
+  });
   await window.loadURL(entryUrl);
   return window;
 }

@@ -69,6 +69,8 @@ interface Parts {
   workspaces: Workspaces;
 }
 
+const ptyKillAgent = "conpty_console_list_agent";
+
 async function start({
   changes,
   files,
@@ -235,10 +237,13 @@ function assemble(home: string): Parts {
 
 prepareVerification();
 const home = prepareHome();
-const parts = home === undefined ? undefined : assemble(home);
-if (parts !== undefined && app.requestSingleInstanceLock()) {
+const locked = home !== undefined && app.requestSingleInstanceLock();
+const parts = home === undefined || !locked ? undefined : assemble(home);
+if (parts !== undefined) {
   registerAppScheme();
-  app.on("second-instance", bringToFront);
+  app.on("second-instance", (_event, argv) => {
+    if (!argv.some((arg) => arg.includes(ptyKillAgent))) bringToFront();
+  });
   start(parts).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
