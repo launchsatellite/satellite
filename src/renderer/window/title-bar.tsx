@@ -112,7 +112,8 @@ export function TitleBar({
         style={{
           height: titleBar.height - 1,
           marginLeft: "env(titlebar-area-x, 0px)",
-          width: "env(titlebar-area-width, 100%)",
+          paddingRight:
+            "max(8px, calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%) + 8px))",
           paddingLeft: lightsRoom,
         }}
       >
