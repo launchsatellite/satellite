@@ -5,6 +5,7 @@ export type Lane = "read" | "log";
 export interface RunOptions {
   signal?: AbortSignal;
   lane?: Lane;
+  asked?: boolean;
   owner?: string;
 }
 
@@ -27,12 +28,16 @@ interface PaceOptions {
 interface Entry {
   lane: Lane;
   owner: string;
+  asked: boolean;
   start: () => Promise<void>;
 }
 
 function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
+
+const kinds = ["log", "asked", "background"] as const;
+type Kind = (typeof kinds)[number];
 
 const tooMany = "Satellite is reading too many pull requests at once. Try again shortly.";
 
@@ -47,15 +52,17 @@ export function createPace({
 }: PaceOptions): Pace {
   const queue: Entry[] = [];
   let busy = false;
-  let lastStart: number | undefined;
+  const lastStart = new Map<Kind, number>();
+  let wake: (() => void) | undefined;
   let pausedUntil: number | undefined;
 
   const paused = () => pausedUntil !== undefined && now() < pausedUntil;
+  const kindOf = (entry: Entry): Kind =>
+    entry.lane === "log" ? "log" : entry.asked ? "asked" : "background";
 
-  const pick = (): Entry | undefined => {
-    const entry = queue.find((one) => one.lane === "read") ?? queue[0];
-    if (entry !== undefined) queue.splice(queue.indexOf(entry), 1);
-    return entry;
+  const waitOf = (entry: Entry): number => {
+    const last = lastStart.get(kindOf(entry));
+    return last === undefined ? 0 : Math.min(gapMs, last + gapMs - now());
   };
 
   const pump = async () => {
@@ -63,11 +70,24 @@ export function createPace({
     busy = true;
     try {
       while (queue.length > 0) {
-        const early = lastStart === undefined ? 0 : Math.min(gapMs, lastStart + gapMs - now());
-        if (early > 0) await after(early);
-        const entry = pick();
+        const firsts = kinds
+          .map((kind) => queue.find((entry) => kindOf(entry) === kind))
+          .filter((entry) => entry !== undefined);
+        const [entry] = firsts.sort((one, other) => waitOf(one) - waitOf(other));
         if (entry === undefined) continue;
-        lastStart = now();
+        const early = waitOf(entry);
+        if (early > 0) {
+          const woken = new Promise<"woken">((resolve) => {
+            wake = () => {
+              resolve("woken");
+            };
+          });
+          const ended = await Promise.race([after(early).then(() => "slept" as const), woken]);
+          wake = undefined;
+          if (ended === "woken" || !queue.includes(entry)) continue;
+        }
+        queue.splice(queue.indexOf(entry), 1);
+        lastStart.set(kindOf(entry), now());
         await entry.start();
       }
     } finally {
@@ -86,13 +106,14 @@ export function createPace({
   };
 
   return {
-    async run(work, { signal, lane = "read", owner = "" } = {}) {
+    async run(work, { signal, lane = "read", owner = "", asked = false } = {}) {
       signal?.throwIfAborted();
       refuseIfFull(lane, owner);
       return new Promise((resolve, reject) => {
         const entry: Entry = {
           lane,
           owner,
+          asked,
           start: async () => {
             try {
               resolve(await work());
@@ -112,6 +133,7 @@ export function createPace({
           },
           { once: true },
         );
+        if (lane === "log" || asked) wake?.();
         void pump();
       });
     },
