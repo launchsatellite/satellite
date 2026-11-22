@@ -283,6 +283,7 @@ const pullRequestCheck = z.strictObject({
 export const hiddenReason = z.enum([
   "abuse",
   "duplicate",
+  "low-quality",
   "off-topic",
   "outdated",
   "resolved",

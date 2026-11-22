@@ -646,10 +646,11 @@ describe("parseThreads", () => {
           ],
         },
         comments: {
-          totalCount: 2,
+          totalCount: 3,
           nodes: [
             comment({ isMinimized: true, minimizedReason: "OFF_TOPIC", body: "x" }),
             comment({ isMinimized: true, minimizedReason: "<b>made up</b>", body: "y" }),
+            comment({ isMinimized: true, minimizedReason: "low-quality", body: "w" }),
           ],
         },
         reviewThreads: {
@@ -667,7 +668,11 @@ describe("parseThreads", () => {
       place,
     );
     expect(detail?.reviews[0]).toMatchObject({ hidden: true, hiddenReason: "spam", body: "" });
-    expect(detail?.comments.map((one) => one.hiddenReason)).toEqual(["off-topic", null]);
+    expect(detail?.comments.map((one) => one.hiddenReason)).toEqual([
+      "off-topic",
+      null,
+      "low-quality",
+    ]);
     expect(detail?.threads[0]?.comments[0]).toMatchObject({
       hidden: true,
       hiddenReason: "abuse",
