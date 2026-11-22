@@ -30,6 +30,7 @@ export type CreationStep = z.output<typeof creationStep>;
 export type LossView = z.output<typeof lossView>;
 export type ToolState = z.output<typeof toolState>;
 export type GhState = z.output<typeof ghState>;
+export type ClaudeState = z.output<typeof claudeState>;
 export type ToolCheck = z.output<typeof toolCheck>;
 export type GhTokenVariable = z.output<typeof ghTokenVariable>;
 export type InstallFix = z.output<typeof installFix>;
@@ -399,7 +400,13 @@ export const ghState = z.discriminatedUnion("state", [
   z.strictObject({ state: z.literal("signed-out"), reason: z.enum(["none", "failed"]) }),
   z.strictObject({ state: z.literal("token-refused"), variable: ghTokenVariable }),
 ]);
-export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: toolState });
+export const claudeState = z.discriminatedUnion("state", [
+  toolReady,
+  toolMissing,
+  toolBroken,
+  toolReady.extend({ state: z.literal("too-old"), minimum: z.string().min(1).max(20) }),
+]);
+export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: claudeState });
 export const defaultInterfaceState: InterfaceState = {
   selected: null,
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
@@ -749,7 +756,12 @@ export const bridgeEvents = {
       .max(2 ** 32 - 1),
     ending: sessionEnding,
   }),
-  "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus, ready: z.boolean() }),
+  "sessions.status": z.strictObject({
+    id: terminalId,
+    status: sessionStatus,
+    ready: z.boolean(),
+    hooksOff: z.boolean(),
+  }),
   "notices.open": z.strictObject({ workspace: workspaceRef }),
   "pullRequests.needing": z.strictObject({
     needing: z

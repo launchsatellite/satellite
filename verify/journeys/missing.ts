@@ -3,11 +3,13 @@ import { chmod, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import { promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
+import { claudePids, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const missing = "Satellite can't find Claude Code. Install it, then start it again.";
 const noSession = "No Claude Code session here yet.";
+const tooOld =
+  "Claude Code 2.1.10 is older than the 2.1.78 Satellite needs. Update it, then start it again.";
 const banner = "Claude Code is here now";
 const tabs = '[data-testid^="session-tab-"]';
 
@@ -70,4 +72,25 @@ async function run(session: AppSession): Promise<void> {
   assert.equal(leftover, undefined, `the temp folder ${String(leftover)} was left behind`);
 }
 
-export const missingJourney: Journey = { name: "missing", scenario: "claude-missing", run };
+async function outdated(session: AppSession): Promise<void> {
+  const { page } = session;
+  await session.answerFolderDialog(session.repo);
+  await page.keyboard.press(`${commandModifier}+O`);
+  await page.getByTestId("workspace-repo-main").click({ timeout: promptTimeoutMs });
+  await page.getByTestId("start-claude").click({ timeout: promptTimeoutMs });
+  await emptyReads(session, tooOld, "with Claude Code too old,");
+  const fix = page.getByTestId("claude-missing-fix");
+  await visible(session, "claude-missing-fix", "with Claude Code too old");
+  assert.equal(await fix.innerText(), "claude update", "the step for a Claude Code too old");
+  await tabCount(session, 0, "with Claude Code too old,");
+  assert.deepEqual(await claudePids(session), [], "a Claude Code too old ran as a session");
+  const { leftover } = await session.close();
+  assert.equal(leftover, undefined, `the temp folder ${String(leftover)} was left behind`);
+}
+
+export const missingJourney: Journey = {
+  name: "missing",
+  scenario: "claude-missing",
+  run,
+  then: [{ name: "missing", scenario: "claude-outdated", run: outdated }],
+};

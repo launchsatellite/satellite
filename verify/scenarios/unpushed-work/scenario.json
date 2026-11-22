@@ -39,7 +39,7 @@
     }
   ],
   "claude": {
-    "version": "2.0.0 (Claude Code stand-in)",
+    "version": "2.1.78 (Claude Code stand-in)",
     "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
   }
 }

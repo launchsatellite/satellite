@@ -3,7 +3,10 @@ import { readFile, readdir, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { z } from "zod";
-import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
+import {
+  hooksOffNote,
+  sendToClaudeCodeEvent,
+} from "../../src/renderer/sessions/send-to-claude-code.ts";
 import { type AppSession, pasteIntoFocus } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
@@ -626,4 +629,74 @@ async function run(session: AppSession): Promise<void> {
   );
 }
 
-export const sessionsJourney: Journey = { name: "sessions", scenario: "needs-permission", run };
+async function hookCount(session: AppSession): Promise<number> {
+  return (await session.standInEvents()).filter((event) => event.type === "hook").length;
+}
+
+async function interrupts(session: AppSession): Promise<void> {
+  const { page } = session;
+  await select(session, "alpha");
+  await startClaude(session, 1);
+  await promptWith(session, "one", "in the first prompt");
+  await stateIs(session, "session-tab-1", "working", "after the first prompt");
+  const before = await hookCount(session);
+  await page.keyboard.press("Escape");
+  await terminalShows(session, "Interrupted.", "after Escape stopped the turn");
+  await stateIs(session, "session-tab-1", "idle", "once the turn stayed quiet after Escape");
+  assert.equal(await hookCount(session), before, "a hook arrived after the interrupt");
+
+  await promptWith(session, "two", "in the second prompt");
+  await stateIs(session, "session-tab-1", "needs-you", "after the permission request");
+  const asked = await hookCount(session);
+  await page.keyboard.press("Escape");
+  await stateIs(session, "session-tab-1", "idle", "after Escape declined");
+  assert.equal(await hookCount(session), asked, "a hook arrived before Escape turned the tab");
+  await stateIs(session, pixel("alpha"), "idle", "after Escape declined, in the sidebar");
+
+  await promptWith(session, "three", "in the third prompt");
+  await stateIs(session, "session-tab-1", "working", "after the third prompt");
+  await page.keyboard.press("Escape");
+  await hooksReach(session, "PostToolUse", 1);
+  await stateIs(session, "session-tab-1", "working", "while a tool finished after Escape");
+  await stateIs(session, "session-tab-1", "idle", "once the turn stayed quiet after the tool");
+  await promptWith(session, "four", "in the fourth prompt");
+  await stateIs(session, "session-tab-1", "working", "after the fourth prompt");
+  const { leftover } = await session.close();
+  assert.equal(leftover, undefined, `the temp folder ${String(leftover)} was left behind`);
+}
+
+async function hooksOff(session: AppSession): Promise<void> {
+  const { page } = session;
+  await select(session, "alpha");
+  await startClaude(session, 1);
+  await promptWith(session, "one", "in a session without hooks");
+  const tab = page.getByTestId("session-tab-1");
+  await waitUntil(
+    async () => (await tab.getAttribute("data-hooks-off")) !== null,
+    promptTimeoutMs,
+    "the tab never said hooks are off while Claude Code worked without one",
+  );
+  assert.equal(await tab.getAttribute("title"), hooksOffNote, "the tab's tooltip");
+  await stateIs(session, "session-tab-1", "idle", "with hooks off");
+  await terminalShows(session, "Done.", "after the work without hooks");
+  await send(page, "later");
+  await toastReads(
+    session,
+    `${hooksOffNote} Type this one yourself.`,
+    "after a send with hooks off,",
+  );
+  assert.equal(await hookCount(session), 0, "a hook arrived in a session without hooks");
+  await session.screenshot("sessions-hooks-off");
+  const { leftover } = await session.close();
+  assert.equal(leftover, undefined, `the temp folder ${String(leftover)} was left behind`);
+}
+
+export const sessionsJourney: Journey = {
+  name: "sessions",
+  scenario: "needs-permission",
+  run,
+  then: [
+    { name: "sessions", scenario: "interrupts", run: interrupts },
+    { name: "sessions", scenario: "hooks-off", run: hooksOff },
+  ],
+};

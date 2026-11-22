@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BridgeResult,
+  ClaudeState,
   GhState,
   InstallFix,
   ToolCheck,
@@ -46,8 +47,14 @@ function installRow(fix: InstallFix): Row {
   };
 }
 
-function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
+function rowOf(tool: CheckedTool, state: ToolState | GhState | ClaudeState): Row {
   switch (state.state) {
+    case "too-old":
+      return {
+        ready: false,
+        detail: `${state.version} found. Satellite needs ${state.minimum} or newer.`,
+        fix: { lead: leads.command, text: "claude update" },
+      };
     case "missing":
       return installRow(state.fix);
     case "broken":

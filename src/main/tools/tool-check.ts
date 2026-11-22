@@ -1,4 +1,4 @@
-import type { GhState, ToolCheck, ToolState } from "../../shared/bridge-contract.ts";
+import type { ClaudeState, GhState, ToolCheck, ToolState } from "../../shared/bridge-contract.ts";
 import { installCommand } from "../platform/install-commands.ts";
 import { runTool, type Tool } from "../platform/tools.ts";
 import { parseGhAuthStatus, type GhSignIn } from "./gh-auth.ts";
@@ -7,6 +7,7 @@ const versionTimeoutMs = 5000;
 const authTimeoutMs = 10_000;
 const versionLimit = 200;
 const firstWithActive = [2, 40, 0];
+const claudeMinimum = [2, 1, 78];
 
 let running: Promise<ToolCheck> | undefined;
 
@@ -47,16 +48,25 @@ async function checkGh(): Promise<GhState> {
   return { state: "signed-out", reason: signIn.state };
 }
 
+export async function checkClaude(): Promise<ClaudeState> {
+  const version = await versionOf("claude");
+  if (version.state !== "ready" || atLeast(version.version, claudeMinimum)) return version;
+  return { state: "too-old", version: version.version, minimum: claudeMinimum.join(".") };
+}
+
 async function readTools(): Promise<ToolCheck> {
-  const [git, gh, claude] = await Promise.all([versionOf("git"), checkGh(), versionOf("claude")]);
+  const [git, gh, claude] = await Promise.all([versionOf("git"), checkGh(), checkClaude()]);
   return { git, gh, claude };
 }
 
+function atLeast(version: string, minimum: readonly number[]): boolean {
+  const parts = version.split(".").map(Number);
+  const index = minimum.findIndex((part, at) => (parts[at] ?? 0) !== part);
+  return index === -1 || (parts[index] ?? 0) > (minimum[index] ?? 0);
+}
+
 export function authStatusArguments(ghVersion: string): string[] {
-  const parts = ghVersion.split(".").map(Number);
-  const index = firstWithActive.findIndex((part, at) => (parts[at] ?? 0) !== part);
-  const supported = index === -1 || (parts[index] ?? 0) > (firstWithActive[index] ?? 0);
-  return supported ? ["auth", "status", "--active"] : ["auth", "status"];
+  return atLeast(ghVersion, firstWithActive) ? ["auth", "status", "--active"] : ["auth", "status"];
 }
 
 export function versionNumber(line: string): string {
