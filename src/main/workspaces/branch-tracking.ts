@@ -1,5 +1,5 @@
 import type { ToolRun } from "../platform/tools.ts";
-import { gitReadMs, noLazyFetch, runGit } from "./git-command.ts";
+import { gitReadMs, noLazyFetch, runGit, storedObjects } from "./git-command.ts";
 
 interface Tracking {
   ahead: number;
@@ -35,7 +35,7 @@ export async function countUnpushed(root: string, branch: string): Promise<numbe
     ["rev-list", "--count", `refs/heads/${branch}`, "--not", "--remotes", "--"],
     gitReadMs,
     undefined,
-    { gitVariables: noLazyFetch },
+    { gitVariables: storedObjects },
   );
   return run?.exitCode === 0 ? parseCount(run.stdout) : null;
 }
@@ -68,7 +68,7 @@ export async function readTracking(
     ],
     gitReadMs,
     undefined,
-    { gitVariables: noLazyFetch },
+    { gitVariables: storedObjects },
   );
   if (run?.exitCode !== 0) return tracking;
   for (const line of run.stdout.split("\n")) {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseCount, parseTrack, readTracking } from "./branch-tracking.ts";
+import { countUnpushed, parseCount, parseTrack, readTracking } from "./branch-tracking.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -93,5 +93,25 @@ describe("readTracking", { timeout: 30_000 }, () => {
     );
     expect(await readTracking(repo, [])).toEqual(new Map());
     expect(await readTracking(join(base, "absent"), ["main"])).toEqual(new Map());
+  });
+
+  it("counts the stored commits, whatever a replace ref says", async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), "satellite-tracking-")));
+    const repo = join(base, "repo");
+    const config = join(base, "gitconfig");
+    await writeFile(config, "[user]\n\tname = Satellite Test\n\temail = test@example.invalid\n");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", config);
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+    const git = (args: string[]) =>
+      run("git", ["-C", repo, ...args], { env: gitEnvironment(config) });
+    await run("git", ["init", "-q", "-b", "main", repo], { env: gitEnvironment(config) });
+    await git(["commit", "-q", "--allow-empty", "-m", "one"]);
+    await git(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    await git(["checkout", "-q", "-b", "work"]);
+    await git(["commit", "-q", "--allow-empty", "-m", "two"]);
+    await git(["branch", "--set-upstream-to=main", "work"]);
+    await git(["replace", "work", "main"]);
+    expect(await countUnpushed(repo, "work")).toBe(1);
+    expect((await readTracking(repo, ["work"])).get("work")).toEqual({ ahead: 1, behind: 0 });
   });
 });
