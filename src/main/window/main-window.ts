@@ -1,8 +1,10 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, nativeTheme } from "electron";
+import { overlayStyle, titleBarSetup } from "../platform/title-bar.ts";
 import { quitButton, quitQuestion } from "./quit-question.ts";
 import { runsQuietly } from "./verification.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
+import { setWindowFrame } from "./window-frame.ts";
 
 let created: BrowserWindow | undefined;
 
@@ -35,6 +37,7 @@ export async function createMainWindow(
   leaving: () => boolean,
 ): Promise<BrowserWindow> {
   const quiet = runsQuietly();
+  const titleBar = titleBarSetup(nativeTheme.shouldUseDarkColors);
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -43,6 +46,7 @@ export async function createMainWindow(
     title: "Satellite",
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#08080A" : "#FFFFFF",
+    ...titleBar.options,
     webPreferences: {
       ...secureWebPreferences(join(import.meta.dirname, "../preload/preload.cjs")),
       backgroundThrottling: !quiet,
@@ -50,6 +54,25 @@ export async function createMainWindow(
   });
   created = window;
   window.setMenuBarVisibility(false);
+  const frame = (fullScreen: boolean) => {
+    setWindowFrame({ frame: titleBar.frame, fullScreen });
+  };
+  frame(window.isFullScreen());
+  window.on("enter-full-screen", () => {
+    frame(true);
+  });
+  window.on("leave-full-screen", () => {
+    frame(false);
+  });
+  if (titleBar.frame === "overlay") {
+    const recolour = () => {
+      if (!window.isDestroyed()) window.setTitleBarOverlay(overlayStyle(nativeTheme.shouldUseDarkColors));
+    };
+    nativeTheme.on("updated", recolour);
+    window.once("closed", () => {
+      nativeTheme.off("updated", recolour);
+    });
+  }
   window.on("close", (event) => {
     if (leaving()) return;
     event.preventDefault();
