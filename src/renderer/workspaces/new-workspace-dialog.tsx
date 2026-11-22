@@ -87,6 +87,12 @@ function defaultLabel(start: StartView, project: string): string {
   return `The commit ${project} is on now`;
 }
 
+function otherStarts<T extends { ref: string }>(branches: readonly T[], start: StartView): T[] {
+  if (start.kind !== "local" || start.branch === null) return [...branches];
+  const current = `refs/heads/${start.branch}`;
+  return branches.filter((branch) => branch.ref !== current);
+}
+
 function chosenStart(value: string): StartChoice {
   return value === defaultStart ? { kind: "default" } : { kind: "ref", ref: value };
 }
@@ -342,7 +348,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
               <option value={defaultStart}>
                 {visibleLabel(defaultLabel(startView, project.name))}
               </option>
-              {phase.prepared.branches.map((branch) => (
+              {otherStarts(phase.prepared.branches, startView).map((branch) => (
                 <option key={branch.ref} value={branch.ref}>
                   {visibleLabel(branch.label)}
                 </option>
