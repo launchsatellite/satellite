@@ -1,7 +1,7 @@
 # Command guards. Every shell command an agent runs is matched against these rules first.
 # Format   <deny|ask|merge> <extended regex> => <reason shown to the agent>
 # Matching is case-insensitive, deny rules win over ask rules, reasons are plain text without quotes.
-# A merge rule denies unless the maintainer created guards/merge-granted on this machine.
+# A merge rule denies unless the maintainer created ~/.config/satellite/merge-granted on this machine.
 # Add a rule, then add a case to guards/test.sh and run it.
 
 deny git[^;&|]*[[:space:]]push[^;&|]*[[:space:]:+](main|master)([[:space:]]|$) => Never push to main. Push your branch and open a pull request.
@@ -10,7 +10,7 @@ deny --no-verify|core[.]hookspath|git[^;&|]*[[:space:]]commit[^;&|]*[[:space:]]-
 deny gh[[:space:]]+pr[[:space:]]+review[^;&|]*(--approve|[[:space:]]-a([[:space:]]|$)) => A human approves every pull request.
 merge gh[[:space:]]+pr[[:space:]]+merge|gh[[:space:]]+api[^;&|]*/merge => A human merges every pull request, unless the maintainer granted merging on this machine (CONTRIBUTING.md).
 deny gh[[:space:]]+repo[[:space:]]+(edit|delete)|gh[[:space:]]+auth[[:space:]]+token => Repository settings and tokens belong to the maintainer.
-deny (>|(^|[[:space:];&|(])(tee|touch|rm|mv|cp|ln|chmod|truncate)[[:space:]]|sed[[:space:]]+-[a-z]*i|git[[:space:]]+(rm|mv|checkout|restore)[[:space:]])[^;&|]*(guards/|[.]githooks/|[.]claude/settings) => Guard files belong to the maintainer. Propose the change in your report.
+deny (>|(^|[[:space:];&|(])(tee|touch|rm|mv|cp|ln|chmod|truncate)[[:space:]]|sed[[:space:]]+-[a-z]*i|git[[:space:]]+(rm|mv|checkout|restore)[[:space:]])[^;&|]*(guards/|[.]githooks/|[.]claude/settings|merge-granted) => Guard files belong to the maintainer. Propose the change in your report.
 deny (^|[^a-z0-9_.-])[.]env($|[^a-z0-9_.-]|[.](local|dev|development|prod|production|staging|test))|[.]secrets/ => Env files and .secrets/ stay out of agent transcripts.
 deny claude[^;&|]*(--dangerously-skip-permissions|bypasspermissions) => Never start an agent with its permissions off.
 

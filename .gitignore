@@ -10,9 +10,6 @@
 .claude/settings.local.json
 .claude/worktrees/
 
-# the maintainer's grant that lets agents on this machine merge, never committed
-/guards/merge-granted
-
 # os and editors
 .DS_Store
 Thumbs.db
