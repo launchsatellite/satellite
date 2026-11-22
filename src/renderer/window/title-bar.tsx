@@ -2,14 +2,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { WindowFrame } from "../../shared/bridge-contract.ts";
 import { titleBar } from "../../shared/title-bar.ts";
 import { visibleText } from "../../shared/visible-text.ts";
-import { subscribe } from "../bridge/bridge-client.ts";
+import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 
 interface TitleBarProps {
-  initial: WindowFrame;
+  initial: WindowFrame | null;
   covered: boolean;
-  place: { project: string; workspace: string } | null;
+  place: { project: string; workspace: string | null } | null;
   waiting: number;
   sidebarShown: boolean;
   sidebarId: string;
@@ -39,10 +39,13 @@ function PlaceTitle({ place }: { place: TitleBarProps["place"] }) {
     );
   }
   const shortcut = commandShortcut(switcher);
-  const name = `${visibleText(place.project)} / ${visibleText(place.workspace)}`;
+  const name =
+    place.workspace === null
+      ? visibleText(place.project)
+      : `${visibleText(place.project)} / ${visibleText(place.workspace)}`;
   const label = `${name}, ${switcher.title.toLowerCase()}`;
   return (
-    <Control>
+    <span className="flex min-w-0 [app-region:no-drag]">
       <button
         type="button"
         data-testid="title-place"
@@ -54,20 +57,30 @@ function PlaceTitle({ place }: { place: TitleBarProps["place"] }) {
         <span className="min-w-[3ch] truncate font-semibold text-fg">
           <VisibleName text={place.project} />
         </span>
-        <span aria-hidden="true" className="flex-none text-dim">
-          /
-        </span>
-        <span dir="ltr" className="min-w-[3ch] truncate text-fg2 [unicode-bidi:isolate]">
-          <VisibleName text={place.workspace} />
-        </span>
+        {place.workspace !== null && (
+          <>
+            <span aria-hidden="true" className="flex-none text-dim">
+              /
+            </span>
+            <span className="min-w-[3ch] truncate text-fg2">
+              <VisibleName text={place.workspace} />
+            </span>
+          </>
+        )}
       </button>
-    </Control>
+    </span>
   );
 }
 
-function useWindowFrame(initial: WindowFrame): WindowFrame {
+function useWindowFrame(initial: WindowFrame | null): WindowFrame | null {
   const [frame, setFrame] = useState(initial);
-  useEffect(() => subscribe("window.frame", setFrame), []);
+  useEffect(() => {
+    const stop = subscribe("window.frame", setFrame);
+    void invoke("window.frame", {}).then((answer) => {
+      if (answer.ok) setFrame(answer.value);
+    });
+    return stop;
+  }, []);
   return frame;
 }
 
@@ -79,8 +92,13 @@ export function TitleBar({
   sidebarShown,
   sidebarId,
 }: TitleBarProps) {
-  const { frame, fullScreen } = useWindowFrame(initial);
+  const shown = useWindowFrame(initial);
+  const frame = shown?.frame ?? "unknown";
   const drags = frame !== "native" && !covered;
+  const lightsRoom =
+    (frame === "inset" || frame === "unknown") && shown?.fullScreen !== true
+      ? titleBar.trafficLightRoom
+      : undefined;
   const sidebarTitle = sidebarShown ? "Hide the sidebar" : "Show the sidebar";
   return (
     <header
@@ -90,15 +108,15 @@ export function TitleBar({
       className={`flex-none border-b border-line bg-side select-none ${drags ? "[app-region:drag]" : ""}`}
     >
       <div
-        className="grid grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 px-2"
+        className="grid grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center px-2"
         style={{
           height: titleBar.height - 1,
-          marginLeft: frame === "overlay" ? "env(titlebar-area-x, 0px)" : undefined,
-          width: frame === "overlay" ? "env(titlebar-area-width, 100%)" : undefined,
-          paddingLeft: frame === "inset" && !fullScreen ? titleBar.trafficLightRoom : undefined,
+          marginLeft: "env(titlebar-area-x, 0px)",
+          width: "env(titlebar-area-width, 100%)",
+          paddingLeft: lightsRoom,
         }}
       >
-        <span className="flex min-w-0 items-center">
+        <span className="flex items-center">
           <Control>
             <CommandButton
               command="sidebar.toggle"
@@ -113,10 +131,10 @@ export function TitleBar({
             />
           </Control>
         </span>
-        <span className="flex min-w-0 justify-center">
+        <span className="flex min-w-0 justify-center px-6">
           <PlaceTitle place={place} />
         </span>
-        <span className="flex min-w-0 items-center justify-end gap-1">
+        <span className="flex items-center justify-end gap-1">
           <Control>
             <CommandButton
               command="inbox.newest"

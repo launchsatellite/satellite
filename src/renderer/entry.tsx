@@ -28,7 +28,7 @@ createRoot(rootElement).render(
   <StrictMode>
     <AppWindow
       initial={loaded.ok ? loaded.value.state : { ...defaultInterfaceState, guideSeen: true }}
-      frame={frame.ok ? frame.value : { frame: "native", fullScreen: false }}
+      frame={frame.ok ? frame.value : null}
       notice={loaded.ok ? loaded.value.notice : loaded.error.message}
     />
   </StrictMode>,
