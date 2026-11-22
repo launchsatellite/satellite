@@ -20,7 +20,7 @@ npm ci
 3. `./scripts/check` passes locally and in CI.
 4. The change fixes every doc, spec and skill it made wrong, in the same pull request.
 5. A finished branch gets an independent review, then a pull request with the template filled in and a conventional-commit title.
-6. **A human merges it.** Pull requests are squash-merged, so the title becomes the one commit on `main`. A maintainer who wants agents to merge their own green pull requests on a machine creates the empty file `guards/merge-granted` there. It is never committed, and deleting it takes the grant back.
+6. **A human merges it.** Pull requests are squash-merged, so the title becomes the one commit on `main`. A maintainer who wants agents to merge their own green pull requests on a machine creates the empty file `~/.config/satellite/merge-granted` there. It lives outside the repo, and deleting it takes the grant back.
 
 Tests are written only where they catch a real, likely failure. Most proof comes from running the real app.
 
