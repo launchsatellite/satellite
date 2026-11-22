@@ -22,7 +22,28 @@ export function windowInFront(): boolean {
   return window !== undefined && window.isVisible() && !window.isMinimized() && window.isFocused();
 }
 
-export async function createMainWindow(entryUrl: string): Promise<BrowserWindow> {
+export async function askToQuit(sessions: number): Promise<boolean> {
+  const window = mainWindow();
+  if (sessions === 0 || window === undefined) return true;
+  const { response } = await dialog.showMessageBox(window, {
+    type: "warning",
+    message:
+      sessions === 1
+        ? "1 Claude Code session is running"
+        : `${String(sessions)} Claude Code sessions are running`,
+    detail:
+      "Quitting Satellite ends them and anything they started. Each workspace offers to resume its conversation next time.",
+    buttons: ["Quit Satellite", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  return response === 0;
+}
+
+export async function createMainWindow(
+  entryUrl: string,
+  leaving: () => boolean,
+): Promise<BrowserWindow> {
   const quiet = runsQuietly();
   const window = new BrowserWindow({
     width: 1440,
@@ -38,6 +59,12 @@ export async function createMainWindow(entryUrl: string): Promise<BrowserWindow>
     },
   });
   created = window;
+  window.setMenuBarVisibility(false);
+  window.on("close", (event) => {
+    if (leaving()) return;
+    event.preventDefault();
+    app.quit();
+  });
   if (!quiet) {
     window.once("ready-to-show", () => {
       window.show();

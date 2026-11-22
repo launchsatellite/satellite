@@ -43,11 +43,17 @@ import {
 } from "./window/app-protocol.ts";
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
-import { bringToFront, createMainWindow, mainWindow, windowInFront } from "./window/main-window.ts";
+import {
+  askToQuit,
+  bringToFront,
+  createMainWindow,
+  mainWindow,
+  windowInFront,
+} from "./window/main-window.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
-import { prepareVerification } from "./window/verification.ts";
+import { prepareVerification, startedByDriver } from "./window/verification.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -69,6 +75,8 @@ interface Parts {
 }
 
 const ptyKillAgent = "conpty_console_list_agent";
+
+let leaving = false;
 
 async function start({
   changes,
@@ -118,7 +126,7 @@ async function start({
     },
     allowedOrigin(entryUrl),
   );
-  const window = await createMainWindow(entryUrl);
+  const window = await createMainWindow(entryUrl, () => leaving);
   window.on("focus", () => {
     windowTookFocus(() => {
       notices.seen();
@@ -251,8 +259,13 @@ if (parts !== undefined) {
 app.on(
   "before-quit",
   createQuitGate(
+    () =>
+      startedByDriver() || parts === undefined
+        ? Promise.resolve(true)
+        : askToQuit(parts.terminals.roots().length),
     () => settleForQuit(parts, quitBoundMs),
     () => {
+      leaving = true;
       app.quit();
     },
   ),
