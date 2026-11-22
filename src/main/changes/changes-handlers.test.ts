@@ -1,5 +1,13 @@
 import { execFile } from "node:child_process";
-import { appendFile, mkdir, mkdtemp, readFile, realpath, unlink, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -254,7 +262,8 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     const page = ownerOf(1);
     const view = "uncommitted";
     await changes.handlers["changes.list"]({ workspace, view }, page);
-    const sides = (path: string) => changes.handlers["changes.file"]({ workspace, view, path }, page);
+    const sides = (path: string) =>
+      changes.handlers["changes.file"]({ workspace, view, path }, page);
     expect(await sides("plain.txt")).toEqual({
       kind: "text",
       original: "a\nb\n",

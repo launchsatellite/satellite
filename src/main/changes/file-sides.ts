@@ -363,7 +363,9 @@ async function convertsOnCommit(folder: string, path: string, signal?: AbortSign
   if (listed === undefined || attribute === "-text") return false;
   if (attribute.startsWith("text") && !attribute.startsWith("text=auto")) return true;
   if (attribute === "") {
-    const autocrlf = stdoutOf(await gitOutput(folder, ["config", "--get", "core.autocrlf"], signal));
+    const autocrlf = stdoutOf(
+      await gitOutput(folder, ["config", "--get", "core.autocrlf"], signal),
+    );
     if (!autocrlfOn.test(autocrlf?.trim() ?? "")) return false;
   }
   return convertedOnDisk.has(worktree) && !convertedOnDisk.has(index) && index !== "-text";
