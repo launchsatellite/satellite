@@ -34,5 +34,7 @@ export function withToast(
 }
 
 export function afterDismiss(queue: readonly QueuedToast[], now: number): QueuedToast[] {
-  return queue.slice(1).filter((queued) => now - queued.queuedAt <= longestWaitMs);
+  return queue
+    .slice(1)
+    .filter((queued) => queued.tone !== "info" || now - queued.queuedAt <= longestWaitMs);
 }

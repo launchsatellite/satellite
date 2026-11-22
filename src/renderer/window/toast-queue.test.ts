@@ -9,6 +9,16 @@ describe("toast queue", () => {
     expect(afterDismiss(queue, 12_000).map((toast) => toast.message)).toEqual(["fresh"]);
   });
 
+  it("never drops a late notice, only a plain confirmation", () => {
+    let queue = withToast([], "first", "info", 0);
+    queue = withToast(queue, "stale", "info", 0);
+    queue = withToast(queue, "forgot a workspace", "notice", 0);
+    queue = withToast(queue, "also stale", "info", 0);
+    expect(afterDismiss(queue, 12_000).map((toast) => toast.message)).toEqual([
+      "forgot a workspace",
+    ]);
+  });
+
   it("puts an error in front, replacing the error already shown", () => {
     let queue = withToast([], "note", "info", 0);
     queue = withToast(queue, "broke", "error", 1);

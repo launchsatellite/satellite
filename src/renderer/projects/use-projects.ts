@@ -45,8 +45,8 @@ export function useProjects(notify: Notify): {
           return { files: false, key: "" };
         }
         failing = false;
-        if (result.value.notice !== null) notify(result.value.notice, "info");
-        for (const sentence of result.value.dropped) notify(sentence, "info");
+        if (result.value.notice !== null) notify(result.value.notice, "notice");
+        for (const sentence of result.value.dropped) notify(sentence, "notice");
         if (startedAt === changes.current) {
           const key = JSON.stringify(result.value.projects);
           setProjects((current) =>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "./button.tsx";
 
-export type ToastTone = "info" | "error";
+export type ToastTone = "info" | "notice" | "error";
 export type Notify = (message: string, tone: ToastTone) => void;
 
 interface ToastProps {

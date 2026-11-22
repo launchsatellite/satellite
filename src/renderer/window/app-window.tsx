@@ -112,7 +112,7 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
   const [toasts, setToasts] = useState<QueuedToast[]>(() =>
-    notice === null ? [] : [{ id: 1, message: notice, tone: "info", queuedAt: Date.now() }],
+    notice === null ? [] : [{ id: 1, message: notice, tone: "notice", queuedAt: Date.now() }],
   );
   const notify = useCallback<Notify>((message, tone) => {
     setToasts((queue) => withToast(queue, message, tone, Date.now()));
@@ -614,7 +614,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                 true,
               );
               refresh();
-              notify(forgotSentence(String(removableName), forgot), "info");
+              notify(forgotSentence(String(removableName), forgot), "notice");
               focusSidebarIfLost();
             },
           },
