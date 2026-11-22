@@ -65,6 +65,7 @@ interface Remembered {
 
 interface Running {
   detail: boolean;
+  asker: { owner: BridgeOwner };
   answer: Promise<PullRequestAnswer>;
 }
 
@@ -426,6 +427,7 @@ export function createPullRequests({
     const controller = new AbortController();
     const read: ActiveRead = { controller, folder, done: Promise.resolve() };
     active.add(read);
+    const asker = { owner };
     const answer = (async () => {
       const result = await readView(
         folder,
@@ -434,7 +436,7 @@ export function createPullRequests({
         memory.get(key)?.verified ?? null,
       );
       controller.signal.throwIfAborted();
-      remember(key, { folder, workspace, owner }, result);
+      remember(key, { folder, workspace, owner: asker.owner }, result);
       return result.answer;
     })().finally(() => {
       active.delete(read);
@@ -444,7 +446,7 @@ export function createPullRequests({
       () => undefined,
       () => undefined,
     );
-    const entry = { detail, answer };
+    const entry = { detail, asker, answer };
     running.set(key, entry);
     return entry;
   };
@@ -517,7 +519,10 @@ export function createPullRequests({
           await joined.answer.catch(() => undefined);
           joined = running.get(key);
         }
-        if (joined !== undefined && (joined.detail || !detail)) return joined.answer;
+        if (joined !== undefined && (joined.detail || !detail)) {
+          joined.asker.owner = owner;
+          return joined.answer;
+        }
         const held = memory.get(key);
         if (held !== undefined) {
           if (held.owner !== owner) {

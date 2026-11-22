@@ -600,6 +600,21 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     });
   });
 
+  it("sends a reloaded page the needs of a read it joined in flight", async () => {
+    const { answer, reads } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const reloaded = vi.fn<BridgeOwner["emit"]>();
+    const page: BridgeOwner = { id: 3, emit: reloaded, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await Promise.all([
+      read({ workspace: first, detail: false }, owner),
+      read({ workspace: first, detail: false }, page),
+    ]);
+    expect(reloaded).toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
   it("keeps every workspace's needs through a rate limit a queued read meets", async () => {
     const { answer, read, needing, advance } = await setup();
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
