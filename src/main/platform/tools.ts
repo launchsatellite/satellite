@@ -324,7 +324,10 @@ export async function runTool(
       options.signal?.removeEventListener("abort", abort);
     };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
-      output.size += chunk.length;
+      output.size += Buffer.byteLength(
+        chunk,
+        stream === "stdout" && options.bytes === true ? "latin1" : "utf8",
+      );
       if (output.size > outputLimit) {
         stop(new ToolStopped(`${tool} printed more than Satellite reads`, "output"));
       } else output[stream] += chunk;

@@ -83,6 +83,14 @@ describe("resolveTool", () => {
     vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([process.execPath, "stand-in.ts"]));
     expect(await resolveTool("claude")).toEqual({ file: process.execPath, args: ["stand-in.ts"] });
   });
+
+  it("stops a tool at 16 MiB of output counted in bytes, not characters", async () => {
+    const wide = "process.stdout.write('\\u754c'.repeat(6_000_000))";
+    vi.stubEnv("SATELLITE_CLAUDE", JSON.stringify([process.execPath, "-e", wide]));
+    await expect(runTool("claude", [], { timeoutMs: 20_000 })).rejects.toMatchObject({
+      reason: "output",
+    });
+  }, 30_000);
 });
 
 describe("toolEnvironment", () => {
