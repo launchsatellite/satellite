@@ -79,12 +79,15 @@ function startDevServer(): void {
   const script = join(import.meta.dirname, "dev-server.ts");
   if (process.platform === "win32") {
     spawn(
-      process.env["ComSpec"] ?? "cmd.exe",
-      ["/d", "/s", "/c", `""${process.execPath}" "${script}""`],
-      {
-        stdio: "ignore",
-        windowsVerbatimArguments: true,
-      },
+      join(
+        process.env["SystemRoot"] ?? String.raw`C:\Windows`,
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+      ),
+      ["-NoProfile", "-NonInteractive", "-Command", `& '${process.execPath}' '${script}'`],
+      { stdio: "ignore" },
     );
     return;
   }
