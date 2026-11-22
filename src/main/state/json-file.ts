@@ -11,7 +11,8 @@ export type JsonReadOutcome =
   | { kind: "missing" }
   | { kind: "set-aside"; name: string }
   | { kind: "not-moved" }
-  | { kind: "not-read" };
+  | { kind: "not-read" }
+  | { kind: "newer" };
 export interface JsonWriter {
   write(value: unknown): Promise<void>;
   flush(): Promise<void>;
@@ -99,6 +100,12 @@ function parseJson(text: string): { ok: true; json: unknown } | { ok: false } {
   }
 }
 
+function isNewer(json: unknown, newestVersion: number | undefined): boolean {
+  if (newestVersion === undefined || typeof json !== "object" || json === null) return false;
+  const version: unknown = Reflect.get(json, "version");
+  return Number.isSafeInteger(version) && Number(version) > newestVersion;
+}
+
 function isSmallRegularFile(info: Stats): boolean {
   return info.isFile() && info.size <= maxFileBytes;
 }
@@ -150,6 +157,7 @@ export async function readJsonFile<T>(
   file: string,
   schema: z.ZodType<T>,
   fallback: T,
+  newestVersion?: number,
 ): Promise<{ value: T; outcome: JsonReadOutcome }> {
   await removeLeftovers(file);
   let text: string;
@@ -162,6 +170,9 @@ export async function readJsonFile<T>(
     return { value: fallback, outcome: { kind: "not-read" } };
   }
   const parsedJson = parseJson(text);
+  if (parsedJson.ok && isNewer(parsedJson.json, newestVersion)) {
+    return { value: fallback, outcome: { kind: "newer" } };
+  }
   const parsed = parsedJson.ok ? schema.safeParse(parsedJson.json) : undefined;
   if (parsed?.success === true) return { value: parsed.data, outcome: { kind: "read" } };
   return { value: fallback, outcome: await setAside(file) };

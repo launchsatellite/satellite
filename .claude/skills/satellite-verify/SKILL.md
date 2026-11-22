@@ -151,6 +151,7 @@ Before trusting a new check, turn its guard off for one run and see the journey 
 | 002 Shell and projects, the first run check with Claude Code missing or gh signed out | `claude-missing`, `not-signed-in` | |
 | 002 Shell and projects, `window.satellite` holding three functions and `projects.drop` refusing a forged relative path | `default` | `boundary` |
 | 002 Shell and projects, a state file cut off mid-write is set aside and the app starts fresh | `corrupt-state` | |
+| 002 Shell and projects, a project list a newer Satellite wrote is left byte for byte as it is, with no projects shown and adding one refused | `newer-state` | |
 | 002 Shell and projects, adding repositories through the dialog and by a drop, refusing other folders and duplicates, the quick switcher, restoring the selection and column width, removing a project with its folder byte for byte unchanged, and a project whose `.git` or whole folder moved away | `two-projects` | `projects` |
 | 003 Workspaces, each workspace in the sidebar with its branch, the commits it has on no remote and its changed files, only the selected one current, removing a project that still has a workspace refused, and the archive dialog listing what would be lost | `unpushed-work` | |
 | 003 Workspaces, making a workspace from the latest default branch or a chosen one, with the files `.worktreeinclude` lists, and a name refused before any step | `fresh-repo` | |

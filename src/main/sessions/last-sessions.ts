@@ -31,7 +31,7 @@ function pairOf(ref: WorkspaceRef): string {
 }
 
 async function readLastSessions(file: string): Promise<Loaded> {
-  const { value, outcome } = await readJsonFile(file, fileSchema, { version: 1, last: [] });
+  const { value, outcome } = await readJsonFile(file, fileSchema, { version: 1, last: [] }, 1);
   if (outcome.kind !== "read" && outcome.kind !== "missing") {
     console.error(
       `sessions.json could not be read (${outcome.kind}), so no session is offered to resume`,
@@ -39,7 +39,8 @@ async function readLastSessions(file: string): Promise<Loaded> {
   }
   return {
     last: value.last,
-    writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
+    writable:
+      outcome.kind !== "not-moved" && outcome.kind !== "not-read" && outcome.kind !== "newer",
   };
 }
 
