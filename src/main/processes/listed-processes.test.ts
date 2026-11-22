@@ -90,6 +90,13 @@ describe("listedProcesses", () => {
     expect(ids(table, [root(7000)], fixtureNow)).toEqual([7003]);
   });
 
+  it("never counts the session's own root as a shell above, even when it is a shell", () => {
+    const table = parsePsTable(
+      [row(100, 1, "10:00:00", "zsh"), row(101, 100, "10:00:01", "node server.js")].join("\n"),
+    );
+    expect(listedProcesses(table, [root(100)], fixtureNow, 5).owned).toEqual([]);
+  });
+
   it("lists nothing under cmd, which launches a tool server on Windows", () => {
     const table = parsePsTable(
       [
