@@ -37,7 +37,7 @@ Hiding the sessions column, a window menu drawn in the strip, and close, minimis
 A Satellite feature is accepted on macOS, Windows and Linux.
 
 - [x] The strip shows the toggle, the centre title and the three buttons, each with its accessible name and tooltip, at the opened size and at 960 by 600, in light and dark. Proof, journey `title-bar`.
-- [x] The centre title names the project and workspace, reads Satellite with nothing selected, writes out a hostile name, keeps a 163 character name between its neighbours with an ellipsis and drag room on both sides at 960 by 600, and opens the switcher. Proof, journey `title-bar`.
+- [x] The centre title names the project and workspace, reads Satellite with nothing selected, writes out a hostile name, keeps a long project and workspace name between its neighbours with an ellipsis and drag room on both sides at 960 by 600, and opens the switcher. Proof, journey `title-bar`.
 - [x] Each right button runs its command and is unavailable exactly when the command is. Proof, journey `title-bar`.
 - [x] Hide the sidebar from the button and the shortcut gives the centre its width, moves focus off the hidden column, comes back after a restart and shows again with Focus the sidebar. Proof, journey `title-bar`.
 - [x] The strip is a drag area with its controls outside it, and drops its drag area under a dialog and the command menu. Proof, journey `title-bar`.

@@ -13,6 +13,7 @@ const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift"
 const shortcut = process.platform === "darwin" ? "⌘" : "Ctrl+Shift+";
 const expectedFrame = process.platform === "darwin" ? "inset" : "overlay";
 const execute = promisify(execFile);
+const longWorkspace = "a-workspace-name-long-enough-to-fill-the-strip";
 const hostileProject = "beta\u202elonrev";
 const shownHostileProject = "beta[U+202E]lonrev";
 
@@ -221,8 +222,33 @@ async function checkSidebar(session: AppSession): Promise<void> {
   await waitUntil(() => sidebarShown(session), waitMs, "the button left it hidden");
 }
 
+function readTitleBarArea(): { left: number; right: number; controls: Box[] } {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:0;left:env(titlebar-area-x,0px);width:env(titlebar-area-width,100%)";
+  document.body.append(probe);
+  const area = probe.getBoundingClientRect();
+  probe.remove();
+  const controls = [
+    "title-sidebar",
+    "title-place",
+    "title-inbox",
+    "title-commands",
+    "title-new-workspace",
+  ].map((testId) => {
+    const box = document.querySelector(`[data-testid='${testId}']`)?.getBoundingClientRect();
+    return { left: box?.left ?? -1, right: box?.right ?? -1 };
+  });
+  return { left: area.left, right: Math.min(area.right, innerWidth), controls };
+}
+
 async function checkSizes(session: AppSession): Promise<void> {
   await session.page.getByTestId("workspace-repo-hostile").click();
+  const area = await session.page.evaluate(readTitleBarArea);
+  assert.ok(
+    area.controls.every((box) => box.left >= area.left && box.right <= area.right),
+    `a strip control sat outside the title bar area ${JSON.stringify(area)}`,
+  );
   for (const theme of ["light", "dark"] as const) {
     await session.page.emulateMedia({ colorScheme: theme });
     await session.page.setViewportSize({ width: 960, height: 600 });
@@ -315,8 +341,14 @@ async function checkLongName(session: AppSession): Promise<void> {
   await session.page.keyboard.press(`${commandModifier}+O`);
   await visible(session, `workspace-${name}-main`, "after adding with the sidebar hidden");
   await session.page.getByTestId(`workspace-${name}-main`).click();
+  await session.page.getByTestId("title-new-workspace").click();
+  await visible(session, "create-workspace", "once New workspace had read the long project");
+  await session.page.getByTestId("workspace-name").fill(longWorkspace);
+  await session.page.keyboard.press("Enter");
+  await visible(session, `workspace-${name}-${longWorkspace}`, "after making the long workspace");
+  await session.page.getByTestId(`workspace-${name}-${longWorkspace}`).click();
   await session.page.setViewportSize({ width: 960, height: 600 });
-  await placeReads(session, name, "on the long project");
+  await placeReads(session, `${name} / ${longWorkspace}`, "on the long workspace");
   const layout = await session.page.evaluate(readStrip);
   assert.ok(
     layout.place.left >= layout.toggle.right && layout.place.right <= layout.inbox.left,
