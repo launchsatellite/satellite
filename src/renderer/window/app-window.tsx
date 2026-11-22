@@ -279,6 +279,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
   const removableId = removable?.id;
+  const removableWorktrees = removable?.worktrees;
   const removableParent =
     removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
@@ -609,7 +610,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: removableId !== undefined,
             run: async () => {
               if (removableId === undefined) return;
-              const worktrees = removable?.worktrees;
               const forgot = await remove(removableId);
               if (forgot === undefined) return;
               forgetProject(removableId);
@@ -621,7 +621,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                 true,
               );
               refresh();
-              notify(forgotSentence(String(removableName), forgot, worktrees), "notice");
+              notify(forgotSentence(String(removableName), forgot, removableWorktrees), "notice");
               focusSidebarIfLost();
             },
           },
@@ -914,6 +914,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     refresh,
     removableId,
     removableName,
+    removableWorktrees,
     notify,
     dismissToast,
     focusSidebarIfLost,

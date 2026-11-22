@@ -39,8 +39,7 @@ function readLine(record: ListedWorktree, label: string, value: string): void {
   else if (label === "locked") {
     record.locked = true;
     record.initializing = value === "initializing";
-  }
-  else if (label === "prunable") record.prunable = true;
+  } else if (label === "prunable") record.prunable = true;
 }
 
 async function listWith(root: string, separator: Separator) {

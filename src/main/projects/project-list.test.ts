@@ -1,6 +1,5 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { once } from "node:events";
 import {
   mkdir,
   mkdtemp,
@@ -499,16 +498,19 @@ describe("createProjects", () => {
       "the repository no longer knows the worktree",
       (repo: string) => [join(repo, ".git", "worktrees", "fix-login")],
     ],
-  ])("forgets workspaces git no longer counts when %s, and keeps their folders", async (_, gone) => {
-    const { home, repo, workspace, projects } = await repoWithWorkspace();
-    for (const path of gone(repo, workspace.path)) await rm(path, { recursive: true });
-    const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
-    expect(
-      await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
-    ).toEqual({ forgotWorkspaces: 1 });
-    expect(await storedWorkspaceIds(home)).toEqual([]);
-    expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
-  });
+  ])(
+    "forgets workspaces git no longer counts when %s, and keeps their folders",
+    async (_, gone) => {
+      const { home, repo, workspace, projects } = await repoWithWorkspace();
+      for (const path of gone(repo, workspace.path)) await rm(path, { recursive: true });
+      const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
+      expect(
+        await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
+      ).toEqual({ forgotWorkspaces: 1 });
+      expect(await storedWorkspaceIds(home)).toEqual([]);
+      expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
+    },
+  );
 
   it("forgets workspaces of a repository another one replaced, and keeps their folders", async () => {
     const { base, home, repo, gitIn, workspace, projects } = await repoWithWorkspace();
@@ -633,7 +635,11 @@ describe("createProjects", () => {
       stdio: "ignore",
       env: { ...process.env, LC_ALL: "C" },
     });
-    const [, signal] = await once(cut, "exit");
+    const signal = await new Promise<NodeJS.Signals | null>((resolve) => {
+      cut.on("exit", (_code, killedBy) => {
+        resolve(killedBy);
+      });
+    });
     expect(signal).toBe("SIGKILL");
     const lock = await readFile(join(repo, ".git", "worktrees", "half-made", "locked"), "utf8");
     expect(lock.trim()).toBe("initializing");
