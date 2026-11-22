@@ -217,7 +217,10 @@ export function Palette({
     restored.current = false;
     const overlay = shell.current;
     behind.current = [...(overlay?.parentElement?.children ?? [])].filter(
-      (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
+      (sibling) =>
+        sibling !== overlay &&
+        !sibling.hasAttribute("inert") &&
+        !sibling.hasAttribute("data-stays-live"),
     );
     for (const sibling of behind.current) sibling.setAttribute("inert", "");
     return restoreFocus;
