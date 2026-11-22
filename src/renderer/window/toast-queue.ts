@@ -28,9 +28,10 @@ export function withToast(
     return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
   }
   const [head, , ...rest] = queue;
-  return queue.length < queueLimit || head === undefined
-    ? [...queue, shown]
-    : [head, ...rest, shown];
+  const room = queue.length < queueLimit || head === undefined ? [...queue] : [head, ...rest];
+  const waiting = room.findIndex((queued, index) => index > 0 && queued.tone === "notice");
+  if (tone === "notice" || waiting < 0) return [...room, shown];
+  return [...room.slice(0, waiting), shown, ...room.slice(waiting)];
 }
 
 export function afterDismiss(queue: readonly QueuedToast[], now: number): QueuedToast[] {

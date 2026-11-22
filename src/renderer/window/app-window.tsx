@@ -25,7 +25,7 @@ import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { fileLinesRequest } from "../files/file-lines.ts";
-import { noFileLinesSentence, notTextSentence } from "../files/file-words.ts";
+import { notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
@@ -853,16 +853,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (filesShown) {
                 if (fileShown === null) return;
                 if (fileShown.kind !== "text") {
-                  notify(notTextSentence, "info");
+                  notify(notTextSentence, "error");
                   return;
                 }
                 const request = fileLinesRequest(fileShown.path, diffSelection());
                 if (request.ok) sendToClaudeCode(request.text);
                 else {
-                  notify(
-                    request.sentence,
-                    request.sentence === noFileLinesSentence ? "info" : "error",
-                  );
+                  notify(request.sentence, "error");
                 }
                 return;
               }

@@ -19,6 +19,23 @@ describe("toast queue", () => {
     ]);
   });
 
+  it("shows a confirmation before notices that wait, so a burst of them never makes it late", () => {
+    let queue = withToast([], "shown", "notice", 0);
+    queue = withToast(queue, "forgot one", "notice", 0);
+    queue = withToast(queue, "forgot two", "notice", 0);
+    queue = withToast(queue, "ready", "info", 1);
+    queue = withToast(queue, "done", "info", 2);
+    queue = withToast(queue, "forgot three", "notice", 3);
+    expect(queue.map((toast) => toast.message)).toEqual([
+      "shown",
+      "ready",
+      "done",
+      "forgot one",
+      "forgot two",
+      "forgot three",
+    ]);
+  });
+
   it("puts an error in front, replacing the error already shown", () => {
     let queue = withToast([], "note", "info", 0);
     queue = withToast(queue, "broke", "error", 1);
