@@ -183,6 +183,8 @@ export function Palette({
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<Element | null>(null);
   const restored = useRef(false);
+  const shell = useRef<HTMLDivElement>(null);
+  const behind = useRef<Element[]>([]);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [shownMode, setShownMode] = useState(mode);
@@ -200,6 +202,8 @@ export function Palette({
   const restoreFocus = () => {
     if (restored.current) return;
     restored.current = true;
+    for (const sibling of behind.current) sibling.removeAttribute("inert");
+    behind.current = [];
     const element = opener.current;
     if (element instanceof HTMLElement && element.isConnected) element.focus();
   };
@@ -211,6 +215,11 @@ export function Palette({
   useLayoutEffect(() => {
     opener.current = document.activeElement;
     restored.current = false;
+    const overlay = shell.current;
+    behind.current = [...(overlay?.parentElement?.children ?? [])].filter(
+      (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
+    );
+    for (const sibling of behind.current) sibling.setAttribute("inert", "");
     return restoreFocus;
   }, []);
   useEffect(() => {
@@ -256,7 +265,7 @@ export function Palette({
   const note = emptyNote(mode, query, files);
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div ref={shell} className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-bg/60" onClick={close} />
       <div
         role="dialog"
