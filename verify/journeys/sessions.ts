@@ -254,9 +254,19 @@ async function firstPrompt(session: AppSession): Promise<number> {
     "",
     "a send while Claude Code asked typed into its question",
   );
+  await stateIs(session, pixel("alpha"), "needs-you", "before a key answered");
+  const hooks = async () =>
+    (await session.standInEvents()).filter((event) => event.type === "hook").length;
+  const hooksBefore = await hooks();
   await page.keyboard.press("1");
-  await stateIs(session, pixel("alpha"), "working", "after a key answered, with no hook yet");
+  await stateIs(session, pixel("alpha"), "working", "after a key answered");
+  assert.equal(await hooks(), hooksBefore, "a hook arrived before the answering key turned alpha");
   await page.keyboard.press("y");
+  await waitUntil(
+    async () => (await hooksAnswered(session, "PostToolUse")) > 0,
+    promptTimeoutMs,
+    "no PostToolUse hook arrived after the approval",
+  );
   await stateIs(session, pixel("alpha"), "working", "after the approval");
   await page.keyboard.press("Enter");
   await stateIs(session, pixel("alpha"), "done", "after the turn ended");
