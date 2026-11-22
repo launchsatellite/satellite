@@ -1,0 +1,45 @@
+{
+  "description": "A repo with one commit on main, a workspace whose branch carries a direction override, a workspace with a long name, a stand-in gh, and a stand-in Claude Code that takes a prompt, asks for permission and finishes once allowed. Satellite is set to the light theme.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":4,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\",\"notifications\":true,\"guideSeen\":true,\"files\":[]}"
+    }
+  ],
+  "workspaces": [
+    { "name": "hostile", "steps": [{ "git": ["switch", "-c", "fix-\u202enigol"] }] },
+    {
+      "name": "a-long-workspace-name-that-meets-the-strip-edge",
+      "steps": []
+    }
+  ],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.1.78 (Claude Code stand-in)",
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      { "print": "> " },
+      { "await": "\r" },
+      { "hook": "UserPromptSubmit" },
+      { "print": "\r\nWorking on it.\r\n" },
+      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
+      { "print": "Allow Bash? Press y to allow.\r\n" },
+      { "await": "y" },
+      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
+      { "hook": "Stop" },
+      { "print": "Done.\r\n> " }
+    ]
+  }
+}
