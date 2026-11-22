@@ -520,7 +520,10 @@ export function createPullRequests({
         if (joined !== undefined && (joined.detail || !detail)) return joined.answer;
         const held = memory.get(key);
         if (held !== undefined) {
-          held.owner = owner;
+          if (held.owner !== owner) {
+            held.owner = owner;
+            tellNeeding();
+          }
           const reused = answerFrom(held, detail, fresh);
           if (reused !== undefined) return reused;
         }
