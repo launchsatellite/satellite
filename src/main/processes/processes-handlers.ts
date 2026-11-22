@@ -31,7 +31,9 @@ interface ProcessesOptions {
   roots: () => readonly RunningRoot[];
   readTable?: () => Promise<ProcessEntry[]>;
   readPorts?: (pids: readonly number[]) => Promise<ListeningPort[]>;
-  readCommandLines?: (pids: readonly number[]) => Promise<Map<number, string>>;
+  readCommandLines?: (
+    entries: readonly Pick<ProcessEntry, "pid" | "started">[],
+  ) => Promise<Map<number, string>>;
   end?: (target: ProcessEntry) => Promise<void>;
   now?: () => number;
   home?: string;
@@ -123,7 +125,7 @@ export function createProcesses({
     if (listed.length === 0) return { at, rows: [], more: [] };
     const [ports, commands] = await Promise.all([
       readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid))),
-      readCommandLines(listed.map(({ entry }) => entry.pid)),
+      readCommandLines(listed.map(({ entry }) => entry)),
     ]);
     const rows = listed.flatMap((owned) => {
       const row = rowOf(owned, ports, commands, home);

@@ -137,9 +137,10 @@ describe("readProcessTable", () => {
       expect(found?.parent).toBe(process.pid);
       expect(found?.command.includes(marker)).toBe(false);
       expect(Math.abs((found?.started ?? 0) - Date.now())).toBeLessThan(5000);
-      expect((await readCommands([child.pid ?? 0])).get(child.pid ?? 0)?.includes(marker)).toBe(
-        true,
-      );
+      const read = found === undefined ? new Map<number, string>() : await readCommands([found]);
+      expect(read.get(child.pid ?? 0)?.includes(marker)).toBe(true);
+      const elsewhere = { pid: child.pid ?? 0, started: (found?.started ?? 0) - 5000 };
+      expect((await readCommands([elsewhere])).size).toBe(0);
     } finally {
       child.kill("SIGKILL");
     }
@@ -147,29 +148,54 @@ describe("readProcessTable", () => {
 });
 
 describe("parsePsCommands", () => {
+  const started = Date.UTC(2026, 10, 21, 10, 6, 1);
+  const lstart = "Sat Nov 21 10:06:01 2026";
+
   it("reads each id with its command and cuts a very long one", () => {
     const commands = parsePsCommands(
-      `  4203 node /srv/app/vite.js --port 5173\n 4402 node ${"x".repeat(5000)}\nnot a row\n`,
+      `  4203 ${lstart} node /srv/app/vite.js --port 5173\n 4402 ${lstart} node ${"x".repeat(5000)}\nnot a row\n`,
+      new Map([
+        [4203, started],
+        [4402, started],
+      ]),
     );
     expect(commands.get(4203)).toBe("node /srv/app/vite.js --port 5173");
     expect(commands.get(4402)?.length).toBe(2000);
     expect(commands.size).toBe(2);
+  });
+
+  it("drops a command whose process started at another time, so a reused id shows none", () => {
+    const commands = parsePsCommands(
+      ` 4203 Sat Nov 21 10:09:00 2026 /usr/bin/other --token secret\n 4402 ${lstart} node a.js\n`,
+      new Map([
+        [4203, started],
+        [4402, null],
+      ]),
+    );
+    expect(commands.size).toBe(0);
   });
 });
 
 describe("parseWindowsCommands", () => {
   it("keeps rows with a command and drops the rest", () => {
     const command = String.raw`node C:\srv\app\server.js`;
+    const starts = new Map<number, number | null>([
+      [3201, 1000],
+      [3202, 1000],
+      [3300, 1000],
+    ]);
     const commands = parseWindowsCommands(
       JSON.stringify([
-        { p: 3201, c: command },
-        { p: 3300, c: null },
-        { p: -4, c: "x" },
-        { p: "7", c: "y" },
+        { p: 3201, s: 1000, c: command },
+        { p: 3202, s: 1001, c: "another process that took the id" },
+        { p: 3300, s: 1000, c: null },
+        { p: -4, s: 1000, c: "x" },
+        { p: "7", s: 1000, c: "y" },
       ]),
+      starts,
     );
     expect([...commands]).toEqual([[3201, command]]);
-    expect(parseWindowsCommands("not json").size).toBe(0);
+    expect(parseWindowsCommands("not json", starts).size).toBe(0);
   });
 });
 

@@ -38,11 +38,11 @@ function setup(
   const table = options.table ?? parsePsTable(psMacos);
   const readTable = vi.fn(() => Promise.resolve(table));
   const readPorts = vi.fn(() => Promise.resolve(parseLsof(lsofMacos)));
-  const readCommandLines = vi.fn((pids: readonly number[]) =>
+  const readCommandLines = vi.fn((entries: readonly Pick<ProcessEntry, "pid" | "started">[]) =>
     Promise.resolve(
       new Map(
         table
-          .filter((entry) => pids.includes(entry.pid))
+          .filter((entry) => entries.some(({ pid }) => pid === entry.pid))
           .map((entry) => [entry.pid, entry.command]),
       ),
     ),
@@ -94,7 +94,9 @@ describe("processes.list", () => {
     const { list, readCommandLines } = setup();
     const answer = await list();
     expect(readCommandLines).toHaveBeenCalledTimes(1);
-    expect(readCommandLines.mock.calls[0]?.[0]).toEqual(answer.rows.map((row) => row.pid));
+    expect(readCommandLines.mock.calls[0]?.[0].map(({ pid }) => pid)).toEqual(
+      answer.rows.map((row) => row.pid),
+    );
   });
 
   it("answers failed, never an empty list, when sessions run and the table reads empty", async () => {
