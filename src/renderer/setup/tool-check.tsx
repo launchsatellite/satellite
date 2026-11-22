@@ -65,7 +65,7 @@ function rowOf(tool: CheckedTool, state: ToolState | GhState): Row {
     case "token-refused":
       return {
         ready: false,
-        detail: `Refused the token in ${state.variable}. Replace it, or remove it from your environment, then check again.`,
+        detail: `GitHub refused the token in ${state.variable}, or couldn't be reached. Check the connection, then the token.`,
       };
     case "ready":
       if (!("account" in state)) return { ready: true, detail: `${state.version} found` };
