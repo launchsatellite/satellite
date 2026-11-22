@@ -52,9 +52,9 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `fg` | `#EDEDEA` | `#0A0A0B` | Primary text |
 | `fg2` | `#B4B4B8` | `#45454B` | Secondary text |
 | `dim` | `#82828A` | `#68686F` | Labels, readouts, hints |
-| `sigfg` | `#FF5A1F` | `#C2410C` | Signal as text |
+| `sigfg` | `#FF5A1F` | `#BE400C` | Signal as text, and the inner edge of the needs you pixel |
 | `add` / `addfg` | `#15122B` / `#A493FF` | `#EEEBFF` / `#4A2EE0` | Added lines |
-| `del` / `delfg` | `#2A130B` / `#FF8A5C` | `#FFEDE6` / `#C2410C` | Removed lines |
+| `del` / `delfg` | `#2A130B` / `#FF8A5C` | `#FFEDE6` / `#BE400C` | Removed lines |
 | `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
 | `signal` | `#FF5A1F` | `#FF5A1F` | Needs you, destructive actions |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
@@ -62,7 +62,7 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `lilac` / `lilac-edge` | `#C7B9FF` / `#C7B9FF` | `#C7B9FF` / `#8066D6` | Merged, approved, secondary state, with the darker lilac that keeps a small lilac shape visible on light |
 | `shadow` | `0 16px 40px rgb(0 0 0 / 0.55)` | `0 16px 40px rgb(10 10 11 / 0.12)` | The one shadow, on menus, the palette, dialogs, toasts and the guide card |
 
-Every text pair passes WCAG AA at 4.5 to 1. On light grounds the volt pixel gets a `#6B7800` inner edge so it stays visible. Shapes too small for an edge, like the cells of a project avatar, draw volt and lilac in their edge colours, `volt-edge` and `lilac-edge`, which pass 3 to 1 against `side` and `sel` in both themes.
+Every text pair in use passes WCAG AA at 4.5 to 1, measured with the WCAG formula, the closest being light `sigfg` and `delfg` on `sel` at 4.51. On light grounds the volt, done and needs you pixels get a 1.5px inner edge, `volt-edge`, `lilac-edge` and `sigfg`, so each pixel measures at least 3 to 1 on `bg`, `side`, `sel` and `hover`, the lowest being lilac on `sel` at 3.7. In dark the edges equal their fills. Shapes too small for an edge, like the cells of a project avatar, draw volt and lilac in their edge colours, `volt-edge` and `lilac-edge`, which pass 3 to 1 against `side` and `sel` in both themes.
 
 ## Type
 
