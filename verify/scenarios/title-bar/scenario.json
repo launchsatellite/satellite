@@ -1,10 +1,21 @@
 {
-  "description": "A repo with one commit on main, a workspace whose branch carries a direction override, a workspace with a long name, a stand-in gh, and a stand-in Claude Code that takes a prompt, asks for permission and finishes once allowed. Satellite is set to the light theme.",
+  "description": "A repo with one commit on main, a workspace whose branch carries a direction override, a workspace with a long name, a repository folder with a 163 character name beside it, a stand-in gh, and a stand-in Claude Code that takes a prompt, asks for permission and finishes once allowed. Satellite is set to the light theme.",
   "repo": [
     { "write": { "path": "README.md", "content": "# Verify repo\n" } },
     { "git": ["init", "-b", "main"] },
     { "git": ["add", "."] },
     { "git": ["commit", "-m", "first commit"] }
+  ],
+  "folders": [
+    {
+      "name": "a-project-folder-whose-name-runs-on-and-on-past-every-sensible-length-so-the-title-bar-has-to-cut-it-short-with-an-ellipsis-and-still-leave-room-to-drag-the-window",
+      "steps": [
+        { "write": { "path": "README.md", "content": "# Long\n" } },
+        { "git": ["init", "-b", "main"] },
+        { "git": ["add", "."] },
+        { "git": ["commit", "-m", "first commit"] }
+      ]
+    }
   ],
   "home": [
     {
