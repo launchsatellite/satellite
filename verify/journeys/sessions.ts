@@ -675,6 +675,20 @@ async function interrupts(session: AppSession): Promise<void> {
   await stateIs(session, "session-tab-1", "idle", "once the turn stayed quiet after the tool");
   await promptWith(session, "four", "in the fourth prompt");
   await stateIs(session, "session-tab-1", "working", "after the fourth prompt");
+  await terminalShows(session, "Working on four.", "in the fourth turn");
+  await page.keyboard.press("Escape");
+  const seen = new Set<string>();
+  const until = Date.now() + 6000;
+  while (Date.now() < until) {
+    seen.add((await page.getByTestId("session-tab-1").getAttribute("data-state")) ?? "");
+    await page.waitForTimeout(200);
+  }
+  assert.deepEqual(
+    [...seen],
+    ["working"],
+    "an Escape that interrupted nothing, while Claude Code kept drawing, turned the tab",
+  );
+  await stateIs(session, "session-tab-1", "done", "after the turn that survived Escape ended");
   const { leftover } = await session.close();
   assert.equal(leftover, undefined, `the temp folder ${String(leftover)} was left behind`);
 }

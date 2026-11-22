@@ -113,6 +113,18 @@
       },
       {
         "hook": "UserPromptSubmit"
+      },
+      {
+        "print": "\r\nWorking on four.\r\n"
+      },
+      {
+        "spin": 9000
+      },
+      {
+        "hook": "Stop"
+      },
+      {
+        "print": "Done.\r\n> "
       }
     ]
   }
