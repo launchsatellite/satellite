@@ -2,7 +2,7 @@
   "name": "satellite",
   "productName": "Satellite",
   "version": "0.1.0",
-  "description": "An agentic development environment where agents do the work and you stay at the centre.",
+  "description": "The development environment for coding agents.",
   "homepage": "https://launchsatellite.com",
   "license": "MIT",
   "private": true,

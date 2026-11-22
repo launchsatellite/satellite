@@ -1,6 +1,6 @@
 # Satellite
 
-An agentic development environment. One desktop app holds all your projects and every parallel piece of work inside them, and each piece of work gets its own git worktree, its own Claude Code sessions and its own view of changes, files and pull requests.
+The development environment for coding agents. One desktop app holds all your projects and every parallel piece of work inside them, and each piece of work gets its own git worktree, its own Claude Code sessions and its own view of changes, files and pull requests.
 
 Agents stay in orbit and do the work. You stay at the centre.
 
