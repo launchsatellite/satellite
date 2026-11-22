@@ -33,6 +33,7 @@ import { ProcessesDialog } from "../processes/processes-dialog.tsx";
 import { portLinkSentence } from "../processes/process-words.ts";
 import { useProcesses } from "../processes/use-processes.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
+import { focusColumn } from "./focus-column.ts";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { ChecksList } from "../pull-request/checks-list.tsx";
@@ -705,6 +706,30 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: true,
             run: () => {
               setPalette((open) => (open === "switcher" ? null : "switcher"));
+            },
+          },
+          {
+            id: "focus.sidebar",
+            title: "Focus the sidebar",
+            available: true,
+            run: () => {
+              focusColumn("column-projects", '[aria-current="true"]');
+            },
+          },
+          {
+            id: "focus.repository",
+            title: "Focus the repository",
+            available: true,
+            run: () => {
+              focusColumn("column-repository", '[role="tab"][aria-selected="true"]');
+            },
+          },
+          {
+            id: "focus.terminal",
+            title: "Focus the terminal",
+            available: true,
+            run: () => {
+              focusColumn("column-sessions", '[data-testid="terminal"] textarea');
             },
           },
           {

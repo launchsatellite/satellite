@@ -8,6 +8,9 @@ import {
 export type CommandId =
   | "palette.commands"
   | "palette.switcher"
+  | "focus.sidebar"
+  | "focus.repository"
+  | "focus.terminal"
   | "project.add"
   | "project.remove"
   | "workspace.new"

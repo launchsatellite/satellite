@@ -387,6 +387,23 @@ async function sendWhileTyping(session: AppSession): Promise<void> {
   );
 }
 
+async function focusCommands(session: AppSession): Promise<void> {
+  const { page } = session;
+  const moves: [string, string][] = [
+    ["Focus the sidebar", "workspace-repo-alpha"],
+    ["Focus the repository", "centre-tab-changes"],
+    ["Focus the terminal", "terminal"],
+  ];
+  for (const [title, target] of moves) {
+    await page.keyboard.press(menuShortcut);
+    await visible(session, "palette-input", `before ${title}`);
+    await page.getByTestId("palette-input").fill(title);
+    await page.keyboard.press("Enter");
+    const focused = await focusedTestId(page);
+    assert.equal(focused, target, `${title} moved focus to ${focused}`);
+  }
+}
+
 async function imageAndDrop(session: AppSession): Promise<void> {
   const { page } = session;
   let before = (await session.standInEvents()).length;
@@ -570,6 +587,7 @@ async function run(session: AppSession): Promise<void> {
   await tabs(session);
   const sendFrom = await sendClean(session);
   await sendWhileTyping(session);
+  await focusCommands(session);
   await links(session);
   await imageAndDrop(session);
   await session.screenshot("sessions");
