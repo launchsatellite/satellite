@@ -5,6 +5,7 @@ export interface SatelliteApi {
 }
 
 export const bridgeRequestChars = 8_388_608;
-export const oversizeRefusal = "Satellite refused a request far larger than any it takes.";
+export const oversizeRefusal =
+  "Satellite refused a request that is not plain data or is far larger than any it takes.";
 
 export const bridgeIpc = { invoke: "satellite:bridge", event: "satellite:event" };

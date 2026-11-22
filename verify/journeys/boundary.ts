@@ -821,15 +821,33 @@ async function checkBridge(page: Page): Promise<void> {
     const api: unknown = Reflect.get(window, "satellite");
     const invoke: unknown =
       typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
-    if (typeof invoke !== "function") return "window.satellite.invoke is missing";
-    const payload = { id: crypto.randomUUID(), data: "x".repeat(chars + 1) };
-    const answer: unknown = await Reflect.apply(invoke, api, ["terminal.write", payload]);
-    return JSON.stringify(answer);
+    if (typeof invoke !== "function") return { missing: "window.satellite.invoke is missing" };
+    const data = "x".repeat(chars + 1);
+    const hidden = { data };
+    Object.setPrototypeOf(hidden, { toJSON: () => ({}) });
+    const payloads = {
+      string: { id: crypto.randomUUID(), data },
+      map: new Map([["data", data]]),
+      buffer: { data: new ArrayBuffer(chars + 1) },
+      "toJSON prototype": hidden,
+    };
+    const answers: Record<string, string> = {};
+    for (const [name, payload] of Object.entries(payloads)) {
+      try {
+        const answer: unknown = await Reflect.apply(invoke, api, ["terminal.write", payload]);
+        answers[name] = JSON.stringify(answer);
+      } catch (error) {
+        answers[name] = `threw ${String(error)}`;
+      }
+    }
+    return answers;
   }, bridgeRequestChars);
-  assert.ok(
-    oversize.includes(oversizeRefusal),
-    `a request past the preload's cap answered ${oversize.slice(0, 200)}`,
-  );
+  for (const [name, answer] of Object.entries(oversize)) {
+    assert.ok(
+      answer.includes(oversizeRefusal),
+      `a ${name} payload past the preload's cap answered ${answer.slice(0, 200)}`,
+    );
+  }
   const unknown = await bridgeCode(page, "__proto__", {});
   assert.equal(
     unknown,
