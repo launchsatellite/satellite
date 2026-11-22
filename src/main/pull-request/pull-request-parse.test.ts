@@ -382,12 +382,12 @@ describe("parseConversation", () => {
     );
     expect(answer?.detail).toBeNull();
     expect(answer?.candidates).toEqual([
-      { number: 41, open: true, writer: false, here: false },
-      { number: 40, open: true, writer: true, here: true },
-      { number: 39, open: false, writer: true, here: false },
-      { number: 38, open: false, writer: false, here: false },
-      { number: 37, open: true, writer: true, here: false },
-      { number: 36, open: true, writer: false, here: false },
+      { number: 41, open: true, trusted: false, here: false },
+      { number: 40, open: true, trusted: true, here: true },
+      { number: 39, open: false, trusted: true, here: false },
+      { number: 38, open: false, trusted: false, here: false },
+      { number: 37, open: true, trusted: true, here: false },
+      { number: 36, open: true, trusted: false, here: false },
     ]);
   });
 

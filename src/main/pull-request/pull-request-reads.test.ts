@@ -85,9 +85,10 @@ function viewJson(
 
 const owned = [{ number: 12, state: "OPEN", authorAssociation: "OWNER" }];
 
-function threadsJson(nodes: object[] = owned) {
+function threadsJson(nodes: object[] = owned, viewer = "verify-owner") {
   return JSON.stringify({
     data: {
+      viewer: { login: viewer },
       repository: {
         pullRequests: { nodes },
         pullRequest: {
@@ -256,14 +257,20 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
   });
 
-  it("shows a pull request from another repository when its fork is the branch's upstream", async () => {
+  it("shows the viewer's own pull request from their fork, whatever their standing upstream", async () => {
     const { answer, read, repo } = await setup();
     await inRepo(repo, "checkout", "-q", "-b", "fix");
     await inRepo(repo, "config", "remote.fork.url", "git@github.com:fork-owner/verify-repo.git");
     await inRepo(repo, "config", "branch.fix.remote", "fork");
     await inRepo(repo, "config", "branch.fix.merge", "refs/heads/topic");
     await answer("view", { stdout: viewJson([], "topic", true) });
+    const fromFork = (login: string) => [
+      { number: 12, state: "OPEN", authorAssociation: "CONTRIBUTOR", author: { login } },
+    ];
+    await answer("threads", { stdout: threadsJson(fromFork("fork-owner"), "fork-owner") });
     expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+    await answer("threads", { stdout: threadsJson(fromFork("stranger"), "fork-owner") });
+    expect(await read(first, true, true)).toEqual({ kind: "absent", reason: "none" });
   });
 
   it("shows no pull request from another repository when the upstream is the pull request's own repository", async () => {

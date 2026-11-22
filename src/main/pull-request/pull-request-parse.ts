@@ -79,11 +79,13 @@ const candidateNode = z.object({
   number: looseCount,
   state: looseText,
   authorAssociation: looseText,
+  author,
   isCrossRepository: looseFlag,
 });
 const threadsShape = z.object({
   data: looseNode(
     z.object({
+      viewer: author,
       repository: looseNode(
         z.object({
           pullRequests: looseNode(z.object({ nodes: looseList })),
@@ -352,7 +354,7 @@ export function parseView(
 export interface Candidate {
   number: number;
   open: boolean;
-  writer: boolean;
+  trusted: boolean;
   here: boolean;
 }
 
@@ -361,14 +363,19 @@ export interface Conversation {
   detail: ReadDetail | null;
 }
 
-function candidatesOf(list: readonly unknown[] | null | undefined): Candidate[] {
+function candidatesOf(
+  list: readonly unknown[] | null | undefined,
+  viewer: string | null | undefined,
+): Candidate[] {
+  const own = (login: string | null | undefined) =>
+    typeof viewer === "string" && viewer !== "" && login === viewer;
   return each(list, candidateNode).flatMap((node) =>
     typeof node.number === "number" && Number.isInteger(node.number)
       ? [
           {
             number: node.number,
             open: node.state === "OPEN",
-            writer: isOwnerMemberOrCollaborator(node.authorAssociation),
+            trusted: isOwnerMemberOrCollaborator(node.authorAssociation) || own(node.author?.login),
             here: node.isCrossRepository === false,
           },
         ]
@@ -412,11 +419,12 @@ export function parseConversation(
   detail: boolean,
 ): Conversation | null {
   const parsed = threadsShape.safeParse(parseJson(stdout));
-  const repository = parsed.success ? parsed.data.data?.repository : undefined;
+  const data = parsed.success ? parsed.data.data : undefined;
+  const repository = data?.repository;
   if (repository === undefined || repository === null) return null;
   const pullRequest = repository.pullRequest;
   return {
-    candidates: candidatesOf(repository.pullRequests?.nodes),
+    candidates: candidatesOf(repository.pullRequests?.nodes, data?.viewer?.login),
     detail:
       detail && pullRequest !== undefined && pullRequest !== null
         ? detailOf(pullRequest, place)

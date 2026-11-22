@@ -327,13 +327,13 @@ export function createPullRequests({
       if ("failure" in asked) return nothing(unavailable(asked.failure));
       conversation = asked;
       const number = parsed.found.number;
-      if (!asked.candidates.some((candidate) => candidate.number === number && candidate.writer)) {
-        const writers = asked.candidates.filter((candidate) => candidate.writer);
+      if (!asked.candidates.some((candidate) => candidate.number === number && candidate.trusted)) {
+        const trusted = asked.candidates.filter((candidate) => candidate.trusted);
         const better =
-          writers.find((candidate) => candidate.here && candidate.open) ??
-          writers.find((candidate) => candidate.here) ??
-          writers.find((candidate) => candidate.open) ??
-          writers[0];
+          trusted.find((candidate) => candidate.here && candidate.open) ??
+          trusted.find((candidate) => candidate.here) ??
+          trusted.find((candidate) => candidate.open) ??
+          trusted[0];
         if (better === undefined) return nothing({ kind: "absent", reason: "none" });
         const again = await readNumber(better.number, viewed.head, folder, signal);
         if (again === null) return nothing(unavailable("failed"));
