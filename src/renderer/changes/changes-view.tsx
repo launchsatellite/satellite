@@ -141,7 +141,12 @@ export function ChangesView({
         />
       );
     }
-    if (files.length === 0 && changes.more === 0 && changes.longPaths === 0) {
+    if (
+      files.length === 0 &&
+      changes.more === 0 &&
+      changes.longPaths === 0 &&
+      !changes.untrackedLeftOut
+    ) {
       return <Sentence testId="changes-empty" text={emptySentence(view, list.base)} />;
     }
     return (
@@ -155,6 +160,7 @@ export function ChangesView({
               files={files}
               more={changes.more}
               longPaths={changes.longPaths}
+              untrackedLeftOut={changes.untrackedLeftOut}
               selected={selectedPath}
               onSelect={select}
             />

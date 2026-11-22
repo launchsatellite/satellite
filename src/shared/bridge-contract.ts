@@ -552,6 +552,7 @@ export const bridgeRequests = {
           files: z.array(changedFile).max(changesLimits.files),
           more: count,
           longPaths: count,
+          untrackedLeftOut: z.boolean(),
         }),
         z.strictObject({
           kind: z.literal("unavailable"),
