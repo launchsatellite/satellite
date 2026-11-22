@@ -19,6 +19,7 @@ import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 import {
   boundaryInside,
+  refusedAsUnclean,
   removeWalked,
   uncheckedBecause,
   uncheckedFix,
@@ -247,11 +248,24 @@ async function removeFromGit(
   root: string,
   walked: Extract<Walked, { kind: "walked" }>,
   name: string,
+  seenUnclean: boolean,
 ): Promise<void> {
   const { path } = walked;
-  const removal = await removeWalked(root, walked, { force: false, locked: false });
+  const removal = await removeWalked(root, walked, {
+    force: false,
+    locked: false,
+    forceWhenUnclean: seenUnclean,
+  });
   if (removal.kind === "kept") throw keptFailure(name, removal.kept, removal.linksRemoved);
   const { run, forced, linksRemoved } = removal;
+  if (!forced && !seenUnclean && refusedAsUnclean(run)) {
+    throw new BridgeFailure(
+      "refused",
+      linksRemoved > 0
+        ? `Something changed in ${name} since you looked, so git removed nothing. Links Satellite removed inside it are gone, and what they pointed to is untouched.`
+        : `Something changed in ${name} since you looked. Here is the latest.`,
+    );
+  }
   if (run === undefined) {
     throw new BridgeFailure(
       "failed",
@@ -330,7 +344,7 @@ export async function archiveWorkspace(
   if (walked.kind === "kept") throw keptFailure(name, walked.kept, 0);
   const latest = await readInspection(home, project, record);
   if (latest.core !== seen.core) throw changed;
-  await removeFromGit(project.path, walked, name);
+  await removeFromGit(project.path, walked, name, latest.view.files.length > 0);
   if (
     sameIdentity(await folderIdentity(path), latest.identity) &&
     (await isConfined(home, project, record))

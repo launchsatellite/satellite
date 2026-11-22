@@ -405,6 +405,33 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     expect(await exists(record.path)).toBe(false);
   });
 
+  it("stops instead of forcing when a file appears in a clean worktree as git removes it", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "tidy");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
+      if (args[0] === "worktree" && args[1] === "remove") {
+        await writeFile(join(record.path, "written-late.txt"), "Saved as git looked.\n");
+      }
+      return actual.runGit(folder, args, ms, signal);
+    });
+    try {
+      await expect(
+        archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+      ).rejects.toMatchObject({
+        code: "refused",
+        message: "Something changed in tidy since you looked. Here is the latest.",
+      });
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+    }
+    expect(removeCalls()).toEqual([["worktree", "remove", "--end-of-options", record.path]]);
+    expect(await readFile(join(record.path, "written-late.txt"), "utf8")).toBe(
+      "Saved as git looked.\n",
+    );
+  });
+
   it("refuses a worktree with a submodule checked out, so its history stays", async () => {
     const library = await repository("library", false);
     const project = await repository("repo", true);
