@@ -14,6 +14,7 @@ import {
 import type { Slot } from "../projects/slots.ts";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
+import { pacedStatus } from "./status-pacing.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
@@ -307,7 +308,7 @@ export async function readWorkspaces(
     inStatusSlot(() => whenGitRuns(readTracking(project.path, branches))),
     Promise.all(
       [project.path, ...live.map((entry) => entry.record.path)].map((path) =>
-        inStatusSlot(() => whenGitRuns(readStatus(path))),
+        inStatusSlot(() => whenGitRuns(pacedStatus(path))),
       ),
     ),
   ]);
