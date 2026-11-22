@@ -588,7 +588,8 @@ async function edgePass(session: AppSession): Promise<void> {
 
   await session.answerFolderDialog(session.repo);
   await session.page.getByTestId("add-first-project").click();
-  await stepShows(session, 1, "after the project was added again", true);
+  await settled(session);
+  await noCard(session, "after the project was added again, since the guide was seen");
 }
 
 async function run(session: AppSession): Promise<void> {

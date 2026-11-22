@@ -33,6 +33,7 @@ export function useGuide({
   const [again, setAgain] = useState(false);
   const [at, setAt] = useState<GuideStep | null>(null);
   const [focusAsk, setFocusAsk] = useState(0);
+  if (again && !listed) setAgain(false);
   const open = listed && (!seen || again);
   const step = open ? settledStep(at ?? 1, facts) : null;
   if (at !== step) setAt(step);
