@@ -1,12 +1,19 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { letterColours, longPathsSentence, moreSentence, rowName } from "./change-words.ts";
+import {
+  leftOutSentence,
+  letterColours,
+  longPathsSentence,
+  moreSentence,
+  rowName,
+} from "./change-words.ts";
 
 interface ChangeListProps {
   files: readonly ChangedFile[];
   more: number;
   longPaths: number;
+  untrackedLeftOut: boolean;
   selected: string | undefined;
   onSelect: (path: string) => void;
 }
@@ -29,7 +36,14 @@ function targetRow(key: string, at: number, last: number): number | undefined {
   return targets[key];
 }
 
-export function ChangeList({ files, more, longPaths, selected, onSelect }: ChangeListProps) {
+export function ChangeList({
+  files,
+  more,
+  longPaths,
+  untrackedLeftOut,
+  selected,
+  onSelect,
+}: ChangeListProps) {
   const move = (event: KeyboardEvent<HTMLUListElement>) => {
     const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
     const at = rows.findIndex((row) => row === document.activeElement);
@@ -111,6 +125,11 @@ export function ChangeList({ files, more, longPaths, selected, onSelect }: Chang
       {longPaths > 0 && (
         <p data-testid="changes-long-paths" className="px-3 pt-2 text-[12px] text-dim">
           {longPathsSentence(longPaths)}
+        </p>
+      )}
+      {untrackedLeftOut && (
+        <p data-testid="changes-left-out" className="px-3 pt-2 text-[12px] text-dim">
+          {leftOutSentence}
         </p>
       )}
     </div>

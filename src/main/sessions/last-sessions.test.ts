@@ -1,4 +1,4 @@
-import { mkdtemp, realpath } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,6 +27,18 @@ describe("createLastSessions", () => {
     const reloaded = createLastSessions(home);
     expect(await reloaded.get(main)).toBe(second);
     expect(await reloaded.get(other)).toBe(second);
+  });
+
+  it("leaves a file a newer Satellite saved exactly as it is", async () => {
+    const home = await realpath(await mkdtemp(join(tmpdir(), "satellite-last-")));
+    const saved = JSON.stringify({ version: 2, last: [] });
+    await writeFile(join(home, "sessions.json"), saved);
+    const last = createLastSessions(home);
+    await last.set(main, first);
+    await last.flush();
+    expect(await last.get(main)).toBe(first);
+    expect(await readFile(join(home, "sessions.json"), "utf8")).toBe(saved);
+    expect(await readdir(home)).toEqual(["sessions.json"]);
   });
 
   it("saves a change still waiting in line when flushed", async () => {

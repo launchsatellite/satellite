@@ -60,6 +60,7 @@ export function useProjects(notify: Notify): {
     };
     const schedule = createSchedule({
       visible: isVisible,
+      focused: () => document.hasFocus(),
       now: () => performance.now(),
       after: (ms, run) => {
         const timer = setTimeout(run, ms);

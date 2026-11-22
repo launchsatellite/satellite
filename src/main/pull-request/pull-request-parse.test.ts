@@ -391,6 +391,57 @@ describe("parseConversation", () => {
     ]);
   });
 
+  it("never trusts a pull request with no author when the viewer is unknown", () => {
+    const answer = parseConversation(
+      JSON.stringify({
+        data: {
+          viewer: null,
+          repository: {
+            pullRequests: {
+              nodes: [
+                { number: 41, state: "OPEN", authorAssociation: "NONE", author: null },
+                { number: 40, state: "OPEN", authorAssociation: "NONE", author: { login: null } },
+              ],
+            },
+          },
+        },
+      }),
+      place,
+      false,
+    );
+    expect(answer?.candidates.map(({ trusted }) => trusted)).toEqual([false, false]);
+  });
+
+  it("reads the newest commits and GitHub's count, and none when they are absent", () => {
+    const nodes = [
+      { commit: { oid: "c".repeat(40), messageHeadline: "older" } },
+      { commit: { oid: "bad", messageHeadline: "dropped" } },
+      { commit: { oid: head, messageHeadline: "newest" } },
+    ];
+    const text = JSON.stringify({
+      data: { repository: { pullRequest: { commits: { totalCount: 161, nodes } } } },
+    });
+    expect(parseConversation(text, place, false)?.commits).toEqual({
+      commits: [
+        { oid: "ccccccc", headline: "older" },
+        { oid: "aaaaaaa", headline: "newest" },
+      ],
+      moreCommits: 158,
+    });
+    expect(parseConversation(candidates([]), place, false)?.commits).toBeNull();
+  });
+
+  it("says when gh's list of commits stops before the head", () => {
+    const listed = (count: number, last: string) =>
+      Array.from({ length: count }, (_, index) => ({
+        oid: index === count - 1 ? last : "b".repeat(40),
+        headline: "x",
+      }));
+    expect(read(view({ commits: listed(100, "c".repeat(40)) }))?.commitsCut).toBe(true);
+    expect(read(view({ commits: listed(100, head) }))?.commitsCut).toBe(false);
+    expect(read(view({ commits: listed(99, "c".repeat(40)) }))?.commitsCut).toBe(false);
+  });
+
   it("reads the detail only when it was asked for", () => {
     const text = JSON.stringify({
       data: { repository: { pullRequests: { nodes: [] }, pullRequest: full() } },
@@ -616,10 +667,11 @@ describe("parseThreads", () => {
           ],
         },
         comments: {
-          totalCount: 2,
+          totalCount: 3,
           nodes: [
             comment({ isMinimized: true, minimizedReason: "OFF_TOPIC", body: "x" }),
             comment({ isMinimized: true, minimizedReason: "<b>made up</b>", body: "y" }),
+            comment({ isMinimized: true, minimizedReason: "low-quality", body: "w" }),
           ],
         },
         reviewThreads: {
@@ -637,7 +689,11 @@ describe("parseThreads", () => {
       place,
     );
     expect(detail?.reviews[0]).toMatchObject({ hidden: true, hiddenReason: "spam", body: "" });
-    expect(detail?.comments.map((one) => one.hiddenReason)).toEqual(["off-topic", null]);
+    expect(detail?.comments.map((one) => one.hiddenReason)).toEqual([
+      "off-topic",
+      null,
+      "low-quality",
+    ]);
     expect(detail?.threads[0]?.comments[0]).toMatchObject({
       hidden: true,
       hiddenReason: "abuse",
@@ -714,17 +770,40 @@ describe("parseThreads", () => {
 const prefix = (text: string) => `2026-01-01T00:00:0${text}`;
 
 describe("failedLines", () => {
-  it("reduces a log to its error lines", () => {
+  it("reduces a log to its error lines and leaves out the bare exit code", () => {
     const log = [
       prefix("0.1234567Z starting"),
-      prefix("1.0000000Z ##[error]Process completed with exit code 1."),
+      prefix("1.0000000Z ##[error]AssertionError: expected 2 to be 3"),
       prefix("2.0000000Z more output"),
-      prefix("3.0000000Z ##[error]Second failure"),
+      prefix("3.0000000Z ##[error]Process completed with exit code 1."),
     ].join("\n");
     expect(failedLines(log)).toEqual({
-      lines: ["Process completed with exit code 1.", "Second failure"],
+      lines: ["AssertionError: expected 2 to be 3"],
       more: false,
     });
+  });
+
+  it("shows the lines that led to a bare exit code, not the cleanup after it", () => {
+    const log = [
+      `\uFEFF${prefix("0.0000000Z Current runner version: 2.330.0")}`,
+      ...Array.from({ length: 50 }, (_, index) => prefix(`1.0000000Z setup ${String(index)}`)),
+      prefix("2.0000000Z ##[group]Run npm run journeys"),
+      prefix("2.1000000Z npm run journeys"),
+      prefix("2.2000000Z ##[endgroup]"),
+      prefix("3.0000000Z pass launch"),
+      prefix("4.0000000Z fail projects locator.click: Timeout 30000ms exceeded."),
+      prefix("5.0000000Z pass quit"),
+      prefix("6.0000000Z ##[error]Process completed with exit code 1."),
+      prefix("7.0000000Z ##[group]Run actions/upload-artifact@v4"),
+      ...Array.from({ length: 50 }, (_, index) => prefix(`8.0000000Z cleanup ${String(index)}`)),
+    ].join("\n");
+    const { lines, more } = failedLines(log);
+    expect(lines).toHaveLength(pullRequestLimits.logLines);
+    expect(lines.at(-1)).toBe("Process completed with exit code 1.");
+    expect(lines.at(-3)).toBe("fail projects locator.click: Timeout 30000ms exceeded.");
+    expect(lines.some((line) => line.startsWith("cleanup"))).toBe(false);
+    expect(lines.slice(-6, -4)).toEqual(["Run npm run journeys", "npm run journeys"]);
+    expect(more).toBe(true);
   });
 
   it("falls back to the last 40 lines", () => {

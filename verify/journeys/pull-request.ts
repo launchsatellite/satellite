@@ -179,6 +179,21 @@ async function appears(session: AppSession): Promise<void> {
   );
 }
 
+async function failingLinesExplain(session: AppSession): Promise<void> {
+  await session.page.getByTestId("pull-request-section-checks").click();
+  const toggle = session.page.locator(
+    '[data-testid^="pull-request-check-"][data-testid$="-toggle"]',
+  );
+  await toggle.click();
+  const id = (await toggle.getAttribute("data-testid"))?.replace(/-toggle$/, "") ?? "";
+  const lines = `${id}-lines`;
+  await textHolds(session, lines, "Unexpected var", "in a log that holds only the exit code");
+  const text = await session.page.getByTestId(lines).innerText();
+  assert.ok(text.includes("exit code 1"), "the failing lines left out the exit code");
+  assert.ok(!text.includes("Cleaning up"), "the failing lines showed the cleanup after the step");
+  await session.page.getByTestId("pull-request-section-overview").click();
+}
+
 async function checksFailed(session: AppSession): Promise<void> {
   await inboxReads(session, "Checks failed on the pull request.", "after launch");
   await noticesAre(session, [alphaNotice], "after the checks failed,");
@@ -191,6 +206,7 @@ async function checksFailed(session: AppSession): Promise<void> {
   await startedClaude(session);
   await session.page.getByTestId("inbox-repo-alpha").click();
   await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
+  await failingLinesExplain(session);
   await session.mark("fixed");
   await endTurn(session, true);
   await rowGone(session, "after the checks passed");

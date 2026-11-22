@@ -267,6 +267,18 @@ async function run(session: AppSession): Promise<void> {
   await refocus(session);
   await workspaceReads(session, "beta", "feature");
 
+  await execute(
+    "git",
+    ["worktree", "add", "-q", "-b", "kept", join(session.home, "worktrees", "beta", "kept")],
+    {
+      cwd: session.folder("beta"),
+      env: { ...withoutGitVariables(process.env), ...session.gitEnv },
+      windowsHide: true,
+    },
+  );
+  await refocus(session);
+  await visible(session, "workspace-beta-kept", "after a worktree was left in beta's folder");
+
   await moveAside(session.folder("beta"), session.folder("beta-moved"), "beta");
   await session.relaunch();
   await showsMissing(session, "beta", "after its folder moved");
@@ -277,8 +289,16 @@ async function run(session: AppSession): Promise<void> {
   );
   await session.page.getByTestId("workspace-beta-main").click();
   await centreReads(session, "beta isn't where it was", "after selecting the moved beta");
+  const kept = "Its workspace's folder stays in worktrees/beta in the Satellite home.";
+  const centre = await session.page.getByTestId("folder-missing").innerText();
+  assert.ok(centre.endsWith(kept), `folder-missing read "${centre}" without "${kept}"`);
   await session.screenshot("projects-missing");
   await session.page.getByTestId("remove-project").click();
+  await toastReads(
+    session,
+    "Satellite removed beta and its 1 workspace. The workspace's folder stays in worktrees/beta in the Satellite home.",
+    "after removing the moved beta",
+  );
   await visible(session, "no-projects", "after removing the moved beta");
 
   assert.equal(

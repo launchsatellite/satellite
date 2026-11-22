@@ -20,6 +20,7 @@ export interface SessionTab {
   resume: boolean;
   status: SessionStatus;
   ready: boolean;
+  hooksOff: boolean;
   needsSince: number | null;
 }
 export interface Sessions {
@@ -91,10 +92,12 @@ export function useSessions(notify: Notify): Sessions {
   }, [state.tabs.length]);
   useEffect(
     () =>
-      subscribe("sessions.status", ({ id, status, ready }) => {
+      subscribe("sessions.status", ({ id, status, ready, hooksOff }) => {
         setState((current) =>
           current.tabs.some(
-            (tab) => tab.terminalId === id && (tab.status !== status || tab.ready !== ready),
+            (tab) =>
+              tab.terminalId === id &&
+              (tab.status !== status || tab.ready !== ready || tab.hooksOff !== hooksOff),
           )
             ? {
                 ...current,
@@ -104,6 +107,7 @@ export function useSessions(notify: Notify): Sessions {
                         ...tab,
                         status,
                         ready,
+                        hooksOff,
                         needsSince: needsSince(tab, status, nextNeed),
                       }
                     : tab,
@@ -128,6 +132,7 @@ export function useSessions(notify: Notify): Sessions {
       resume,
       status: "idle",
       ready: false,
+      hooksOff: false,
       needsSince: null,
     };
     setState((current) => ({
@@ -148,6 +153,7 @@ export function useSessions(notify: Notify): Sessions {
               resume: false,
               status: "idle",
               ready: false,
+              hooksOff: false,
               needsSince: null,
             }
           : tab,

@@ -1,5 +1,7 @@
 import { app, type Session } from "electron";
 
+const unreachableProxy = "http://127.0.0.1:0";
+
 function isEntryReload(target: string, entry: URL): boolean {
   let url: URL;
   try {
@@ -12,7 +14,7 @@ function isEntryReload(target: string, entry: URL): boolean {
   );
 }
 
-export function hardenSession(session: Session): void {
+export async function hardenSession(session: Session, entryUrl: string): Promise<void> {
   session.setPermissionRequestHandler((_contents, _permission, callback) => {
     callback(false);
   });
@@ -20,6 +22,13 @@ export function hardenSession(session: Session): void {
   session.setDevicePermissionHandler(() => false);
   session.setDisplayMediaRequestHandler((_request, callback) => {
     callback({});
+  });
+  const entry = new URL(entryUrl);
+  const devServer = entry.protocol === "http:" ? [entry.host] : [];
+  await session.setProxy({
+    mode: "fixed_servers",
+    proxyRules: unreachableProxy,
+    proxyBypassRules: ["<-loopback>", ...devServer].join(","),
   });
   session.on("will-download", (event) => {
     event.preventDefault();
@@ -43,5 +52,6 @@ export function hardenWebContents(entryUrl: string): void {
       callback("");
     });
     contents.setWindowOpenHandler(() => ({ action: "deny" }));
+    contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
   });
 }

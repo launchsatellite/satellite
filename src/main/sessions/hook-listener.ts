@@ -138,7 +138,7 @@ export async function startHookListener(
     const authorization = onlyValue(request, "authorization");
     if (!secretMatches(launch, authorization) || launch === undefined) return 401;
     if (!isJson(onlyValue(request, "content-type"))) return 415;
-    if (!withinRate(launch, Date.now())) return 429;
+    if (!withinRate(launch, performance.now())) return 429;
     const read = await readBody(request, bodyLimitOf(name));
     if (read.kind === "failed") return undefined;
     if (read.kind === "too-large" && name === "Notification") return 413;
@@ -185,7 +185,7 @@ export async function startHookListener(
     port,
     open(launchId) {
       const secret = randomBytes(secretBytes);
-      launches.set(launchId, { secret, windowStart: 0, events: 0 });
+      launches.set(launchId, { secret, windowStart: -Infinity, events: 0 });
       return secret.toString("hex");
     },
     close(launchId) {

@@ -1,5 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { basename, dirname, relative, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
@@ -92,6 +92,23 @@ async function revParse(folder: string): Promise<RevParse> {
   return parseRevParse(run);
 }
 
+async function ignoresHome(root: string, home: string): Promise<boolean> {
+  const run = await runTool(
+    "git",
+    ["-C", root, "-c", "core.fsmonitor=", "check-ignore", "-q", "--", home],
+    {
+      timeoutMs: gitReadTimeoutMs,
+    },
+  ).catch(() => undefined);
+  return run?.exitCode === 0;
+}
+
+function homeInside(root: string, home: string): string {
+  const name = folderName(root);
+  const inside = relative(root, home).split(sep).join("/");
+  return `${name} holds Satellite's home, ${inside}, and git doesn't ignore it there. Add ${inside}/ to the .gitignore in ${name}, then add it again.`;
+}
+
 function refuse(refusal: string): RepositoryCheck {
   return { ok: false, refusal };
 }
@@ -180,6 +197,9 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   if (!samePath(root, real)) {
     const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
+  }
+  if (isInsidePath(root, read.home) && !(await ignoresHome(root, read.home))) {
+    return refuse(homeInside(root, read.home));
   }
   return { ok: true, root };
 }

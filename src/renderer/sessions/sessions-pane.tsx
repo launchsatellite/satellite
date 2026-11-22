@@ -7,6 +7,7 @@ import { Button } from "../ui/button.tsx";
 import type { Notify } from "../ui/toast.tsx";
 import { focusSessionEvent, focusedTerminal } from "./focus-session.ts";
 import {
+  hooksOffNote,
   leavesFocusAlone,
   sendToClaudeCodeEvent,
   sentText,
@@ -27,7 +28,10 @@ const noSession = "Start a Claude Code session in this workspace first.";
 const answerFirst = "Answer Claude Code first, then send this again.";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
-const missingLeads: Record<InstallFix["kind"], string> = {
+const hooksOffSend = `${hooksOffNote} Type this one yourself.`;
+const updateFix: InstallFix = { kind: "command", text: "claude update" };
+const missingLeads: Record<InstallFix["kind"] | "update", string> = {
+  update: "Run this in a terminal to update it.",
   command: "Run this in a terminal to install it.",
   address: "Follow the steps at this address to install it.",
 };
@@ -37,9 +41,10 @@ function InstallStep() {
   useEffect(() => {
     let current = true;
     void invoke("tools.check", {}).then((check) => {
-      if (current && check.ok && check.value.claude.state === "missing") {
-        setFix(check.value.claude.fix);
-      }
+      if (!current || !check.ok) return;
+      const { claude } = check.value;
+      if (claude.state === "missing") setFix(claude.fix);
+      if (claude.state === "too-old") setFix(updateFix);
     });
     return () => {
       current = false;
@@ -48,7 +53,9 @@ function InstallStep() {
   if (fix === undefined) return null;
   return (
     <div className="flex w-full max-w-[360px] flex-col items-center gap-1">
-      <p className="text-[12px] text-fg2">{missingLeads[fix.kind]}</p>
+      <p className="text-[12px] text-fg2">
+        {missingLeads[fix === updateFix ? "update" : fix.kind]}
+      </p>
       <code
         data-testid="claude-missing-fix"
         className="block w-full rounded-[6px] border border-ctl bg-side px-2 py-1 text-left font-mono text-[12px] break-words text-fg select-all"
@@ -179,7 +186,7 @@ export function SessionsPane({
         return;
       }
       if (!tab.ready) {
-        tell(notReady, "error");
+        tell(tab.hooksOff ? hooksOffSend : notReady, "error");
         return;
       }
       if (tab.status === "needs-you") {

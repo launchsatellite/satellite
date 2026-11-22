@@ -71,9 +71,10 @@ describe("refresh pace", () => {
 function harness() {
   const reads: { at: number; settle: (answer: ScheduleAnswer) => void }[] = [];
   const timers: { at: number; run: () => void; live: boolean }[] = [];
-  const state = { clock: 0, visible: true, reads, timers };
+  const state = { clock: 0, visible: true, focused: true, reads, timers };
   const schedule = createSchedule({
     visible: () => state.visible,
+    focused: () => state.focused,
     now: () => state.clock,
     read: () =>
       new Promise((settle) => {
@@ -119,6 +120,23 @@ describe("refresh schedule", () => {
     state.timers.at(-1)?.run();
     await answer(true, "b");
     expect(next()).toBe(6000 + 2000);
+  });
+
+  it("lets the idle wait grow to 2 minutes while the window is not focused", async () => {
+    const { state, schedule, answer, next, wait } = harness();
+    state.focused = false;
+    schedule.start();
+    const waits: number[] = [];
+    for (let list = 0; list < 7; list += 1) {
+      await answer(true, "same");
+      const at = next() ?? 0;
+      waits.push(at - state.clock);
+      wait(at - state.clock);
+    }
+    expect(waits).toEqual([2000, 4000, 8000, 16_000, 32_000, 64_000, 120_000]);
+    state.focused = true;
+    await answer(true, "same");
+    expect((next() ?? 0) - state.clock).toBe(30_000);
   });
 
   it("counts an answer without a file list as a step even when it differs", async () => {

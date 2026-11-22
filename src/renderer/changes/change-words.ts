@@ -144,6 +144,9 @@ export function moreSentence(more: number): string {
   return more === 1 ? "1 more file is not listed." : `${String(more)} more files are not listed.`;
 }
 
+export const leftOutSentence =
+  "New files are left out, because untracked folders here hold too many to list.";
+
 export function longPathsSentence(longPaths: number): string {
   return longPaths === 1
     ? "1 file has a path too long to show."

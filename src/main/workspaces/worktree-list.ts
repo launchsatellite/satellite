@@ -8,6 +8,7 @@ export interface ListedWorktree {
   detached: boolean;
   bare: boolean;
   locked: boolean;
+  initializing: boolean;
   prunable: boolean;
 }
 type Separator = "\0" | "\n";
@@ -23,6 +24,7 @@ function emptyRecord(): ListedWorktree {
     detached: false,
     bare: false,
     locked: false,
+    initializing: false,
     prunable: false,
   };
 }
@@ -34,8 +36,10 @@ function readLine(record: ListedWorktree, label: string, value: string): void {
     record.branch = value.startsWith(branchPrefix) ? value.slice(branchPrefix.length) : value;
   } else if (label === "detached") record.detached = true;
   else if (label === "bare") record.bare = true;
-  else if (label === "locked") record.locked = true;
-  else if (label === "prunable") record.prunable = true;
+  else if (label === "locked") {
+    record.locked = true;
+    record.initializing = value === "initializing";
+  } else if (label === "prunable") record.prunable = true;
 }
 
 async function listWith(root: string, separator: Separator) {

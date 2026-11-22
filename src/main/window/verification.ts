@@ -4,7 +4,7 @@ const driverCheckMs = 1000;
 
 let driverAtStart: number | undefined;
 
-function underVerification(): boolean {
+export function underVerification(): boolean {
   return process.env["SATELLITE_VERIFY_FOLDER_DIALOG"] !== undefined;
 }
 
