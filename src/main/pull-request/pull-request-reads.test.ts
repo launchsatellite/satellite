@@ -588,6 +588,36 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(needing).toHaveBeenLastCalledWith([]);
   });
 
+  it("keeps every workspace's needs through a rate limit a queued read meets", async () => {
+    const { answer, read, needing, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await read(second);
+    expect(needing).toHaveBeenCalledTimes(2);
+    await answer("view", { exitCode: 1, stderr: "API rate limit exceeded for user" });
+    advance(10_000);
+    expect(await Promise.all([read(first), read(second)])).toEqual([
+      { kind: "unavailable", reason: "rate-limited" },
+      { kind: "unavailable", reason: "rate-limited" },
+    ]);
+    expect(needing).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps needing when the branch itself cannot be read", async () => {
+    const { answer, read, needing, advance, repo } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await writeFile(join(repo, ".git", "HEAD"), "not a ref\n");
+    advance(10_000);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "failed" });
+    expect(needing).toHaveBeenCalledTimes(1);
+    await writeFile(join(repo, ".git", "HEAD"), "ref: refs/heads/main\n");
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    advance(60_000);
+    await read(first);
+    expect(needing).toHaveBeenCalledTimes(1);
+  });
+
   it("lets the old branch's pull request go when a read fails after a branch switch", async () => {
     const { answer, read, needing, advance, repo } = await setup();
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });

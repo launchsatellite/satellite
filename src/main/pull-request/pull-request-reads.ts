@@ -217,8 +217,8 @@ export function createPullRequests({
     const keeps =
       answer.kind === "unavailable" &&
       transient.has(answer.reason) &&
-      branch !== null &&
-      before?.branch === branch;
+      before !== undefined &&
+      (branch === null || before.branch === branch);
     const kept = answer.kind === "found" ? answer : keeps ? before.kept : null;
     const failures = failed ? (before?.failures ?? 0) + 1 : 0;
     const hold = Math.min(firstHoldMs * 2 ** (failures - 1), longestHoldMs);
@@ -227,7 +227,7 @@ export function createPullRequests({
       answer,
       at: now(),
       kept,
-      branch,
+      branch: keeps ? before.branch : branch,
       place: answer.kind === "found" ? place : keeps ? before.place : null,
       verified: answer.kind === "found" ? verified : keeps ? before.verified : null,
       jobs:
