@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "An agentic development environment where agents do the work and you stay at the centre.",
   "homepage": "https://launchsatellite.com",
+  "license": "MIT",
   "private": true,
   "author": "Satellite",
   "type": "module",
