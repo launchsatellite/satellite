@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
@@ -31,10 +31,6 @@ function countSentence(count: number): string {
   return count === 1 ? "1 workspace needs you." : `${String(count)} workspaces need you.`;
 }
 
-function rowLabel(project: ProjectView, workspace: WorkspaceView): string {
-  return project.missing === null ? workspaceLabel(project, workspace) : (workspace.name ?? "main");
-}
-
 function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]): ShownRow[] {
   const repeated = repeatedNames(projects);
   return withUniqueTestIds(
@@ -49,7 +45,7 @@ function shownRows(rows: readonly InboxRow[], projects: readonly ProjectView[]):
           key: `${project.id}/${workspace.key}`,
           row,
           testId: `inbox-${project.name}-${workspace.name ?? "main"}`,
-          label: rowLabel(project, workspace),
+          label: workspaceLabel(project, workspace),
           project: shownProject(project, repeated),
           sentence: reasonSentence(row),
         },

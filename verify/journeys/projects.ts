@@ -270,6 +270,11 @@ async function run(session: AppSession): Promise<void> {
   await moveAside(session.folder("beta"), session.folder("beta-moved"), "beta");
   await session.relaunch();
   await showsMissing(session, "beta", "after its folder moved");
+  assert.equal(
+    (await session.page.getByTestId("workspace-beta-main").innerText()).trim(),
+    "main",
+    "the moved beta's row lost its branch",
+  );
   await session.page.getByTestId("workspace-beta-main").click();
   await centreReads(session, "beta isn't where it was", "after selecting the moved beta");
   await session.screenshot("projects-missing");
