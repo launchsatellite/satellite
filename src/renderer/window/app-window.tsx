@@ -20,7 +20,11 @@ import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { GuideLayer } from "../guide/guide-layer.tsx";
-import { guideClosedSentence } from "../guide/guide-steps.ts";
+import {
+  guideClosedSentence,
+  guideWaitsForToolsSentence,
+  guideWaitsSentence,
+} from "../guide/guide-steps.ts";
 import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
@@ -241,6 +245,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
+  const guideUnplaced = useCallback(() => {
+    notify(checking ? guideWaitsForToolsSentence : guideWaitsSentence, "info");
+  }, [notify, checking]);
   const closeCheck = useCallback(() => {
     setChecking(false);
   }, []);
@@ -1141,6 +1148,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           onNext={guide.next}
           onDone={guide.done}
           onClose={guide.close}
+          onUnplaced={guideUnplaced}
         />
         <section
           ref={projectsRef}

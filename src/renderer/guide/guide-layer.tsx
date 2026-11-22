@@ -20,6 +20,7 @@ interface GuideLayerProps {
   onNext: () => void;
   onDone: () => void;
   onClose: () => void;
+  onUnplaced: () => void;
 }
 
 const fallbackFocus =
@@ -65,7 +66,15 @@ function anchorTurnedUp(records: MutationRecord[], anchor: string): boolean {
   );
 }
 
-export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }: GuideLayerProps) {
+export function GuideLayer({
+  step,
+  covered,
+  focusAsk,
+  onNext,
+  onDone,
+  onClose,
+  onUnplaced,
+}: GuideLayerProps) {
   const card = useRef<HTMLDivElement>(null);
   const cameFrom = useRef<HTMLElement | null>(null);
   const held = useRef<Placement | null>(null);
@@ -181,13 +190,14 @@ export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }:
     if (focusAsk > asked.current) {
       asked.current = focusAsk;
       wantFocus.current = placeable.current;
+      if (!placeable.current) onUnplaced();
     }
     if (wantFocus.current && placement !== null) {
       wantFocus.current = false;
       byMouse.current = false;
       card.current?.focus({ preventScroll: true });
     }
-  }, [focusAsk, placement]);
+  }, [focusAsk, placement, onUnplaced]);
 
   useLayoutEffect(() => {
     if (covered && card.current?.contains(document.activeElement) === true) holding.current = true;
