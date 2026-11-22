@@ -73,6 +73,7 @@ export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }:
   const watcher = useRef<ResizeObserver | null>(null);
   const placeable = useRef(false);
   const byMouse = useRef(false);
+  const holding = useRef(false);
   const asked = useRef(0);
   const wantFocus = useRef(false);
   const inside = useRef(false);
@@ -187,6 +188,20 @@ export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }:
       card.current?.focus({ preventScroll: true });
     }
   }, [focusAsk, placement]);
+
+  useLayoutEffect(() => {
+    if (covered && card.current?.contains(document.activeElement) === true) holding.current = true;
+  }, [covered]);
+
+  useLayoutEffect(() => {
+    if (placement === null || !holding.current) return;
+    holding.current = false;
+    const active = document.activeElement;
+    if (active === null || active === document.body) {
+      byMouse.current = false;
+      card.current?.focus({ preventScroll: true });
+    }
+  }, [placement]);
 
   useLayoutEffect(() => {
     if (step !== null || !inside.current) return;

@@ -361,6 +361,9 @@ async function columnBoxes(session: AppSession): Promise<Box[]> {
 
 async function moveControl(session: AppSession, step: GuideStep, away: boolean): Promise<void> {
   const { anchor } = anchors[step];
+  await session.page
+    .locator(`[data-guide="${anchor}"]`)
+    .waitFor({ state: "attached", timeout: promptTimeoutMs });
   await session.page.evaluate(
     ([name, out]) => {
       const control = document.querySelector<HTMLElement>(`[data-guide="${String(name)}"]`);
@@ -661,18 +664,20 @@ async function edgePass(session: AppSession): Promise<void> {
   await gone(session, "create-workspace", "after Escape in the dialog");
   await stepShows(session, 2, "after the dialog closed", true);
 
+  await showGuide(session);
+  await cardFocused(session, "before the command menu opened from the card");
   await session.page.keyboard.press(`${commandModifier}+K`);
   await visible(session, "palette", "over the guide");
   await cardHidden(session, "under the command menu");
   await session.page.keyboard.press("Escape");
   await gone(session, "palette", "after Escape in the command menu");
   await stepShows(session, 2, "after the command menu closed", true);
+  await cardFocused(session, "after the command menu opened from the card closed");
   assert.deepEqual(
     (await statusReads(session)).filter((read) => read !== ""),
     [],
     "the status region spoke again when a dialog and the command menu came and went",
   );
-  assert.ok(!(await focusInCard(session)), "the card took focus back after a dialog");
 
   await sitsBeside(session, 2, "after the command menu closed");
 
@@ -706,6 +711,7 @@ async function edgePass(session: AppSession): Promise<void> {
 
   await session.answerFolderDialog(session.repo);
   await session.page.getByTestId("add-first-project").click();
+  await visible(session, "project-repo", "after the project was added again");
   await settled(session);
   await noCard(session, "after the project was added again, since the guide was seen");
 }
