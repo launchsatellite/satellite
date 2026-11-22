@@ -488,6 +488,12 @@ async function findsByName(session: AppSession): Promise<void> {
   await page.keyboard.press("Enter");
   await page.getByTestId("files").waitFor({ timeout: waitMs });
   await editorShows(session, "needle", "after opening it by name");
+  await waitUntil(
+    () =>
+      page.evaluate(() => document.activeElement?.closest("[data-testid='file-pane']") !== null),
+    waitMs,
+    "focus did not move into the viewer after opening a file by name",
+  );
   assert.equal((await tabPaths(page)).titles.length, 1, "opening by name made no single tab");
   assert.equal(
     (await rowOf(session, "src", "after opening by name")).open,

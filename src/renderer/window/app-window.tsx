@@ -444,13 +444,41 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const fileSearch = useFileSearch(changesHere, palette === "files");
   const fileTabs = useFileTabs(state, update, changesHere, listedWorkspace);
   const openFileTab = fileTabs.open;
+  const openedByName = useRef<string | null>(null);
   const openFound = useCallback(
     (path: string) => {
+      openedByName.current = path;
       openFileTab(path);
       setCentreView("files");
     },
     [openFileTab],
   );
+  useEffect(() => {
+    if (fileShown === null) return;
+    if (openedByName.current !== fileShown.path) return;
+    openedByName.current = null;
+    let frame = 0;
+    let tries = 60;
+    const focusOpened = () => {
+      const viewer = document.querySelector<HTMLElement>("[data-testid='file-pane'] textarea");
+      if (viewer !== null) {
+        viewer.focus();
+        return;
+      }
+      tries -= 1;
+      if (fileShown.kind === "text" && tries > 0) {
+        frame = requestAnimationFrame(focusOpened);
+        return;
+      }
+      document
+        .querySelector<HTMLElement>("[data-testid='file-tabs'] [aria-selected='true']")
+        ?.focus();
+    };
+    frame = requestAnimationFrame(focusOpened);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [fileShown]);
   const shownPullRequestUrl = shownPullRequest?.url ?? null;
   const pullRequestFound = shownPullRequest !== null;
   const placeHere =
