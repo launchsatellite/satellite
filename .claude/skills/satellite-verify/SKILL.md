@@ -69,7 +69,7 @@ The output is `{ scenario, home, repo, steps: [{ step, ok, value?, error?, outpu
 
 ## Scenarios
 
-A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenarioSchema` in `verify/scenario.ts`.
+A scenario is `verify/scenarios/<kebab-name>/scenario.json`, checked by `scenarioSchema` in `verify/scenario.ts`, and `verify/scenario.test.ts` loads every one, so a scenario no journey runs still cannot rot.
 
 - `description` says what world it sets up.
 - `repo` builds the throwaway repo in order. `{ "write": { "path", "content" | "base64", "executable"? } }` writes a file inside it, text from `content` or bytes from `base64` for a binary file such as an image, with mode `0o755` when `executable` is true, such as a hook in `.git/hooks`, and `{ "git": [args] }` runs the real `git` there, with no system config and a global config naming `Satellite Verify`.

@@ -1,5 +1,6 @@
+import { readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { scenarioSchema } from "./scenario.ts";
+import { loadScenario, scenarioSchema } from "./scenario.ts";
 
 const base = {
   description: "d",
@@ -30,5 +31,13 @@ describe("scenarioSchema", () => {
   it("keeps the exact arguments entry and refuses a call that is not one of the three", () => {
     expect(scenarioSchema.safeParse({ ...base, gh: [{ args: ["--version"] }] }).success).toBe(true);
     expect(scenarioSchema.safeParse({ ...base, gh: [{ call: "merge" }] }).success).toBe(false);
+  });
+});
+
+describe("loadScenario", () => {
+  it("loads every scenario folder", async () => {
+    const folders = await readdir(new URL("scenarios/", import.meta.url));
+    expect(folders.length).toBeGreaterThan(0);
+    for (const name of folders) await expect(loadScenario(name), name).resolves.toBeDefined();
   });
 });
