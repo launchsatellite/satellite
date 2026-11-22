@@ -41,7 +41,7 @@ export function WorkspaceHeader({
     <header
       data-testid="workspace-header"
       tabIndex={-1}
-      className="@container order-first focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
+      className="@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
       <h1 className="max-w-[45%] min-w-10 truncate text-[14px] font-semibold">
         <VisibleName text={workspace.name ?? project.name} />

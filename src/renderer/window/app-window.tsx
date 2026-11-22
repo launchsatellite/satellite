@@ -1061,6 +1061,21 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     }
     return (
       <>
+        <WorkspaceHeader
+          project={selectedProject}
+          workspace={selectedWorkspace}
+          base={changes.header?.base ?? null}
+          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
+          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
+          pullRequest={shownPullRequest}
+          processes={processesHere.length}
+          onShowProcesses={() => {
+            setProcessesOpen(true);
+          }}
+          onShowPullRequest={() => {
+            setCentreView("pull-request");
+          }}
+        />
         {selectedProject.missing !== null ? (
           <FolderMissing
             name={visibleText(selectedProject.name)}
@@ -1142,21 +1157,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             />
           ))
         )}
-        <WorkspaceHeader
-          project={selectedProject}
-          workspace={selectedWorkspace}
-          base={changes.header?.base ?? null}
-          ahead={changes.header === undefined ? selectedWorkspace.ahead : changes.header.ahead}
-          behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
-          pullRequest={shownPullRequest}
-          processes={processesHere.length}
-          onShowProcesses={() => {
-            setProcessesOpen(true);
-          }}
-          onShowPullRequest={() => {
-            setCentreView("pull-request");
-          }}
-        />
       </>
     );
   };
