@@ -65,7 +65,7 @@ interface Shared {
   worktreeLeft: boolean;
 }
 export type DefaultStart =
-  { remote: null } | { remote: string; branch: string | null; unread?: true };
+  { remote: null; remotes: number } | { remote: string; branch: string | null; unread?: true };
 
 const includeFilesMs = 120_000;
 
@@ -73,6 +73,7 @@ const remotePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const signInPattern =
   /unable to get password from user|could not read (?:Username|Password)|terminal prompts disabled|Authentication failed|Permission denied \(publickey/;
+const goneOnRemote = "couldn't find remote ref";
 const remoteHeadPattern = /^refs\/remotes\/[^/]+\/HEAD$/;
 const startPrefixes = ["refs/heads/", "refs/remotes/"];
 const includeLimit = 65536;
@@ -187,7 +188,9 @@ export async function defaultStart(
   const run = await listed;
   if (run?.exitCode !== 0) return undefined;
   const remote = pickRemote(run.stdout);
-  if (remote === null) return { remote };
+  if (remote === null) {
+    return { remote, remotes: run.stdout.split("\n").filter((line) => line !== "").length };
+  }
   const branch = await cachedDefault(root, remote, signal);
   return branch === undefined ? { remote, branch: null, unread: true } : { remote, branch };
 }
@@ -204,6 +207,23 @@ async function remoteDefault(root: string, remote: string, signal: AbortSignal) 
   const match = line === undefined ? null : /^ref: refs\/heads\/(.+)\tHEAD$/.exec(line);
   const branch = match?.[1] ?? "";
   return isBranchName(branch) ? branch : null;
+}
+
+function fetchBranch(root: string, remote: string, branch: string, signal: AbortSignal) {
+  return git(
+    root,
+    [
+      "fetch",
+      "--no-tags",
+      "--no-recurse-submodules",
+      "--no-write-fetch-head",
+      "--end-of-options",
+      remote,
+      `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+    ],
+    fetchMs,
+    signal,
+  );
 }
 
 async function refOid(root: string, ref: string): Promise<string | null> {
@@ -253,7 +273,19 @@ function needsSignIn(run: ToolRun | undefined): boolean {
   return run !== undefined && signInPattern.test(run.stderr);
 }
 
-async function startFromMain(root: string, project: string, shared: Shared): Promise<string> {
+function withoutRemoteWords(project: string, remotes: number): string {
+  if (remotes === 0) return `${project} has no remote`;
+  return remotes === 1
+    ? `${project}'s only remote has a name Satellite won't pass to git`
+    : `${project} has several remotes and none is origin`;
+}
+
+async function startFromMain(
+  root: string,
+  project: string,
+  shared: Shared,
+  remotes: number,
+): Promise<string> {
   const main = (await listWorktrees(root))?.worktrees[0];
   if (main === undefined) throw new Error("git worktree list did not answer");
   if (main.head === null || !oidPattern.test(main.head)) {
@@ -262,16 +294,17 @@ async function startFromMain(root: string, project: string, shared: Shared): Pro
     );
   }
   shared.oid = main.head;
+  const why = withoutRemoteWords(project, remotes);
   return main.branch !== null && isBranchName(main.branch)
-    ? `${project} has no remote, so it starts from ${main.branch}.`
-    : `${project} has no remote, so it starts from the current commit.`;
+    ? `${why}, so it starts from ${main.branch}.`
+    : `${why}, so it starts from the current commit.`;
 }
 
 async function startFromDefault(context: CreationContext, shared: Shared): Promise<string> {
   const { root, project, signal } = context;
   const found = await inStep(() => defaultStart(root));
   if (found === undefined) throw new Error("git remote did not answer");
-  if (found.remote === null) return startFromMain(root, project, shared);
+  if (found.remote === null) return startFromMain(root, project, shared, found.remotes);
   const { remote } = found;
   const branch = found.branch ?? (await remoteDefault(root, remote, signal));
   stopIfQuitting(signal);
@@ -280,20 +313,27 @@ async function startFromDefault(context: CreationContext, shared: Shared): Promi
       `Satellite couldn't find the default branch of ${remote}. Start from a branch you have instead.`,
     );
   }
-  const fetched = await git(
-    root,
-    [
-      "fetch",
-      "--no-tags",
-      "--no-recurse-submodules",
-      "--no-write-fetch-head",
-      "--end-of-options",
-      remote,
-      `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
-    ],
-    fetchMs,
-    signal,
-  );
+  const fetched = await fetchBranch(root, remote, branch, signal);
+  stopIfQuitting(signal);
+  if (fetched?.stderr.includes(goneOnRemote) === true) {
+    const current = await remoteDefault(root, remote, signal);
+    stopIfQuitting(signal);
+    if (current === null || current === branch) {
+      throw new StepFailure(
+        `${remote} no longer has ${branch}. Run git remote set-head ${remote} --auto, then try again, or start from a branch you have.`,
+      );
+    }
+    const moved = await fetchBranch(root, remote, current, signal);
+    stopIfQuitting(signal);
+    shared.oid =
+      moved?.exitCode === 0 ? await refOid(root, `refs/remotes/${remote}/${current}`) : null;
+    if (shared.oid === null) {
+      throw new StepFailure(
+        `${remote}'s default branch is ${current} now, and Satellite couldn't fetch it. Try again, or start from a branch you have.`,
+      );
+    }
+    return `${remote}'s default branch is ${current} now, so it fetched ${current}.`;
+  }
   stopIfQuitting(signal);
   shared.oid = await refOid(root, `refs/remotes/${remote}/${branch}`);
   const signIn = needsSignIn(fetched);

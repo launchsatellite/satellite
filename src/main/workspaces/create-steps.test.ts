@@ -163,6 +163,20 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     if (onUnix) expect((await lstat(path)).mode & 0o777).toBe(0o700);
   });
 
+  it("follows the remote's default branch after it was renamed", async () => {
+    const upstream = join(base, "upstream");
+    await run("git", ["init", "-q", "-b", "master", upstream], { env: gitEnvironment() });
+    await commit(upstream, "a", "first commit\n");
+    const root = join(base, "repo");
+    await run("git", ["clone", "-q", upstream, root], { env: gitEnvironment() });
+    await git(upstream, ["branch", "-m", "master", "main"]);
+    const latest = await commit(upstream, "b", "second commit\n");
+    const { result, path, detail } = await create(root, "renamed");
+    expect(result).toEqual({ ok: true });
+    expect(detail("start")).toBe("origin's default branch is main now, so it fetched main.");
+    expect(await git(path, ["rev-parse", "HEAD"])).toBe(latest);
+  });
+
   it("starts from a chosen branch", async () => {
     const root = await repository();
     const first = await commit(root, "a", "first commit\n");
@@ -184,6 +198,18 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     expect(result).toEqual({ ok: true });
     expect(detail("start")).toBe("repo has no remote, so it starts from main.");
     expect(await git(path, ["rev-parse", "HEAD"])).toBe(first);
+  });
+
+  it("says so when several remotes have none named origin", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["remote", "add", "upstream", join(base, "nowhere")]);
+    await git(root, ["remote", "add", "fork", join(base, "elsewhere")]);
+    const { result, detail } = await create(root, "several");
+    expect(result).toEqual({ ok: true });
+    expect(detail("start")).toBe(
+      "repo has several remotes and none is origin, so it starts from main.",
+    );
   });
 
   it("copies only ignored files .worktreeinclude names", async () => {
