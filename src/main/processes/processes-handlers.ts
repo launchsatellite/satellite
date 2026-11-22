@@ -124,7 +124,10 @@ export function createProcesses({
     );
     if (listed.length === 0) return { at, rows: [], more: [] };
     const [ports, commands] = await Promise.all([
-      readPorts(listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid))),
+      readPorts([
+        ...listed.map(({ entry }) => entry.pid),
+        ...listed.flatMap(({ subtree }) => subtree.map(({ pid }) => pid)),
+      ]),
       readCommandLines(listed.map(({ entry }) => entry)),
     ]);
     const rows = listed.flatMap((owned) => {
