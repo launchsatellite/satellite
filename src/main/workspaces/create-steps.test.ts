@@ -355,23 +355,30 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     );
   });
 
-  it.skipIf(!onUnix)("refuses a .worktreeinclude that is a link and undoes", async () => {
-    const root = await repository();
-    await commit(root, "a", "first commit\n");
-    const outside = join(base, "outside-include");
-    await writeFile(outside, ".env\n");
-    await symlink(outside, join(root, ".worktreeinclude"));
-    const { result, path } = await create(root, "linked");
-    expect(result).toEqual({
-      ok: false,
-      step: "files",
-      sentence:
-        ".worktreeinclude isn't a plain file of at most 64 KiB, so Satellite won't read it.",
-      undone: true,
-      left: null,
-    });
-    await leftNothing(root, "linked", path);
-  });
+  it.skipIf(!onUnix)(
+    "refuses a .worktreeinclude that is a link before making anything",
+    async () => {
+      const root = await repository();
+      await commit(root, "a", "first commit\n");
+      const outside = join(base, "outside-include");
+      await writeFile(outside, ".env\n");
+      await symlink(outside, join(root, ".worktreeinclude"));
+      vi.mocked(runGit).mockClear();
+      const { result, path } = await create(root, "linked");
+      const ran = vi.mocked(runGit).mock.calls.map(([, args]) => args[0]);
+      expect(ran).not.toContain("branch");
+      expect(ran).not.toContain("worktree");
+      expect(result).toEqual({
+        ok: false,
+        step: "start",
+        sentence:
+          ".worktreeinclude isn't a plain file of at most 64 KiB, so Satellite won't read it.",
+        undone: true,
+        left: null,
+      });
+      await leftNothing(root, "linked", path);
+    },
+  );
 
   it.skipIf(!onUnix)("undoes the branch and the worktree when a hook fails", async () => {
     const root = await repository();
