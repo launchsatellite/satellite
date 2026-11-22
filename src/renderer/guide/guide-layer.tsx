@@ -253,7 +253,7 @@ export function GuideLayer({ step, covered, focusAsk, onNext, onDone, onClose }:
             onFocus={remember}
             onBlur={leave}
             onKeyDown={escape}
-            className={`fixed flex w-[300px] flex-col gap-2 rounded-[10px] border border-line bg-raised pt-3 pr-3 pb-4 pl-4 text-[13px] leading-5 font-normal text-fg shadow-raised outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${placement === null ? "invisible" : ""}`}
+            className={`fixed flex w-[300px] flex-col gap-2 rounded-[10px] border border-line bg-raised pt-3 pr-3 pb-4 pl-4 text-[13px] leading-5 font-normal text-fg shadow-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${placement === null ? "invisible" : ""}`}
             style={placement?.card ?? { left: 0, top: 0 }}
           >
             {placement !== null && (

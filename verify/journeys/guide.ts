@@ -163,6 +163,11 @@ async function stepShows(
   );
   if (!focusAsked) {
     assert.ok(!(await focusInCard(session)), `step ${String(step)} took focus ${when}`);
+    assert.equal(
+      (await cardOutline(session)).style,
+      "none",
+      `step ${String(step)} drew a focus ring by itself ${when}`,
+    );
   }
 }
 
@@ -315,11 +320,25 @@ async function showGuide(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Enter");
 }
 
+async function cardOutline(session: AppSession): Promise<{ style: string; width: string }> {
+  return session.page.evaluate(() => {
+    const card = document.querySelector('[data-testid="guide-card"]');
+    if (card === null) return { style: "", width: "" };
+    const { outlineStyle, outlineWidth } = getComputedStyle(card);
+    return { style: outlineStyle, width: outlineWidth };
+  });
+}
+
 async function cardFocused(session: AppSession, when: string): Promise<void> {
   await waitUntil(
     async () => (await focusedId(session)) === "guide-card",
     promptTimeoutMs,
     `the card did not take focus ${when}`,
+  );
+  const outline = await cardOutline(session);
+  assert.ok(
+    outline.style !== "none" && outline.width === "2px",
+    `the focused card drew no 2 pixel focus ring ${when}, it read ${describe(outline)}`,
   );
 }
 
