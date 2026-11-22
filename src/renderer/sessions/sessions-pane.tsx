@@ -18,6 +18,7 @@ import { tabLimit, tabLimitSentence, type Sessions } from "./use-sessions.ts";
 interface SessionsPaneProps {
   sessions: Sessions;
   selected: WorkspaceRef | null;
+  hasProjects: boolean;
   onAskLink: (address: string) => void;
   notify: Notify;
 }
@@ -27,8 +28,8 @@ const answerFirst = "Answer Claude Code first, then send this again.";
 const notReady =
   "Satellite sends here only after Claude Code reports your first request. Type this one yourself.";
 const missingLeads: Record<InstallFix["kind"], string> = {
-  command: "Run this in a terminal, then start Claude Code again.",
-  address: "Follow the steps at this address, then start Claude Code again.",
+  command: "Run this in a terminal to install it.",
+  address: "Follow the steps at this address to install it.",
 };
 
 function InstallStep() {
@@ -46,11 +47,11 @@ function InstallStep() {
   }, []);
   if (fix === undefined) return null;
   return (
-    <div className="flex flex-col items-center gap-1">
-      <p className="text-[12.5px] text-fg2">{missingLeads[fix.kind]}</p>
+    <div className="flex w-full max-w-[360px] flex-col items-center gap-1">
+      <p className="text-[12px] text-fg2">{missingLeads[fix.kind]}</p>
       <code
         data-testid="claude-missing-fix"
-        className="rounded-[6px] border border-ctl bg-side px-2 py-1 font-mono text-[12px] break-words text-fg select-all"
+        className="block w-full rounded-[6px] border border-ctl bg-side px-2 py-1 text-left font-mono text-[12px] break-words text-fg select-all"
       >
         {fix.text}
       </code>
@@ -96,7 +97,11 @@ function EmptyWorkspace({
   if (resumable === undefined) return <div className="flex-1" />;
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-      <p role="status" data-testid="sessions-empty" className="text-[13px] text-fg2">
+      <p
+        role={missing === undefined && !(full && atLimit) ? undefined : "status"}
+        data-testid="sessions-empty"
+        className="text-[13px] text-fg2"
+      >
         {missing ??
           (full && atLimit ? tabLimitSentence : undefined) ??
           (resumable
@@ -144,7 +149,13 @@ function EmptyWorkspace({
   );
 }
 
-export function SessionsPane({ sessions, selected, onAskLink, notify }: SessionsPaneProps) {
+export function SessionsPane({
+  sessions,
+  selected,
+  hasProjects,
+  onAskLink,
+  notify,
+}: SessionsPaneProps) {
   const tabs = selected === null ? [] : sessions.tabsOf(selected);
   const active = selected === null ? undefined : sessions.activeOf(selected);
   const shownTab = tabs.find((tab) => tab.key === active);
@@ -210,7 +221,9 @@ export function SessionsPane({ sessions, selected, onAskLink, notify }: Sessions
       return (
         <div className="flex flex-1 items-center justify-center p-6 text-center">
           <p data-testid="sessions-empty" className="text-[13px] text-fg2">
-            Pick a workspace to start Claude Code there.
+            {hasProjects
+              ? "Pick a workspace to start Claude Code there."
+              : "Add a project to start Claude Code in it."}
           </p>
         </div>
       );

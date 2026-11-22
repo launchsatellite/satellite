@@ -243,7 +243,7 @@ async function run(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Enter");
   await toastReads(
     session,
-    "Satellite forgot alpha. Its folder is untouched.",
+    "Satellite removed alpha. Its folder is untouched.",
     "after removing alpha",
   );
   await gone(session, "project-alpha", "after removing it");

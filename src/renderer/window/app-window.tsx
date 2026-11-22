@@ -78,9 +78,9 @@ const notificationsOff = "Notifications are off. The inbox still shows what need
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 
 function forgotSentence(name: string, workspaces: number): string {
-  if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
+  if (workspaces === 0) return `Satellite removed ${name}. Its folder is untouched.`;
   const counted = workspaces === 1 ? "1 workspace" : `${String(workspaces)} workspaces`;
-  return `Satellite forgot ${name} and its ${counted}. Every folder stays where it is.`;
+  return `Satellite removed ${name} and its ${counted}. Every folder stays where it is.`;
 }
 
 function archivedSentence(name: string, branch: string | null, leftover: string | null): string {
@@ -1134,6 +1134,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           <SessionsPane
             sessions={sessions}
             selected={sessionHere ?? null}
+            hasProjects={projects === undefined || projects.length > 0}
             onAskLink={askTerminalLink}
             notify={notify}
           />
