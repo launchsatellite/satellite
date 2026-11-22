@@ -22,7 +22,6 @@ import {
   gitReadMs,
   ignoredListMs,
   lsRemoteMs,
-  noLazyFetch,
   runGit,
   worktreeAddMs,
 } from "./git-command.ts";
@@ -170,7 +169,6 @@ async function cachedDefault(
     ["symbolic-ref", "--quiet", `refs/remotes/${remote}/HEAD`],
     gitReadMs,
     signal,
-    { gitVariables: noLazyFetch },
   );
   if (run === undefined || (run.exitCode !== 0 && run.exitCode !== 1)) return undefined;
   const prefix = `refs/remotes/${remote}/`;
@@ -181,9 +179,7 @@ async function cachedDefault(
 
 export async function defaultStart(
   root: string,
-  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs, undefined, {
-    gitVariables: noLazyFetch,
-  }),
+  listed: Promise<ToolRun | undefined> = runGit(root, ["remote"], gitReadMs),
   signal?: AbortSignal,
 ): Promise<DefaultStart | undefined> {
   const run = await listed;
@@ -436,11 +432,16 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
       stopIfQuitting(signal);
       const folder = await makeLeafFolder(prepared.path, name, prepared.segment);
       shared.folder = folder;
-      const added = await git(
-        root,
-        ["worktree", "add", "--end-of-options", folder.path, name],
-        worktreeAddMs,
-        signal,
+      const added = await inStep(() =>
+        runGit(
+          root,
+          ["worktree", "add", "--end-of-options", folder.path, name],
+          worktreeAddMs,
+          signal,
+          {
+            lazyFetch: true,
+          },
+        ),
       );
       stopIfQuitting(signal);
       if (added?.exitCode !== 0) {

@@ -101,6 +101,8 @@ export async function removeWalked(
     root,
     ["worktree", "remove", ...first, "--end-of-options", path],
     worktreeRemoveMs,
+    undefined,
+    { filtersOf: path },
   );
   if (!forced && run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer)) {
     forced = true;
@@ -108,6 +110,8 @@ export async function removeWalked(
       root,
       ["worktree", "remove", "--force", "--end-of-options", path],
       worktreeRemoveMs,
+      undefined,
+      { filtersOf: path },
     );
   }
   return { kind: "ran", run, forced, linksRemoved };

@@ -212,7 +212,10 @@ function withUnmerged(changes: ListedChange[], unmerged: readonly string[]): Lis
 }
 
 async function gitOutput(folder: string, args: string[], signal: AbortSignal) {
-  return readGit(folder, args, changesReadMs, signal, { gitVariables: storedObjects });
+  return readGit(folder, args, changesReadMs, signal, {
+    gitVariables: storedObjects,
+    filtersOf: folder,
+  });
 }
 
 function stdoutOf(run: ToolRun | GitStop): string | undefined {

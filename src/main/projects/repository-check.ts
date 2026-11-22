@@ -4,6 +4,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
+import {
+  honoursNoLazyFetch,
+  partialCloneRefusal,
+  refusesReads,
+  repositoryConfig,
+} from "../workspaces/repository-config.ts";
 
 export type RevParse =
   | { kind: "work-tree"; toplevel: string; commonDir: string; linked: boolean }
@@ -180,6 +186,12 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   if (!samePath(root, real)) {
     const rootName = folderName(root);
     return refuse(`${name} is inside the repository ${rootName}. Add ${rootName} itself instead.`);
+  }
+  if (
+    !(await honoursNoLazyFetch()) &&
+    refusesReads(false, await repositoryConfig(root).catch(() => undefined))
+  ) {
+    return refuse(partialCloneRefusal);
   }
   return { ok: true, root };
 }

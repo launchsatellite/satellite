@@ -68,6 +68,11 @@ vi.mock("../platform/tools.ts", async (importOriginal) => {
   };
 });
 
+vi.mock("../workspaces/repository-config.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../workspaces/repository-config.ts")>()),
+  refusePartialClone: () => Promise.resolve(),
+}));
+
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
     Promise.resolve(

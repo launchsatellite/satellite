@@ -23,6 +23,11 @@ vi.mock("../platform/tools.ts", async (importOriginal) => {
   };
 });
 
+vi.mock("./repository-config.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository-config.ts")>()),
+  refusePartialClone: () => Promise.resolve(),
+}));
+
 describe("runGit", () => {
   it("answers at once for a git that never exits, and starts none in that folder until it does", async () => {
     const stuck = join(tmpdir(), "code", "stuck");

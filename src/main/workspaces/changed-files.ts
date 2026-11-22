@@ -30,7 +30,7 @@ export function parseStatus(stdout: string): StatusEntry[] {
 export async function readStatus(
   folder: string,
 ): Promise<{ entries: StatusEntry[]; raw: string } | undefined> {
-  const run = await runGit(folder, statusArgs, gitReadMs);
+  const run = await runGit(folder, statusArgs, gitReadMs, undefined, { filtersOf: folder });
   if (run?.exitCode !== 0) return undefined;
   return { entries: parseStatus(run.stdout), raw: run.stdout };
 }
