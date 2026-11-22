@@ -7,6 +7,7 @@ type Read = Extract<PullRequestDetail, { kind: "read" }>;
 function comment(at: string | null, body = "x") {
   return {
     author: "ada-example",
+    outside: false,
     at,
     body,
     bodyCut: false,
