@@ -20,11 +20,17 @@ import type { StoredWorkspace } from "../projects/projects-file.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import * as ignoreCheck from "../files/ignore-check.ts";
 import { creationSteps, prepareWorkspace } from "./create-steps.ts";
+import { runGit } from "./git-command.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
 vi.mock("../files/ignore-check.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof ignoreCheck>();
   return { checkIgnored: vi.fn(actual.checkIgnored) };
+});
+
+vi.mock("./git-command.ts", async (original) => {
+  const actual = await original<typeof import("./git-command.ts")>();
+  return { ...actual, runGit: vi.fn(actual.runGit) };
 });
 
 vi.mock("../platform/user-environment.ts", () => ({
@@ -388,6 +394,23 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     ]);
     expect(saved).toEqual([]);
     await leftNothing(root, "broken", path);
+  });
+
+  it("undoes a branch git made before its run ran out of time", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    const actual = await vi.importActual<typeof import("./git-command.ts")>("./git-command.ts");
+    vi.mocked(runGit).mockImplementation(async (folder, args, ms, signal) => {
+      const answer = await actual.runGit(folder, args, ms, signal);
+      return args[0] === "branch" && args[1] === "--no-track" ? undefined : answer;
+    });
+    try {
+      const { result, path } = await create(root, "slow");
+      expect(result).toMatchObject({ ok: false, step: "branch", undone: true });
+      await leftNothing(root, "slow", path);
+    } finally {
+      vi.mocked(runGit).mockImplementation(actual.runGit);
+    }
   });
 
   it("removes a link made during creation before undoing it, never what it points to", async () => {
