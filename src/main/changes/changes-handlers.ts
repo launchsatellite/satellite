@@ -321,6 +321,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
           files: list.records.map(listedFile),
           more: list.more,
           longPaths: list.longPaths,
+          untrackedLeftOut: list.untrackedLeftOut,
         },
       },
       cached: cachedList(folder, list.records),

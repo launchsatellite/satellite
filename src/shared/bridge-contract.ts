@@ -185,6 +185,7 @@ export const projectView = z.strictObject({
   name: z.string().min(1).max(255),
   parent: z.string().max(255),
   missing: z.enum(["folder", "repository"]).nullable(),
+  worktrees: z.string().min(1).max(300).optional(),
   workspaces: z
     .array(workspaceView)
     .min(1)
@@ -552,6 +553,7 @@ export const bridgeRequests = {
           files: z.array(changedFile).max(changesLimits.files),
           more: count,
           longPaths: count,
+          untrackedLeftOut: z.boolean(),
         }),
         z.strictObject({
           kind: z.literal("unavailable"),

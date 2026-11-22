@@ -1,6 +1,16 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -206,6 +216,20 @@ describe("parentName and shownProjectName", () => {
 });
 
 describe("createProjects", () => {
+  it("refuses to add a project over a file a newer Satellite saved, leaving it as it was", async () => {
+    const { base, home } = await repoWithWorkspace();
+    const other = join(base, "other");
+    await mkdir(other);
+    await run("git", ["init", "-q", "-b", "main", other]);
+    const saved = JSON.stringify({ version: 3, projects: [{ id: randomUUID(), future: true }] });
+    await writeFile(join(home, "projects.json"), saved);
+    const { handlers } = projectsIn(home);
+    await expect(handlers["projects.drop"]({ path: other }, owner)).rejects.toThrow(
+      "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.",
+    );
+    expect(await readFile(join(home, "projects.json"), "utf8")).toBe(saved);
+  });
+
   it("keeps healthy projects healthy while folders hang, and bounds the hung reads", async () => {
     const base = await mkdtemp(join(tmpdir(), "satellite-project-hung-"));
     const stuck = ["a", "b", "c"].map((name) => join(base, name));
@@ -482,6 +506,39 @@ describe("createProjects", () => {
     expect(await storedWorkspaceIds(home)).toHaveLength(1);
   });
 
+  it.each([
+    ["the worktree's .git file is gone", (repo: string, folder: string) => [join(folder, ".git")]],
+    [
+      "the repository no longer knows the worktree",
+      (repo: string) => [join(repo, ".git", "worktrees", "fix-login")],
+    ],
+  ])(
+    "forgets workspaces git no longer counts when %s, and keeps their folders",
+    async (_, gone) => {
+      const { home, repo, workspace, projects } = await repoWithWorkspace();
+      for (const path of gone(repo, workspace.path)) await rm(path, { recursive: true });
+      const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
+      expect(
+        await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
+      ).toEqual({ forgotWorkspaces: 1 });
+      expect(await storedWorkspaceIds(home)).toEqual([]);
+      expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
+    },
+  );
+
+  it("forgets workspaces of a repository another one replaced, and keeps their folders", async () => {
+    const { base, home, repo, gitIn, workspace, projects } = await repoWithWorkspace();
+    const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
+    await rename(repo, join(base, "repo-aside"));
+    await mkdir(repo);
+    await gitIn(repo, ["init", "-q", "-b", "main"]);
+    expect(
+      await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
+    ).toEqual({ forgotWorkspaces: 1 });
+    expect(await storedWorkspaceIds(home)).toEqual([]);
+    expect(await stat(join(workspace.path, "a")).then((entry) => entry.isFile())).toBe(true);
+  });
+
   it("forgets a missing project with its workspaces and stops the sessions in each", async () => {
     const { home, repo, workspace } = await repoWithWorkspace();
     const stopSessions = vi.fn((folder: string) => {
@@ -492,6 +549,7 @@ describe("createProjects", () => {
     await rm(repo, { recursive: true, force: true });
     const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
     expect(project?.missing).toBe("folder");
+    expect(project?.worktrees).toBe("worktrees/repo");
     expect(
       await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
     ).toEqual({ forgotWorkspaces: 1 });
@@ -576,6 +634,40 @@ describe("createProjects", () => {
       "being-made",
     );
     expect(await storedWorkspaceIds(home)).toEqual(stored);
+  });
+
+  it("never adopts a worktree whose checkout was cut off, and names its folder once", async () => {
+    const { home, repo, gitIn, projects } = await repoWithWorkspace();
+    await writeFile(join(repo, ".gitattributes"), "cut.txt filter=cut\n");
+    await writeFile(join(repo, "cut.txt"), "cut\n");
+    await gitIn(repo, ["add", ".gitattributes", "cut.txt"]);
+    await gitIn(repo, ["commit", "-q", "-m", "two"]);
+    await gitIn(repo, ["config", "filter.cut.smudge", "kill -9 0"]);
+    const half = join(home, "worktrees", "repo", "half-made");
+    const cut = spawn("git", ["-C", repo, "worktree", "add", "-q", "-b", "half-made", half], {
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, LC_ALL: "C" },
+    });
+    const signal = await new Promise<NodeJS.Signals | null>((resolve) => {
+      cut.on("exit", (_code, killedBy) => {
+        resolve(killedBy);
+      });
+    });
+    expect(signal).toBe("SIGKILL");
+    const lock = await readFile(join(repo, ".git", "worktrees", "half-made", "locked"), "utf8");
+    expect(lock.trim()).toBe("initializing");
+    const first = await projects.handlers["projects.list"]({}, owner);
+    expect(first.projects[0]?.workspaces.map((workspace) => workspace.name)).toEqual([
+      null,
+      "fix-login",
+    ]);
+    expect(first.dropped).toEqual([
+      "Making half-made in repo stopped halfway, so Satellite leaves worktrees/repo/half-made in the Satellite home out of the list. git worktree remove --force --force on it clears it.",
+    ]);
+    expect(await storedWorkspaceIds(home)).toHaveLength(1);
+    expect((await projects.handlers["projects.list"]({}, owner)).dropped).toEqual([]);
+    expect(await stat(half).then((entry) => entry.isDirectory())).toBe(true);
   });
 
   it("shows a dropped workspace again when its record could not be forgotten", async () => {

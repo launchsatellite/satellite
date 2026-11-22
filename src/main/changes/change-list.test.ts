@@ -38,6 +38,7 @@ const gitCalls = vi.hoisted(() => {
   const calls: {
     stop?: "time" | "stuck" | undefined;
     diff?: string | undefined;
+    untrackedOverflow?: boolean;
     seen: string[][];
   } = { seen: [] };
   return calls;
@@ -51,6 +52,9 @@ vi.mock("../workspaces/git-command.ts", async (importOriginal) => {
       gitCalls.seen.push([...args[1]]);
       if (gitCalls.diff !== undefined && args[1].includes("--raw")) {
         return Promise.resolve({ exitCode: 0, stdout: gitCalls.diff, stderr: "" });
+      }
+      if (gitCalls.untrackedOverflow === true && args[1].includes("--others")) {
+        return Promise.resolve("output" as const);
       }
       return gitCalls.stop === undefined ? actual.readGit(...args) : Promise.resolve(gitCalls.stop);
     },
@@ -570,6 +574,26 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     const list = await listed(repo, await git("rev-parse", "HEAD"));
     expect(list.records.map((record) => record.path)).toEqual([]);
     expect(list.longPaths).toBe(1);
+  });
+
+  it("keeps the tracked edits when the untracked names are too many to read", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "edited.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "edited.txt"), "two\n");
+    await writeFile(join(repo, "new.txt"), "new\n");
+    gitCalls.untrackedOverflow = true;
+    try {
+      const list = await listed(repo, await git("rev-parse", "HEAD"));
+      expect(list.records.map((record) => [record.path, record.letter])).toEqual([
+        ["edited.txt", "M"],
+      ]);
+      expect(list.untrackedLeftOut).toBe(true);
+    } finally {
+      gitCalls.untrackedOverflow = false;
+    }
+    expect((await listed(repo, await git("rev-parse", "HEAD"))).untrackedLeftOut).toBe(false);
   });
 
   it("answers too-many for a list longer than Satellite reads", async () => {

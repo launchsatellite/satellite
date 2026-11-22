@@ -23,8 +23,7 @@ export function satelliteHome(
   return fromEnvironment;
 }
 
-export function prepareSatelliteHome(): string {
-  const home = satelliteHome();
+export function prepareSatelliteHome(home: string): string {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   if (process.platform !== "win32") chmodSync(home, 0o700);
   return home;

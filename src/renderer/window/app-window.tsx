@@ -77,10 +77,16 @@ const terminalLinkSentence =
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 
-function forgotSentence(name: string, workspaces: number): string {
+function forgotSentence(name: string, workspaces: number, worktrees: string | undefined): string {
   if (workspaces === 0) return `Satellite removed ${name}. Its folder is untouched.`;
   const counted = workspaces === 1 ? "1 workspace" : `${String(workspaces)} workspaces`;
-  return `Satellite removed ${name} and its ${counted}. Every folder stays where it is.`;
+  const kept =
+    worktrees === undefined
+      ? "Every folder stays where it is."
+      : workspaces === 1
+        ? `The workspace's folder stays in ${worktrees} in the Satellite home.`
+        : `The workspaces' folders stay in ${worktrees} in the Satellite home.`;
+  return `Satellite removed ${name} and its ${counted}. ${kept}`;
 }
 
 function archivedSentence(name: string, branch: string | null, leftover: string | null): string {
@@ -273,6 +279,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
   const removableId = removable?.id;
+  const removableWorktrees = removable?.worktrees;
   const removableParent =
     removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
@@ -614,7 +621,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                 true,
               );
               refresh();
-              notify(forgotSentence(String(removableName), forgot), "notice");
+              notify(forgotSentence(String(removableName), forgot, removableWorktrees), "notice");
               focusSidebarIfLost();
             },
           },
@@ -907,6 +914,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     refresh,
     removableId,
     removableName,
+    removableWorktrees,
     notify,
     dismissToast,
     focusSidebarIfLost,
@@ -972,6 +980,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             name={visibleText(selectedProject.name)}
             parent={visibleText(selectedProject.parent)}
             missing={selectedProject.missing}
+            worktrees={selectedProject.worktrees}
+            workspaces={selectedProject.workspaces.length - 1}
           />
         ) : (
           changesHere !== null &&
