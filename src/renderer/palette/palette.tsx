@@ -15,6 +15,7 @@ import { KeyHint } from "../ui/key-hint.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
+import { visibleLabel } from "../ui/visible-name.tsx";
 import { rankMatches } from "../../shared/fuzzy-match.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
@@ -102,7 +103,7 @@ function switcherOptions(
     ranked.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
       testId: `switch-${item.project}-${item.testKey}`,
-      title: visibleText(item.label),
+      title: visibleLabel(item.label),
       detail: visibleText(
         item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       ),

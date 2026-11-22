@@ -278,11 +278,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const removableName =
     removable === undefined
       ? undefined
-      : visibleText(
-          removableParent === undefined
-            ? removable.name
-            : `${removable.name} in ${removableParent}`,
-        );
+      : removableParent === undefined
+        ? removable.name
+        : `${removable.name} in ${removableParent}`;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
