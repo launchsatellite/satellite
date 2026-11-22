@@ -5,7 +5,7 @@ body:
     id: spec
     attributes:
       label: Spec
-      description: The approved spec this task belongs to, like specs/002-shell/spec.md. Leave empty for fixes, docs, CI and tooling.
+      description: The approved spec this task belongs to, like specs/002-shell-and-projects/spec.md. Leave empty for fixes, docs, CI and tooling.
   - type: textarea
     id: task
     attributes:

@@ -26,6 +26,7 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | `verify/` | the driver, scenarios, stand-ins and journeys that prove changes in the real app |
 | `lint/` | the `no-comments` lint rule |
 | `packaging/` | the app icon electron-builder packages |
+| `.github/` | the CI and release workflows, the task issue template and the pull request template |
 | `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer and the licence notices step |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 

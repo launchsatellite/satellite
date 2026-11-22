@@ -15,7 +15,7 @@ The Folder layout section of `ARCHITECTURE.md` maps every folder and the files t
 
 One folder per feature on each side, named for the domain thing, tests beside the code.
 
-- `src/main/<feature>/` holds its handlers and logic, for example `src/main/git/git-status.ts` with `git-status.test.ts` beside its parser.
+- `src/main/<feature>/` holds its handlers and logic, for example `src/main/changes/change-list.ts` with `change-list.test.ts` beside its parser.
 - `src/renderer/<feature>/` holds its views, for example `src/renderer/changes/changes-view.tsx`.
 - A feature that reads a repository keeps its reads in its own folder, as `src/main/changes/` does, on top of `runGit` and `readGit`, with a read queue when reads can pile up and a per-page cache that `owner.onGone` drops. Text from a repository reaches React only through `VisibleName` or Monaco's models, and a name the page sends goes through a key the page was given first. A feature that reads files for a page, as `src/main/files/` does, takes a relative path, runs it through the five steps of the Files section of `ARCHITECTURE.md` (`isChangePath`, a link-free walk, the real path check, a no-follow open and a recheck) by reusing the confined reader of `src/main/changes/file-sides.ts`, and never reads from an absolute path.
 - A feature that reads the machine's processes, as `src/main/processes/` does, takes its rows from the table reader in the platform module, which reads short names for the table that decides and full commands only for the listed ids, lists by a pure rule over a table so a hand-made table in `process.test-fixture.ts` can test it, and keeps what crosses to the page bounded and cut.
