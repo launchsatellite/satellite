@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import {
   chmod,
+  cp,
   lstat,
   mkdir,
   mkdtemp,
@@ -39,6 +40,21 @@ vi.mock("./git-command.ts", async (original) => {
 vi.mock("./worktree-list.ts", async (original) => {
   const actual = await original<typeof import("./worktree-list.ts")>();
   return { ...actual, listWorktrees: vi.fn(actual.listWorktrees) };
+});
+const duringWalk = vi.hoisted(() => {
+  const state: { hook?: () => Promise<void> } = {};
+  return state;
+});
+vi.mock("./folder-links.ts", async (original) => {
+  const actual = await original<typeof import("./folder-links.ts")>();
+  return {
+    ...actual,
+    findLinks: async (...args: Parameters<typeof actual.findLinks>) => {
+      const found = await actual.findLinks(...args);
+      await duringWalk.hook?.();
+      return found;
+    },
+  };
 });
 const beforeRemove = vi.hoisted(() => {
   const state: { hook?: () => Promise<void> } = {};
@@ -164,6 +180,7 @@ beforeEach(async () => {
   vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
   vi.mocked(runGit).mockClear();
   delete beforeRemove.hook;
+  delete duringWalk.hook;
 });
 
 afterEach(() => {
@@ -494,6 +511,38 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
       vi.mocked(listWorktrees).mockImplementation(listActual.listWorktrees);
     }
     expect(await listed(project)).toContain(asGitPrints(record.path));
+  });
+
+  it("refuses when a file appears while it walks the worktree, so nothing unseen is deleted", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "busy");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    duringWalk.hook = () => writeFile(join(record.path, "late.md"), "Saved during the walk.\n");
+    await expect(
+      archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+    ).rejects.toMatchObject({
+      code: "refused",
+      message: "Something changed in busy since you looked. Here is the latest.",
+    });
+    expect(removeCalls()).toEqual([]);
+    expect(await readFile(join(record.path, "late.md"), "utf8")).toBe("Saved during the walk.\n");
+  });
+
+  it("refuses a worktree that belongs to a copy's original, links included", async () => {
+    const original = await repository("repo", true);
+    const record = await workspace(original, "shared");
+    const outside = join(base, "outside");
+    await mkdir(outside);
+    await symlink(outside, join(record.path, "link"), "junction");
+    const copyPath = join(base, "copies", "repo");
+    await cp(original.path, copyPath, { recursive: true, verbatimSymlinks: true });
+    const copy = { id: randomUUID(), path: await realpath(copyPath), workspaces: [] };
+    expect(await listed(copy)).toContain(asGitPrints(record.path));
+    await expect(inspectWorkspace(home, copy, record, 0)).rejects.toMatchObject({
+      code: "failed",
+      message: "Satellite couldn't read shared, so it won't archive it. Try again.",
+    });
+    expect(await exists(join(record.path, "link"))).toBe(true);
   });
 
   it("refuses a record that sits in another project's worktrees folder", async () => {

@@ -16,13 +16,15 @@ import { hasRemote, parseCount } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
-import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
+import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 import {
   boundaryInside,
-  removeWorktree,
+  removeWalked,
   uncheckedBecause,
   uncheckedFix,
+  walkForRemoval,
   type Kept,
+  type Walked,
 } from "./worktree-removal.ts";
 
 export type InspectView = BridgeResponse<"workspaces.inspect">;
@@ -172,6 +174,7 @@ async function readInspection(
     .slice(1)
     .find((worktree) => samePath(worktree.path, record.path));
   if (listed === undefined || listed.bare || listed.prunable) throw failure;
+  if (!(await sharesRepository(project.path, record.path))) throw failure;
   const status = await readStatus(record.path);
   if (status === undefined) throw failure;
   const index = await readIndex(record.path);
@@ -223,8 +226,13 @@ function keptFailure(name: string, kept: Kept, linksRemoved: number): BridgeFail
   }
 }
 
-async function removeFromGit(root: string, path: string, name: string): Promise<void> {
-  const removal = await removeWorktree(root, path, { force: false, locked: false });
+async function removeFromGit(
+  root: string,
+  walked: Extract<Walked, { kind: "walked" }>,
+  name: string,
+): Promise<void> {
+  const { path } = walked;
+  const removal = await removeWalked(root, walked, { force: false, locked: false });
   if (removal.kind === "kept") throw keptFailure(name, removal.kept, removal.linksRemoved);
   const { run, forced, linksRemoved } = removal;
   if (run === undefined) {
@@ -301,9 +309,11 @@ export async function archiveWorkspace(
     );
   }
   await sessions.stopInside(path);
+  const walked = await walkForRemoval(path);
+  if (walked.kind === "kept") throw keptFailure(name, walked.kept, 0);
   const latest = await readInspection(home, project, record);
   if (latest.core !== seen.core) throw changed;
-  await removeFromGit(project.path, path, name);
+  await removeFromGit(project.path, walked, name);
   if (
     sameIdentity(await folderIdentity(path), latest.identity) &&
     (await isConfined(home, project, record))
