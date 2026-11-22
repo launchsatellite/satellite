@@ -452,6 +452,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .map((tab) => tab.key)
     .join(" ");
   const processes = useProcesses({ live: liveTerminals, finished: finishedTabs, notify });
+  useEffect(() => {
+    if (finishedTabs !== "") refresh();
+  }, [finishedTabs, refresh]);
   const refreshProcesses = processes.refresh;
   useEffect(() => {
     if (processesOpen) refreshProcesses();
