@@ -84,7 +84,12 @@ export function createInterfaceFile(home: string): InterfaceFile {
   const writer = createJsonWriter(file);
   let cached: Promise<LoadedInterface> | undefined;
   const load = () => {
-    cached ??= readInterfaceFile(file);
+    cached ??= readInterfaceFile(file).then(async (loaded) => {
+      if (loaded.notice !== null && loaded.writable) {
+        await writer.write({ version: 4, ...loaded.state }).catch(() => undefined);
+      }
+      return loaded;
+    });
     return cached;
   };
   return {

@@ -90,6 +90,22 @@ describe("createInterfaceFile", () => {
     expect(notice).toMatch(/set that file aside and started fresh\.$/);
   });
 
+  it("saves the fresh state once it set a layout file aside, so the guide stays seen", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const file = join(home, "interface.json");
+    await writeFile(file, "{");
+    const interfaceFile = createInterfaceFile(home);
+    await interfaceFile.load();
+    await interfaceFile.flush();
+    const next = await createInterfaceFile(home).load();
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({
+      ...defaultInterfaceState,
+      version: 4,
+      guideSeen: true,
+    });
+    expect(next).toEqual({ state: { ...defaultInterfaceState, guideSeen: true }, notice: null });
+  });
+
   it("reads a version 1, 2 and 3 file as one whose guide was seen and keeps the rest", async () => {
     const layout = '"selected":null,"columns":{"left":300,"right":500},"theme":"dark"';
     const files = [
