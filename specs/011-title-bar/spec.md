@@ -1,6 +1,6 @@
 # 011 Title bar
 
-Status **In progress** · Depends on **002, 003, 005**
+Status **Done** · Depends on **002, 003, 005**
 
 ## Why
 
@@ -36,11 +36,11 @@ Hiding the sessions column, a window menu drawn in the strip, and close, minimis
 
 A Satellite feature is accepted on macOS, Windows and Linux.
 
-- [ ] The strip shows the toggle, the centre title and the three buttons, each with its accessible name and tooltip, at the opened size and at 960 by 600, in light and dark. Proof, journey `title-bar`.
-- [ ] The centre title names the project and workspace, reads Satellite with nothing selected, writes out a hostile name and opens the switcher. Proof, journey `title-bar`.
-- [ ] Each right button runs its command and is unavailable exactly when the command is. Proof, journey `title-bar`.
-- [ ] Hide the sidebar from the button and the shortcut gives the centre its width, moves focus off the hidden column, comes back after a restart and shows again with Focus the sidebar. Proof, journey `title-bar`.
-- [ ] The strip is a drag area with its controls outside it, and drops its drag area under a dialog and the command menu. Proof, journey `title-bar`.
-- [ ] The workspace header no longer names the project, and keeps its heading for screen readers. Proof, journey `title-bar`.
-- [ ] The title bar options per system, and overlay colours equal to the tokens in `app.css`. Proof, `src/main/platform/title-bar.test.ts`.
+- [x] The strip shows the toggle, the centre title and the three buttons, each with its accessible name and tooltip, at the opened size and at 960 by 600, in light and dark. Proof, journey `title-bar`.
+- [x] The centre title names the project and workspace, reads Satellite with nothing selected, writes out a hostile name and opens the switcher. Proof, journey `title-bar`.
+- [x] Each right button runs its command and is unavailable exactly when the command is. Proof, journey `title-bar`.
+- [x] Hide the sidebar from the button and the shortcut gives the centre its width, moves focus off the hidden column, comes back after a restart and shows again with Focus the sidebar. Proof, journey `title-bar`.
+- [x] The strip is a drag area with its controls outside it, and drops its drag area under a dialog and the command menu. Proof, journey `title-bar`.
+- [x] The workspace header no longer names the project, and keeps its heading for screen readers. Proof, journey `title-bar`.
+- [x] The title bar options per system, and overlay colours equal to the tokens in `app.css`. Proof, `src/main/platform/title-bar.test.ts`.
 - [ ] The traffic lights, the overlay and a double click on the strip behave as the system's own title bar. Proof, a person on each system, since a quiet window shows no frame.
