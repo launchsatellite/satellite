@@ -26,14 +26,17 @@ jobs:
             label: macos
             package: --mac --arm64 --x64
             app: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite
+            fused: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite release/mac/Satellite.app/Contents/MacOS/Satellite
           - os: windows-2025
             label: windows
             package: --win --x64
             app: release/win-unpacked/Satellite.exe
+            fused: release/win-unpacked/Satellite.exe
           - os: ubuntu-24.04
             label: linux
             package: --linux --x64
             app: release/linux-unpacked/satellite
+            fused: release/linux-unpacked/satellite
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     defaults:
@@ -56,13 +59,15 @@ jobs:
       - run: npm run build
       - run: npx electron-builder ${{ matrix.package }} --publish never
       - run: |
-          fuses=$(npx @electron/fuses read --app "${{ matrix.app }}")
-          echo "$fuses"
-          for fuse in "RunAsNode is Disabled" "EnableCookieEncryption is Disabled" \
-            "EnableNodeOptionsEnvironmentVariable is Disabled" "EnableNodeCliInspectArguments is Disabled" \
-            "EnableEmbeddedAsarIntegrityValidation is Enabled" "OnlyLoadAppFromAsar is Enabled" \
-            "GrantFileProtocolExtraPrivileges is Disabled"; do
-            grep -Fqx "  $fuse" <<<"$fuses" || { echo "::error::Expected $fuse"; exit 1; }
+          for app in ${{ matrix.fused }}; do
+            fuses=$(npx @electron/fuses read --app "$app")
+            echo "$fuses"
+            for fuse in "RunAsNode is Disabled" "EnableCookieEncryption is Disabled" \
+              "EnableNodeOptionsEnvironmentVariable is Disabled" "EnableNodeCliInspectArguments is Disabled" \
+              "EnableEmbeddedAsarIntegrityValidation is Enabled" "OnlyLoadAppFromAsar is Enabled" \
+              "GrantFileProtocolExtraPrivileges is Disabled"; do
+              grep -Fqx "  $fuse" <<<"$fuses" || { echo "::error::Expected $fuse in $app"; exit 1; }
+            done
           done
         env:
           FORCE_COLOR: "0"
