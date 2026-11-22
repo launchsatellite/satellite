@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, session } from "electron";
+import { app, nativeTheme, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
@@ -48,7 +48,6 @@ import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handl
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
 import { prepareVerification } from "./window/verification.ts";
-import { applyThemeChoice } from "./window/theme.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -87,7 +86,7 @@ async function start({
   prepareSystemNotices();
   await listening;
   const applyInterface = (state: InterfaceState) => {
-    applyThemeChoice(state.theme);
+    nativeTheme.themeSource = state.theme;
     notices.setEnabled(state.notifications);
   };
   applyInterface((await interfaceFile.load()).state);
