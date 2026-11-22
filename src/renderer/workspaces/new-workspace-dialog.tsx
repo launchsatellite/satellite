@@ -179,20 +179,21 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     };
   }, [projectId]);
 
-  useLayoutEffect(() => {
-    if (phase.kind === "form") {
-      input.current?.focus();
-      input.current?.select();
-    } else if (phase.kind === "failed") {
-      failure.current?.scrollIntoView({ block: "nearest" });
-    }
-  }, [phase.kind]);
-
-  const problem = workspaceNameProblem(name);
   const failedDetail =
     stepOrder
       .map((step) => steps[step])
       .find((entry) => entry.state === "failed" && entry.detail !== null)?.detail ?? undefined;
+  useLayoutEffect(() => {
+    if (phase.kind === "form") {
+      input.current?.focus();
+      input.current?.select();
+    }
+  }, [phase.kind]);
+  useLayoutEffect(() => {
+    if (phase.kind === "failed") failure.current?.scrollIntoView({ block: "end" });
+  }, [phase.kind, failedDetail]);
+
+  const problem = workspaceNameProblem(name);
   const canCreate =
     phase.kind === "form" && problem === null && phase.prepared.start.kind !== "empty";
 
@@ -421,11 +422,10 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     if (phase.kind === "failed") {
       return (
         <>
-          <Button variant="ghost" onClick={onClose} testId="close-workspace-dialog">
+          <Button variant="ghost" onClick={onClose} testId="close-workspace-dialog" autoFocus>
             Close
           </Button>
           <Button
-            autoFocus
             onClick={() => {
               setPhase({ kind: "form", prepared: phase.prepared });
             }}
