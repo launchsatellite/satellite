@@ -220,6 +220,7 @@ async function fileStamp(realRoot: string | undefined, path: string): Promise<st
   if (realRoot === undefined) return "gone";
   const parent = posix.dirname(path);
   if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
+  if (await isSatelliteState(realRoot, join(realRoot, parent))) return refusedStamp;
   try {
     const entry = await lstat(join(realRoot, path), { bigint: true });
     if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
