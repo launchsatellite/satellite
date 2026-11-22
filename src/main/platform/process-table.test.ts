@@ -187,7 +187,7 @@ describe("parseWindowsCommands", () => {
     const commands = parseWindowsCommands(
       JSON.stringify([
         { p: 3201, s: 1000, c: command },
-        { p: 3202, s: 1001, c: "another process that took the id" },
+        { p: 3202, s: 6000, c: "another process that took the id" },
         { p: 3300, s: 1000, c: null },
         { p: -4, s: 1000, c: "x" },
         { p: "7", s: 1000, c: "y" },
