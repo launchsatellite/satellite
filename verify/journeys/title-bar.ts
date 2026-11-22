@@ -13,7 +13,7 @@ const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift"
 const shortcut = process.platform === "darwin" ? "⌘" : "Ctrl+Shift+";
 const expectedFrame = process.platform === "darwin" ? "inset" : "overlay";
 const execute = promisify(execFile);
-const longWorkspace = "a-workspace-name-long-enough-to-fill-the-strip";
+const longTitleWidth = 560;
 const hostileProject = "beta\u202elonrev";
 const shownHostileProject = "beta[U+202E]lonrev";
 
@@ -341,20 +341,15 @@ async function checkLongName(session: AppSession): Promise<void> {
   await session.page.keyboard.press(`${commandModifier}+O`);
   await visible(session, `workspace-${name}-main`, "after adding with the sidebar hidden");
   await session.page.getByTestId(`workspace-${name}-main`).click();
-  await session.page.getByTestId("title-new-workspace").click();
-  await visible(session, "create-workspace", "once New workspace had read the long project");
-  await session.page.getByTestId("workspace-name").fill(longWorkspace);
-  await session.page.keyboard.press("Enter");
-  await visible(session, `workspace-${name}-${longWorkspace}`, "after making the long workspace");
-  await session.page.getByTestId(`workspace-${name}-${longWorkspace}`).click();
-  await session.page.setViewportSize({ width: 960, height: 600 });
-  await placeReads(session, `${name} / ${longWorkspace}`, "on the long workspace");
+  await placeReads(session, name, "on the long project");
+  const at = `at ${String(longTitleWidth)} by 600`;
+  await session.page.setViewportSize({ width: longTitleWidth, height: 600 });
   const layout = await session.page.evaluate(readStrip);
   assert.ok(
     layout.place.left >= layout.toggle.right && layout.place.right <= layout.inbox.left,
-    `the long title ran from ${String(layout.place.left)} to ${String(layout.place.right)} over its neighbours`,
+    `the long title ran from ${String(layout.place.left)} to ${String(layout.place.right)} over its neighbours ${at}`,
   );
-  assert.ok(layout.clipped, "the long title was not cut with an ellipsis");
+  assert.ok(layout.clipped, `the long title was not cut with an ellipsis ${at}`);
   assert.deepEqual(
     layout.hits,
     {
@@ -363,9 +358,13 @@ async function checkLongName(session: AppSession): Promise<void> {
       "title-commands": true,
       "title-new-workspace": true,
     },
-    "a control in the strip was covered by the long title",
+    `a control in the strip was covered by the long title ${at}`,
   );
-  assert.deepEqual(layout.dragGaps, [true, true], "the long title left no drag area beside it");
+  assert.deepEqual(
+    layout.dragGaps,
+    [true, true],
+    `the long title left no drag area beside it ${at}`,
+  );
   await session.screenshot("strip-long-project");
   await session.page.setViewportSize({ width: 1440, height: 900 });
 }
