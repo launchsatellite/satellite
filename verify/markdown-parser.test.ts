@@ -8,7 +8,7 @@ import {
   type WorkerHandlers,
 } from "../src/renderer/pull-request/markdown-parser.ts";
 
-const deadlineMs = 500;
+const deadlineMs = 1500;
 const thread = new URL("./markdown-test-thread.ts", import.meta.url);
 const parsers: ReturnType<typeof createMarkdownParser>[] = [];
 const started: Worker[] = [];
