@@ -15,7 +15,7 @@ import { countUnpushed, hasRemote, readTracking } from "../workspaces/branch-tra
 import { currentBranch, headOid, mergeBase, resolveBase } from "./change-base.ts";
 import { readChangeList, type ChangeRecord } from "./change-list.ts";
 import { conflictCheck, knownConflict, type ConflictCheck } from "./conflict-check.ts";
-import { readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
+import { asGitStores, readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
 import { createReadQueue } from "./read-queue.ts";
 
 export interface Changes {
@@ -178,7 +178,11 @@ async function fileSides(
     record.letter === "A" || sourceOid === null
       ? emptyText
       : readBlobSide(folder, sourceOid, signal),
-    record.letter === "D" ? emptyText : readWorktreeSide(folder, record.path),
+    record.letter === "D"
+      ? emptyText
+      : readWorktreeSide(folder, record.path).then((side) =>
+          asGitStores(folder, record.path, side, signal),
+        ),
   ]);
   return sidesOf(original, modified);
 }

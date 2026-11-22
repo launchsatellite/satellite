@@ -37,6 +37,9 @@ const ignorableInNames = /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g;
 const windowsShortName = /~\d/;
 const allZeros = /^0+$/;
 const sizeOutput = /^(\d{1,16})\n$/;
+const eolEntry = /^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*?)\s*\t/;
+const autocrlfOn = /^(?:true|yes|on|1|input)$/i;
+const convertedOnDisk = new Set(["crlf", "mixed"]);
 const gone: SideRead = { kind: "gone" };
 const refused: SideRead = { kind: "refused" };
 const large: SideRead = { kind: "large" };
@@ -346,4 +349,33 @@ export async function readBlobSide(
   if (content === undefined) return gone;
   if (content.length > changesLimits.sideBytes) return large;
   return decodedText(Buffer.from(content, "latin1"));
+}
+
+async function convertsOnCommit(folder: string, path: string, signal?: AbortSignal) {
+  const listed = stdoutOf(
+    await gitOutput(
+      folder,
+      ["--literal-pathspecs", "ls-files", "--eol", "-z", "--cached", "--others", "--", path],
+      signal,
+    ),
+  );
+  const [, index = "", worktree = "", attribute = ""] = eolEntry.exec(listed ?? "") ?? [];
+  if (listed === undefined || attribute === "-text") return false;
+  if (attribute.startsWith("text") && !attribute.startsWith("text=auto")) return true;
+  if (attribute === "") {
+    const autocrlf = stdoutOf(await gitOutput(folder, ["config", "--get", "core.autocrlf"], signal));
+    if (!autocrlfOn.test(autocrlf?.trim() ?? "")) return false;
+  }
+  return convertedOnDisk.has(worktree) && !convertedOnDisk.has(index) && index !== "-text";
+}
+
+export async function asGitStores(
+  folder: string,
+  path: string,
+  side: SideRead,
+  signal?: AbortSignal,
+): Promise<SideRead> {
+  if (side.kind !== "text" || !side.text.includes("\r\n")) return side;
+  if (!(await convertsOnCommit(folder, path, signal))) return side;
+  return { kind: "text", text: side.text.replaceAll("\r\n", "\n") };
 }

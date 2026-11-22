@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -226,6 +226,61 @@ describe("changes handlers", { timeout: 30_000 }, () => {
     expect(
       await changes.handlers["changes.file"]({ workspace, view, path: "module" }, page),
     ).toEqual({ kind: "submodule", from: null, to: null });
+  });
+
+  it("compares a file git checked out with line ending conversion the way git stores it", async () => {
+    const { repo, git, changes } = await repository();
+    const files: Record<string, string> = {
+      "plain.txt": "a\nb\n",
+      "eol.txt": "a\nb\n",
+      "lone.txt": "a\rb\n",
+      "kept.txt": "a\nb\n",
+      "data.bin": "a\0b\n",
+    };
+    await writeFile(join(repo, ".gitattributes"), "kept.txt -text\neol.txt text eol=crlf\n");
+    for (const [name, text] of Object.entries(files)) await writeFile(join(repo, name), text);
+    await git("add", ".");
+    await git("commit", "-q", "-m", "files");
+    for (const name of Object.keys(files)) await unlink(join(repo, name));
+    await git("-c", "core.autocrlf=true", "checkout", "--", ".");
+    await git("config", "core.autocrlf", "true");
+    expect(await readFile(join(repo, "plain.txt"), "latin1")).toBe("a\r\nb\r\n");
+    await appendFile(join(repo, "plain.txt"), "c\r\n");
+    await appendFile(join(repo, "eol.txt"), "c\r\n");
+    await writeFile(join(repo, "lone.txt"), "a\rb\r\nc\r\n");
+    await writeFile(join(repo, "kept.txt"), "a\r\nb\r\n");
+    await writeFile(join(repo, "mixed.txt"), "a\r\nb\rc\r\n");
+    await appendFile(join(repo, "data.bin"), "c\r\n");
+    const page = ownerOf(1);
+    const view = "uncommitted";
+    await changes.handlers["changes.list"]({ workspace, view }, page);
+    const sides = (path: string) => changes.handlers["changes.file"]({ workspace, view, path }, page);
+    expect(await sides("plain.txt")).toEqual({
+      kind: "text",
+      original: "a\nb\n",
+      modified: "a\nb\nc\n",
+    });
+    expect(await sides("eol.txt")).toEqual({
+      kind: "text",
+      original: "a\nb\n",
+      modified: "a\nb\nc\n",
+    });
+    expect(await sides("lone.txt")).toEqual({
+      kind: "text",
+      original: "a\rb\n",
+      modified: "a\rb\r\nc\r\n",
+    });
+    expect(await sides("kept.txt")).toEqual({
+      kind: "text",
+      original: "a\nb\n",
+      modified: "a\r\nb\r\n",
+    });
+    expect(await sides("mixed.txt")).toEqual({
+      kind: "text",
+      original: "",
+      modified: "a\r\nb\rc\r\n",
+    });
+    expect(await sides("data.bin")).toEqual({ kind: "binary" });
   });
 
   it("waits a bounded time for a read inside a folder that is going away", async () => {
