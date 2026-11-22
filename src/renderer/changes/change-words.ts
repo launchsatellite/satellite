@@ -105,7 +105,7 @@ export function unavailableSentence(reason: UnavailableReason, base: string | nu
     case "no-commits":
       return "This branch has no commits yet, so there is nothing to compare.";
     case "no-base":
-      return "Satellite found no base branch to compare with. Uncommitted shows the work here.";
+      return "Branch needs a base branch to compare with, and this workspace has none. Uncommitted shows everything here.";
     case "unrelated":
       return `This branch shares no history with ${baseName(base)}, so Branch has nothing to compare.`;
     case "not-local":

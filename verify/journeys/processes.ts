@@ -151,9 +151,35 @@ async function removeAsks(session: AppSession, claudePid: number): Promise<void>
   );
 }
 
+async function viewChecked(session: AppSession, view: string, when: string): Promise<void> {
+  await waitUntil(
+    async () =>
+      (await session.page.getByTestId(`changes-view-${view}`).getAttribute("aria-checked")) ===
+      "true",
+    promptTimeoutMs,
+    `Changes was not on ${view} ${when}`,
+  );
+}
+
+async function noBaseOpensUncommitted(session: AppSession): Promise<void> {
+  await viewChecked(session, "uncommitted", "in a workspace with no base");
+  await session.page.getByTestId("changes-view-branch").click();
+  await viewChecked(session, "branch", "once Branch was picked");
+  await visible(session, "changes-unavailable", "in Branch with no base");
+  assert.equal(
+    (await textOf(session, "changes-unavailable")).trim(),
+    "Branch needs a base branch to compare with, and this workspace has none. Uncommitted shows everything here.",
+  );
+  await delay(1500);
+  await viewChecked(session, "branch", "a moment after Branch was picked");
+  await session.page.getByTestId("changes-view-uncommitted").click();
+  await viewChecked(session, "uncommitted", "once Uncommitted was picked");
+}
+
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   await page.getByTestId("workspace-repo-main").click();
+  await noBaseOpensUncommitted(session);
   const claudePid = await startClaude(session, 1);
   const server = await startedServer(session);
   assert.ok(!processGone(server.pid), "the dev server was gone before it was listed");

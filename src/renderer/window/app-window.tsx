@@ -307,7 +307,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   );
   const folderHere = selectedProject?.missing === null;
   const [centreView, setCentreView] = useState<CentreView>("changes");
-  const [changesView, setChangesView] = useState<ChangesShown>("branch");
+  const [pickedView, setPickedView] = useState<ChangesShown>("branch");
+  const [noBase, setNoBase] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [picked, setPicked] = useState<Picked | null>(null);
   const [diffInline, setDiffInline] = useState(false);
   const [diffNarrow, setDiffNarrow] = useState(true);
@@ -316,6 +317,23 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
+  const hereText =
+    changesHere === null ? null : `${changesHere.projectId}/${changesHere.workspace}`;
+  const changesView: ChangesShown =
+    pickedView === "branch" && hereText !== null && noBase.get(hereText) === false
+      ? "uncommitted"
+      : pickedView;
+  const setChangesView = useCallback(
+    (view: ChangesShown) => {
+      if (view === "branch" && hereText !== null) {
+        setNoBase((current) =>
+          current.has(hereText) ? new Map(current).set(hereText, true) : current,
+        );
+      }
+      setPickedView(view);
+    },
+    [hereText],
+  );
   const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
   const changesShown = shownHere && centreView === "changes";
   const filesShown = shownHere && centreView === "files";
@@ -384,6 +402,24 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownText?.path,
     pullRequestBase,
   );
+  const listedReason =
+    changes.list?.changes.kind === "unavailable" ? changes.list.changes.reason : undefined;
+  const listedBase = changes.header?.base;
+  const knownNoBase = hereText === null ? undefined : noBase.get(hereText);
+  if (hereText !== null) {
+    if (
+      knownNoBase === undefined &&
+      changesShown &&
+      changesView === "branch" &&
+      listedReason === "no-base"
+    ) {
+      setNoBase(new Map(noBase).set(hereText, false));
+    } else if (knownNoBase !== undefined && listedBase !== undefined && listedBase !== null) {
+      const next = new Map(noBase);
+      next.delete(hereText);
+      setNoBase(next);
+    }
+  }
   const uncommitted = useChanges(
     pullRequestFilesShown && shownPullRequest?.atHead === true ? changesHere : null,
     "uncommitted",
@@ -963,6 +999,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     shownHere,
     centreView,
     changesView,
+    setChangesView,
     layoutShown,
     diffInline,
     conflicting,
