@@ -254,6 +254,8 @@ async function firstPrompt(session: AppSession): Promise<number> {
     "",
     "a send while Claude Code asked typed into its question",
   );
+  await page.keyboard.press("1");
+  await stateIs(session, pixel("alpha"), "working", "after a key answered, with no hook yet");
   await page.keyboard.press("y");
   await stateIs(session, pixel("alpha"), "working", "after the approval");
   await page.keyboard.press("Enter");

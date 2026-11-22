@@ -17,7 +17,12 @@ import { claudeArgs, hookSettings, type ClaudeStart } from "../sessions/claude-l
 import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import type { RunningRoot } from "../processes/processes-handlers.ts";
-import { nextState, type SessionEvent, type SessionState } from "../sessions/session-status.ts";
+import {
+  answersQuestion,
+  nextState,
+  type SessionEvent,
+  type SessionState,
+} from "../sessions/session-status.ts";
 import {
   removeSettingsFile,
   sweepSettingsFiles,
@@ -408,7 +413,14 @@ export function createTerminalSessions({
       "terminal.start": start,
       "terminal.write": ({ id, data }, owner) =>
         answered(() => {
-          held(id, owner).pty?.write(data);
+          const session = held(id, owner);
+          if (session.pty === undefined) return;
+          if (needsYou(session.state.status) && answersQuestion(data)) {
+            session.state = nextState(session.state, { name: "AnswerKey" });
+            tellNeeding();
+            showStatus(session);
+          }
+          session.pty.write(data);
         }),
       "terminal.resize": ({ id, cols, rows }, owner) =>
         answered(() => {

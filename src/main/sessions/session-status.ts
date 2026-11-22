@@ -10,7 +10,8 @@ export type SessionEvent =
   | { name: "Notification"; type: string | null; agent: Agent }
   | { name: AgentEventName; agent: Agent }
   | { name: Exclude<HookEventName, "Notification" | AgentEventName> }
-  | { name: "Exit" };
+  | { name: "Exit" }
+  | { name: "AnswerKey" };
 type AgentEventName = "PermissionRequest" | "PostToolUse" | "PostToolUseFailure";
 
 export const mainThread = "";
@@ -21,8 +22,10 @@ const asks = new Set([
   "elicitation_dialog",
   "elicitation_url_dialog",
   "agent_needs_input",
+  "quota_auto_resume_stale",
 ]);
 const answers = new Set(["elicitation_complete", "elicitation_response"]);
+const answerKeys = new Set(["\r", "\u001b", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 
 function asking(current: SessionState, agent: Agent): SessionState {
   const askers = current.status === "needs-you" ? current.askers : [];
@@ -37,6 +40,7 @@ function afterNotification(current: SessionState, type: string | null, agent: Ag
   if (type !== null && answers.has(type)) {
     return status === "needs-you" ? { status: "working", askers: [] } : current;
   }
+  if (type === "quota_auto_resume_fired") return { status: "working", askers: [] };
   if (type === "idle_prompt" && (status === "working" || status === "needs-you")) {
     return { status: "done", askers: [] };
   }
@@ -51,11 +55,17 @@ function afterTool(current: SessionState, agent: Agent): SessionState {
   return askers.length === 0 ? { status: "working", askers } : { ...current, askers };
 }
 
+export function answersQuestion(data: string): boolean {
+  return answerKeys.has(data);
+}
+
 export function nextState(current: SessionState, event: SessionEvent): SessionState {
   if (current.status === "stopped") return current;
   switch (event.name) {
     case "Exit":
       return { status: "stopped", askers: [] };
+    case "AnswerKey":
+      return current.status === "needs-you" ? { status: "working", askers: [] } : current;
     case "Notification":
       return afterNotification(current, event.type, event.agent);
     case "PostToolUse":
