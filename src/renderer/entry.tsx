@@ -14,7 +14,9 @@ const fontFamilies = [
 ];
 
 const [, loaded] = await Promise.all([
-  Promise.all(fontFamilies.map((family) => document.fonts.load(`13px "${family}"`, " \u2588"))),
+  Promise.allSettled(
+    fontFamilies.map((family) => document.fonts.load(`13px "${family}"`, " \u2588")),
+  ),
   invoke("interface.load", {}),
 ]);
 
