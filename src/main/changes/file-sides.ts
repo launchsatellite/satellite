@@ -5,12 +5,13 @@ import { changesLimits } from "../../shared/bridge-contract.ts";
 import {
   isMissing,
   isSafeFileName,
+  isShortName,
   noFollow,
   nonBlocking,
   noTerminal,
 } from "../platform/file-system.ts";
 import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { gitReadMs, noLazyFetch, readGit, type GitStop } from "../workspaces/git-command.ts";
+import { gitReadMs, storedObjects, readGit, type GitStop } from "../workspaces/git-command.ts";
 
 export type SideRead =
   | { kind: "text"; text: string }
@@ -34,9 +35,11 @@ export const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const readFlags = constants.O_RDONLY | noFollow | nonBlocking | noTerminal;
 const drivePrefix = /^[A-Za-z]:/;
 const ignorableInNames = /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g;
-const windowsShortName = /~\d/;
 const allZeros = /^0+$/;
 const sizeOutput = /^(\d{1,16})\n$/;
+const eolEntry = /^i\/(\S*)\s+w\/(\S*)\s+attr\/(.*?)\s*\t/;
+const autocrlfOn = /^(?:true|yes|on|1|input)$/i;
+const convertedOnDisk = new Set(["crlf", "mixed"]);
 const gone: SideRead = { kind: "gone" };
 const refused: SideRead = { kind: "refused" };
 const large: SideRead = { kind: "large" };
@@ -58,12 +61,11 @@ const objectFormatLengths = new Map([
 function isChangeSegment(segment: string, platform: NodeJS.Platform): boolean {
   if (!isSafeFileName(segment, platform)) return false;
   if (segment.replace(ignorableInNames, "").toLowerCase() === ".git") return false;
-  return platform !== "win32" || !windowsShortName.test(segment);
+  return !isShortName(segment, platform);
 }
 
 export function sameFolder(a: string, b: string): boolean {
-  if (process.platform !== "darwin") return samePath(a, b);
-  return samePath(a.normalize("NFC"), b.normalize("NFC"));
+  return samePath(a, b);
 }
 
 function sameVersion(a: BigIntStats, b: BigIntStats): boolean {
@@ -217,6 +219,7 @@ async function fileStamp(realRoot: string | undefined, path: string): Promise<st
   if (realRoot === undefined) return "gone";
   const parent = posix.dirname(path);
   if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
+  if (await isSatelliteState(realRoot, join(realRoot, parent))) return refusedStamp;
   try {
     const entry = await lstat(join(realRoot, path), { bigint: true });
     if ((await folderPathKind(realRoot, parent)) !== "plain") return "gone";
@@ -240,7 +243,10 @@ async function gitOutput(
   signal?: AbortSignal,
   bytes = false,
 ): Promise<{ stdout: string } | GitStop | undefined> {
-  const run = await readGit(folder, args, gitReadMs, signal, { gitVariables: noLazyFetch, bytes });
+  const run = await readGit(folder, args, gitReadMs, signal, {
+    gitVariables: storedObjects,
+    bytes,
+  });
   if (typeof run === "string") return run;
   return run.exitCode === 0 ? run : undefined;
 }
@@ -346,4 +352,35 @@ export async function readBlobSide(
   if (content === undefined) return gone;
   if (content.length > changesLimits.sideBytes) return large;
   return decodedText(Buffer.from(content, "latin1"));
+}
+
+async function convertsOnCommit(folder: string, path: string, signal?: AbortSignal) {
+  const listed = stdoutOf(
+    await gitOutput(
+      folder,
+      ["--literal-pathspecs", "ls-files", "--eol", "-z", "--cached", "--others", "--", path],
+      signal,
+    ),
+  );
+  const [, index = "", worktree = "", attribute = ""] = eolEntry.exec(listed ?? "") ?? [];
+  if (listed === undefined || attribute === "-text") return false;
+  if (attribute.startsWith("text") && !attribute.startsWith("text=auto")) return true;
+  if (attribute === "") {
+    const autocrlf = stdoutOf(
+      await gitOutput(folder, ["config", "--get", "core.autocrlf"], signal),
+    );
+    if (!autocrlfOn.test(autocrlf?.trim() ?? "")) return false;
+  }
+  return convertedOnDisk.has(worktree) && !convertedOnDisk.has(index) && index !== "-text";
+}
+
+export async function asGitStores(
+  folder: string,
+  path: string,
+  side: SideRead,
+  signal?: AbortSignal,
+): Promise<SideRead> {
+  if (side.kind !== "text" || !side.text.includes("\r\n")) return side;
+  if (!(await convertsOnCommit(folder, path, signal))) return side;
+  return { kind: "text", text: side.text.replaceAll("\r\n", "\n") };
 }

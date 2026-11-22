@@ -14,8 +14,10 @@ import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
+import { VisibleName } from "../ui/visible-name.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
 import { countLabel } from "../processes/process-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
@@ -196,10 +198,12 @@ function ProjectRows({
         className="flex h-7 flex-none items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg"
       >
         <PixelAvatar seed={project.id} />
-        <span className="min-w-0 truncate">{project.name}</span>
+        <span className="min-w-0 truncate">
+          <VisibleName text={project.name} />
+        </span>
         {showParent && (
           <span className="min-w-0 flex-[1_1_0%] truncate font-medium text-dim">
-            {project.parent}
+            <VisibleName text={project.parent} />
           </span>
         )}
         {project.missing !== null ? (
@@ -210,7 +214,7 @@ function ProjectRows({
               variant="ghost"
               size="small"
               icon="plus"
-              label={`New workspace in ${project.name}`}
+              label={`New workspace in ${visibleText(project.name)}`}
               testId={newWorkspaceTestId}
               onClick={() => {
                 onNewWorkspace(project.id);
@@ -219,7 +223,7 @@ function ProjectRows({
           </span>
         )}
       </div>
-      <ul aria-label={project.name} className="flex flex-col gap-px">
+      <ul aria-label={visibleText(project.name)} className="flex flex-col gap-px">
         {project.workspaces.map((workspace, index) => {
           const current =
             selected?.projectId === project.id && selected.workspace === workspace.key;
@@ -243,8 +247,11 @@ function ProjectRows({
                   testId={testId === undefined ? undefined : `${testId}-status`}
                   label={pixelLabel(pixel)}
                 />
-                <span className={`min-w-0 truncate ${current ? "font-semibold" : ""}`}>
-                  {workspaceLabel(project, workspace)}
+                <span
+                  dir="ltr"
+                  className={`min-w-0 truncate [unicode-bidi:isolate] ${current ? "font-semibold" : ""}`}
+                >
+                  <VisibleName text={workspaceLabel(project, workspace)} />
                 </span>
                 <Readouts
                   workspace={workspace}

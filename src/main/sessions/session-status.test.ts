@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { SessionStatus } from "../../shared/bridge-contract.ts";
-import { mainThread, nextState, type SessionEvent, type SessionState } from "./session-status.ts";
+import {
+  answersQuestion,
+  mainThread,
+  nextState,
+  type SessionEvent,
+  type SessionState,
+} from "./session-status.ts";
 
 const statuses: readonly SessionStatus[] = ["idle", "working", "needs-you", "done", "stopped"];
 
@@ -26,10 +32,13 @@ const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
       "elicitation_dialog",
       "elicitation_url_dialog",
       "agent_needs_input",
+      "quota_auto_resume_stale",
     ].map(notification),
   },
   { label: "answered", events: ["elicitation_complete", "elicitation_response"].map(notification) },
   { label: "idle prompt", events: [notification("idle_prompt")] },
+  { label: "resumed", events: [notification("quota_auto_resume_fired")] },
+  { label: "answer key", events: [{ name: "AnswerKey" }] },
   {
     label: "other",
     events: ["auth_success", "agent_completed", "", "PERMISSION_PROMPT", null].map(notification),
@@ -39,7 +48,19 @@ const columns: readonly { label: string; events: readonly SessionEvent[] }[] = [
 ];
 
 const table: Record<SessionStatus, readonly SessionStatus[]> = {
-  idle: ["working", "needs-you", "working", "needs-you", "idle", "idle", "idle", "done", "stopped"],
+  idle: [
+    "working",
+    "needs-you",
+    "working",
+    "needs-you",
+    "idle",
+    "idle",
+    "working",
+    "idle",
+    "idle",
+    "done",
+    "stopped",
+  ],
   working: [
     "working",
     "needs-you",
@@ -47,6 +68,8 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "needs-you",
     "working",
     "done",
+    "working",
+    "working",
     "working",
     "done",
     "stopped",
@@ -58,12 +81,28 @@ const table: Record<SessionStatus, readonly SessionStatus[]> = {
     "needs-you",
     "working",
     "done",
+    "working",
+    "working",
     "needs-you",
     "done",
     "stopped",
   ],
-  done: ["working", "needs-you", "working", "needs-you", "done", "done", "done", "done", "stopped"],
+  done: [
+    "working",
+    "needs-you",
+    "working",
+    "needs-you",
+    "done",
+    "done",
+    "working",
+    "done",
+    "done",
+    "done",
+    "stopped",
+  ],
   stopped: [
+    "stopped",
+    "stopped",
     "stopped",
     "stopped",
     "stopped",
@@ -97,6 +136,18 @@ function run(start: SessionStatus, events: readonly SessionEvent[]): SessionStat
   return seen;
 }
 
+describe("answersQuestion", () => {
+  it("takes Enter, Escape and a digit pressed alone as an answer", () => {
+    expect(["\r", "\u001b", "1", "3"].map(answersQuestion)).toEqual([true, true, true, true]);
+  });
+
+  it("takes no arrow, letter, paste or typed text as an answer", () => {
+    expect(
+      ["\u001b[B", "y", "12", "\u001b[200~1\u001b[201~", "fix it\r", ""].map(answersQuestion),
+    ).toEqual([false, false, false, false, false, false]);
+  });
+});
+
 describe("nextState", () => {
   it.each(cells)(
     "moves through every status from every status, $current on $column $event",
@@ -115,6 +166,18 @@ describe("nextState", () => {
         { name: "Stop" },
       ]),
     ).toEqual(["working", "needs-you", "needs-you", "working", "done"]);
+  });
+
+  it("works again at once when a key answers the question, while every agent that asked lets go", () => {
+    expect(
+      run("idle", [
+        { name: "UserPromptSubmit" },
+        asked(mainThread),
+        asked("helper"),
+        { name: "AnswerKey" },
+        toolDone(mainThread),
+      ]),
+    ).toEqual(["working", "needs-you", "needs-you", "working", "working"]);
   });
 
   it("lets go of a declined permission once the turn has gone quiet", () => {

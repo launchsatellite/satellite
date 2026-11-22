@@ -161,7 +161,7 @@ async function archiveThroughDialog(session: AppSession, folder: string): Promis
   const files = await textOf(session, "archive-files");
   assert.ok(
     files.includes("1 file isn't committed and will be deleted.") &&
-      files.includes(`?? ${onlyHere}`),
+      files.includes(`A ${onlyHere}`),
     `archive-files read "${files}" without the uncommitted file`,
   );
   const commits = await textOf(session, "archive-commits");

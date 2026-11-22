@@ -25,7 +25,7 @@ import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
 import { fileLinesRequest } from "../files/file-lines.ts";
-import { noFileLinesSentence, notTextSentence } from "../files/file-words.ts";
+import { notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
@@ -33,6 +33,7 @@ import { ProcessesDialog } from "../processes/processes-dialog.tsx";
 import { portLinkSentence } from "../processes/process-words.ts";
 import { useProcesses } from "../processes/use-processes.ts";
 import { Palette, type SwitcherItem } from "../palette/palette.tsx";
+import { focusColumn } from "./focus-column.ts";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
 import { ChecksList } from "../pull-request/checks-list.tsx";
@@ -44,6 +45,7 @@ import { linkSentence } from "../pull-request/pull-request-words.ts";
 import { useThreadJump } from "../pull-request/use-thread-jump.ts";
 import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
@@ -51,7 +53,8 @@ import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
-import { Toast, type Notify, type ToastTone } from "../ui/toast.tsx";
+import { Toast, type Notify } from "../ui/toast.tsx";
+import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
 import type { CentreView } from "./centre-tabs.tsx";
@@ -67,23 +70,17 @@ interface AppWindowProps {
   initial: InterfaceState;
   notice: string | null;
 }
-interface ShownToast {
-  id: number;
-  message: string;
-  tone: ToastTone;
-}
 
 const commandFailure = "Satellite couldn't finish that. Try again.";
-const toastQueueLimit = 32;
 const terminalLinkSentence =
   "The text Claude Code showed points to this address. Check it before you open it.";
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 
 function forgotSentence(name: string, workspaces: number): string {
-  if (workspaces === 0) return `Satellite forgot ${name}. Its folder is untouched.`;
+  if (workspaces === 0) return `Satellite removed ${name}. Its folder is untouched.`;
   const counted = workspaces === 1 ? "1 workspace" : `${String(workspaces)} workspaces`;
-  return `Satellite forgot ${name} and its ${counted}. Every folder stays where it is.`;
+  return `Satellite removed ${name} and its ${counted}. Every folder stays where it is.`;
 }
 
 function archivedSentence(name: string, branch: string | null, leftover: string | null): string {
@@ -114,25 +111,14 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
 }
 
 export function AppWindow({ initial, notice }: AppWindowProps) {
-  const [toasts, setToasts] = useState<ShownToast[]>(() =>
-    notice === null ? [] : [{ id: 1, message: notice, tone: "info" }],
+  const [toasts, setToasts] = useState<QueuedToast[]>(() =>
+    notice === null ? [] : [{ id: 1, message: notice, tone: "notice", queuedAt: Date.now() }],
   );
   const notify = useCallback<Notify>((message, tone) => {
-    setToasts((queue) => {
-      const shown = { id: Math.max(0, ...queue.map((queued) => queued.id)) + 1, message, tone };
-      if (tone === "error") {
-        const replaced = queue[0]?.tone === "error" ? queue[0] : undefined;
-        if (replaced === undefined) return [shown, ...queue].slice(0, toastQueueLimit);
-        return [{ ...shown, id: replaced.id }, ...queue.slice(1)];
-      }
-      const [head, , ...rest] = queue;
-      return queue.length < toastQueueLimit || head === undefined
-        ? [...queue, shown]
-        : [head, ...rest, shown];
-    });
+    setToasts((queue) => withToast(queue, message, tone, Date.now()));
   }, []);
   const dismissToast = useCallback(() => {
-    setToasts((queue) => queue.slice(1));
+    setToasts((queue) => afterDismiss(queue, Date.now()));
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
@@ -281,21 +267,6 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     [dismissToast, drop, open],
   );
   const dragging = useFolderDrop({ accepts: acceptsDrop, onFolder: dropFolder, notify });
-  const switcher = useMemo<SwitcherItem[]>(() => {
-    const listed = projects ?? [];
-    const repeated = repeatedNames(listed);
-    return listed
-      .filter((project) => project.missing === null)
-      .flatMap((project) =>
-        project.workspaces.map((workspace) => ({
-          ref: { projectId: project.id, workspace: workspace.key },
-          label: workspaceLabel(project, workspace),
-          testKey: workspace.name ?? "main",
-          project: project.name,
-          parent: shownParent(project, repeated),
-        })),
-      );
-  }, [projects]);
   const selectedProject = projects?.find((project) => project.id === selectedId);
   const selectedWorkspace = selectedProject?.workspaces.find(
     (workspace) => workspace.key === state.selected?.workspace,
@@ -305,9 +276,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const removableParent =
     removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
   const removableName =
-    removable === undefined || removableParent === undefined
-      ? removable?.name
-      : `${removable.name} in ${removableParent}`;
+    removable === undefined
+      ? undefined
+      : removableParent === undefined
+        ? removable.name
+        : `${removable.name} in ${removableParent}`;
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
@@ -348,6 +321,18 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .filter((tab) => tab.status === "done")
     .map((tab) => tab.key)
     .join(" ");
+  const listedBranches = useMemo(
+    () =>
+      new Map(
+        (projects ?? []).flatMap((project) =>
+          project.workspaces.map((workspace) => [
+            `${project.id}/${workspace.key}`,
+            workspace.branch,
+          ]),
+        ),
+      ),
+    [projects],
+  );
   const listedRefs = useMemo(
     () =>
       (projects ?? [])
@@ -371,6 +356,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   }, [allSessions]);
   const pullRequests = usePullRequests({
     listed: listedRefs,
+    branches: listedBranches,
     shown: changesHere,
     detail: pullRequestShown,
     finished: finishedHere,
@@ -447,6 +433,9 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     .map((tab) => tab.key)
     .join(" ");
   const processes = useProcesses({ live: liveTerminals, finished: finishedTabs, notify });
+  useEffect(() => {
+    if (finishedTabs !== "") refresh();
+  }, [finishedTabs, refresh]);
   const refreshProcesses = processes.refresh;
   useEffect(() => {
     if (processesOpen) refreshProcesses();
@@ -463,36 +452,43 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const askProcessPort = useCallback((url: string) => {
     setAsking({ address: url, description: portLinkSentence });
   }, []);
-  const pullRequestNeeding = useMemo(
-    () =>
-      listedRefs.flatMap((workspace) => {
-        const entry = pullRequests.of(workspace);
-        const needs = entry?.last?.needs ?? [];
-        return entry?.needsSince === null || entry === undefined || needs.length === 0
-          ? []
-          : [{ workspace, needs, since: entry.needsSince }];
-      }),
-    [listedRefs, pullRequests],
-  );
   const inbox = useMemo(
     () =>
-      inboxRows(inboxReasons(allSessions, pullRequestNeeding), ({ projectId, workspace }) =>
+      inboxRows(inboxReasons(allSessions, pullRequests.needing), ({ projectId, workspace }) =>
         (projects ?? []).some(
           (project) =>
             project.id === projectId &&
             project.workspaces.some((listed) => listed.key === workspace),
         ),
       ),
-    [allSessions, pullRequestNeeding, projects],
+    [allSessions, pullRequests.needing, projects],
   );
   const newest = inbox[0]?.reasons[0];
   const pixelFor = useCallback(
     (projectId: string, workspace: WorkspaceKey) =>
-      pullRequests.of({ projectId, workspace })?.needsSince == null
-        ? sessions.pixelFor(projectId, workspace)
-        : "needs-you",
+      pullRequests.needing.some(
+        (need) => need.workspace.projectId === projectId && need.workspace.workspace === workspace,
+      )
+        ? "needs-you"
+        : sessions.pixelFor(projectId, workspace),
     [pullRequests, sessions],
   );
+  const switcher = useMemo<SwitcherItem[]>(() => {
+    const listed = projects ?? [];
+    const repeated = repeatedNames(listed);
+    return listed
+      .filter((project) => project.missing === null)
+      .flatMap((project) =>
+        project.workspaces.map((workspace) => ({
+          ref: { projectId: project.id, workspace: workspace.key },
+          label: workspaceLabel(project, workspace),
+          testKey: workspace.name ?? "main",
+          project: project.name,
+          parent: shownParent(project, repeated),
+          pixel: pixelFor(project.id, workspace.key),
+        })),
+      );
+  }, [pixelFor, projects]);
   const openFromInbox = useCallback(
     (target: InboxTarget) => {
       if (modal) return;
@@ -618,7 +614,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
                 true,
               );
               refresh();
-              notify(forgotSentence(String(removableName), forgot), "info");
+              notify(forgotSentence(String(removableName), forgot), "notice");
               focusSidebarIfLost();
             },
           },
@@ -692,6 +688,30 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: true,
             run: () => {
               setPalette((open) => (open === "switcher" ? null : "switcher"));
+            },
+          },
+          {
+            id: "focus.sidebar",
+            title: "Focus the sidebar",
+            available: true,
+            run: () => {
+              focusColumn("column-projects", '[aria-current="true"]');
+            },
+          },
+          {
+            id: "focus.repository",
+            title: "Focus the repository",
+            available: true,
+            run: () => {
+              focusColumn("column-repository", '[role="tab"][aria-selected="true"]');
+            },
+          },
+          {
+            id: "focus.terminal",
+            title: "Focus the terminal",
+            available: true,
+            run: () => {
+              focusColumn("column-sessions", '[data-testid="terminal"] textarea');
             },
           },
           {
@@ -833,16 +853,13 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
               if (filesShown) {
                 if (fileShown === null) return;
                 if (fileShown.kind !== "text") {
-                  notify(notTextSentence, "info");
+                  notify(notTextSentence, "error");
                   return;
                 }
                 const request = fileLinesRequest(fileShown.path, diffSelection());
                 if (request.ok) sendToClaudeCode(request.text);
                 else {
-                  notify(
-                    request.sentence,
-                    request.sentence === noFileLinesSentence ? "info" : "error",
-                  );
+                  notify(request.sentence, "error");
                 }
                 return;
               }
@@ -952,8 +969,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
         />
         {selectedProject.missing !== null ? (
           <FolderMissing
-            name={selectedProject.name}
-            parent={selectedProject.parent}
+            name={visibleText(selectedProject.name)}
+            parent={visibleText(selectedProject.parent)}
             missing={selectedProject.missing}
           />
         ) : (
@@ -1112,6 +1129,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
           <SessionsPane
             sessions={sessions}
             selected={sessionHere ?? null}
+            hasProjects={projects === undefined || projects.length > 0}
             onAskLink={askTerminalLink}
             notify={notify}
           />
@@ -1170,14 +1188,16 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             notify={notify}
           />
         )}
-        {toast !== undefined && (
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            tone={toast.tone}
-            onDismiss={dismissToast}
-          />
-        )}
+        <div role="status" data-stays-live="">
+          {toast !== undefined && (
+            <Toast
+              key={toast.id}
+              message={toast.message}
+              tone={toast.tone}
+              onDismiss={dismissToast}
+            />
+          )}
+        </div>
       </div>
     </CommandsProvider>
   );

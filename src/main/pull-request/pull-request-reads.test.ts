@@ -25,7 +25,8 @@ vi.mock("../platform/user-environment.ts", () => ({
 
 const run = promisify(execFile);
 const recorded = z.strictObject({ args: z.array(z.string()), cwd: z.string() });
-const owner: BridgeOwner = { id: 1, emit: () => undefined, onGone: () => undefined };
+const emitted = vi.fn<BridgeOwner["emit"]>();
+const owner: BridgeOwner = { id: 1, emit: emitted, onGone: () => undefined };
 const headOid = "a".repeat(40);
 const jobAddress = "https://github.com/example-org/verify-repo/actions/runs/1001/job/2001";
 const place = { host: "github.com", owner: "example-org", repo: "verify-repo", number: 12 };
@@ -85,9 +86,10 @@ function viewJson(
 
 const owned = [{ number: 12, state: "OPEN", authorAssociation: "OWNER" }];
 
-function threadsJson(nodes: object[] = owned) {
+function threadsJson(nodes: object[] = owned, viewer = "verify-owner") {
   return JSON.stringify({
     data: {
+      viewer: { login: viewer },
       repository: {
         pullRequests: { nodes },
         pullRequest: {
@@ -256,14 +258,20 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(await read(first)).toEqual({ kind: "absent", reason: "none" });
   });
 
-  it("shows a pull request from another repository when its fork is the branch's upstream", async () => {
+  it("shows the viewer's own pull request from their fork, whatever their standing upstream", async () => {
     const { answer, read, repo } = await setup();
     await inRepo(repo, "checkout", "-q", "-b", "fix");
     await inRepo(repo, "config", "remote.fork.url", "git@github.com:fork-owner/verify-repo.git");
     await inRepo(repo, "config", "branch.fix.remote", "fork");
     await inRepo(repo, "config", "branch.fix.merge", "refs/heads/topic");
     await answer("view", { stdout: viewJson([], "topic", true) });
+    const fromFork = (login: string) => [
+      { number: 12, state: "OPEN", authorAssociation: "CONTRIBUTOR", author: { login } },
+    ];
+    await answer("threads", { stdout: threadsJson(fromFork("fork-owner"), "fork-owner") });
     expect(await read(first)).toMatchObject({ kind: "found", number: 12 });
+    await answer("threads", { stdout: threadsJson(fromFork("stranger"), "fork-owner") });
+    expect(await read(first, true, true)).toEqual({ kind: "absent", reason: "none" });
   });
 
   it("shows no pull request from another repository when the upstream is the pull request's own repository", async () => {
@@ -556,11 +564,15 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
     await read(first);
     expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+    expect(emitted).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
     await answer("view", { stdout: viewJson([{ conclusion: "SUCCESS" }]) });
     advance(10_000);
     await read(first);
     expect(needing).toHaveBeenLastCalledWith([]);
     expect(needing).toHaveBeenCalledTimes(2);
+    expect(emitted).toHaveBeenLastCalledWith("pullRequests.needing", { needing: [] });
   });
 
   it("keeps needing through an offline answer and drops it when signed out", async () => {
@@ -573,6 +585,77 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(needing).toHaveBeenCalledTimes(1);
     await answer("view", { exitCode: 4, stderr: "gh auth login" });
     expect(await read(first, true)).toEqual({ kind: "unavailable", reason: "signed-out" });
+    expect(needing).toHaveBeenLastCalledWith([]);
+  });
+
+  it("sends a reloaded page the needs of an answer it reuses", async () => {
+    const { answer, read, reads } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    const reloaded = vi.fn<BridgeOwner["emit"]>();
+    const page: BridgeOwner = { id: 2, emit: reloaded, onGone: () => undefined };
+    await reads.handlers["pullRequest.read"]({ workspace: first, detail: false }, page);
+    expect(reloaded).toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
+  it("sends a reloaded page the needs of a read it joined in flight", async () => {
+    const { answer, reads } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const reloaded = vi.fn<BridgeOwner["emit"]>();
+    const page: BridgeOwner = { id: 3, emit: reloaded, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await Promise.all([
+      read({ workspace: first, detail: false }, owner),
+      read({ workspace: first, detail: false }, page),
+    ]);
+    expect(reloaded).toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
+  it("keeps every workspace's needs through a rate limit a queued read meets", async () => {
+    const { answer, read, needing, advance } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await read(second);
+    expect(needing).toHaveBeenCalledTimes(2);
+    await answer("view", { exitCode: 1, stderr: "API rate limit exceeded for user" });
+    advance(10_000);
+    expect(await Promise.all([read(first), read(second)])).toEqual([
+      { kind: "unavailable", reason: "rate-limited" },
+      { kind: "unavailable", reason: "rate-limited" },
+    ]);
+    expect(needing).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps needing when the branch itself cannot be read", async () => {
+    const { answer, read, needing, advance, repo } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    await writeFile(join(repo, ".git", "HEAD"), "not a ref\n");
+    advance(10_000);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "failed" });
+    expect(needing).toHaveBeenCalledTimes(1);
+    await writeFile(join(repo, ".git", "HEAD"), "ref: refs/heads/main\n");
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    advance(60_000);
+    await read(first);
+    expect(needing).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the old branch's pull request go when a read fails after a branch switch", async () => {
+    const { answer, read, needing, advance, repo } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    await read(first);
+    expect(needing).toHaveBeenLastCalledWith([{ workspace: first, owner, reason: "pull-request" }]);
+    await inRepo(repo, "checkout", "-q", "-b", "other");
+    await inRepo(repo, "config", "branch.other.remote", "origin");
+    await inRepo(repo, "config", "branch.other.merge", "refs/heads/other");
+    await answer("view", { exitCode: 1, stderr: "dial tcp: no such host" });
+    advance(10_000);
+    expect(await read(first)).toEqual({ kind: "unavailable", reason: "offline" });
     expect(needing).toHaveBeenLastCalledWith([]);
   });
 

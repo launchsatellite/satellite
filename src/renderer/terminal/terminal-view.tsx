@@ -17,6 +17,7 @@ import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
 import { createHeldKeyGate } from "./held-keys.ts";
 import { linkFollow } from "./link-follow.ts";
+import { pastedText } from "./pasted-text.ts";
 import "./terminal-font.css";
 import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
 import { terminalTheme } from "./terminal-theme.ts";
@@ -162,11 +163,16 @@ export function TerminalView({
     };
 
     const input = terminal.onData(send);
-    const pasteImage = (event: ClipboardEvent) => {
-      if (!holdsOnlyFiles(event.clipboardData)) return;
+    const paste = (text: string) => {
+      terminal.paste(pastedText(text));
+    };
+    const pasteClipboard = (event: ClipboardEvent) => {
+      const data = event.clipboardData;
+      if (data === null) return;
       event.preventDefault();
       event.stopPropagation();
-      send(imagePasteSequence());
+      if (holdsOnlyFiles(data)) send(imagePasteSequence());
+      else paste(data.getData("text/plain"));
     };
     const dragOver = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
@@ -193,10 +199,10 @@ export function TerminalView({
         tell(unsafePath, "error");
         return;
       }
-      terminal.paste(typed);
+      paste(typed);
       terminal.focus();
     };
-    element.addEventListener("paste", pasteImage, true);
+    element.addEventListener("paste", pasteClipboard, true);
     element.addEventListener("dragover", dragOver);
     element.addEventListener("drop", drop);
     const held = createHeldKeyGate();
@@ -225,9 +231,7 @@ export function TerminalView({
       if (!noticedNow.current) terminal.focus();
     };
     prompt.current = {
-      paste: (text) => {
-        terminal.paste(text);
-      },
+      paste,
       focus: () => {
         terminal.focus();
       },
@@ -242,7 +246,7 @@ export function TerminalView({
     return () => {
       show.current = undefined;
       prompt.current = undefined;
-      element.removeEventListener("paste", pasteImage, true);
+      element.removeEventListener("paste", pasteClipboard, true);
       element.removeEventListener("dragover", dragOver);
       element.removeEventListener("drop", drop);
       element.removeEventListener("focusin", tookFocus);

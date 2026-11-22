@@ -16,7 +16,7 @@ import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
-import { listWorktrees, type ListedWorktree } from "./worktree-list.ts";
+import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 
 export interface Drop {
   workspaceId: string;
@@ -177,7 +177,10 @@ async function adoptedWorkspaces(
   });
   const adopted: StoredWorkspace[] = [];
   for (const candidate of candidates) {
-    if (await isWorktreeFolder(rule.home, candidate.path)) {
+    if (
+      (await isWorktreeFolder(rule.home, candidate.path)) &&
+      (await sharesRepository(project.path, candidate.path))
+    ) {
       adopted.push({ id: randomUUID(), ...candidate });
     }
   }

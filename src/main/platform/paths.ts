@@ -40,7 +40,8 @@ export function isNetworkPath(path: string, platform: NodeJS.Platform = process.
 
 export function comparablePath(path: string, platform: NodeJS.Platform = process.platform): string {
   const full = platform === "win32" ? win32.resolve(path) : posix.resolve(path);
-  return platform === "win32" || platform === "darwin" ? full.toLowerCase() : full;
+  if (platform === "darwin") return full.normalize("NFC").toLowerCase();
+  return platform === "win32" ? full.toLowerCase() : full;
 }
 
 export function samePath(

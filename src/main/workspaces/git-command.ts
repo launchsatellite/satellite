@@ -1,3 +1,5 @@
+import { devNull } from "node:os";
+import { join } from "node:path";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 import {
@@ -19,6 +21,11 @@ interface GitExtra {
 
 export const gitReadMs = gitReadTimeoutMs;
 export const noLazyFetch = { GIT_NO_LAZY_FETCH: "1" };
+export const storedObjects = {
+  ...noLazyFetch,
+  GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_GRAFT_FILE: join(devNull, "satellite-no-grafts"),
+};
 export const lsRemoteMs = 10_000;
 export const fetchMs = 15_000;
 export const branchMs = 5000;

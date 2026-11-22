@@ -44,7 +44,7 @@ function record(file: string, line: RecordedLine): void {
 
 function clampedCount(count: number): number {
   return Number.isFinite(count)
-    ? Math.min(Math.max(Math.trunc(count), 0), bridgeLimits.terminals)
+    ? Math.min(Math.max(Math.trunc(count), 0), bridgeLimits.workspacesNeeding)
     : 0;
 }
 

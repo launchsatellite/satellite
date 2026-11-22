@@ -49,7 +49,7 @@ export function spawnPty(
   });
   let killing: Promise<void> | undefined;
   const endWindows = async () => {
-    await endWindowsTree(pty.pid);
+    if (!ended) await endWindowsTree(pty.pid);
     await Promise.race([exited, delay(forceKillGraceMs)]);
     if (!ended) pty.kill();
   };
@@ -71,7 +71,7 @@ export function spawnPty(
       killing ??=
         process.platform === "win32"
           ? endWindows()
-          : endUnixTree(pty.pid, exited, forceKillGraceMs);
+          : endUnixTree(pty.pid, exited, forceKillGraceMs, ended);
       return killing;
     },
     onData(listener) {

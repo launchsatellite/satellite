@@ -71,6 +71,8 @@ const droppedLimit = 20;
 const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
 const workspaceSaveFailure = "Satellite couldn't save the workspace list. Nothing changed.";
 const notInSatellite = "That project is not in Satellite.";
+const newerFile =
+  "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.";
 const homeFolderWords = "your home folder";
 
 let realHome: { home: string; forms: readonly string[] } | undefined;
@@ -240,6 +242,7 @@ export function createProjects({
   ) => {
     const run = changing.then(async () => {
       const list = await current();
+      if ((await file.load()).newer) throw new BridgeFailure("refused", newerFile);
       projects = change(list);
       try {
         if ((await answerWithin(file.save(projects), saveBoundMs)) === "late") {

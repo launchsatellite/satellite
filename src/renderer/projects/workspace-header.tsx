@@ -41,14 +41,14 @@ export function WorkspaceHeader({
     <header
       data-testid="workspace-header"
       tabIndex={-1}
-      className="@container focus:outline-none flex h-11 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
+      className="@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
     >
       <h1 className="max-w-[45%] min-w-10 truncate text-[14px] font-semibold">
-        {workspace.name ?? project.name}
+        <VisibleName text={workspace.name ?? project.name} />
       </h1>
       {workspace.name !== null && (
         <span className="hidden min-w-[4ch] truncate text-[13px] text-dim @md:block">
-          {project.name}
+          <VisibleName text={project.name} />
         </span>
       )}
       {project.missing === null && (
@@ -126,12 +126,14 @@ export function WorkspaceHeader({
             Archive
           </CommandButton>
         )}
-        <CommandButton
-          command="project.remove"
-          variant="ghost"
-          size="small"
-          testId="remove-project"
-        />
+        <span className={project.missing === null ? "hidden @md:flex" : "flex"}>
+          <CommandButton
+            command="project.remove"
+            variant="ghost"
+            size="small"
+            testId="remove-project"
+          />
+        </span>
       </span>
     </header>
   );

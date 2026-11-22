@@ -17,6 +17,8 @@ export type Kept = Exclude<Boundary, { kind: "clear" }> | { kind: "link"; at: st
 export type Removal =
   | { kind: "kept"; kept: Kept; linksRemoved: number }
   | { kind: "ran"; run: ToolRun | undefined; forced: boolean; linksRemoved: number };
+export type Walked =
+  Extract<Removal, { kind: "kept" }> | { kind: "walked"; path: string; links: readonly string[] };
 interface RemovalOptions {
   force: boolean;
   locked: boolean;
@@ -73,17 +75,21 @@ export async function boundaryInside(folder: string, read?: ReadEntry): Promise<
   return found === "late" ? lateWalk : boundaryOf(folder, found);
 }
 
-export async function removeWorktree(
-  root: string,
-  path: string,
-  { force, locked, read }: RemovalOptions,
-): Promise<Removal> {
+export async function walkForRemoval(path: string, read?: ReadEntry): Promise<Walked> {
   const found = await walk(path, read);
   if (found === "late") return { kind: "kept", kept: lateWalk, linksRemoved: 0 };
   const boundary = boundaryOf(path, found);
   if (boundary.kind !== "clear") return { kind: "kept", kept: boundary, linksRemoved: 0 };
+  return { kind: "walked", path, links: found.links };
+}
+
+export async function removeWalked(
+  root: string,
+  { path, links }: Extract<Walked, { kind: "walked" }>,
+  { force, locked }: Omit<RemovalOptions, "read">,
+): Promise<Removal> {
   let linksRemoved = 0;
-  for (const link of found.links) {
+  for (const link of links) {
     if (!(await removeLink(link))) {
       return { kind: "kept", kept: { kind: "link", at: placeIn(path, link) }, linksRemoved };
     }
@@ -105,4 +111,13 @@ export async function removeWorktree(
     );
   }
   return { kind: "ran", run, forced, linksRemoved };
+}
+
+export async function removeWorktree(
+  root: string,
+  path: string,
+  options: RemovalOptions,
+): Promise<Removal> {
+  const walked = await walkForRemoval(path, options.read);
+  return walked.kind === "kept" ? walked : removeWalked(root, walked, options);
 }

@@ -12,6 +12,9 @@ describe("file system rules", () => {
       "COM\u00b9",
       "lpt\u00b2.log",
       "Com\u00b3 .txt",
+      "CONIN$",
+      "conout$.txt",
+      "clock$",
     ]) {
       expect(isSafeFileName(name, "win32")).toBe(false);
       expect(isSafeFileName(name, "linux")).toBe(true);

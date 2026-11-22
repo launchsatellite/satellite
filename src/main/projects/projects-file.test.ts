@@ -9,6 +9,9 @@ import { createProjectsFile } from "./projects-file.ts";
 const setAsideNotice =
   "Satellite couldn't read its saved projects, so it set that file aside and started with an empty list.";
 
+const newerNotice =
+  "Your projects were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.";
+
 async function homeWith(content: unknown): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), "satellite-projects-file-"));
   await writeFile(join(home, "projects.json"), JSON.stringify(content));
@@ -40,6 +43,7 @@ describe("createProjectsFile", { timeout: 20_000 }, () => {
       notice: null,
       writable: true,
       read: true,
+      newer: false,
     });
   });
 
@@ -58,8 +62,25 @@ describe("createProjectsFile", { timeout: 20_000 }, () => {
     expect((await createProjectsFile(home).load()).projects).toEqual(changed);
   });
 
-  it("sets aside a file from a newer version", async () => {
-    const home = await homeWith({ version: 3, projects: [] });
+  it("leaves a file from a newer version exactly as it is and saves nothing over it", async () => {
+    const home = await homeWith({ version: 3, projects: [{ id: randomUUID(), future: true }] });
+    const before = await readFile(join(home, "projects.json"));
+    const file = createProjectsFile(home);
+    const loaded = await file.load();
+    expect(loaded).toEqual({
+      projects: [],
+      notice: newerNotice,
+      writable: false,
+      read: false,
+      newer: true,
+    });
+    await expect(file.save([])).rejects.toThrow();
+    expect(await setAsideFiles(home)).toEqual([]);
+    expect(await readFile(join(home, "projects.json"))).toEqual(before);
+  });
+
+  it("sets aside a file of a known version that does not parse", async () => {
+    const home = await homeWith({ version: 2, projects: [{ id: "not-an-id" }] });
     const loaded = await createProjectsFile(home).load();
     expect(loaded.projects).toEqual([]);
     expect(loaded.notice).toBe(setAsideNotice);

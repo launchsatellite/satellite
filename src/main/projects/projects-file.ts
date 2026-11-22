@@ -20,6 +20,7 @@ export interface LoadedProjects {
   notice: string | null;
   writable: boolean;
   read: boolean;
+  newer: boolean;
 }
 export interface ProjectsFile {
   load(): Promise<LoadedProjects>;
@@ -29,6 +30,8 @@ export interface ProjectsFile {
 
 export const projectLimit = 200;
 export const workspaceLimit = bridgeLimits.workspacesPerProject;
+
+const newestVersion = 2;
 
 const storedPath = z
   .string()
@@ -82,6 +85,8 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
     "Satellite couldn't read its saved projects or move them aside, so it started with an empty list and won't save project changes for now.",
   "not-read":
     "Satellite couldn't open its saved projects, so it started with an empty list, left the file as it is and won't save project changes for now.",
+  newer:
+    "Your projects were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.",
 };
 
 function allDifferent(values: readonly string[]): boolean {
@@ -102,12 +107,19 @@ function withoutRepeatedFolders(projects: readonly StoredProject[]): StoredProje
 }
 
 async function readProjectsFile(file: string): Promise<LoadedProjects> {
-  const { value, outcome } = await readJsonFile(file, fileSchema, { version: 2, projects: [] });
+  const { value, outcome } = await readJsonFile(
+    file,
+    fileSchema,
+    { version: 2, projects: [] },
+    newestVersion,
+  );
   return {
     projects: value.projects,
     notice: notices[outcome.kind],
-    writable: outcome.kind !== "not-moved" && outcome.kind !== "not-read",
+    writable:
+      outcome.kind !== "not-moved" && outcome.kind !== "not-read" && outcome.kind !== "newer",
     read: outcome.kind === "read",
+    newer: outcome.kind === "newer",
   };
 }
 
@@ -124,7 +136,7 @@ export function createProjectsFile(home: string): ProjectsFile {
     async save(projects) {
       const loaded = await load();
       if (!loaded.writable) throw new Error("projects.json is not writable for this run");
-      await writer.write({ version: 2, projects });
+      await writer.write({ version: newestVersion, projects });
     },
     flush: () => writer.flush(),
   };

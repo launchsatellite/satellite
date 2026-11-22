@@ -56,6 +56,7 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
     "Satellite couldn't read its saved layout or move it aside, so it started fresh and won't save layout changes for now.",
   "not-read":
     "Satellite couldn't open its saved layout, so it started fresh, left the file as it is and won't save layout changes for now.",
+  newer: null,
 };
 const saveFailure =
   "Satellite couldn't save the layout. It keeps working and saves again on the next change.";

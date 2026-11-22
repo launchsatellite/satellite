@@ -173,7 +173,7 @@ export function useSessions(notify: Notify): Sessions {
     (gone: readonly { ref: WorkspaceRef; name: string | null }[]) => {
       for (const { ref } of gone) forgetWorkspace(ref);
       const names = gone.flatMap(({ name }) => (name === null ? [] : [name]));
-      if (names.length > 0) notify(stoppedSentence(names), "info");
+      if (names.length > 0) notify(stoppedSentence(names), "notice");
     },
     [forgetWorkspace, notify],
   );

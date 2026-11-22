@@ -12,7 +12,7 @@ const looks: Record<PixelState, string> = {
   working: "bg-accent",
   ready: "bg-volt shadow-[inset_0_0_0_1.5px_var(--volt-edge)]",
   done: "bg-lilac shadow-[inset_0_0_0_1.5px_var(--lilac-edge)]",
-  "needs-you": "bg-signal",
+  "needs-you": "bg-signal shadow-[inset_0_0_0_1.5px_var(--sigfg)]",
 };
 
 export function StatusPixel({ state, size = 8, testId, label }: StatusPixelProps) {

@@ -30,11 +30,9 @@ export function LinkDialog({ address, description, onClose, notify }: LinkDialog
       closable
       footer={
         <>
-          <span className="mr-auto">
-            <Button variant="ghost" onClick={onClose} testId="link-cancel" autoFocus>
-              Cancel
-            </Button>
-          </span>
+          <Button variant="ghost" onClick={onClose} testId="link-cancel" autoFocus>
+            Cancel
+          </Button>
           <Button
             onClick={() => {
               void openLink(address, notify).then((opened) => {

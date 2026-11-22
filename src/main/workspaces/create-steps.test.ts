@@ -18,8 +18,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StartChoice } from "../../shared/bridge-contract.ts";
 import type { StoredWorkspace } from "../projects/projects-file.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
+import * as ignoreCheck from "../files/ignore-check.ts";
 import { creationSteps, prepareWorkspace } from "./create-steps.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
+
+vi.mock("../files/ignore-check.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof ignoreCheck>();
+  return { checkIgnored: vi.fn(actual.checkIgnored) };
+});
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () =>
@@ -163,6 +169,20 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     if (onUnix) expect((await lstat(path)).mode & 0o777).toBe(0o700);
   });
 
+  it("follows the remote's default branch after it was renamed", async () => {
+    const upstream = join(base, "upstream");
+    await run("git", ["init", "-q", "-b", "master", upstream], { env: gitEnvironment() });
+    await commit(upstream, "a", "first commit\n");
+    const root = join(base, "repo");
+    await run("git", ["clone", "-q", upstream, root], { env: gitEnvironment() });
+    await git(upstream, ["branch", "-m", "master", "main"]);
+    const latest = await commit(upstream, "b", "second commit\n");
+    const { result, path, detail } = await create(root, "renamed");
+    expect(result).toEqual({ ok: true });
+    expect(detail("start")).toBe("origin's default branch is main now, so it fetched main.");
+    expect(await git(path, ["rev-parse", "HEAD"])).toBe(latest);
+  });
+
   it("starts from a chosen branch", async () => {
     const root = await repository();
     const first = await commit(root, "a", "first commit\n");
@@ -184,6 +204,18 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     expect(result).toEqual({ ok: true });
     expect(detail("start")).toBe("repo has no remote, so it starts from main.");
     expect(await git(path, ["rev-parse", "HEAD"])).toBe(first);
+  });
+
+  it("says so when several remotes have none named origin", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["remote", "add", "upstream", join(base, "nowhere")]);
+    await git(root, ["remote", "add", "fork", join(base, "elsewhere")]);
+    const { result, detail } = await create(root, "several");
+    expect(result).toEqual({ ok: true });
+    expect(detail("start")).toBe(
+      "repo has several remotes and none is origin, so it starts from main.",
+    );
   });
 
   it("copies only ignored files .worktreeinclude names", async () => {
@@ -212,6 +244,109 @@ describe("creationSteps", { timeout: 30_000 }, () => {
     for (const absent of ["notes.log", "node_modules", "scratch.txt"]) {
       expect(await exists(join(path, absent))).toBe(false);
     }
+  });
+
+  it("leaves out a file the new worktree does not ignore, so git never sees it as new", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["branch", "old"]);
+    await writeFile(join(root, ".gitignore"), "secret.local\n.env\n");
+    await writeFile(join(root, ".worktreeinclude"), "secret.local\n.env\n");
+    await commit(root, "b", "second commit\n");
+    await writeFile(join(root, "secret.local"), "TOKEN=1\n");
+    await writeFile(join(root, ".env"), "KEY=1\n");
+    const { result, path, detail } = await create(root, "from-old", {
+      kind: "ref",
+      ref: "refs/heads/old",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(await exists(join(path, "secret.local"))).toBe(false);
+    expect(await exists(join(path, ".env"))).toBe(false);
+    expect(await git(path, ["status", "--porcelain"])).toBe("");
+    expect(detail("files")).toBe(
+      "Copied 0 files. Left out 2 that this workspace's branch doesn't ignore, so git could commit them, .env and secret.local.",
+    );
+  });
+
+  it.skipIf(!onUnix)(
+    "leaves out a path git cannot check behind a link of the new branch and copies the rest",
+    async () => {
+      const root = await repository();
+      await writeFile(join(root, ".gitignore"), ".env\nconfig/*.local.json\n");
+      await writeFile(join(root, ".worktreeinclude"), ".env\nconfig/dev.local.json\n");
+      await commit(root, "a", "first commit\n");
+      await git(root, ["checkout", "-q", "-b", "linked"]);
+      await symlink("elsewhere", join(root, "config"));
+      await git(root, ["add", "config"]);
+      await git(root, ["commit", "-q", "-m", "config is a link"]);
+      await git(root, ["checkout", "-q", "main"]);
+      await mkdir(join(root, "config"));
+      await writeFile(join(root, "config", "dev.local.json"), "{}\n");
+      await writeFile(join(root, ".env"), "TOKEN=1\n");
+      const { result, path, detail } = await create(root, "behind-link", {
+        kind: "ref",
+        ref: "refs/heads/linked",
+      });
+      expect(result).toEqual({ ok: true });
+      expect(await readFile(join(path, ".env"), "utf8")).toBe("TOKEN=1\n");
+      expect(detail("files")).toBe(
+        "Copied 1 file. Left out 1 that git wouldn't check in this workspace, because each sits behind a link or inside a submodule or was asked together with one, config/dev.local.json.",
+      );
+    },
+  );
+
+  it.skipIf(!onUnix)(
+    "asks git a bounded number of times when many paths sit behind a link",
+    async () => {
+      const root = await repository();
+      await writeFile(join(root, ".gitignore"), "config/\n");
+      await writeFile(join(root, ".worktreeinclude"), "config/\n");
+      await commit(root, "a", "first commit\n");
+      await git(root, ["checkout", "-q", "-b", "linked"]);
+      await symlink("elsewhere", join(root, "config"));
+      await git(root, ["add", "config"]);
+      await git(root, ["commit", "-q", "-m", "config is a link"]);
+      await git(root, ["checkout", "-q", "main"]);
+      await mkdir(join(root, "config"));
+      for (let at = 0; at < 400; at += 1) {
+        await writeFile(join(root, "config", `f${String(at)}.json`), "{}\n");
+      }
+      const asked = vi.mocked(ignoreCheck.checkIgnored);
+      asked.mockClear();
+      const { result, detail } = await create(root, "many-behind", {
+        kind: "ref",
+        ref: "refs/heads/linked",
+      });
+      const checks = asked.mock.calls.length;
+      expect(result).toEqual({ ok: true });
+      expect(checks).toBeLessThanOrEqual(20);
+      expect(detail("files")).toMatch(
+        /^Copied 0 files\. Left out 400 that git wouldn't check in this workspace, because each sits behind a link or inside a submodule or was asked together with one, /,
+      );
+    },
+  );
+
+  it("counts a file the new branch tracks as already in the checkout", async () => {
+    const root = await repository();
+    await commit(root, "a", "first commit\n");
+    await git(root, ["checkout", "-q", "-b", "tracks"]);
+    await writeFile(join(root, "notes.local"), "tracked\n");
+    await git(root, ["add", "notes.local"]);
+    await git(root, ["commit", "-q", "-m", "track notes"]);
+    await git(root, ["checkout", "-q", "main"]);
+    await writeFile(join(root, ".gitignore"), "notes.local\n");
+    await writeFile(join(root, ".worktreeinclude"), "notes.local\n");
+    await commit(root, "b", "second commit\n");
+    await writeFile(join(root, "notes.local"), "mine\n");
+    const { result, path, detail } = await create(root, "tracking", {
+      kind: "ref",
+      ref: "refs/heads/tracks",
+    });
+    expect(result).toEqual({ ok: true });
+    expect(await readFile(join(path, "notes.local"), "utf8")).toBe("tracked\n");
+    expect(detail("files")).toBe(
+      "Copied 0 files. Skipped 1 that were links or already in the checkout.",
+    );
   });
 
   it.skipIf(!onUnix)("refuses a .worktreeinclude that is a link and undoes", async () => {

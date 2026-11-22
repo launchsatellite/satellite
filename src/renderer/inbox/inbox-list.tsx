@@ -147,7 +147,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                     >
                       {label}
                     </span>
-                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12.5px]">
+                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
                       <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
                       <span
                         data-testid={`${testId}-reason`}

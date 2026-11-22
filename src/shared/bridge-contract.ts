@@ -55,6 +55,7 @@ export const bridgeLimits = {
   terminalOutputChars: 65536,
   terminals: 16,
   workspacesPerProject: 20,
+  workspacesNeeding: 4200,
   messageChars: 1000,
   linkChars: 2048,
   cols: { min: 2, max: 500 },
@@ -289,6 +290,7 @@ export const hiddenReason = z.enum([
 ]);
 const pullRequestComment = z.strictObject({
   author: shortName.nullable(),
+  outside: z.boolean(),
   at: moment,
   body: pullRequestBody,
   bodyCut: z.boolean(),
@@ -749,6 +751,16 @@ export const bridgeEvents = {
   }),
   "sessions.status": z.strictObject({ id: terminalId, status: sessionStatus, ready: z.boolean() }),
   "notices.open": z.strictObject({ workspace: workspaceRef }),
+  "pullRequests.needing": z.strictObject({
+    needing: z
+      .array(
+        z.strictObject({
+          workspace: workspaceRef,
+          needs: z.array(pullRequestNeed).min(1).max(3),
+        }),
+      )
+      .max(bridgeLimits.workspacesNeeding),
+  }),
 };
 
 const bridgeErrorCode = z.enum([

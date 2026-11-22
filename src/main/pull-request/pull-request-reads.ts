@@ -4,6 +4,7 @@ import type {
   PullRequestAnswer,
   PullRequestDetail,
   PullRequestFound,
+  PullRequestNeed,
   PullRequestTrouble,
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
@@ -54,6 +55,7 @@ interface Remembered {
   workspace: WorkspaceRef;
   owner: BridgeOwner;
   kept: PullRequestFound | null;
+  branch: string | null;
   place: PullRequestPlace | null;
   verified: string | null;
   jobs: ReadonlySet<string>;
@@ -63,6 +65,7 @@ interface Remembered {
 
 interface Running {
   detail: boolean;
+  asker: { owner: BridgeOwner };
   answer: Promise<PullRequestAnswer>;
 }
 
@@ -169,32 +172,55 @@ export function createPullRequests({
   const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
   const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
   let told = "";
+  const toldPages = new Map<BridgeOwner, string>();
+
+  const tellPages = (needing: readonly (Needing & { needs: readonly PullRequestNeed[] })[]) => {
+    const pages = new Set([...toldPages.keys(), ...needing.map(({ owner }) => owner)]);
+    for (const page of pages) {
+      const own = needing
+        .filter(({ owner }) => owner === page)
+        .map(({ workspace, needs }) => ({ workspace, needs: [...needs] }));
+      const signature = JSON.stringify(own);
+      if (toldPages.get(page) === signature) continue;
+      if (own.length === 0) toldPages.delete(page);
+      else toldPages.set(page, signature);
+      page.emit("pullRequests.needing", { needing: own });
+    }
+  };
 
   const tellNeeding = () => {
     const needing = [...memory.values()].flatMap(({ kept, workspace, owner }) =>
       kept !== null && kept.needs.length > 0
-        ? [{ workspace, owner, reason: "pull-request" as const }]
+        ? [{ workspace, owner, reason: "pull-request" as const, needs: kept.needs }]
         : [],
     );
+    tellPages(needing);
     const signature = needing
       .map(({ workspace, owner }) => `${keyOf(workspace)}@${String(owner.id)}`)
       .join("\n");
     if (signature === told) return;
     told = signature;
-    onNeeding(needing);
+    onNeeding(needing.map(({ workspace, owner, reason }) => ({ workspace, owner, reason })));
   };
 
   const remember = (
     key: string,
     base: Pick<Remembered, "folder" | "workspace" | "owner">,
-    answer: PullRequestAnswer,
-    place: PullRequestPlace | null,
-    verified: string | null,
+    {
+      answer,
+      place,
+      verified,
+      branch,
+    }: Pick<Remembered, "answer" | "place" | "verified" | "branch">,
   ) => {
     const before = memory.get(key);
     const failed = answer.kind === "unavailable";
-    const keeps = answer.kind === "unavailable" && transient.has(answer.reason);
-    const kept = answer.kind === "found" ? answer : keeps ? (before?.kept ?? null) : null;
+    const keeps =
+      answer.kind === "unavailable" &&
+      transient.has(answer.reason) &&
+      before !== undefined &&
+      (branch === null || before.branch === branch);
+    const kept = answer.kind === "found" ? answer : keeps ? before.kept : null;
     const failures = failed ? (before?.failures ?? 0) + 1 : 0;
     const hold = Math.min(firstHoldMs * 2 ** (failures - 1), longestHoldMs);
     memory.set(key, {
@@ -202,13 +228,14 @@ export function createPullRequests({
       answer,
       at: now(),
       kept,
-      place: answer.kind === "found" ? place : keeps ? (before?.place ?? null) : null,
-      verified: answer.kind === "found" ? verified : keeps ? (before?.verified ?? null) : null,
+      branch: keeps ? before.branch : branch,
+      place: answer.kind === "found" ? place : keeps ? before.place : null,
+      verified: answer.kind === "found" ? verified : keeps ? before.verified : null,
       jobs:
         answer.kind === "found"
           ? new Set(answer.checks.flatMap((check) => (check.job === null ? [] : [check.job])))
           : keeps
-            ? (before?.jobs ?? new Set())
+            ? before.jobs
             : new Set(),
       failures,
       holdUntil: failed ? now() + hold : 0,
@@ -279,13 +306,21 @@ export function createPullRequests({
     answer: PullRequestAnswer;
     place: PullRequestPlace | null;
     verified: string | null;
+    branch: string | null;
   }> => {
-    const nothing = (answer: PullRequestAnswer) => ({ answer, place: null, verified: null });
+    let branch: string | null = null;
+    const nothing = (answer: PullRequestAnswer) => ({
+      answer,
+      place: null,
+      verified: null,
+      branch,
+    });
     const viewed = await pace.run(
       async () => {
         if (pace.paused()) return { failure: "rate-limited" as const };
-        const branch = await currentBranch(folder, signal);
-        if (branch === undefined) return { failure: "failed" as const };
+        const current = await currentBranch(folder, signal);
+        if (current === undefined) return { failure: "failed" as const };
+        branch = current;
         const pushed = await isPushed(folder, branch, signal);
         if (pushed === undefined) return { failure: "failed" as const };
         if (!pushed) return { failure: "not-pushed" as const };
@@ -327,13 +362,13 @@ export function createPullRequests({
       if ("failure" in asked) return nothing(unavailable(asked.failure));
       conversation = asked;
       const number = parsed.found.number;
-      if (!asked.candidates.some((candidate) => candidate.number === number && candidate.writer)) {
-        const writers = asked.candidates.filter((candidate) => candidate.writer);
+      if (!asked.candidates.some((candidate) => candidate.number === number && candidate.trusted)) {
+        const trusted = asked.candidates.filter((candidate) => candidate.trusted);
         const better =
-          writers.find((candidate) => candidate.here && candidate.open) ??
-          writers.find((candidate) => candidate.here) ??
-          writers.find((candidate) => candidate.open) ??
-          writers[0];
+          trusted.find((candidate) => candidate.here && candidate.open) ??
+          trusted.find((candidate) => candidate.here) ??
+          trusted.find((candidate) => candidate.open) ??
+          trusted[0];
         if (better === undefined) return nothing({ kind: "absent", reason: "none" });
         const again = await readNumber(better.number, viewed.head, folder, signal);
         if (again === null) return nothing(unavailable("failed"));
@@ -356,13 +391,13 @@ export function createPullRequests({
     }
     const verified = addressKey(parsed.place);
     if (!detail) {
-      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified };
+      return { answer: { ...parsed.found, detail: null }, place: parsed.place, verified, branch };
     }
     const read: PullRequestDetail = conversation?.detail ?? {
       kind: "unavailable",
       reason: "failed",
     };
-    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified };
+    return { answer: { ...parsed.found, detail: read }, place: parsed.place, verified, branch };
   };
 
   const answerFrom = (
@@ -392,6 +427,7 @@ export function createPullRequests({
     const controller = new AbortController();
     const read: ActiveRead = { controller, folder, done: Promise.resolve() };
     active.add(read);
+    const asker = { owner };
     const answer = (async () => {
       const result = await readView(
         folder,
@@ -400,7 +436,7 @@ export function createPullRequests({
         memory.get(key)?.verified ?? null,
       );
       controller.signal.throwIfAborted();
-      remember(key, { folder, workspace, owner }, result.answer, result.place, result.verified);
+      remember(key, { folder, workspace, owner: asker.owner }, result);
       return result.answer;
     })().finally(() => {
       active.delete(read);
@@ -410,7 +446,7 @@ export function createPullRequests({
       () => undefined,
       () => undefined,
     );
-    const entry = { detail, answer };
+    const entry = { detail, asker, answer };
     running.set(key, entry);
     return entry;
   };
@@ -483,10 +519,16 @@ export function createPullRequests({
           await joined.answer.catch(() => undefined);
           joined = running.get(key);
         }
-        if (joined !== undefined && (joined.detail || !detail)) return joined.answer;
+        if (joined !== undefined && (joined.detail || !detail)) {
+          joined.asker.owner = owner;
+          return joined.answer;
+        }
         const held = memory.get(key);
         if (held !== undefined) {
-          held.owner = owner;
+          if (held.owner !== owner) {
+            held.owner = owner;
+            tellNeeding();
+          }
           const reused = answerFrom(held, detail, fresh);
           if (reused !== undefined) return reused;
         }

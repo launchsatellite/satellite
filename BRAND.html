@@ -122,7 +122,7 @@ section.s{padding:120px 0;border-bottom:1px solid var(--g2)}
 /* ── Product mock ── */
 .mock{--bg:#08080A;--side:#0C0C0E;--fg:#EDEDEA;--fg2:#B4B4B8;--dim:#82828A;--line:#1C1C1F;--sel:#18181B;--hover:#131315;--term:#060607;--tfg:#B4B4B8;--add:#15122B;--del:#2A130B;--kw:#A493FF;--str:#FFB089;
   border:1px solid var(--line);background:var(--bg);color:var(--fg);font:400 13px/1.45 var(--sans);display:grid;grid-template-columns:244px 1fr 360px;grid-template-rows:40px 1fr 160px 28px;height:700px;overflow:hidden}
-.mock.light{--bg:#FFFFFF;--side:#F6F6F3;--fg:#0A0A0B;--fg2:#45454B;--dim:#68686F;--line:#E7E7E3;--sel:#ECECE8;--hover:#F0F0EC;--term:#FAFAF8;--tfg:#45454B;--add:#EEEBFF;--del:#FFEDE6;--kw:#4A2EE0;--str:#C2410C}
+.mock.light{--bg:#FFFFFF;--side:#F6F6F3;--fg:#0A0A0B;--fg2:#45454B;--dim:#68686F;--line:#E7E7E3;--sel:#ECECE8;--hover:#F0F0EC;--term:#FAFAF8;--tfg:#45454B;--add:#EEEBFF;--del:#FFEDE6;--kw:#4A2EE0;--str:#BE400C}
 .mock-notes{display:grid;grid-template-columns:repeat(4,1fr);gap:32px;margin-top:28px}
 .mock-notes b{display:block;font:600 15px var(--sans);margin-bottom:4px}
 .mock-notes p{color:var(--g5);font-size:14px}
@@ -406,7 +406,7 @@ footer .wrap{display:flex;align-items:center;gap:16px}
 }
 /* ── Kit. Semantic tokens, one set per theme, every component reads only these ── */
 .kx-p,.tok{--bg:#08080A;--side:#0C0C0E;--raised:#161618;--fg:#EDEDEA;--fg2:#B4B4B8;--dim:#82828A;--sigfg:#FF5A1F;--line:#1C1C1F;--ctl:#2E2E33;--sel:#18181B;--hover:#131315;--add:#15122B;--del:#2A130B;--addfg:#A493FF;--delfg:#FF8A5C;--pri-bg:#F4F4F1;--pri-fg:#08080A;--shadow:0 16px 40px rgba(0,0,0,.55)}
-.kx-p.kx-lt,.tok.lt{--bg:#FFFFFF;--side:#F6F6F3;--raised:#FFFFFF;--fg:#0A0A0B;--fg2:#45454B;--dim:#68686F;--sigfg:#C2410C;--line:#E7E7E3;--ctl:#D6D6D1;--sel:#ECECE8;--hover:#F0F0EC;--add:#EEEBFF;--del:#FFEDE6;--addfg:#4A2EE0;--delfg:#C2410C;--pri-bg:#0A0A0B;--pri-fg:#F4F4F1;--shadow:0 16px 40px rgba(10,10,11,.12)}
+.kx-p.kx-lt,.tok.lt{--bg:#FFFFFF;--side:#F6F6F3;--raised:#FFFFFF;--fg:#0A0A0B;--fg2:#45454B;--dim:#68686F;--sigfg:#BE400C;--line:#E7E7E3;--ctl:#D6D6D1;--sel:#ECECE8;--hover:#F0F0EC;--add:#EEEBFF;--del:#FFEDE6;--addfg:#4A2EE0;--delfg:#BE400C;--pri-bg:#0A0A0B;--pri-fg:#F4F4F1;--shadow:0 16px 40px rgba(10,10,11,.12)}
 .kx-b{margin-top:72px}.kx-b:first-of-type{margin-top:0}
 .kx-h{display:grid;grid-template-columns:240px 1fr;gap:48px;margin-bottom:24px}
 .kx-h .lbl{color:var(--g5);padding-top:6px}.kx-h h3{font:700 32px/1 var(--display);letter-spacing:-.035em}.kx-h p{margin-top:10px;color:var(--g5);max-width:62ch}
@@ -613,7 +613,7 @@ footer .wrap{display:flex;align-items:center;gap:16px}
 .launch li{display:grid;grid-template-columns:70px 1fr;gap:12px;color:var(--g5);font-size:14px}.launch li .ro{color:var(--paper);font-size:13px}
 /* ── Screens. One shell, built only from kit parts and tokens ── */
 .mock{display:block;--raised:#161618;--ctl:#2E2E33;--sigfg:#FF5A1F;--addfg:#A493FF;--delfg:#FF8A5C;--pri-bg:#F4F4F1;--pri-fg:#08080A;--shadow:0 16px 40px rgba(0,0,0,.55);--ok:#4EBA65;--clay:#D97757}
-.mock.light{--raised:#FFFFFF;--ctl:#D6D6D1;--sigfg:#C2410C;--addfg:#4A2EE0;--delfg:#C2410C;--pri-bg:#0A0A0B;--pri-fg:#F4F4F1;--shadow:0 16px 40px rgba(10,10,11,.12);--ok:#2E8B47;--clay:#C0613F}
+.mock.light{--raised:#FFFFFF;--ctl:#D6D6D1;--sigfg:#BE400C;--addfg:#4A2EE0;--delfg:#BE400C;--pri-bg:#0A0A0B;--pri-fg:#F4F4F1;--shadow:0 16px 40px rgba(10,10,11,.12);--ok:#2E8B47;--clay:#C0613F}
 .mock.light .k-pix.volt{box-shadow:inset 0 0 0 1.5px #6B7800}
 .mock.tall{height:780px}
 .s-app{display:grid;grid-template-columns:248px minmax(0,1fr) var(--rw,440px);grid-template-rows:minmax(0,1fr) 26px;height:100%;font:400 13px/1.45 var(--sans);color:var(--fg);background:var(--bg)}
@@ -1570,7 +1570,7 @@ certs/localhost.pem</pre>
   const h=s=>{let x=2166136261;for(const c of s)x=Math.imul(x^c.charCodeAt(0),16777619);return x>>>0};
   document.querySelectorAll('#kit [data-av]').forEach(a=>{let v=h(a.dataset.av),out='';for(let r=0;r<5;r++)for(let c=0;c<5;c++){const m=c<3?c:4-c,on=(v>>(r*3+m))&1;out+=`<i class="${on?'on':''}"></i>`}a.innerHTML=out});
   document.querySelectorAll('#kit [data-prog]').forEach(p=>{const n=+p.dataset.prog;p.innerHTML=Array.from({length:24},(_,i)=>`<i class="${i<n?'on':''}"></i>`).join('')});
-  const T=[['bg','#08080A','#FFFFFF','Window and pane background'],['side','#0C0C0E','#F6F6F3','Sidebar, inputs, dialog footers'],['raised','#161618','#FFFFFF','Menus, palette, dialogs, toasts'],['sel','#18181B','#ECECE8','Selected row, active tab'],['hover','#131315','#F0F0EC','Hovered row'],['line','#1C1C1F','#E7E7E3','Hairlines between parts'],['ctl','#2E2E33','#D6D6D1','Control borders, keys'],['fg','#EDEDEA','#0A0A0B','Primary text'],['fg2','#B4B4B8','#45454B','Secondary text'],['dim','#82828A','#68686F','Hints, metadata, idle'],['sigfg','#FF5A1F','#C2410C','Signal as text, errors'],['add','#15122B','#EEEBFF','Added lines'],['del','#2A130B','#FFEDE6','Removed lines'],['accent','#6A4BFF','#6A4BFF','Working, main action, focus'],['signal','#FF5A1F','#FF5A1F','Needs you, destructive']];
+  const T=[['bg','#08080A','#FFFFFF','Window and pane background'],['side','#0C0C0E','#F6F6F3','Sidebar, inputs, dialog footers'],['raised','#161618','#FFFFFF','Menus, palette, dialogs, toasts'],['sel','#18181B','#ECECE8','Selected row, active tab'],['hover','#131315','#F0F0EC','Hovered row'],['line','#1C1C1F','#E7E7E3','Hairlines between parts'],['ctl','#2E2E33','#D6D6D1','Control borders, keys'],['fg','#EDEDEA','#0A0A0B','Primary text'],['fg2','#B4B4B8','#45454B','Secondary text'],['dim','#82828A','#68686F','Hints, metadata, idle'],['sigfg','#FF5A1F','#BE400C','Signal as text, errors'],['add','#15122B','#EEEBFF','Added lines'],['del','#2A130B','#FFEDE6','Removed lines'],['accent','#6A4BFF','#6A4BFF','Working, main action, focus'],['signal','#FF5A1F','#FF5A1F','Needs you, destructive']];
   document.getElementById('kx-tok').innerHTML=['<div class="th"><span>Token</span><span>Dark</span><span>Light</span><span>Use</span></div>','<div class="th"><span>Token</span><span>Dark</span><span>Light</span><span>Use</span></div>'].join('')+T.map(([n,d,l,u])=>`<div><code>--${n}</code><i style="background:${d}"></i><i style="background:${l}"></i><span>${u}</span></div>`).join('');
   document.getElementById('kx-space').innerHTML=[4,8,12,16,24,32,48,64].map(n=>`<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><i style="height:${Math.min(n,52)}px;width:${Math.min(n,22)}px"></i><span>${n}</span></div>`).join('');
 })();

@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, realpath } from "node:fs/promises";
+import { chmod, lstat, realpath } from "node:fs/promises";
 import { reservedWorkspaceNames } from "../../shared/workspace-name.ts";
 import { samePath } from "./paths.ts";
 
@@ -10,6 +10,8 @@ export interface FolderIdentity {
 
 const windowsPathLimit = 150;
 const superscriptDevices = /^(?:com|lpt)[\u00b9\u00b2\u00b3]$/;
+const consoleDevices = new Set(["conin$", "conout$", "clock$"]);
+const windowsShortName = /~\d/;
 
 export const noFollow = "O_NOFOLLOW" in constants ? constants.O_NOFOLLOW : 0;
 export const nonBlocking = "O_NONBLOCK" in constants ? constants.O_NONBLOCK : 0;
@@ -41,8 +43,17 @@ export function isSafeFileName(name: string, platform: NodeJS.Platform = process
   if (name.includes("\\") || name.includes("\0")) return false;
   if (platform !== "win32") return true;
   const stem = (name.split(".")[0] ?? "").replace(/ +$/, "").toLowerCase();
-  if (reservedWorkspaceNames.has(stem) || superscriptDevices.test(stem)) return false;
+  if (reservedWorkspaceNames.has(stem) || consoleDevices.has(stem)) return false;
+  if (superscriptDevices.test(stem)) return false;
   return !name.includes(":") && !/[. ]$/.test(name);
+}
+
+export function isShortName(name: string, platform: NodeJS.Platform = process.platform) {
+  return platform === "win32" && windowsShortName.test(name);
+}
+
+export async function restrictToUser(folder: string): Promise<void> {
+  if (process.platform !== "win32") await chmod(folder, 0o700);
 }
 
 export function isTooLongForCheckouts(

@@ -4,7 +4,7 @@ import { posix, win32 } from "node:path";
 import { z } from "zod";
 import { findExecutable } from "./executable-search.ts";
 import { isFullyQualified, samePath } from "./paths.ts";
-import { endUnixTree, endWindowsTree, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
+import { endUnixTree, endWindowsChild, forceKillGraceMs, treeKillBoundMs } from "./process-tree.ts";
 import { userEnvironment } from "./user-environment.ts";
 
 export type Tool = "git" | "gh" | "claude";
@@ -103,6 +103,8 @@ const ghQuiet = {
 const gitQuiet = { LC_ALL: "C", ...gitPromptless };
 const gitVariables = [
   "GIT_NO_LAZY_FETCH",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_GRAFT_FILE",
   "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   "GIT_CONFIG_GLOBAL",
   "GIT_CONFIG_SYSTEM",
@@ -149,8 +151,9 @@ const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 function stopChild(child: ChildProcess, exited: Promise<void>): void {
   const pid = child.pid;
   if (pid === undefined) return;
-  if (process.platform === "win32") void endWindowsTree(pid);
-  else void endUnixTree(pid, exited, forceKillGraceMs);
+  const gone = child.exitCode !== null || child.signalCode !== null;
+  if (process.platform !== "win32") void endUnixTree(pid, exited, forceKillGraceMs, gone);
+  else void endWindowsChild(child);
 }
 
 function without(env: Record<string, string>, keys: Set<string>): Record<string, string> {
@@ -321,7 +324,10 @@ export async function runTool(
       options.signal?.removeEventListener("abort", abort);
     };
     const collect = (stream: "stdout" | "stderr") => (chunk: string) => {
-      output.size += chunk.length;
+      output.size += Buffer.byteLength(
+        chunk,
+        stream === "stdout" && options.bytes === true ? "latin1" : "utf8",
+      );
       if (output.size > outputLimit) {
         stop(new ToolStopped(`${tool} printed more than Satellite reads`, "output"));
       } else output[stream] += chunk;

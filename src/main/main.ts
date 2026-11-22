@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, session } from "electron";
+import { app, nativeTheme, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
@@ -43,12 +43,17 @@ import {
 } from "./window/app-protocol.ts";
 import { installAppMenu } from "./window/app-menu.ts";
 import { hardenSession, hardenWebContents } from "./window/hardening.ts";
-import { bringToFront, createMainWindow, mainWindow, windowInFront } from "./window/main-window.ts";
+import {
+  askToQuit,
+  bringToFront,
+  createMainWindow,
+  mainWindow,
+  windowInFront,
+} from "./window/main-window.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
-import { prepareVerification } from "./window/verification.ts";
-import { applyThemeChoice } from "./window/theme.ts";
+import { prepareVerification, startedByDriver } from "./window/verification.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -69,6 +74,10 @@ interface Parts {
   workspaces: Workspaces;
 }
 
+const ptyKillAgent = "conpty_console_list_agent";
+
+let leaving = false;
+
 async function start({
   changes,
   files,
@@ -85,7 +94,7 @@ async function start({
   prepareSystemNotices();
   await listening;
   const applyInterface = (state: InterfaceState) => {
-    applyThemeChoice(state.theme);
+    nativeTheme.themeSource = state.theme;
     notices.setEnabled(state.notifications);
   };
   applyInterface((await interfaceFile.load()).state);
@@ -117,7 +126,7 @@ async function start({
     },
     allowedOrigin(entryUrl),
   );
-  const window = await createMainWindow(entryUrl);
+  const window = await createMainWindow(entryUrl, () => leaving);
   window.on("focus", () => {
     windowTookFocus(() => {
       notices.seen();
@@ -235,10 +244,13 @@ function assemble(home: string): Parts {
 
 prepareVerification();
 const home = prepareHome();
-const parts = home === undefined ? undefined : assemble(home);
-if (parts !== undefined && app.requestSingleInstanceLock()) {
+const locked = home !== undefined && app.requestSingleInstanceLock();
+const parts = home === undefined || !locked ? undefined : assemble(home);
+if (parts !== undefined) {
   registerAppScheme();
-  app.on("second-instance", bringToFront);
+  app.on("second-instance", (_event, argv) => {
+    if (!argv.some((arg) => arg.includes(ptyKillAgent))) bringToFront();
+  });
   start(parts).catch(failStart);
 } else if (home !== undefined) {
   app.exit(0);
@@ -247,8 +259,13 @@ if (parts !== undefined && app.requestSingleInstanceLock()) {
 app.on(
   "before-quit",
   createQuitGate(
+    () =>
+      startedByDriver() || parts === undefined
+        ? Promise.resolve(true)
+        : askToQuit(parts.terminals.roots().length),
     () => settleForQuit(parts, quitBoundMs),
     () => {
+      leaving = true;
       app.quit();
     },
   ),

@@ -6,7 +6,7 @@ import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
 
 export type RevParse =
-  | { kind: "work-tree"; toplevel: string; linked: boolean }
+  | { kind: "work-tree"; toplevel: string; commonDir: string; linked: boolean }
   | { kind: "bare" }
   | { kind: "git-dir" }
   | { kind: "not-a-repository" }
@@ -34,6 +34,7 @@ const revParseArgs = [
 ];
 const ownFolder = "That folder belongs to Satellite itself. Add a repository from somewhere else.";
 const missingFolder = "That folder no longer exists. Choose another one.";
+const ownCheckout = "Satellite needs a repository with its own checkout.";
 const slowFolder =
   "That folder didn't answer within 6 seconds. Check the drive it's on, then try again.";
 const stillWaiting =
@@ -122,7 +123,7 @@ export function parseRevParse(run: ToolRun): RevParse {
     commonDir !== undefined &&
     toplevel !== undefined
   ) {
-    return { kind: "work-tree", toplevel, linked: !samePath(gitDir, commonDir) };
+    return { kind: "work-tree", toplevel, commonDir, linked: !samePath(gitDir, commonDir) };
   }
   if (run.stderr.includes("dubious ownership")) return { kind: "untrusted" };
   if (run.stderr.includes("not a git repository")) return { kind: "not-a-repository" };
@@ -149,9 +150,7 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
         `${name} is not a git repository. Choose the folder a repository was cloned into.`,
       );
     case "bare":
-      return refuse(
-        `${name} is a bare repository with no working files. Add a folder with a checkout instead.`,
-      );
+      return refuse(`${name} is a bare repository with no working files. ${ownCheckout}`);
     case "git-dir":
       return refuse(
         "That folder is inside a repository's .git folder. Add the repository's own folder instead.",
@@ -166,6 +165,9 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
       return refuse(`git couldn't read ${name}. Nothing was added.`);
     case "work-tree":
       break;
+  }
+  if (parsed.linked && (await revParse(parsed.commonDir)).kind === "bare") {
+    return refuse(`${name} is a worktree of a bare repository. ${ownCheckout}`);
   }
   if (parsed.linked) {
     return refuse(

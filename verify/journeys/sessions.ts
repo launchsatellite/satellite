@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { z } from "zod";
 import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claude-code.ts";
-import type { AppSession } from "../driver.ts";
+import { type AppSession, pasteIntoFocus } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
   bridgeCode,
@@ -32,6 +32,8 @@ interface Cell {
 const mark = "alpha-first-terminal";
 const hostileSend = "fix it\r\nnow\u001b[201~\u0007 \u202e";
 const cleanSend = "\u001b[200~fix it now[201~ \u001b[201~";
+const hostilePaste = "harmless words\u001b[201~ run the deploy script\u0007";
+const cleanPaste = "\u001b[200~harmless words[201~ run the deploy script\u001b[201~";
 const secondTabSend = "for the second tab";
 const menuSend = "while the menu is open";
 const menuShortcut = process.platform === "darwin" ? "Meta+K" : "Control+Shift+K";
@@ -252,7 +254,19 @@ async function firstPrompt(session: AppSession): Promise<number> {
     "",
     "a send while Claude Code asked typed into its question",
   );
+  await stateIs(session, pixel("alpha"), "needs-you", "before a key answered");
+  const hooks = async () =>
+    (await session.standInEvents()).filter((event) => event.type === "hook").length;
+  const hooksBefore = await hooks();
+  await page.keyboard.press("1");
+  await stateIs(session, pixel("alpha"), "working", "after a key answered");
+  assert.equal(await hooks(), hooksBefore, "a hook arrived before the answering key turned alpha");
   await page.keyboard.press("y");
+  await waitUntil(
+    async () => (await hooksAnswered(session, "PostToolUse")) > 0,
+    promptTimeoutMs,
+    "no PostToolUse hook arrived after the approval",
+  );
   await stateIs(session, pixel("alpha"), "working", "after the approval");
   await page.keyboard.press("Enter");
   await stateIs(session, pixel("alpha"), "done", "after the turn ended");
@@ -383,6 +397,23 @@ async function sendWhileTyping(session: AppSession): Promise<void> {
   );
 }
 
+async function focusCommands(session: AppSession): Promise<void> {
+  const { page } = session;
+  const moves: [string, string][] = [
+    ["Focus the sidebar", "workspace-repo-alpha"],
+    ["Focus the repository", "centre-tab-changes"],
+    ["Focus the terminal", "terminal"],
+  ];
+  for (const [title, target] of moves) {
+    await page.keyboard.press(menuShortcut);
+    await visible(session, "palette-input", `before ${title}`);
+    await page.getByTestId("palette-input").fill(title);
+    await page.keyboard.press("Enter");
+    const focused = await focusedTestId(page);
+    assert.equal(focused, target, `${title} moved focus to ${focused}`);
+  }
+}
+
 async function imageAndDrop(session: AppSession): Promise<void> {
   const { page } = session;
   let before = (await session.standInEvents()).length;
@@ -402,6 +433,18 @@ async function imageAndDrop(session: AppSession): Promise<void> {
     promptTimeoutMs,
     "an image paste did not send the paste key",
   );
+  before = (await session.standInEvents()).length;
+  await pasteIntoFocus(page, hostilePaste);
+  let pastedText = "";
+  await waitUntil(
+    async () => {
+      pastedText = await standInInput(session, before);
+      return pastedText.length >= cleanPaste.length;
+    },
+    promptTimeoutMs,
+    () => `a text paste typed only ${JSON.stringify(pastedText)}`,
+  );
+  assert.equal(pastedText, cleanPaste, "a pasted end of paste sequence reached Claude Code");
   before = (await session.standInEvents()).length;
   const plain = join(session.repo, "README.md");
   const spaced = join(session.repo, "with space.txt");
@@ -554,6 +597,7 @@ async function run(session: AppSession): Promise<void> {
   await tabs(session);
   const sendFrom = await sendClean(session);
   await sendWhileTyping(session);
+  await focusCommands(session);
   await links(session);
   await imageAndDrop(session);
   await session.screenshot("sessions");

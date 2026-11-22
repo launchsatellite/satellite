@@ -153,7 +153,9 @@ async function ignoredRuns(
       signal,
       ignoreCheckMs,
     );
-    if (check.kind !== "checked") return { ignored, stopped: check.kind };
+    if (check.kind !== "checked") {
+      return { ignored, stopped: check.kind === "hung" ? "hung" : "failed" };
+    }
     for (const path of check.ignored) ignored.add(path);
   }
   return { ignored, stopped: undefined };

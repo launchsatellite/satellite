@@ -1,3 +1,4 @@
+import { realpathOrUndefined, samePath } from "../platform/paths.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
 
 export interface ListedWorktree {
@@ -70,4 +71,20 @@ export async function listWorktrees(
   }
   if (run?.exitCode !== 0) return undefined;
   return { worktrees: parseWorktreeList(run.stdout, separator), separator };
+}
+
+async function commonFolder(folder: string): Promise<string | undefined> {
+  const run = await runGit(
+    folder,
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    gitReadMs,
+  );
+  const answer = run?.exitCode === 0 ? run.stdout.replace(/\r?\n$/, "") : "";
+  if (answer === "" || answer.includes("\n")) return undefined;
+  return realpathOrUndefined(answer);
+}
+
+export async function sharesRepository(root: string, worktree: string): Promise<boolean> {
+  const [own, its] = await Promise.all([commonFolder(root), commonFolder(worktree)]);
+  return own !== undefined && its !== undefined && samePath(own, its);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureNow, psMacos, tableWindows } from "../platform/process-fixtures.ts";
+import { fixtureNow, psMacos, tableWindows } from "../platform/process.test-fixture.ts";
 import { parsePsTable, parseWindowsTable } from "../platform/process-table.ts";
 import {
   listedProcesses,
@@ -88,6 +88,18 @@ describe("listedProcesses", () => {
       ].join("\n"),
     );
     expect(ids(table, [root(7000)], fixtureNow)).toEqual([7003]);
+  });
+
+  it("lists nothing under cmd, which launches a tool server on Windows", () => {
+    const table = parsePsTable(
+      [
+        row(7000, 1, "10:00:00", "claude"),
+        row(7001, 7000, "10:00:01", "cmd /c npx -y some-server"),
+        row(7002, 7001, "10:00:02", "node npx"),
+        row(7003, 7002, "10:00:03", "node some-server"),
+      ].join("\n"),
+    );
+    expect(ids(table, [root(7000)], fixtureNow)).toEqual([]);
   });
 
   it("ignores a root that started after Satellite spawned the session", () => {

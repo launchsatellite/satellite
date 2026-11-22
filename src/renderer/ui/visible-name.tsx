@@ -1,4 +1,4 @@
-import { visibleParts } from "../../shared/visible-text.ts";
+import { visibleParts, visibleText } from "../../shared/visible-text.ts";
 import { lookAlikeColumns } from "../diff/look-alikes.ts";
 
 function MarkedText({ text }: { text: string }) {
@@ -31,4 +31,9 @@ export function VisibleName({ text }: { text: string }) {
       <MarkedText key={index} text={part.text} />
     ),
   );
+}
+
+export function visibleLabel(text: string): string {
+  const shown = visibleText(text);
+  return lookAlikeColumns(shown).length === 0 ? shown : `${shown} (look-alike letters)`;
 }

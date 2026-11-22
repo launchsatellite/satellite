@@ -86,7 +86,7 @@ export function sideSentence(sides: SideSentenceKind): string {
     case "not-local":
       return "This clone never downloaded the earlier version of this file, so there is no diff to show.";
     case "unreadable":
-      return "This file's name isn't valid text, so Satellite can't read it.";
+      return "Satellite doesn't read files with a name like this one, so there is no diff to show.";
     case "not-utf8":
       return "This file isn't UTF-8 text, so there is no diff to show.";
     case "submodule":

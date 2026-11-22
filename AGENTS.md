@@ -19,13 +19,14 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | --- | --- |
 | `specs/` | numbered feature specs, the template and the index |
 | `.claude/skills/` | how to work here, one folder per skill |
-| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu, quiet verification and the interface's shortcut keys |
+| `src/main/` | the background process, one folder per feature plus `platform/`, the only code that spawns processes or branches on the operating system apart from the macOS app menu, quiet verification, the Windows case fold in a command's home folder and the interface's shortcut keys and image paste |
 | `src/preload/` | the preload that exposes `window.satellite` |
 | `src/renderer/` | the sandboxed interface, React and Tailwind, one folder per feature plus `ui/` |
 | `src/shared/` | the bridge contract and other code both processes import |
 | `verify/` | the driver, scenarios, stand-ins and journeys that prove changes in the real app |
 | `lint/` | the `no-comments` lint rule |
 | `packaging/` | the app icon electron-builder packages |
+| `.github/` | the CI and release workflows, the task issue template and the pull request template |
 | `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer and the licence notices step |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 

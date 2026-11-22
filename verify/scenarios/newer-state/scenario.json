@@ -1,0 +1,51 @@
+{
+  "description": "A fresh repo with a Satellite home whose project list a newer Satellite wrote, as version 3.",
+  "repo": [
+    {
+      "write": {
+        "path": "README.md",
+        "content": "# Verify repo\n"
+      }
+    },
+    {
+      "git": ["init", "-b", "main"]
+    },
+    {
+      "git": ["add", "."]
+    },
+    {
+      "git": ["commit", "-m", "first commit"]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    },
+    {
+      "path": "projects.json",
+      "content": "{\"version\":3,\"projects\":[{\"id\":\"0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e\",\"path\":\"/Users/<name>/code/alpha\",\"pinned\":true,\"workspaces\":[]}]}\n"
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.0.0 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "> "
+      }
+    ]
+  }
+}

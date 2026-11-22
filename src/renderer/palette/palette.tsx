@@ -12,8 +12,10 @@ import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
-import { StatusPixel } from "../ui/status-pixel.tsx";
+import { pixelLabel } from "../sessions/session-pixel.ts";
+import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
+import { visibleLabel } from "../ui/visible-name.tsx";
 import { rankMatches } from "../../shared/fuzzy-match.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
@@ -28,6 +30,7 @@ export interface SwitcherItem {
   testKey: string;
   project: string;
   parent?: string;
+  pixel: PixelState;
 }
 
 interface PaletteProps {
@@ -45,7 +48,7 @@ interface PaletteOption {
   title: string;
   hint?: string;
   detail?: string;
-  pixel?: boolean;
+  pixel?: PixelState;
   path?: string;
   run: () => void;
 }
@@ -100,9 +103,11 @@ function switcherOptions(
     ranked.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
       testId: `switch-${item.project}-${item.testKey}`,
-      title: item.label,
-      detail: item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
-      pixel: true,
+      title: visibleLabel(item.label),
+      detail: visibleText(
+        item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
+      ),
+      pixel: item.pixel,
       run: () => {
         onOpenWorkspace(item.ref);
       },
@@ -179,6 +184,8 @@ export function Palette({
   const input = useRef<HTMLInputElement>(null);
   const opener = useRef<Element | null>(null);
   const restored = useRef(false);
+  const shell = useRef<HTMLDivElement>(null);
+  const behind = useRef<Element[]>([]);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [shownMode, setShownMode] = useState(mode);
@@ -196,6 +203,8 @@ export function Palette({
   const restoreFocus = () => {
     if (restored.current) return;
     restored.current = true;
+    for (const sibling of behind.current) sibling.removeAttribute("inert");
+    behind.current = [];
     const element = opener.current;
     if (element instanceof HTMLElement && element.isConnected) element.focus();
   };
@@ -207,6 +216,14 @@ export function Palette({
   useLayoutEffect(() => {
     opener.current = document.activeElement;
     restored.current = false;
+    const overlay = shell.current;
+    behind.current = [...(overlay?.parentElement?.children ?? [])].filter(
+      (sibling) =>
+        sibling !== overlay &&
+        !sibling.hasAttribute("inert") &&
+        !sibling.hasAttribute("data-stays-live"),
+    );
+    for (const sibling of behind.current) sibling.setAttribute("inert", "");
     return restoreFocus;
   }, []);
   useEffect(() => {
@@ -252,7 +269,7 @@ export function Palette({
   const note = emptyNote(mode, query, files);
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div ref={shell} className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-bg/60" onClick={close} />
       <div
         role="dialog"
@@ -318,7 +335,9 @@ export function Palette({
                     runOption(option);
                   }}
                 >
-                  {option.pixel === true && <StatusPixel state="idle" size={6} />}
+                  {option.pixel !== undefined && (
+                    <StatusPixel state={option.pixel} size={6} label={pixelLabel(option.pixel)} />
+                  )}
                   {option.path !== undefined && <OptionIcon icons={icons} path={option.path} />}
                   <span
                     className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}

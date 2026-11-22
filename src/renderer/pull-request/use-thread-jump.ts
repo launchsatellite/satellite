@@ -44,7 +44,7 @@ export function useThreadJump({ place, shown, found, notify, onSection }: Thread
   useEffect(() => {
     if (noThreads === 0) return;
     const id = setTimeout(() => {
-      notify(noUnresolvedSentence, "info");
+      notify(noUnresolvedSentence, "error");
     }, 0);
     return () => {
       clearTimeout(id);

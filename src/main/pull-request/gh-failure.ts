@@ -5,6 +5,7 @@ const signedOutStart = /^(?:To get started with GitHub CLI, please run:|HTTP 401
 const otherHostStarts = [
   "none of the git remotes configured for this repository point to a known GitHub host",
   "set the GH_HOST environment variable to specify which GitHub host to use",
+  "could not find any host configurations",
 ];
 const rateLimitStart =
   /^(?:HTTP \d{3}: |GraphQL: )?(?:API rate limit|You have exceeded a (?:secondary )?rate limit)/i;

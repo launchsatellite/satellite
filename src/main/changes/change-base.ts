@@ -2,7 +2,7 @@ import { isBranchName } from "../../shared/workspace-name.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import { samePath } from "../platform/paths.ts";
 import { defaultStart, pickRemote } from "../workspaces/create-steps.ts";
-import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, storedObjects, runGit } from "../workspaces/git-command.ts";
 import { isObjectName } from "./file-sides.ts";
 
 interface ChangeBase {
@@ -27,7 +27,7 @@ function oneLine(stdout: string): string {
 
 async function commitOid(folder: string, spec: string, signal?: AbortSignal) {
   const run = await runGit(folder, ["rev-parse", "--verify", "--quiet", spec], gitReadMs, signal, {
-    gitVariables: noLazyFetch,
+    gitVariables: storedObjects,
   });
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;
@@ -41,7 +41,7 @@ async function namedRef(
   named: string,
 ): Promise<BaseLookup | Omit<ChangeBase, "oid">> {
   const listed = await (remotes ??
-    runGit(projectRoot, ["remote"], gitReadMs, undefined, { gitVariables: noLazyFetch }));
+    runGit(projectRoot, ["remote"], gitReadMs, undefined, { gitVariables: storedObjects }));
   if (listed?.exitCode !== 0) return failed;
   const remote = pickRemote(listed.stdout);
   if (remote === null || !isBranchName(named)) return { kind: "none", why: "gone" };
@@ -83,7 +83,7 @@ export async function currentBranch(
   signal?: AbortSignal,
 ): Promise<string | null | undefined> {
   const run = await runGit(folder, ["branch", "--show-current"], gitReadMs, signal, {
-    gitVariables: noLazyFetch,
+    gitVariables: storedObjects,
   });
   if (run?.exitCode !== 0) return undefined;
   const branch = oneLine(run.stdout);
@@ -118,7 +118,7 @@ export async function mergeBase(
   const known = forks.get(key);
   if (known !== undefined) return known;
   const run = await runGit(folder, ["merge-base", head, base], gitReadMs, signal, {
-    gitVariables: noLazyFetch,
+    gitVariables: storedObjects,
   });
   if (run === undefined) return undefined;
   if (run.exitCode === 1) return null;

@@ -1,8 +1,8 @@
 name: Release
 
-# Runs the unit tests, packages Satellite on three platforms and proves each packaged app with the
-# journeys. A tag drafts a release, a platforms/ branch only builds and proves, so the matrix can
-# run before a merge.
+# Runs the green checkpoint, packages Satellite on three platforms, checks the fuses and proves each
+# packaged app with the journeys. A tag drafts a release once its name matches the package version,
+# a platforms/ branch only builds and proves, so the matrix can run before a merge.
 on:
   push:
     tags: ["v*"]
@@ -26,14 +26,17 @@ jobs:
             label: macos
             package: --mac --arm64 --x64
             app: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite
+            fused: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite release/mac/Satellite.app/Contents/MacOS/Satellite
           - os: windows-2025
             label: windows
             package: --win --x64
             app: release/win-unpacked/Satellite.exe
+            fused: release/win-unpacked/Satellite.exe
           - os: ubuntu-24.04
             label: linux
             package: --linux --x64
             app: release/linux-unpacked/satellite
+            fused: release/linux-unpacked/satellite
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     defaults:
@@ -47,11 +50,27 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: ${{ !startsWith(github.ref, 'refs/tags/') && 'npm' || '' }}
+      - if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME and package version $version differ"; exit 1; }
       - run: npm ci
-      - run: npm run test
+      - run: ./scripts/check
       - run: npm run build
       - run: npx electron-builder ${{ matrix.package }} --publish never
-      - run: npx @electron/fuses read --app "${{ matrix.app }}"
+      - run: |
+          for app in ${{ matrix.fused }}; do
+            fuses=$(npx @electron/fuses read --app "$app")
+            echo "$fuses"
+            for fuse in "RunAsNode is Disabled" "EnableCookieEncryption is Disabled" \
+              "EnableNodeOptionsEnvironmentVariable is Disabled" "EnableNodeCliInspectArguments is Disabled" \
+              "EnableEmbeddedAsarIntegrityValidation is Enabled" "OnlyLoadAppFromAsar is Enabled" \
+              "GrantFileProtocolExtraPrivileges is Disabled"; do
+              grep -Fqx "  $fuse" <<<"$fuses" || { echo "::error::Expected $fuse in $app"; exit 1; }
+            done
+          done
+        env:
+          FORCE_COLOR: "0"
       - if: runner.os == 'Linux'
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

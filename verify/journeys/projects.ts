@@ -21,7 +21,7 @@ const execute = promisify(execFile);
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const narrowPresses = 4;
-const menuCommands = 16;
+const menuCommands = 19;
 const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
@@ -243,7 +243,7 @@ async function run(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Enter");
   await toastReads(
     session,
-    "Satellite forgot alpha. Its folder is untouched.",
+    "Satellite removed alpha. Its folder is untouched.",
     "after removing alpha",
   );
   await gone(session, "project-alpha", "after removing it");

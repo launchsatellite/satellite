@@ -93,7 +93,7 @@ function Sections({
             onClick={() => {
               onChange(section.value);
             }}
-            className={`flex h-[26px] items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+            className={`flex h-7 items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
           >
             {section.label}
           </button>

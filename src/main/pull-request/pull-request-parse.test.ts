@@ -382,12 +382,12 @@ describe("parseConversation", () => {
     );
     expect(answer?.detail).toBeNull();
     expect(answer?.candidates).toEqual([
-      { number: 41, open: true, writer: false, here: false },
-      { number: 40, open: true, writer: true, here: true },
-      { number: 39, open: false, writer: true, here: false },
-      { number: 38, open: false, writer: false, here: false },
-      { number: 37, open: true, writer: true, here: false },
-      { number: 36, open: true, writer: false, here: false },
+      { number: 41, open: true, trusted: false, here: false },
+      { number: 40, open: true, trusted: true, here: true },
+      { number: 39, open: false, trusted: true, here: false },
+      { number: 38, open: false, trusted: false, here: false },
+      { number: 37, open: true, trusted: true, here: false },
+      { number: 36, open: true, trusted: false, here: false },
     ]);
   });
 
@@ -428,6 +428,46 @@ describe("parseThreads", () => {
         detail,
       }).success,
     ).toBe(true);
+  });
+
+  it("marks a review from someone without standing who is not the viewer as outside", () => {
+    const review = (login: string, authorAssociation?: string) => ({
+      url: null,
+      state: "CHANGES_REQUESTED",
+      submittedAt: "2026-01-01T00:00:00Z",
+      body: "No.",
+      author: { login },
+      authorAssociation,
+    });
+    const text = JSON.stringify({
+      data: {
+        viewer: { login: "fork-owner" },
+        repository: {
+          pullRequests: { nodes: [] },
+          pullRequest: {
+            ...full(),
+            reviews: {
+              totalCount: 4,
+              nodes: [
+                review("maintainer", "MEMBER"),
+                review("passer-by", "CONTRIBUTOR"),
+                review("fork-owner", "CONTRIBUTOR"),
+                review("unknown"),
+              ],
+            },
+          },
+        },
+      },
+    });
+    const detail = parseConversation(text, place, true)?.detail;
+    expect(
+      detail?.kind === "read" ? detail.reviews.map(({ author, outside }) => [author, outside]) : [],
+    ).toEqual([
+      ["maintainer", false],
+      ["passer-by", true],
+      ["fork-owner", false],
+      ["unknown", false],
+    ]);
   });
 
   it("reads threads with a null line as listed and not placed", () => {

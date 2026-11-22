@@ -7,7 +7,7 @@ import type {
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
 import type { ToolRun } from "../platform/tools.ts";
-import { gitReadMs, noLazyFetch, runGit } from "../workspaces/git-command.ts";
+import { gitReadMs, storedObjects, runGit } from "../workspaces/git-command.ts";
 import { isInsidePath, samePath } from "../platform/paths.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import { sessionFolder } from "../sessions/session-folder.ts";
@@ -15,7 +15,7 @@ import { countUnpushed, hasRemote, readTracking } from "../workspaces/branch-tra
 import { currentBranch, headOid, mergeBase, resolveBase } from "./change-base.ts";
 import { readChangeList, type ChangeRecord } from "./change-list.ts";
 import { conflictCheck, knownConflict, type ConflictCheck } from "./conflict-check.ts";
-import { readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
+import { asGitStores, readBlobSide, readWorktreeSide, type SideRead } from "./file-sides.ts";
 import { createReadQueue } from "./read-queue.ts";
 
 export interface Changes {
@@ -178,7 +178,11 @@ async function fileSides(
     record.letter === "A" || sourceOid === null
       ? emptyText
       : readBlobSide(folder, sourceOid, signal),
-    record.letter === "D" ? emptyText : readWorktreeSide(folder, record.path),
+    record.letter === "D"
+      ? emptyText
+      : readWorktreeSide(folder, record.path).then((side) =>
+          asGitStores(folder, record.path, side, signal),
+        ),
   ]);
   return sidesOf(original, modified);
 }
@@ -269,7 +273,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     const project = await store.project(ref.projectId);
     signal.throwIfAborted();
     const remotes = runGit(project.path, ["remote"], gitReadMs, undefined, {
-      gitVariables: noLazyFetch,
+      gitVariables: storedObjects,
     });
     const [head, branch, lookup] = await Promise.all([
       headOid(folder, signal),

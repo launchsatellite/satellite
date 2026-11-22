@@ -1,6 +1,6 @@
-import { chmod, lstat, mkdir, open, readdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { errorCode, isMissing } from "../platform/file-system.ts";
+import { errorCode, isMissing, restrictToUser } from "../platform/file-system.ts";
 
 const folderName = "sessions";
 const launchFile = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/;
@@ -21,7 +21,7 @@ async function sessionsFolder(home: string): Promise<string> {
   });
   if (!(await isRealFolder(folder)))
     throw new Error(`${folderName} in the Satellite home is not a folder`);
-  if (process.platform !== "win32") await chmod(folder, 0o700);
+  await restrictToUser(folder);
   return folder;
 }
 

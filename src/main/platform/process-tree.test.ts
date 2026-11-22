@@ -1,9 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { type ProcessEntry, readProcessTable } from "./process-table.ts";
 import {
   endSubtree,
@@ -11,10 +8,9 @@ import {
   prepareLinux,
   windowsStopChunks,
   endUnixTree,
+  endWindowsChild,
   endWindowsTree,
-  forceKillGraceMs,
   subtreeStopBoundMs,
-  treeKillBoundMs,
   StopNotConfirmed,
   StopRefused,
 } from "./process-tree.ts";
@@ -227,7 +223,8 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
       const found = (await readProcessTable()).find((candidate) => candidate.pid === pid);
       expect(found).toBeDefined();
       if (found === undefined) return;
-      const sendsNothing = () => Promise.resolve({ ready: true, send: () => Promise.resolve() });
+      const sendsNothing = () =>
+        Promise.resolve({ ready: true, starts: new Map(), send: () => Promise.resolve() });
       await expect(endSubtree(found, readProcessTable, sendsNothing)).rejects.toBeInstanceOf(
         StopNotConfirmed,
       );
@@ -258,22 +255,86 @@ describe.skipIf(process.platform === "win32")("endSubtree", () => {
   }, 15_000);
 });
 
-describe.skipIf(process.platform === "win32")("endWindowsTree", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
+describe("endWindowsTree", () => {
+  function entry(pid: number, parent: number, started: number): ProcessEntry {
+    return {
+      pid,
+      parent,
+      group: 0,
+      identity: "",
+      started,
+      defunct: false,
+      name: "",
+      command: "",
+    };
+  }
+
+  async function ended(pid: number, table: ProcessEntry[]): Promise<number[] | undefined> {
+    let members: number[] | undefined;
+    await endWindowsTree(
+      pid,
+      () => Promise.resolve(table),
+      (found) => {
+        members = found.map((member) => member.pid);
+        return Promise.resolve({ ready: true, starts: new Map(), send: () => Promise.resolve() });
+      },
+    );
+    return members;
+  }
+
+  it("ends only the root and what it started, never an older process holding its id as parent", async () => {
+    const table = [
+      entry(10, 1, 5_000),
+      entry(50, 10, 10_000),
+      entry(51, 50, 11_000),
+      entry(52, 51, 12_000),
+      entry(60, 50, 4_000),
+      entry(61, 60, 4_500),
+    ];
+    expect(await ended(50, table)).toEqual([50, 51, 52]);
   });
 
-  it("gives up on a taskkill that hangs, within the tree kill's own bound", async () => {
-    const root = await mkdtemp(join(tmpdir(), "satellite-taskkill-"));
-    await mkdir(join(root, "System32"));
-    const taskkill = join(root, "System32", "taskkill.exe");
-    await writeFile(taskkill, "#!/bin/sh\nexec sleep 30\n");
-    await chmod(taskkill, 0o755);
-    vi.stubEnv("SystemRoot", root);
-    const began = performance.now();
-    await endWindowsTree(process.pid);
-    expect(performance.now() - began).toBeLessThan(treeKillBoundMs - forceKillGraceMs + 500);
-  }, 40_000);
+  it("ends nothing when the root is no longer in the table", async () => {
+    expect(await ended(50, [entry(10, 1, 5_000), entry(60, 50, 4_000)])).toBeUndefined();
+  });
+});
+
+describe("endWindowsChild", () => {
+  function child(exitCode: number | null = null) {
+    let kills = 0;
+    return {
+      own: { pid: 50, exitCode, signalCode: null, kill: () => ++kills > 0 },
+      kills: () => kills,
+    };
+  }
+
+  it("ends a running child through its own handle when the tree stop could not", async () => {
+    const running = child();
+    const asked: number[] = [];
+    await endWindowsChild(running.own, (pid) => {
+      asked.push(pid);
+      return Promise.resolve();
+    });
+    expect(asked).toEqual([50]);
+    expect(running.kills()).toBe(1);
+  });
+
+  it("ends a running child even when the tree stop throws", async () => {
+    const running = child();
+    await endWindowsChild(running.own, () => Promise.reject(new Error("no table")));
+    expect(running.kills()).toBe(1);
+  });
+
+  it("never touches a child that already exited, since its id may be another process's", async () => {
+    const exited = child(0);
+    let asked = false;
+    await endWindowsChild(exited.own, () => {
+      asked = true;
+      return Promise.resolve();
+    });
+    expect(asked).toBe(false);
+    expect(exited.kills()).toBe(0);
+  });
 });
 
 describe("parseStartTicks", () => {
@@ -314,6 +375,34 @@ describe.skipIf(process.platform === "win32")("prepareLinux", () => {
       expect(isAlive(entry.pid)).toBe(false);
     } finally {
       if (isAlive(entry.pid)) child.kill("SIGKILL");
+    }
+  });
+
+  it("compares every round with the start ticks recorded in the first", async () => {
+    const { child, entry } = await sleeperEntry();
+    try {
+      const first = await prepareLinux([entry], () => Promise.resolve("100"));
+      const later = await prepareLinux([entry], () => Promise.resolve("101"), first);
+      expect(later.starts.get(entry.pid)).toBe("100");
+      await later.send("SIGKILL");
+      await delay(100);
+      expect(isAlive(entry.pid)).toBe(true);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  });
+
+  it("never signals in a later round a member the first round recorded no ticks for", async () => {
+    const { child, entry } = await sleeperEntry();
+    try {
+      const first = await prepareLinux([entry], () => Promise.resolve(null));
+      const later = await prepareLinux([entry], () => Promise.resolve("100"), first);
+      expect(later.starts.has(entry.pid)).toBe(false);
+      await later.send("SIGKILL");
+      await delay(100);
+      expect(isAlive(entry.pid)).toBe(true);
+    } finally {
+      child.kill("SIGKILL");
     }
   });
 

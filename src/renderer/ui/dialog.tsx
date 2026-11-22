@@ -87,7 +87,10 @@ export function Dialog({
         : focused;
     const opener = priorFocus === document.body || element.contains(priorFocus) ? null : priorFocus;
     const behind = [...(overlay.parentElement?.children ?? [])].filter(
-      (sibling) => sibling !== overlay && !sibling.hasAttribute("inert"),
+      (sibling) =>
+        sibling !== overlay &&
+        !sibling.hasAttribute("inert") &&
+        !sibling.hasAttribute("data-stays-live"),
     );
     for (const sibling of behind) sibling.setAttribute("inert", "");
     if (!element.contains(focused)) element.focus();

@@ -56,6 +56,8 @@ beforeAll(async () => {
   await writeFile(join(base, "notes.txt"), "notes");
   await git(base, ["init", "-q", "--bare", "bare.git"]);
   await git(join(base, "repo"), ["worktree", "add", "-q", join(base, "linked")]);
+  await git(base, ["clone", "-q", "--bare", join(base, "repo"), "shared.git"]);
+  await git(join(base, "shared.git"), ["worktree", "add", "-q", join(base, "from-bare")]);
 }, 30_000);
 
 afterEach(() => {
@@ -75,7 +77,12 @@ describe("parseRevParse", () => {
           "false\nfalse\n/Users/<name>/repo/.git\n/Users/<name>/repo/.git\n/Users/<name>/repo\n",
         stderr: "",
       }),
-    ).toEqual({ kind: "work-tree", toplevel: "/Users/<name>/repo", linked: false });
+    ).toEqual({
+      kind: "work-tree",
+      toplevel: "/Users/<name>/repo",
+      commonDir: "/Users/<name>/repo/.git",
+      linked: false,
+    });
   });
 
   it("reads a subfolder's toplevel", () => {
@@ -117,7 +124,12 @@ describe("parseRevParse", () => {
           "false\nfalse\n/Users/<name>/repo/.git/worktrees/linked\n/Users/<name>/repo/.git\n/Users/<name>/linked\n",
         stderr: "",
       }),
-    ).toEqual({ kind: "work-tree", toplevel: "/Users/<name>/linked", linked: true });
+    ).toEqual({
+      kind: "work-tree",
+      toplevel: "/Users/<name>/linked",
+      commonDir: "/Users/<name>/repo/.git",
+      linked: true,
+    });
   });
 
   it("recognises a folder that is not a repository", () => {
@@ -154,7 +166,12 @@ describe("parseRevParse", () => {
           "false\r\nfalse\r\nC:/Users/<name>/repo/.git\r\nC:/Users/<name>/repo/.git\r\nC:/Users/<name>/repo\r\n",
         stderr: "",
       }),
-    ).toEqual({ kind: "work-tree", toplevel: "C:/Users/<name>/repo", linked: false });
+    ).toEqual({
+      kind: "work-tree",
+      toplevel: "C:/Users/<name>/repo",
+      commonDir: "C:/Users/<name>/repo/.git",
+      linked: false,
+    });
   });
 });
 
@@ -168,7 +185,11 @@ describe("checkRepository", () => {
       ],
       [
         join(base, "bare.git"),
-        "bare.git is a bare repository with no working files. Add a folder with a checkout instead.",
+        "bare.git is a bare repository with no working files. Satellite needs a repository with its own checkout.",
+      ],
+      [
+        join(base, "from-bare"),
+        "from-bare is a worktree of a bare repository. Satellite needs a repository with its own checkout.",
       ],
       [
         join(base, "repo", ".git"),

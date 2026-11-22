@@ -3,17 +3,17 @@ import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesLimits } from "../../shared/bridge-contract.ts";
-import { protectHome } from "../changes/file-sides.ts";
+import { protectHome, worktreeStamps } from "../changes/file-sides.ts";
 import { listFolders } from "./folder-listing.ts";
 import { readFileForViewing } from "./file-read.ts";
-import { gif, jpeg, png, webpExtended, webpLossless, webpLossy } from "./image-fixture.ts";
+import { gif, jpeg, png, webpExtended, webpLossless, webpLossy } from "./image.test-fixture.ts";
 import {
   isolateGit,
   makeRepository,
   mockedEnvironment,
   put,
   scratch,
-} from "./repository-fixture.ts";
+} from "./repository.test-fixture.ts";
 
 vi.mock("../platform/user-environment.ts", () => ({
   userEnvironment: () => mockedEnvironment(),
@@ -40,6 +40,19 @@ describe("the Satellite home", () => {
     expect(await seen(root, ".satellite/projects.json")).toEqual({ kind: "unreadable" });
     expect(await seen(root, "ok.txt")).toEqual({ kind: "text", text: "ok\n" });
     expect(await listFolders(root, [".satellite"])).toEqual([{ state: "unreadable" }]);
+  });
+
+  it("gives no size or time of its files to a list of changes", async () => {
+    const root = await makeRepository();
+    await put(root, { ".satellite/projects.json": "{}\n", "ok.txt": "ok\n" });
+    protectHome(join(root, ".satellite"));
+    const stamps = await worktreeStamps(
+      root,
+      [".satellite/projects.json", "ok.txt"],
+      new AbortController().signal,
+    );
+    expect(stamps.get(".satellite/projects.json")).toBe("refused");
+    expect(stamps.get("ok.txt")).toMatch(/^\d+:\d+:\d+$/);
   });
 
   it("is read from a workspace whose own worktree lives inside it", async () => {
