@@ -126,6 +126,7 @@ const terminalEscape = new RegExp(
 );
 const timestamp = /^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/;
 const errorMarker = "##[error]";
+const exitLine = /^Process completed with exit code -?\d+\.$/;
 
 function parseJson(text: string): unknown {
   try {
@@ -454,11 +455,19 @@ export function failedLines(stdout: string): { lines: string[]; more: boolean } 
     .split(/\r?\n/)
     .map(lineOf)
     .filter((line) => line.trim() !== "");
-  const errors = lines.filter((line) => line.includes(errorMarker));
+  const marked = lines.map((line) =>
+    line.includes(errorMarker) ? line.replace(errorMarker, "").trim() : null,
+  );
+  const told = marked.filter((text) => text !== null && !exitLine.test(text));
+  const exit = marked.findIndex((text) => text !== null && exitLine.test(text));
   const chosen =
-    errors.length > 0 ? errors.map((line) => line.replace(errorMarker, "").trim()) : lines;
+    told.length > 0
+      ? told
+      : lines
+          .slice(0, exit === -1 ? lines.length : exit + 1)
+          .map((line, index) => marked[index] ?? line);
   const picked =
-    errors.length > 0
+    told.length > 0
       ? chosen.slice(0, pullRequestLimits.logLines)
       : chosen.slice(-pullRequestLimits.logLines);
   const cuts = picked.map((line) => cutText(line, pullRequestLimits.logLineChars));

@@ -714,17 +714,39 @@ describe("parseThreads", () => {
 const prefix = (text: string) => `2026-01-01T00:00:0${text}`;
 
 describe("failedLines", () => {
-  it("reduces a log to its error lines", () => {
+  it("reduces a log to its error lines and leaves out the bare exit code", () => {
     const log = [
       prefix("0.1234567Z starting"),
-      prefix("1.0000000Z ##[error]Process completed with exit code 1."),
+      prefix("1.0000000Z ##[error]AssertionError: expected 2 to be 3"),
       prefix("2.0000000Z more output"),
-      prefix("3.0000000Z ##[error]Second failure"),
+      prefix("3.0000000Z ##[error]Process completed with exit code 1."),
     ].join("\n");
     expect(failedLines(log)).toEqual({
-      lines: ["Process completed with exit code 1.", "Second failure"],
+      lines: ["AssertionError: expected 2 to be 3"],
       more: false,
     });
+  });
+
+  it("shows the lines that led to a bare exit code, not the cleanup after it", () => {
+    const log = [
+      `﻿${prefix("0.0000000Z Current runner version: 2.330.0")}`,
+      ...Array.from({ length: 50 }, (_, index) => prefix(`1.0000000Z setup ${String(index)}`)),
+      prefix("2.0000000Z ##[group]Run npm run journeys"),
+      prefix("2.1000000Z npm run journeys"),
+      prefix("2.2000000Z ##[endgroup]"),
+      prefix("3.0000000Z pass launch"),
+      prefix("4.0000000Z fail projects locator.click: Timeout 30000ms exceeded."),
+      prefix("5.0000000Z pass quit"),
+      prefix("6.0000000Z ##[error]Process completed with exit code 1."),
+      prefix("7.0000000Z ##[group]Run actions/upload-artifact@v4"),
+      ...Array.from({ length: 50 }, (_, index) => prefix(`8.0000000Z cleanup ${String(index)}`)),
+    ].join("\n");
+    const { lines, more } = failedLines(log);
+    expect(lines).toHaveLength(pullRequestLimits.logLines);
+    expect(lines.at(-1)).toBe("Process completed with exit code 1.");
+    expect(lines.at(-3)).toBe("fail projects locator.click: Timeout 30000ms exceeded.");
+    expect(lines.some((line) => line.startsWith("cleanup"))).toBe(false);
+    expect(more).toBe(true);
   });
 
   it("falls back to the last 40 lines", () => {
