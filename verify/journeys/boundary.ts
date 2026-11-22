@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { createSocket, type Socket } from "node:dgram";
 import { mkdir, readFile, rmdir, stat, symlink, unlink, writeFile } from "node:fs/promises";
+import { createServer, Server } from "node:net";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -746,6 +748,57 @@ async function checkPermissions(page: Page): Promise<void> {
   }
 }
 
+async function listening(server: Server | Socket): Promise<number> {
+  await new Promise<void>((done) => {
+    if (server instanceof Server) server.listen(0, "127.0.0.1", done);
+    else server.bind(0, "127.0.0.1", done);
+  });
+  const address = server.address();
+  return typeof address === "object" && address !== null ? address.port : 0;
+}
+
+async function checkWebRtc(page: Page): Promise<void> {
+  let datagrams = 0;
+  let connections = 0;
+  const udp = createSocket("udp4").on("message", () => (datagrams += 1));
+  const tcp = createServer((socket) => {
+    connections += 1;
+    socket.destroy();
+  });
+  try {
+    const ports = [await listening(udp), await listening(tcp)];
+    await page.evaluate(async ([udpPort = 0, tcpPort = 0]) => {
+      const frame = document.createElement("iframe");
+      document.body.append(frame);
+      const isPeer = (value: unknown): value is typeof RTCPeerConnection =>
+        typeof value === "function";
+      const framed: unknown = Reflect.get(frame.contentWindow ?? window, "RTCPeerConnection");
+      const kinds = [RTCPeerConnection, isPeer(framed) ? framed : RTCPeerConnection];
+      for (const Peer of kinds) {
+        const peer = new Peer({
+          iceServers: [
+            { urls: `stun:127.0.0.1:${String(udpPort)}` },
+            {
+              urls: `turn:127.0.0.1:${String(tcpPort)}?transport=tcp`,
+              username: "satellite",
+              credential: "satellite",
+            },
+          ],
+        });
+        peer.createDataChannel("probe");
+        await peer.setLocalDescription(await peer.createOffer());
+      }
+      await new Promise((done) => setTimeout(done, 3000));
+      frame.remove();
+    }, ports);
+    assert.equal(datagrams, 0, `WebRTC sent ${String(datagrams)} datagrams from the page`);
+    assert.equal(connections, 0, `WebRTC opened ${String(connections)} connections from the page`);
+  } finally {
+    udp.close();
+    tcp.close();
+  }
+}
+
 async function checkPaths(page: Page): Promise<void> {
   for (const url of escapingPaths) {
     const status = await page.evaluate(
@@ -910,6 +963,7 @@ async function run(session: AppSession): Promise<void> {
   await checkNoNode(page);
   await checkPolicy(page);
   await checkPermissions(page);
+  await checkWebRtc(page);
   await checkPaths(page);
   await checkBridge(page);
   await checkPathForFile(page);

@@ -100,7 +100,7 @@ async function start({
   applyInterface((await interfaceFile.load()).state);
   const entryUrl = rendererEntryUrl();
   installAppMenu();
-  hardenSession(session.defaultSession);
+  await hardenSession(session.defaultSession, entryUrl);
   hardenWebContents(entryUrl);
   handleAppProtocol(join(app.getAppPath(), "out/renderer"));
   registerBridge(
