@@ -344,7 +344,7 @@
     },
     {
       "call": "failed-log",
-      "stdout": "﻿2025-01-01T10:01:00.0000000Z Current runner version: 2.330.0\n2025-01-01T10:01:04.0000000Z ##[group]Run npm run lint\n2025-01-01T10:01:04.1000000Z \u001b[36;1mnpm run lint\u001b[0m\n2025-01-01T10:01:04.2000000Z ##[endgroup]\n2025-01-01T10:01:05.0000000Z > eslint src\n2025-01-01T10:01:06.0000000Z \n2025-01-01T10:01:06.1000000Z src/app.ts\n2025-01-01T10:01:06.2000000Z   2:3  error  Unexpected var, use let or const instead  no-var\n2025-01-01T10:01:06.3000000Z \n2025-01-01T10:01:06.4000000Z 1 problem (1 error, 0 warnings)\n2025-01-01T10:01:07.0000000Z ##[error]Process completed with exit code 1.\n2025-01-01T10:01:08.0000000Z Post job cleanup.\n2025-01-01T10:01:08.1000000Z Cleaning up orphan processes\n"
+      "stdout": "\ufeff2025-01-01T10:01:00.0000000Z Current runner version: 2.330.0\n2025-01-01T10:01:04.0000000Z ##[group]Run npm run lint\n2025-01-01T10:01:04.1000000Z \u001b[36;1mnpm run lint\u001b[0m\n2025-01-01T10:01:04.2000000Z ##[endgroup]\n2025-01-01T10:01:05.0000000Z > eslint src\n2025-01-01T10:01:06.0000000Z \n2025-01-01T10:01:06.1000000Z src/app.ts\n2025-01-01T10:01:06.2000000Z   2:3  error  Unexpected var, use let or const instead  no-var\n2025-01-01T10:01:06.3000000Z \n2025-01-01T10:01:06.4000000Z 1 problem (1 error, 0 warnings)\n2025-01-01T10:01:07.0000000Z ##[error]Process completed with exit code 1.\n2025-01-01T10:01:08.0000000Z Post job cleanup.\n2025-01-01T10:01:08.1000000Z Cleaning up orphan processes\n"
     }
   ],
   "claude": {
