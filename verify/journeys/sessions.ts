@@ -32,8 +32,8 @@ interface Cell {
 const mark = "alpha-first-terminal";
 const hostileSend = "fix it\r\nnow\u001b[201~\u0007 \u202e";
 const cleanSend = "\u001b[200~fix it now[201~ \u001b[201~";
-const hostilePaste = "harmless words\u001b[201~ run the deploy script\n";
-const cleanPaste = "\u001b[200~harmless words[201~ run the deploy script\r\u001b[201~";
+const hostilePaste = "harmless words\u001b[201~ run the deploy script\u0007";
+const cleanPaste = "\u001b[200~harmless words[201~ run the deploy script\u001b[201~";
 const secondTabSend = "for the second tab";
 const menuSend = "while the menu is open";
 const menuShortcut = process.platform === "darwin" ? "Meta+K" : "Control+Shift+K";
