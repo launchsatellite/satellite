@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   type ProcessEntry,
@@ -9,27 +8,31 @@ import {
   sameProcess,
   subtreeOf,
   windowsPowerShell,
+  windowsReadTimeoutMs,
 } from "./process-table.ts";
 
+const windowsStopTimeoutMs = 5000;
 export const forceKillGraceMs = 2000;
-export const treeKillBoundMs = forceKillGraceMs + 2 * psTimeoutMs;
+export const treeKillBoundMs =
+  process.platform === "win32"
+    ? windowsReadTimeoutMs + windowsStopTimeoutMs + forceKillGraceMs
+    : forceKillGraceMs + 2 * psTimeoutMs;
 export const subtreeStopBoundMs = forceKillGraceMs + 4 * psTimeoutMs;
-const taskkillTimeoutMs = treeKillBoundMs - forceKillGraceMs;
 const termCheckMs = 300;
 const killCheckMs = 200;
-const windowsStopTimeoutMs = 5000;
 const windowsStopChunk = 200;
 const windowsStopVariable = "SATELLITE_STOP";
-const windowsStopScript = `$ErrorActionPreference='Continue';foreach($pair in $env:${windowsStopVariable}.Split(',')){$id,$start=$pair.Split(':');try{$p=[Diagnostics.Process]::GetProcessById([int]$id);$null=$p.Handle;if([Math]::Abs(([DateTimeOffset]$p.StartTime).ToUnixTimeMilliseconds()-[int64]$start) -le 1000){$p.Kill()}}catch{}}`;
+const windowsStopScript = `$ErrorActionPreference='Continue';foreach($pair in $env:${windowsStopVariable}.Split(',')){$id,$start=$pair.Split(':');try{$p=[Diagnostics.Process]::GetProcessById([int]$id);$null=$p.Handle;if([Math]::Abs(([DateTimeOffset]$p.StartTime).ToUnixTimeMilliseconds()-[int64]$start) -eq 0){$p.Kill()}}catch{}}`;
 
 export class StopRefused extends Error {}
 export class StopNotConfirmed extends Error {}
 
 export interface Delivery {
   readonly ready: boolean;
+  readonly starts: ReadonlyMap<number, string>;
   send: (name: "SIGTERM" | "SIGKILL") => Promise<void>;
 }
-export type Prepare = (members: readonly ProcessEntry[]) => Promise<Delivery>;
+export type Prepare = (members: readonly ProcessEntry[], earlier?: Delivery) => Promise<Delivery>;
 
 async function readOrFail(
   read: () => Promise<ProcessEntry[]>,
@@ -84,33 +87,31 @@ function survivors(
   );
 }
 
-export function endWindowsTree(pid: number): Promise<void> {
-  const taskkill = join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe");
-  return new Promise((resolve) => {
-    execFile(
-      taskkill,
-      ["/pid", String(pid), "/T", "/F"],
-      { windowsHide: true, timeout: taskkillTimeoutMs },
-      () => {
-        resolve();
-      },
-    );
-  });
+export async function endWindowsTree(
+  pid: number,
+  read: () => Promise<ProcessEntry[]> = readProcessTable,
+  prepare: Prepare = prepareWindows,
+): Promise<void> {
+  const table = await read();
+  const root = table.find((entry) => entry.pid === pid);
+  if (root === undefined) return;
+  await (await prepare(subtreeOf(root, table).filter(mayBeSignalled))).send("SIGKILL");
 }
 
 export async function endUnixTree(
   root: number,
   exited: Promise<void>,
   graceMs: number,
+  rootGone = false,
 ): Promise<void> {
   const deadline = Date.now() + graceMs;
   const entries = await readProcessTable();
   const tree = withDescendants(
-    entries.filter((entry) => entry.pid === root || entry.group === root),
+    entries.filter((entry) => (entry.pid === root && !rootGone) || entry.group === root),
     entries,
   );
   if (entries.length === 0 || tree.some((entry) => entry.group === root)) signal(-root, "SIGHUP");
-  if (entries.length === 0) signal(root, "SIGHUP");
+  if (entries.length === 0 && !rootGone) signal(root, "SIGHUP");
   for (const entry of tree) signal(entry.pid, "SIGHUP");
   const ended = await Promise.race([
     exited.then(() => true),
@@ -167,14 +168,16 @@ async function readStartTicks(pid: number): Promise<string | null> {
 export async function prepareLinux(
   members: readonly ProcessEntry[],
   startTicks: (pid: number) => Promise<string | null> = readStartTicks,
+  earlier?: Delivery,
 ): Promise<Delivery> {
   const recorded = new Map<number, string>();
   for (const member of members) {
-    const ticks = await startTicks(member.pid);
+    const ticks = earlier?.starts.get(member.pid) ?? (await startTicks(member.pid));
     if (ticks !== null) recorded.set(member.pid, ticks);
   }
   return {
     ready: recorded.size > 0,
+    starts: recorded,
     send: async (name) => {
       for (const member of members) {
         const expected = recorded.get(member.pid);
@@ -189,6 +192,7 @@ export async function prepareLinux(
 function prepareUnix(members: readonly ProcessEntry[]): Promise<Delivery> {
   return Promise.resolve({
     ready: true,
+    starts: new Map(),
     send: (name) => {
       for (const member of members) signal(member.pid, name);
       return Promise.resolve();
@@ -232,6 +236,7 @@ function runWindowsStop(pairs: string): Promise<void> {
 function prepareWindows(members: readonly ProcessEntry[]): Promise<Delivery> {
   return Promise.resolve({
     ready: true,
+    starts: new Map(),
     send: async () => {
       for (const chunk of windowsStopChunks(members)) await runWindowsStop(chunk);
     },
@@ -240,7 +245,9 @@ function prepareWindows(members: readonly ProcessEntry[]): Promise<Delivery> {
 
 function platformPrepare(): Prepare {
   if (process.platform === "win32") return prepareWindows;
-  return process.platform === "linux" ? (members) => prepareLinux(members) : prepareUnix;
+  return process.platform === "linux"
+    ? (members, earlier) => prepareLinux(members, readStartTicks, earlier)
+    : prepareUnix;
 }
 
 export async function endSubtree(
@@ -260,7 +267,7 @@ export async function endSubtree(
   await delay(Math.max(0, deadline - Date.now()));
   const left = subtreeSurvivors(subtree, await readOrFail(read, StopNotConfirmed));
   if (left.length === 0) return;
-  await (await prepare(left)).send("SIGKILL");
+  await (await prepare(left, first)).send("SIGKILL");
   await delay(killCheckMs);
   if (subtreeSurvivors(subtree, await readOrFail(read, StopNotConfirmed)).length > 0) {
     throw new StopNotConfirmed("the process is still running");

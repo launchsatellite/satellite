@@ -23,7 +23,7 @@ const windowsRow = z.object({
 const windowsCommandRow = z.object({ p: z.int().min(1), c: z.string().nullable() });
 
 export const psTimeoutMs = 1000;
-const windowsReadTimeoutMs = 5000;
+export const windowsReadTimeoutMs = 5000;
 const outputLimit = 16 * 1024 * 1024;
 const psPaths = ["/bin/ps", "/usr/bin/ps"];
 const psArguments = [

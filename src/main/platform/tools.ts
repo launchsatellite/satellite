@@ -149,8 +149,9 @@ const overrideSchema = z.tuple([z.string().min(1)], z.string().min(1));
 function stopChild(child: ChildProcess, exited: Promise<void>): void {
   const pid = child.pid;
   if (pid === undefined) return;
-  if (process.platform === "win32") void endWindowsTree(pid);
-  else void endUnixTree(pid, exited, forceKillGraceMs);
+  const gone = child.exitCode !== null || child.signalCode !== null;
+  if (process.platform !== "win32") void endUnixTree(pid, exited, forceKillGraceMs, gone);
+  else if (!gone) void endWindowsTree(pid);
 }
 
 function without(env: Record<string, string>, keys: Set<string>): Record<string, string> {
