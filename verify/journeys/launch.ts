@@ -48,6 +48,18 @@ async function drawnTerminalSize(page: Page): Promise<TerminalSize | null> {
   });
 }
 
+async function checkColumnsFill(page: Page): Promise<void> {
+  const height = await page.evaluate(() => innerHeight);
+  for (const column of columns) {
+    const box = await page.getByTestId(column).boundingBox();
+    assert.ok(box !== null, `${column} has no box`);
+    assert.ok(
+      Math.abs(box.y + box.height - height) <= 1,
+      `${column} ends at ${String(Math.round(box.y + box.height))} in a window ${String(height)} tall`,
+    );
+  }
+}
+
 async function checkWindow(page: Page): Promise<void> {
   for (const column of columns) {
     await page
@@ -57,6 +69,7 @@ async function checkWindow(page: Page): Promise<void> {
         throw new Error(`${column} is not visible`);
       });
   }
+  await checkColumnsFill(page);
   await page
     .getByTestId("check-git")
     .filter({ hasText: /\d+\.\d+/ })
@@ -135,6 +148,7 @@ async function run(session: AppSession): Promise<void> {
   await session.answerFolderDialog(session.repo);
   await page.getByTestId("add-first-project").click();
   await page.getByTestId("changes").waitFor({ timeout: promptTimeoutMs });
+  await checkColumnsFill(page);
   const firstPid = await startClaude(session, 1);
   await checkInput(session);
   await checkResize(session);

@@ -1188,7 +1188,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             notify={notify}
           />
         )}
-        <div role="status" data-stays-live="">
+        <div role="status" data-stays-live="" className="absolute">
           {toast !== undefined && (
             <Toast
               key={toast.id}
