@@ -20,6 +20,7 @@ import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
 import { CommandsProvider } from "../commands/commands-context.tsx";
 import { GuideLayer } from "../guide/guide-layer.tsx";
+import { guideClosedSentence } from "../guide/guide-steps.ts";
 import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
 import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
@@ -238,7 +239,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     onSeen: markGuideSeen,
     notify,
   });
-  const showGuide = guide.show;
+  const openGuide = guide.show;
+  const showGuide = useCallback(() => {
+    setToasts((queue) => queue.filter((queued) => queued.message !== guideClosedSentence));
+    openGuide();
+  }, [openGuide]);
   const { left, right } = fitColumns(state.columns, width);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
