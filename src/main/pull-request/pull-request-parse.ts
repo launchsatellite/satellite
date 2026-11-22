@@ -131,6 +131,8 @@ const terminalEscape = new RegExp(
 );
 const timestamp = /^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/;
 const errorMarker = "##[error]";
+const groupMarker = "##[group]";
+const groupEnd = "##[endgroup]";
 const exitLine = /^Process completed with exit code -?\d+\.$/;
 
 function parseJson(text: string): unknown {
@@ -475,14 +477,15 @@ export function parseConversation(
 }
 
 function lineOf(raw: string): string {
-  return visibleText(raw.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " "));
+  const text = raw.replace(terminalEscape, "").replace(timestamp, "").replaceAll("\t", " ");
+  return visibleText(text.startsWith(groupMarker) ? text.slice(groupMarker.length) : text);
 }
 
 export function failedLines(stdout: string): { lines: string[]; more: boolean } {
   const lines = stdout
     .split(/\r?\n/)
     .map(lineOf)
-    .filter((line) => line.trim() !== "");
+    .filter((line) => line.trim() !== "" && line !== groupEnd);
   const marked = lines.map((line) =>
     line.includes(errorMarker) ? line.replace(errorMarker, "").trim() : null,
   );

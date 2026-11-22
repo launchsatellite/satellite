@@ -781,6 +781,7 @@ describe("failedLines", () => {
     expect(lines.at(-1)).toBe("Process completed with exit code 1.");
     expect(lines.at(-3)).toBe("fail projects locator.click: Timeout 30000ms exceeded.");
     expect(lines.some((line) => line.startsWith("cleanup"))).toBe(false);
+    expect(lines.slice(-6, -4)).toEqual(["Run npm run journeys", "npm run journeys"]);
     expect(more).toBe(true);
   });
 
