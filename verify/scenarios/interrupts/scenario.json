@@ -1,0 +1,119 @@
+{
+  "description": "A repo with one workspace alpha, a stand-in gh, and a stand-in Claude Code that takes a prompt and stops on Escape with no hook, asks to run Bash and takes Escape as a decline, then takes a prompt whose tool still finishes after Escape, with Satellite set to the light theme.",
+  "repo": [
+    {
+      "write": {
+        "path": "README.md",
+        "content": "# Verify repo\n"
+      }
+    },
+    {
+      "git": ["init", "-b", "main"]
+    },
+    {
+      "git": ["add", "."]
+    },
+    {
+      "git": ["commit", "-m", "first commit"]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":1,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"theme\":\"light\"}"
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "alpha",
+      "steps": []
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.1.78 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "print": "> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "print": "\r\nWorking. Escape stops it.\r\n"
+      },
+      {
+        "await": "\u001b"
+      },
+      {
+        "print": "\r\nInterrupted.\r\n> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "hook": "PermissionRequest",
+        "fields": {
+          "tool_name": "Bash"
+        }
+      },
+      {
+        "print": "\r\nAllow Bash to run? Escape declines.\r\n"
+      },
+      {
+        "await": "\u001b"
+      },
+      {
+        "print": "\r\nDeclined.\r\n> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      },
+      {
+        "print": "\r\nRunning Bash.\r\n"
+      },
+      {
+        "await": "\u001b"
+      },
+      {
+        "wait": 1000
+      },
+      {
+        "hook": "PostToolUse",
+        "fields": {
+          "tool_name": "Bash"
+        }
+      },
+      {
+        "print": "\r\nInterrupted.\r\n> "
+      },
+      {
+        "await": "\r"
+      },
+      {
+        "hook": "UserPromptSubmit"
+      }
+    ]
+  }
+}

@@ -17,10 +17,13 @@ interface Waiter {
 
 const ctrlC = "\u0003";
 const ctrlD = "\u0004";
-const escapeEnter = "\u001b\r";
+const escape = "\u001b";
+const escapeEnter = `${escape}\r`;
 const ignoresHangup = "process.on('SIGHUP', () => {}); setInterval(() => {}, 1000);";
 const unreadLimit = 65536;
 const hookTimeoutMs = 5000;
+const spinFrameMs = 100;
+const spinFrames = "|/-\\";
 const trustQuestion = "Do you trust the files in this folder? Press Enter to trust it.\r\n";
 const settingsSchema = z.object({
   hooks: z.record(
@@ -68,6 +71,14 @@ async function flood(chars: number): Promise<void> {
     if (!process.stdout.write(text)) await once(process.stdout, "drain");
   }
   process.stdout.write(`flood done ${String(line)} lines\r\n`);
+}
+
+async function spin(ms: number): Promise<void> {
+  for (let frame = 0; frame * spinFrameMs < ms; frame += 1) {
+    process.stdout.write(`\r${spinFrames[frame % spinFrames.length] ?? ""} Working`);
+    await delay(spinFrameMs);
+  }
+  process.stdout.write("\r\n");
 }
 
 function startStubbornChild(): void {
@@ -139,6 +150,7 @@ async function play(step: ClaudeStep, settings: Settings | undefined): Promise<v
   if ("print" in step) process.stdout.write(step.print);
   else if ("wait" in step) await delay(step.wait);
   else if ("flood" in step) await flood(step.flood);
+  else if ("spin" in step) await spin(step.spin);
   else if ("await" in step) await awaitInput(step.await);
   else if ("exit" in step) process.exit(step.exit);
   else if ("trust" in step) {
@@ -156,7 +168,7 @@ function listen(): void {
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (data: string) => {
     appendStandInEvent({ type: "input", data });
-    process.stdout.write(data.replaceAll(escapeEnter, "\r\n"));
+    if (data !== escape) process.stdout.write(data.replaceAll(escapeEnter, "\r\n"));
     if (data.includes(ctrlC) || data.includes(ctrlD)) process.exit(0);
     unread = (unread + data).slice(-unreadLimit);
     meetWaiter();

@@ -2,6 +2,7 @@ import { useEffect, type KeyboardEvent } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { hooksOffNote } from "./send-to-claude-code.ts";
 import { pixelLabel, pixelOf } from "./session-pixel.ts";
 import type { SessionTab } from "./use-sessions.ts";
 
@@ -94,6 +95,9 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
                 tabIndex={selected ? 0 : -1}
                 data-testid={`session-tab-${String(tab.number)}`}
                 data-state={tab.status}
+                data-hooks-off={tab.hooksOff ? "" : undefined}
+                title={tab.hooksOff ? hooksOffNote : undefined}
+                aria-description={tab.hooksOff ? hooksOffNote : undefined}
                 onClick={() => {
                   onActivate(tab.key);
                 }}

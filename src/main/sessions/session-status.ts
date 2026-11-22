@@ -11,7 +11,9 @@ export type SessionEvent =
   | { name: AgentEventName; agent: Agent }
   | { name: Exclude<HookEventName, "Notification" | AgentEventName> }
   | { name: "Exit" }
-  | { name: "AnswerKey" };
+  | { name: "AnswerKey" }
+  | { name: "DeclineKey" }
+  | { name: "Interrupted" };
 type AgentEventName = "PermissionRequest" | "PostToolUse" | "PostToolUseFailure";
 
 export const mainThread = "";
@@ -25,7 +27,9 @@ const asks = new Set([
   "quota_auto_resume_stale",
 ]);
 const answers = new Set(["elicitation_complete", "elicitation_response"]);
-const answerKeys = new Set(["\r", "\u001b", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+const escape = "\u001b";
+const ctrlC = "\u0003";
+const answerKeys = new Set(["\r", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 
 function asking(current: SessionState, agent: Agent): SessionState {
   const askers = current.status === "needs-you" ? current.askers : [];
@@ -59,6 +63,14 @@ export function answersQuestion(data: string): boolean {
   return answerKeys.has(data);
 }
 
+export function declinesQuestion(data: string): boolean {
+  return data === escape;
+}
+
+export function interruptsTurn(data: string): boolean {
+  return data === escape || data === ctrlC;
+}
+
 export function nextState(current: SessionState, event: SessionEvent): SessionState {
   if (current.status === "stopped") return current;
   switch (event.name) {
@@ -66,6 +78,10 @@ export function nextState(current: SessionState, event: SessionEvent): SessionSt
       return { status: "stopped", askers: [] };
     case "AnswerKey":
       return current.status === "needs-you" ? { status: "working", askers: [] } : current;
+    case "DeclineKey":
+      return current.status === "needs-you" ? { status: "idle", askers: [] } : current;
+    case "Interrupted":
+      return current.status === "working" ? { status: "idle", askers: [] } : current;
     case "Notification":
       return afterNotification(current, event.type, event.agent);
     case "PostToolUse":
