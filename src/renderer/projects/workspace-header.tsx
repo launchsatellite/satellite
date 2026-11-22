@@ -126,7 +126,7 @@ export function WorkspaceHeader({
             Archive
           </CommandButton>
         )}
-        <span className="hidden @md:flex">
+        <span className={project.missing === null ? "hidden @md:flex" : "flex"}>
           <CommandButton
             command="project.remove"
             variant="ghost"
