@@ -605,6 +605,22 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     ]);
   });
 
+  it("lists a text file bigger than a side as binary, so git never loads it whole", async () => {
+    const { repo, git } = await repository();
+    const lines = (count: number, word: string) => `${word}\n`.repeat(count);
+    await writeFile(join(repo, "big.txt"), lines(300_000, "line"));
+    await writeFile(join(repo, "small.txt"), lines(10, "line"));
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "big.txt"), lines(300_000, "edit"));
+    await writeFile(join(repo, "small.txt"), lines(10, "edit"));
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records.map((record) => [record.path, record.kind, record.added])).toEqual([
+      ["big.txt", "binary", null],
+      ["small.txt", "text", 10],
+    ]);
+  });
+
   it("hashes a touched binary file once while its stamp does not move", async () => {
     const { repo, git } = await repository();
     await writeFile(join(repo, "same.dat"), Buffer.from([97, 0, 98]));

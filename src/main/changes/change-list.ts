@@ -61,6 +61,8 @@ const linkMode = "120000";
 const diffWithoutIndexWrite = [
   "-c",
   "diff.autoRefreshIndex=false",
+  "-c",
+  `core.bigFileThreshold=${String(changesLimits.sideBytes)}`,
   "diff",
   "--raw",
   "--numstat",
