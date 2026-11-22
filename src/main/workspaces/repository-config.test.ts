@@ -22,7 +22,10 @@ import {
   lazyFetchVerdict,
   parseConfigEntries,
   readConfigEntries,
-  refusesReads,
+  partialCloneRefusal,
+  readRefusal,
+  uncheckedRefusal,
+  unreadableConfig,
   repositoryConfig,
 } from "./repository-config.ts";
 
@@ -100,25 +103,33 @@ describe("readConfigEntries", () => {
 });
 
 describe("lazy fetch decision", () => {
-  it("trusts a git only when the control reached the probe remote and the guarded run did not", () => {
+  it("answers ignored only when both runs reached the remote, and unchecked when the probe proved nothing", () => {
     const control = answer(128, probeSaid);
-    expect(lazyFetchVerdict(control, answer(1, ""))).toBe(true);
-    expect(lazyFetchVerdict(control, answer(128, "warning: lazy fetching disabled"))).toBe(true);
-    expect(lazyFetchVerdict(control, answer(128, probeSaid))).toBe(false);
-    expect(lazyFetchVerdict(control, answer(0, ""))).toBe(false);
-    expect(lazyFetchVerdict(answer(128, "fatal: bad config"), answer(1, ""))).toBe(false);
-    expect(lazyFetchVerdict(undefined, answer(1, ""))).toBe(false);
-    expect(lazyFetchVerdict(control, undefined)).toBe(false);
+    expect(lazyFetchVerdict(control, answer(1, ""))).toBe("honoured");
+    expect(lazyFetchVerdict(control, answer(128, "warning: lazy fetching disabled"))).toBe(
+      "honoured",
+    );
+    expect(lazyFetchVerdict(control, answer(128, probeSaid))).toBe("ignored");
+    expect(lazyFetchVerdict(control, answer(0, ""))).toBe("unchecked");
+    expect(
+      lazyFetchVerdict(answer(128, "fatal: transport 'file' not allowed"), answer(1, "")),
+    ).toBe("unchecked");
+    expect(lazyFetchVerdict(undefined, answer(1, ""))).toBe("unchecked");
+    expect(lazyFetchVerdict(control, undefined)).toBe("unchecked");
   });
 
-  it("refuses reads only for a partial clone, or one it could not read, on a git that ignores the switch", () => {
+  it("gives each refusal its own sentence and blames the git version only when it was proved", () => {
     const plain = { blanks: [], partial: false, includes: false };
     const partial = { ...plain, partial: true };
-    expect(refusesReads(true, partial)).toBe(false);
-    expect(refusesReads(true, undefined)).toBe(false);
-    expect(refusesReads(false, plain)).toBe(false);
-    expect(refusesReads(false, partial)).toBe(true);
-    expect(refusesReads(false, undefined)).toBe(true);
+    expect(readRefusal("honoured", partial)).toBeUndefined();
+    expect(readRefusal("honoured", undefined)).toBeUndefined();
+    expect(readRefusal("ignored", plain)).toBeUndefined();
+    expect(readRefusal("unchecked", plain)).toBeUndefined();
+    expect(readRefusal("ignored", partial)).toBe(partialCloneRefusal);
+    expect(readRefusal("unchecked", partial)).toBe(uncheckedRefusal);
+    expect(readRefusal("ignored", undefined)).toBe(unreadableConfig);
+    expect(readRefusal("unchecked", undefined)).toBe(unreadableConfig);
+    expect(uncheckedRefusal).not.toMatch(/update git/i);
   });
 });
 

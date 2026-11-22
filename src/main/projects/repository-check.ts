@@ -4,12 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isFullyQualified, isInsidePath, samePath } from "../platform/paths.ts";
 import { runTool, type ToolRun } from "../platform/tools.ts";
-import {
-  honoursNoLazyFetch,
-  partialCloneRefusal,
-  refusesReads,
-  repositoryConfig,
-} from "../workspaces/repository-config.ts";
+import { partialCloneProblem, unreadableConfig } from "../workspaces/repository-config.ts";
 
 export type RevParse =
   | { kind: "work-tree"; toplevel: string; gitDir: string; commonDir: string; linked: boolean }
@@ -212,11 +207,7 @@ export async function checkRepository(folder: string, home: string): Promise<Rep
   if (isInsidePath(root, read.home) && !(await ignoresHome(root, read.home))) {
     return refuse(homeInside(root, read.home));
   }
-  if (
-    !(await honoursNoLazyFetch()) &&
-    refusesReads(false, await repositoryConfig(root).catch(() => undefined))
-  ) {
-    return refuse(partialCloneRefusal);
-  }
+  const problem = await partialCloneProblem(root).catch(() => unreadableConfig);
+  if (problem !== undefined) return refuse(problem);
   return { ok: true, root };
 }

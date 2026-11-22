@@ -38,10 +38,15 @@ const configPattern =
   "^(filter\\..+\\.(clean|process)|include\\.path|includeif\\..+\\.path|remote\\..+\\.promisor|extensions\\.partialclone)$";
 const ownScopes = new Set(["local", "worktree"]);
 const falseWords = new Set(["false", "no", "off", "0", ""]);
+export type LazyFetch = "honoured" | "ignored" | "unchecked";
+export const unreadableConfig =
+  "Satellite couldn't read this repository's git config, so it reads nothing there. Try again.";
+export const uncheckedRefusal =
+  "Satellite couldn't check that this git opens a partial clone safely. Try again.";
 export const partialCloneRefusal =
   "This git can't safely open a partial clone. Update git to 2.45 or newer, then try again.";
 
-const verdicts = new Map<string, Promise<boolean>>();
+const verdicts = new Map<string, Promise<LazyFetch>>();
 const known = new Map<string, Known>();
 
 export function parseConfigEntries(stdout: string): ConfigEntry[] | undefined {
@@ -85,18 +90,25 @@ export function readConfigEntries(entries: readonly ConfigEntry[]): RepositoryCo
   return { blanks, partial, includes };
 }
 
-export function lazyFetchVerdict(control: ToolRun | undefined, probe: ToolRun | undefined) {
-  return (
-    control !== undefined &&
-    control.stderr.includes(probeRemote) &&
-    probe !== undefined &&
-    probe.exitCode !== 0 &&
-    !probe.stderr.includes(probeRemote)
-  );
+export function lazyFetchVerdict(
+  control: ToolRun | undefined,
+  probe: ToolRun | undefined,
+): LazyFetch {
+  if (control === undefined || probe === undefined || !control.stderr.includes(probeRemote)) {
+    return "unchecked";
+  }
+  if (probe.stderr.includes(probeRemote)) return "ignored";
+  return probe.exitCode === 0 ? "unchecked" : "honoured";
 }
 
-export function refusesReads(honoursNoLazyFetch: boolean, config: RepositoryConfig | undefined) {
-  return !honoursNoLazyFetch && config?.partial !== false;
+export function readRefusal(
+  lazyFetch: LazyFetch,
+  config: RepositoryConfig | undefined,
+): string | undefined {
+  if (lazyFetch === "honoured") return undefined;
+  if (config === undefined) return unreadableConfig;
+  if (!config.partial) return undefined;
+  return lazyFetch === "ignored" ? partialCloneRefusal : uncheckedRefusal;
 }
 
 function unlessAbandoned(error: unknown): undefined {
@@ -108,7 +120,7 @@ function quoted(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
-async function probeLazyFetch(): Promise<boolean> {
+async function probeLazyFetch(): Promise<LazyFetch> {
   let folder: string | undefined;
   try {
     folder = await mkdtemp(join(tmpdir(), "satellite-lazy-"));
@@ -132,21 +144,25 @@ async function probeLazyFetch(): Promise<boolean> {
       });
     return lazyFetchVerdict(await once("0"), await once("1"));
   } catch {
-    return false;
+    return "unchecked";
   } finally {
     if (folder !== undefined)
       await rm(folder, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
-export async function honoursNoLazyFetch(): Promise<boolean> {
+export async function lazyFetchSupport(): Promise<LazyFetch> {
   const command = await resolveTool("git");
-  if (command === undefined) return true;
+  if (command === undefined) return "honoured";
   const key = JSON.stringify(command);
   let verdict = verdicts.get(key);
   if (verdict === undefined) {
-    verdict = probeLazyFetch();
-    verdicts.set(key, verdict);
+    const probed = probeLazyFetch();
+    verdict = probed;
+    verdicts.set(key, probed);
+    void probed.then((found) => {
+      if (found === "unchecked" && verdicts.get(key) === probed) verdicts.delete(key);
+    });
   }
   return verdict;
 }
@@ -232,9 +248,13 @@ export async function repositoryConfig(folder: string): Promise<RepositoryConfig
   return config;
 }
 
+export async function partialCloneProblem(folder: string): Promise<string | undefined> {
+  const lazyFetch = await lazyFetchSupport();
+  if (lazyFetch === "honoured") return undefined;
+  return readRefusal(lazyFetch, await repositoryConfig(folder));
+}
+
 export async function refusePartialClone(folder: string): Promise<void> {
-  if (await honoursNoLazyFetch()) return;
-  if (refusesReads(false, await repositoryConfig(folder))) {
-    throw new BridgeFailure("tool-missing", partialCloneRefusal);
-  }
+  const problem = await partialCloneProblem(folder);
+  if (problem !== undefined) throw new BridgeFailure("tool-missing", problem);
 }
