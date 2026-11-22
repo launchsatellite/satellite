@@ -15,11 +15,11 @@ Developers who already work with Claude Code and run several sessions at once, a
 Every spec is checked against these. When two conflict, the earlier one wins.
 
 1. **Satellite reads, agents write, you decide.** Code, commits, pushes, pull requests and replies are made by your agent. Satellite shows the result and hands your decisions back to the agent. An environment built for agents stays small, and it gets better every time the agents do.
-2. **A thin layer, never an opinion.** Satellite sits above the tools you already use and adds nothing your agent or your repo can already do. Setup, verification and workflow belong to your agents, your skills and your hooks, so every team keeps working the way it prefers.
+2. **A thin layer, never an opinion.** Satellite sits above the tools you already use and adds nothing your agent or your repository can already do. Setup, verification and workflow belong to your agents, your skills and your hooks, so every team keeps working the way it prefers.
 3. **Embed real tools, never redraw them.** The agent pane is your own Claude Code in a terminal. Git is `git` and GitHub is `gh`. Every feature those tools ship works the day it ships, and there is no copy to maintain.
 4. **One text box.** The Claude Code prompt is the only place you type instructions. Satellite has no commit box, no reply form and no editor. When something needs words, Satellite prepares the request in the prompt and you press enter.
 5. **Hold no credentials.** Sign-in stays with `gh` and `claude`. Satellite never reads, stores or forwards a token, and it loads no remote web content.
-6. **Leave the repo alone.** Satellite writes nothing into a project's files. A workspace adds only its branch, its worktree and the remote-tracking branch its fetch updates to git, and everything Satellite owns lives in `~/.satellite`, apart from what the system keeps for every app.
+6. **Leave the repository alone.** Satellite writes nothing into a project's files. A workspace adds only its branch, its worktree and the remote-tracking branch its fetch updates to git, and everything Satellite owns lives in `~/.satellite`, apart from what the system keeps for every app.
 7. **Local first.** Everything runs on your machine, with no account, no server and no telemetry.
 8. **Quiet until you are needed.** Greys carry the interface. Signal orange means an agent cannot go on without you, and nothing else.
 9. **Simple first.** The smallest thing that works, in the product, the code and the process.
@@ -135,8 +135,8 @@ Satellite never checks for updates, since it loads nothing remote. A new version
 | A native read-only pull request view fed by `gh` | An embedded browser signed in to GitHub | A browser needs its own sign-in, stores a full-power session on disk and must be patched as fast as a browser. `gh` is already signed in and scoped. |
 | Agents open, update and reply on pull requests | Forms in Satellite | Principle 1 and principle 4. |
 | A view of the processes agents started | Plain terminals and a run button | The agent runs things. What was missing is seeing what is still running. |
-| A worktree plus the files in `.worktreeinclude` | Setup and cleanup commands, a config file in the repo | Principle 2. Installing dependencies is the agent's job, and `.worktreeinclude` is the file Claude Code already reads. |
+| A worktree plus the files in `.worktreeinclude` | Setup and cleanup commands, a config file in the repository | Principle 2. Installing dependencies is the agent's job, and `.worktreeinclude` is the file Claude Code already reads. |
 | A card beside the real control that follows what the user does | Slides before the app | People learn a control by using it, and nothing stands between them and their first agent. |
-| Worktrees under `~/.satellite` | Worktrees inside the repo | Nested copies confuse search and file watchers, and the repo stays clean. |
+| Worktrees under `~/.satellite` | Worktrees inside the repository | Nested copies confuse search and file watchers, and the repository stays clean. |
 | Electron | A shell drawn by each system's own web engine | Identical rendering on macOS, Windows and Linux, and the terminal and diff components run unchanged. |
 | macOS, Windows and Linux built and tested together at release | One platform first | The app shell makes all three nearly free to build, and an automated journey through the real app proves each one. |
