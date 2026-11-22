@@ -9,7 +9,7 @@ A new user sees three columns and no agent, and has to guess that a workspace is
 ## Scope
 
 - The guide starts once the first project is added. The welcome screen stays as it is.
-- One small card sits beside the control it explains, with a grey ring around that control. Nothing is dimmed, nothing is blocked and the card takes no focus by itself. Show the guide moves focus into the card, a control of the card that holds keyboard focus draws the standard focus ring, and the card and ring step aside while a dialog or the command menu is open.
+- One small card sits beside the control it explains, with a grey ring around that control. Nothing is dimmed, nothing is blocked and the card takes no focus by itself. Show the guide moves focus into the card, the card draws the standard focus ring while it holds keyboard focus, and the card and ring step aside while a dialog or the command menu is open.
 - Four steps, each a readout, a lowercase title, one sentence and one action.
   - 01 make a workspace. "A workspace is a git worktree and a branch made in one step, so agents work side by side and never in each other's files."
   - 02 start Claude Code. "This is your own Claude Code in a real terminal, with your settings and skills, and its prompt is the only place you type."
