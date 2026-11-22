@@ -97,6 +97,10 @@ function byPath(a: { path: string }, b: { path: string }): number {
   return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
 }
 
+function trackedFirst(a: ListedChange, b: ListedChange): number {
+  return a.tracked === b.tracked ? byPath(a, b) : a.tracked ? -1 : 1;
+}
+
 function namedPath(fields: string[], at: number): string | undefined {
   const path = fields[at];
   return path === undefined || path === "" ? undefined : path;
@@ -414,8 +418,8 @@ export async function readChangeList(
   if (signal.aborted) return failed;
   const once = oncePerPath([...withUnmerged(parsed.records, unmerged), ...untracked]);
   const merged = await withoutTouched(folder, once.kept, signal);
-  const named = merged.filter(isNamed).sort(byPath);
-  const kept = named.slice(0, changesLimits.files);
+  const named = merged.filter(isNamed).sort(trackedFirst);
+  const kept = named.slice(0, changesLimits.files).sort(byPath);
   return {
     kind: "files",
     records: await stamped(folder, kept, signal),

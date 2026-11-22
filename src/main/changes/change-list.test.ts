@@ -572,6 +572,23 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     expect(list.longPaths).toBe(1);
   });
 
+  it("keeps every edited tracked file when untracked files pass the cap", async () => {
+    const { repo, git } = await repository();
+    await writeFile(join(repo, "z.txt"), "one\n");
+    await git("add", ".");
+    await git("commit", "-q", "-m", "one");
+    await writeFile(join(repo, "z.txt"), "two\n");
+    await mkdir(join(repo, "a"));
+    for (let at = 0; at < changesLimits.files; at += 1) {
+      await writeFile(join(repo, "a", `${String(at).padStart(4, "0")}.out`), "");
+    }
+    const list = await listed(repo, await git("rev-parse", "HEAD"));
+    expect(list.records).toHaveLength(changesLimits.files);
+    expect(list.records.at(-1)?.path).toBe("z.txt");
+    expect(list.records[0]?.path).toBe("a/0000.out");
+    expect(list.more).toBe(1);
+  });
+
   it("answers too-many for a list longer than Satellite reads", async () => {
     const { repo, git, index } = await repository();
     await writeFile(join(repo, "short.txt"), "short\n");
