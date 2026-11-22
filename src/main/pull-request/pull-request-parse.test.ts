@@ -391,6 +391,27 @@ describe("parseConversation", () => {
     ]);
   });
 
+  it("never trusts a pull request with no author when the viewer is unknown", () => {
+    const answer = parseConversation(
+      JSON.stringify({
+        data: {
+          viewer: null,
+          repository: {
+            pullRequests: {
+              nodes: [
+                { number: 41, state: "OPEN", authorAssociation: "NONE", author: null },
+                { number: 40, state: "OPEN", authorAssociation: "NONE", author: { login: null } },
+              ],
+            },
+          },
+        },
+      }),
+      place,
+      false,
+    );
+    expect(answer?.candidates.map(({ trusted }) => trusted)).toEqual([false, false]);
+  });
+
   it("reads the newest commits and GitHub's count, and none when they are absent", () => {
     const nodes = [
       { commit: { oid: "c".repeat(40), messageHeadline: "older" } },
