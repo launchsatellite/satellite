@@ -81,7 +81,11 @@ async function outdated(session: AppSession): Promise<void> {
   await emptyReads(session, tooOld, "with Claude Code too old,");
   const fix = page.getByTestId("claude-missing-fix");
   await visible(session, "claude-missing-fix", "with Claude Code too old");
-  assert.equal(await fix.innerText(), "claude update", "the step for a Claude Code too old");
+  assert.equal(
+    await fix.innerText(),
+    "https://code.claude.com/docs/en/setup#update-claude-code",
+    "the step for a Claude Code too old",
+  );
   await tabCount(session, 0, "with Claude Code too old,");
   assert.deepEqual(await claudePids(session), [], "a Claude Code too old ran as a session");
   const { leftover } = await session.close();

@@ -27,6 +27,7 @@ const tools: readonly { tool: CheckedTool; name: string }[] = [
   { tool: "gh", name: "GitHub CLI" },
   { tool: "claude", name: "Claude Code" },
 ];
+const claudeUpdateAddress = "https://code.claude.com/docs/en/setup#update-claude-code";
 const missingDetail = "Not installed, or Satellite can't find it.";
 const brokenDetail = "Installed, but Satellite couldn't run it.";
 const signedOutDetail = {
@@ -53,7 +54,7 @@ function rowOf(tool: CheckedTool, state: ToolState | GhState | ClaudeState): Row
       return {
         ready: false,
         detail: `${state.version} found. Satellite needs ${state.minimum} or newer.`,
-        fix: { lead: leads.command, text: "claude update" },
+        fix: { lead: leads.address, text: claudeUpdateAddress },
       };
     case "missing":
       return installRow(state.fix);
