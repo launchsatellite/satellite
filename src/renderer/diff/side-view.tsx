@@ -3,6 +3,7 @@ import "monaco-editor/features/codicon/register";
 import "monaco-editor/features/diffEditor/register";
 import "monaco-editor/languages/definitions/register.all";
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { onThemeChange } from "../ui/shown-theme.ts";
 import { diffLanguage } from "./diff-language.ts";
 import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
@@ -92,12 +93,11 @@ export function SideView({
     const unclick = markClick(made, (line) => {
       onMarkNow.current?.(line);
     });
-    const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-    darkScheme.addEventListener("change", applyMonacoTheme);
+    const stopTheme = onThemeChange(applyMonacoTheme);
     return () => {
       unclick.dispose();
       threadLine.current = null;
-      darkScheme.removeEventListener("change", applyMonacoTheme);
+      stopTheme();
       const model = made.getModel();
       made.dispose();
       model?.dispose();
