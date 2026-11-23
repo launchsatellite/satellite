@@ -68,7 +68,7 @@ npm run build && npm run package                 # installers for this machine i
 
 **Never** approve a pull request, enable auto-merge, merge one without the maintainer's grant, push to `main`, force-push, skip or rewire Git hooks, edit a guard file, change repository settings, read `.env` files or `.secrets/`, or credit an AI tool as an author anywhere.
 
-Merging is the maintainer's. Where the maintainer granted it, the guard lets `gh pr merge` through, and you squash-merge your own pull request once CI is fully green and the independent review is addressed. You never merge anyone else's.
+Merging is the maintainer's. Where the maintainer granted it, the guard lets `gh pr merge` through, and you squash-merge your own pull request once CI is fully green, CodeRabbit has approved the latest commit and the independent review is addressed. You never merge anyone else's.
 
 Approval covers the scoped work it was given for. Silence never authorizes a gated action. Routine, reversible choices are yours, stated in the pull request.
 
