@@ -269,8 +269,7 @@ export function TerminalView({
       input.dispose();
       stopData();
       stopExit();
-      gpu.release();
-      terminal.dispose();
+      gpu.end();
       void invoke("terminal.close", { id: terminalId });
     };
   }, [terminalId, projectId, key, resume]);

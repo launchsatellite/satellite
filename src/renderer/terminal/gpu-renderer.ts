@@ -6,12 +6,23 @@ export type TerminalRenderer = "webgl" | "dom";
 export interface GpuRenderer {
   take: () => void;
   release: () => void;
+  end: () => void;
 }
 
 let refused = false;
 
-function canvasesOf(terminal: Terminal): Set<HTMLCanvasElement> {
-  return new Set(terminal.element?.querySelectorAll("canvas") ?? []);
+function screenCanvases(terminal: Terminal): HTMLCanvasElement[] {
+  return [...(terminal.element?.querySelectorAll<HTMLCanvasElement>(".xterm-screen canvas") ?? [])];
+}
+
+function letGo(canvases: HTMLCanvasElement[]): void {
+  for (const canvas of canvases) {
+    const context = canvas.getContext("webgl2");
+    if (context !== null && !context.isContextLost()) {
+      context.getExtension("WEBGL_lose_context")?.loseContext();
+    }
+    canvas.remove();
+  }
 }
 
 export function gpuRenderer(
@@ -19,34 +30,35 @@ export function gpuRenderer(
   drawnBy: (renderer: TerminalRenderer) => void,
 ): GpuRenderer {
   let addon: WebglAddon | undefined;
-  let own: HTMLCanvasElement[] = [];
   const release = () => {
     if (addon === undefined) return;
-    const held = own;
+    const canvases = screenCanvases(terminal);
     addon.dispose();
     addon = undefined;
-    own = [];
-    for (const canvas of held) {
-      canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext();
-    }
+    letGo(canvases);
     drawnBy("dom");
   };
   const take = () => {
     if (addon !== undefined || refused) return;
-    const before = canvasesOf(terminal);
     const candidate = new WebglAddon();
     try {
       terminal.loadAddon(candidate);
     } catch {
       refused = true;
       candidate.dispose();
+      letGo(screenCanvases(terminal));
       return;
     }
     addon = candidate;
-    own = [...canvasesOf(terminal)].filter((canvas) => !before.has(canvas));
     candidate.onContextLoss(release);
     drawnBy("webgl");
   };
+  const end = () => {
+    const canvases = screenCanvases(terminal);
+    addon = undefined;
+    terminal.dispose();
+    letGo(canvases);
+  };
   drawnBy("dom");
-  return { take, release };
+  return { take, release, end };
 }
