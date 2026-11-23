@@ -60,6 +60,7 @@ import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
+import { SettingsDialog } from "../settings/settings-dialog.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { Toast, type Notify } from "../ui/toast.tsx";
 import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
@@ -174,6 +175,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   } | null>(null);
   const [added, setAdded] = useState<string>();
   const [processesOpen, setProcessesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
   const askTerminalLink = useCallback((address: string) => {
     setAsking({ address, description: terminalLinkSentence });
@@ -186,6 +188,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   }, []);
   const closeLink = useCallback(() => {
     setAsking(null);
+  }, []);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+  }, []);
+  const askAboutLink = useCallback((address: string, description: string) => {
+    setAsking({ address, description });
   }, []);
   const windowRef = useRef<HTMLDivElement>(null);
   const projectsRef = useRef<HTMLElement>(null);
@@ -534,6 +542,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     archiving !== null ||
     removing !== null ||
     asking !== null ||
+    settingsOpen ||
     showingProcesses;
   const liveTerminals = allSessions
     .filter((tab) => tab.status !== "stopped")
@@ -877,6 +886,16 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             },
           },
           {
+            id: "settings.show",
+            title: "Open settings",
+            shortcut: { key: ",", ctrlAlone: true },
+            available: true,
+            run: () => {
+              setPalette(null);
+              setSettingsOpen(true);
+            },
+          },
+          {
             id: "tools.check",
             title: "Check git, gh and Claude Code",
             available: true,
@@ -1107,6 +1126,18 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     sidebarShown,
     showSidebar,
   ]);
+  const latestRegistry = useRef(registry);
+  useEffect(() => {
+    latestRegistry.current = registry;
+  }, [registry]);
+  useEffect(
+    () =>
+      subscribe("window.settings", () => {
+        const command = latestRegistry.current.get("settings.show");
+        if (command?.available === true) command.run();
+      }),
+    [],
+  );
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };
@@ -1386,6 +1417,26 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               setRemoving(null);
               void removeProject(removing.projectId, removing.name, removing.worktrees);
             }}
+          />
+        )}
+        {settingsOpen && (
+          <SettingsDialog
+            theme={state.theme}
+            onTheme={(theme) => {
+              update((current) => ({ ...current, theme }), true);
+            }}
+            notifications={state.notifications}
+            onNotifications={(on) => {
+              update((current) => ({ ...current, notifications: on }), true);
+            }}
+            guideReady={guideListed}
+            onShowGuide={() => {
+              setSettingsOpen(false);
+              showSidebar();
+              showGuide();
+            }}
+            onLink={askAboutLink}
+            onClose={closeSettings}
           />
         )}
         {asking !== null && (

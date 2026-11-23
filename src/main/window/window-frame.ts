@@ -10,6 +10,10 @@ export function setWindowFrame(next: WindowFrame): void {
   for (const owner of watching) owner.emit("window.frame", next);
 }
 
+export function askForSettings(): void {
+  for (const owner of watching) owner.emit("window.settings", {});
+}
+
 export const windowFrameHandlers: Pick<BridgeHandlers, "window.frame"> = {
   "window.frame": (_request, owner) => {
     if (!watching.has(owner)) {
