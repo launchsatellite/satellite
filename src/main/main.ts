@@ -89,7 +89,7 @@ async function quitFacts({ terminals, processes }: Parts): Promise<QuitFacts> {
     processes.count().catch(() => null),
     delay(quitReadMs, null, { ref: false }),
   ]);
-  return { ...states, processes: counted };
+  return { ...terminals.quitStates(), processes: counted };
 }
 
 async function start({
