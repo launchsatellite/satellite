@@ -10,6 +10,7 @@ import {
 } from "../../src/renderer/sessions/send-to-claude-code.ts";
 import { type AppSession, pasteIntoFocus } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { readTerminal, terminalText } from "../terminal-screen.ts";
 import {
   bridgeCode,
   claudePids,
@@ -60,11 +61,6 @@ function pixel(name: string): string {
 
 async function select(session: AppSession, name: string): Promise<void> {
   await session.page.getByTestId(`workspace-repo-${name}`).click();
-}
-
-async function terminalText(page: Page): Promise<string> {
-  const terminal = page.getByTestId("terminal");
-  return (await terminal.count()) === 0 ? "" : await terminal.innerText();
 }
 
 async function terminalShows(session: AppSession, text: string, when: string): Promise<void> {
@@ -137,26 +133,18 @@ async function settingsLeft(home: string): Promise<string[]> {
 }
 
 async function cellOf(page: Page, text: string, last: boolean): Promise<Cell | null> {
-  return page.evaluate(
-    ({ wanted, fromEnd }) => {
-      const terminal = document.querySelector('[data-testid="terminal"]');
-      const measure = terminal?.querySelector(".xterm-char-measure-element");
-      if (measure === null || measure === undefined) return null;
-      const charWidth = measure.getBoundingClientRect().width / measure.textContent.length;
-      for (const row of terminal?.querySelectorAll(".xterm-rows > div") ?? []) {
-        const at = fromEnd ? row.textContent.lastIndexOf(wanted) : row.textContent.indexOf(wanted);
-        if (at === -1) continue;
-        const box = row.getBoundingClientRect();
-        return {
-          x: box.left + (at + 2.5) * charWidth,
-          y: box.top + box.height / 2,
-          width: charWidth,
-        };
-      }
-      return null;
-    },
-    { wanted: text, fromEnd: last },
-  );
+  const screen = await readTerminal(page);
+  if (screen === null) return null;
+  for (const [row, line] of screen.lines.entries()) {
+    const at = last ? line.lastIndexOf(text) : line.indexOf(text);
+    if (at === -1) continue;
+    return {
+      x: screen.left + (at + 2.5) * screen.cellWidth,
+      y: screen.top + (row + 0.5) * screen.cellHeight,
+      width: screen.cellWidth,
+    };
+  }
+  return null;
 }
 
 async function clickLink(

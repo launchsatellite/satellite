@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
 import { z } from "zod";
 import { isProcessAlive, type AppSession } from "../driver.ts";
+import { terminalText } from "../terminal-screen.ts";
 
 const pollMs = 100;
 const refusedAnswer = z.object({ ok: z.literal(false), error: z.object({ code: z.string() }) });
@@ -42,8 +43,8 @@ export async function startClaude(session: AppSession, count: number): Promise<n
   await waitUntil(
     async () => {
       pid = (await claudePids(session))[count - 1];
-      const text = await session.page.getByTestId("terminal").textContent();
-      return pid !== undefined && text?.includes("Claude Code stand-in") === true;
+      const text = await terminalText(session.page);
+      return pid !== undefined && text.includes("Claude Code stand-in");
     },
     promptTimeoutMs,
     "Claude Code stand-in did not appear in the terminal",

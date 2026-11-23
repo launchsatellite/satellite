@@ -15,6 +15,7 @@ import {
   type AppSession,
   type AppTarget,
 } from "./driver.ts";
+import { terminalText } from "./terminal-screen.ts";
 
 interface StepContext {
   session: AppSession;
@@ -78,11 +79,16 @@ async function focusedTestId(page: Page): Promise<string> {
   return testId;
 }
 
-async function waitForText(page: Page, testId: string, text: string): Promise<void> {
+async function shownText(page: Page, testId: string): Promise<string> {
+  if (testId === "terminal") return terminalText(page);
   const element = page.getByTestId(testId);
+  return (await element.count()) === 0 ? "" : await element.first().innerText();
+}
+
+async function waitForText(page: Page, testId: string, text: string): Promise<void> {
   const deadline = Date.now() + waitLimitMs;
   for (;;) {
-    const read = (await element.count()) === 0 ? "" : await element.first().innerText();
+    const read = await shownText(page, testId);
     if (read.includes(text)) return;
     if (Date.now() >= deadline) {
       throw new Error(
@@ -139,9 +145,14 @@ function parseStep(raw: string): Step {
       return step(({ session }) => readTree(session.page));
     case "text": {
       const testId = needsValue();
-      return step(async ({ session }) =>
-        (await session.page.getByTestId(testId).innerText()).slice(0, textLimit),
-      );
+      return step(async ({ session }) => {
+        const { page } = session;
+        const read =
+          testId === "terminal"
+            ? await terminalText(page)
+            : await page.getByTestId(testId).innerText();
+        return read.slice(0, textLimit);
+      });
     }
     case "box": {
       const testId = needsValue();

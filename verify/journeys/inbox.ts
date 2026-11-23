@@ -6,6 +6,7 @@ import { z } from "zod";
 import { noticeGapMs } from "../../src/main/inbox/notices.ts";
 import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { terminalText } from "../terminal-screen.ts";
 import {
   claudePids,
   gone,
@@ -142,11 +143,10 @@ async function focusTerminal(session: AppSession): Promise<void> {
 }
 
 async function terminalShows(session: AppSession, text: string, when: string): Promise<void> {
-  const terminal = session.page.getByTestId("terminal");
   let read = "";
   await waitUntil(
     async () => {
-      read = (await terminal.count()) === 0 ? "" : await terminal.innerText();
+      read = await terminalText(session.page);
       return read.includes(text);
     },
     promptTimeoutMs,

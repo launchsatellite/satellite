@@ -11,6 +11,7 @@ import { sendToClaudeCodeEvent } from "../../src/renderer/sessions/send-to-claud
 import { bridgeRequestChars, oversizeRefusal } from "../../src/shared/satellite-api.ts";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { terminalText } from "../terminal-screen.ts";
 import {
   bridgeAnswer,
   bridgeCode,
@@ -877,8 +878,7 @@ async function checkTerminalSurvives(session: AppSession, pid: number): Promise<
   assert.ok(!processGone(pid), "a refused navigation ended Claude Code");
   await session.page.keyboard.type(stillHere);
   await waitUntil(
-    async () =>
-      (await session.page.getByTestId("terminal").textContent())?.includes(stillHere) === true,
+    async () => (await terminalText(session.page)).includes(stillHere),
     promptTimeoutMs,
     "after a refused navigation the terminal no longer echoed what was typed",
   );
