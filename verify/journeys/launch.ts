@@ -95,25 +95,34 @@ async function checkType(session: AppSession): Promise<void> {
   const { page } = session;
   const renderer = (await gpuAvailable(page)) ? "webgl" : "dom";
   const inner = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-  for (const size of [inner, { width: 960, height: 600 }]) {
-    await page.setViewportSize(size);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      let problem: string | undefined;
-      await waitUntil(
-        async () => {
-          problem = typeProblem(await readTerminal(page), renderer);
-          return problem === undefined;
-        },
-        promptTimeoutMs,
-        () =>
-          `at ${String(size.width)} by ${String(size.height)} in ${colorScheme} ${problem ?? ""}`,
-      );
-      await session.screenshot(`terminal-${String(size.width)}-${colorScheme}`);
+  const devtools = await page.context().newCDPSession(page);
+  try {
+    for (const size of [inner, { width: 960, height: 600 }]) {
+      await devtools.send("Emulation.setDeviceMetricsOverride", {
+        ...size,
+        deviceScaleFactor: 0,
+        mobile: false,
+      });
+      for (const colorScheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme });
+        let problem: string | undefined;
+        await waitUntil(
+          async () => {
+            problem = typeProblem(await readTerminal(page), renderer);
+            return problem === undefined;
+          },
+          promptTimeoutMs,
+          () =>
+            `at ${String(size.width)} by ${String(size.height)} in ${colorScheme} ${problem ?? ""}`,
+        );
+        await session.screenshot(`terminal-${String(size.width)}-${colorScheme}`);
+      }
     }
+  } finally {
+    await devtools.send("Emulation.clearDeviceMetricsOverride");
+    await devtools.detach();
   }
   await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize(inner);
 }
 
 async function checkGpuShared(session: AppSession): Promise<void> {
