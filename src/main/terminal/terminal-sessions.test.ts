@@ -507,6 +507,30 @@ describe("createTerminalSessions", () => {
       expect(latest()).toEqual({ id, status: "working", ready: true, hooksOff: false });
     });
 
+    it("counts for quitting the sessions mid-task and those whose hooks are off, never idle or done ones", async () => {
+      const listener = fakeListener();
+      const sessions = create({ listener });
+      const { mine } = owners();
+      for (const index of [1, 2, 3, 4, 5, 6]) {
+        await sessions.handlers["terminal.start"]({ id: terminalId(index), ...size }, mine);
+      }
+      const launch = (index: number) => listener.open.mock.calls[index]?.[0] ?? "";
+      expect(sessions.quitStates()).toEqual({ sessions: 6, midTask: 0, unseen: 0 });
+      sessions.hookEvent(launch(0), { name: "UserPromptSubmit" }, null);
+      sessions.hookEvent(launch(1), { name: "PermissionRequest", agent: "" }, null);
+      sessions.hookEvent(launch(2), { name: "Stop" }, null);
+      sessions.hookEvent(launch(3), { name: "UserPromptSubmit" }, null);
+      ptys[3]?.exit(0);
+      expect(sessions.quitStates()).toEqual({ sessions: 5, midTask: 2, unseen: 0 });
+      await sessions.handlers["terminal.write"]({ id: terminalId(5), data: "o" }, mine);
+      await sessions.handlers["terminal.write"]({ id: terminalId(5), data: "\r" }, mine);
+      for (let tick = 0; tick <= hooksOffAfterMs / 500; tick += 1) {
+        ptys[4]?.print("spinning");
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      expect(sessions.quitStates()).toEqual({ sessions: 5, midTask: 2, unseen: 1 });
+    });
+
     it("says hooks are off once Claude Code works on after Enter without any hook", async () => {
       const { id, latest, write, hook } = await started();
       await write("\r");

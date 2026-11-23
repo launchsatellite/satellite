@@ -20,6 +20,7 @@ import { portUrl } from "./port-address.ts";
 
 export interface Processes {
   handlers: Pick<BridgeHandlers, "processes.list" | "processes.stop">;
+  count(): Promise<number>;
 }
 
 export interface RunningRoot {
@@ -173,6 +174,10 @@ export function createProcesses({
   };
 
   return {
+    async count() {
+      const { rows, more } = await snapshot();
+      return rows.length + more.reduce((total, { count }) => total + count, 0);
+    },
     handlers: {
       "processes.list": async (_request, owner) => {
         const { at, rows, more } = await snapshot();

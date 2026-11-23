@@ -61,6 +61,7 @@ function setup(
     list: (owner: BridgeOwner = pageOne) => processes.handlers["processes.list"]({}, owner),
     stop: (pid: number, started: number, owner: BridgeOwner = pageOne) =>
       processes.handlers["processes.stop"]({ pid, started }, owner),
+    count: () => processes.count(),
     readTable,
     readPorts,
     readCommandLines,
@@ -103,6 +104,17 @@ describe("processes.list", () => {
     const { list, readTable } = setup();
     readTable.mockResolvedValueOnce([]);
     await expect(list()).rejects.toMatchObject({ code: "failed" });
+  });
+
+  it("counts every listed process for the quit question, and fails when the table reads empty", async () => {
+    const { count, list, readTable } = setup();
+    const { rows, more } = await list();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(await count()).toBe(rows.length + more.reduce((total, left) => total + left.count, 0));
+    const empty = setup();
+    empty.readTable.mockResolvedValueOnce([]);
+    await expect(empty.count()).rejects.toMatchObject({ code: "failed" });
+    expect(readTable).toHaveBeenCalledTimes(1);
   });
 
   it("shows the home folder as a tilde before anything crosses", async () => {

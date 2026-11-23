@@ -53,7 +53,7 @@ export interface TerminalSessions {
   sessionsInside: WorkspaceSessions;
   hookEvent(launchId: string, event: SessionEvent, sessionId: string | null): void;
   roots(): RunningRoot[];
-  unfinished(): number;
+  quitStates(): { sessions: number; midTask: number; unseen: number };
   closeAll(): Promise<void>;
 }
 interface TerminalOptions {
@@ -566,11 +566,16 @@ export function createTerminalSessions({
           : [{ owner, root: { session: id, workspace, pid: pty.pid, spawnedAt } }],
       );
     },
-    unfinished() {
-      return [...running].filter(
-        ({ ended, hooksOff, state }) =>
-          !ended && (hooksOff || state.status === "working" || needsYou(state.status)),
-      ).length;
+    quitStates() {
+      const live = [...running].filter(({ ended }) => !ended);
+      return {
+        sessions: live.length,
+        midTask: live.filter(
+          ({ hooksOff, state }) =>
+            !hooksOff && (state.status === "working" || needsYou(state.status)),
+        ).length,
+        unseen: live.filter(({ hooksOff }) => hooksOff).length,
+      };
     },
     async closeAll() {
       closed = true;
