@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   BridgeResult,
   ClaudeState,
@@ -89,12 +89,12 @@ function rowOf(tool: CheckedTool, state: ToolState | GhState | ClaudeState): Row
 }
 
 function CheckRow({
-  tool,
+  testId,
   name,
   row,
   first,
 }: {
-  tool: CheckedTool;
+  testId: string;
   name: string;
   row: Row | undefined;
   first: boolean;
@@ -102,7 +102,7 @@ function CheckRow({
   const failing = row !== undefined && !row.ready;
   return (
     <div
-      data-testid={`check-${tool}`}
+      data-testid={testId}
       className={`flex min-h-12 gap-3 px-3 py-3 ${failing ? "items-start" : "items-center"} ${first ? "" : "border-t border-line"}`}
     >
       <span className="flex h-5 flex-none items-center">
@@ -131,10 +131,15 @@ function CheckRow({
   );
 }
 
-export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
+export function ToolChecks({
+  testPrefix = "check",
+  children,
+}: {
+  testPrefix?: string;
+  children?: ReactNode;
+}) {
   const [result, setResult] = useState<BridgeResult<ToolCheck>>();
   const latest = useRef(0);
-  const heading = useRef<HTMLHeadingElement>(null);
   const request = useCallback(() => {
     latest.current += 1;
     const asked = latest.current;
@@ -143,9 +148,6 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
     });
   }, []);
   useEffect(request, [request]);
-  useEffect(() => {
-    if (!firstRun) heading.current?.focus();
-  }, [firstRun]);
   const checkAgain = () => {
     setResult(undefined);
     request();
@@ -155,6 +157,59 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
   const readyCount = tools.filter(
     ({ tool }) => rows !== undefined && rowOf(tool, rows[tool]).ready,
   ).length;
+  return (
+    <>
+      <div
+        aria-live="polite"
+        aria-busy={!settled}
+        className="overflow-hidden rounded-[10px] border border-line"
+      >
+        {result?.ok === false ? (
+          <p className="px-3 py-3 text-[12px] text-fg2">{result.error.message}</p>
+        ) : (
+          tools.map(({ tool, name }, index) => (
+            <CheckRow
+              key={tool}
+              testId={`${testPrefix}-${tool}`}
+              name={name}
+              row={rows === undefined ? undefined : rowOf(tool, rows[tool])}
+              first={index === 0}
+            />
+          ))
+        )}
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-[10px]">
+        <span
+          data-testid={settled ? `${testPrefix}-count` : undefined}
+          className="mr-auto whitespace-nowrap"
+        >
+          <span aria-hidden className="font-pixel text-[13px] text-dim uppercase">
+            {`0${String(readyCount)} / 03`}
+          </span>
+          <span className="sr-only">{`${String(readyCount)} of 3 tools ready`}</span>
+        </span>
+        <span className="contents">
+          <Button
+            variant="ghost"
+            icon="refresh"
+            onClick={checkAgain}
+            disabled={!settled}
+            testId={`${testPrefix}-again`}
+          >
+            Check again
+          </Button>
+          {children}
+        </span>
+      </div>
+    </>
+  );
+}
+
+export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!firstRun) heading.current?.focus();
+  }, [firstRun]);
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="@container flex min-h-full items-center justify-center">
@@ -174,62 +229,23 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
               ? "Three checks, then add your first project."
               : "Satellite runs your own git, gh and Claude Code."}
           </p>
-          <div
-            aria-live="polite"
-            aria-busy={!settled}
-            className="overflow-hidden rounded-[10px] border border-line"
-          >
-            {result?.ok === false ? (
-              <p className="px-3 py-3 text-[12px] text-fg2">{result.error.message}</p>
+          <ToolChecks>
+            {firstRun ? (
+              <CommandButton command="project.add" testId="add-first-project">
+                Add your first project
+              </CommandButton>
             ) : (
-              tools.map(({ tool, name }, index) => (
-                <CheckRow
-                  key={tool}
-                  tool={tool}
-                  name={name}
-                  row={rows === undefined ? undefined : rowOf(tool, rows[tool])}
-                  first={index === 0}
-                />
-              ))
-            )}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-[10px]">
-            <span
-              data-testid={settled ? "check-count" : undefined}
-              className="mr-auto whitespace-nowrap"
-            >
-              <span aria-hidden className="font-pixel text-[13px] text-dim uppercase">
-                {`0${String(readyCount)} / 03`}
-              </span>
-              <span className="sr-only">{`${String(readyCount)} of 3 tools ready`}</span>
-            </span>
-            <span className="contents">
               <Button
                 variant="ghost"
-                icon="refresh"
-                onClick={checkAgain}
-                disabled={!settled}
-                testId="check-again"
+                onClick={() => {
+                  onClose?.();
+                }}
+                testId="close-check"
               >
-                Check again
+                Close
               </Button>
-              {firstRun ? (
-                <CommandButton command="project.add" testId="add-first-project">
-                  Add your first project
-                </CommandButton>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    onClose?.();
-                  }}
-                  testId="close-check"
-                >
-                  Close
-                </Button>
-              )}
-            </span>
-          </div>
+            )}
+          </ToolChecks>
         </div>
       </div>
     </div>
