@@ -94,25 +94,7 @@
 }
 
 @layer base {
-  :is(
-    a[href],
-    button,
-    summary,
-    select,
-    label:has(> input:is([type="checkbox"], [type="radio"]):enabled),
-    input:is([type="checkbox"], [type="radio"]),
-    [role="button"],
-    [role="link"],
-    [role="tab"],
-    [role="option"],
-    [role="treeitem"],
-    [role="menuitem"],
-    [role="menuitemcheckbox"],
-    [role="menuitemradio"],
-    [role="checkbox"],
-    [role="radio"],
-    [role="switch"]
-  ) {
+  :is(button, select, [role="option"], [role="treeitem"]) {
     cursor: pointer;
 
     &:is(:disabled, [aria-disabled="true"]) {
@@ -136,6 +118,10 @@ body,
   outline: 1px solid var(--sigfg);
   outline-offset: -1px;
   box-shadow: 0 0 0 1px var(--bg);
+}
+
+.thread-mark {
+  cursor: pointer;
 }
 
 .thread-mark::before {
