@@ -107,7 +107,8 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
 - The pointer shows over everything a click acts on, every enabled button, link, tab, option, tree row, select, summary and checkbox, the selected row and tab included, so a selection never reads as switched off. A disabled control keeps the arrow, never a not allowed sign, which the system keeps for a drop that cannot land. Text fields, the terminal and read-only code keep the text cursor, the column dividers the resize cursor, and the title bar's drag area the arrow.
 - Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
-- The segmented control is a radio group, a 28px track on `side` with a `ctl` border and a 6px corner, each option 24px with the chosen one on `sel` in `fg` and the others in `fg2`. The arrow keys move the choice and its focus, and only the chosen option is in the tab order.
+- The segmented control is a radio group, a 28px track on `side` with a `ctl` border and a 6px corner, each option 24px with the chosen one on `sel` in `fg` and the others in `fg2`, taking `hover` under the pointer. The arrow keys move the choice and its focus, and only the chosen option is in the tab order.
+- A close button on a tab is a 24px target flush with the tab's right edge. Inside it a 20px square, 4px in from that edge, holds the 12px close glyph and takes `hover` and the focus ring, so the target meets the small button's size and the tab never grows to hold it.
 - Status is a square pixel, never a dot.
 - One primary action per view.
 - An action that loses work is a danger button, signal text on the plain ground with a control border, never a signal fill. It replaces the primary action only while something would be lost, as Archive anyway.

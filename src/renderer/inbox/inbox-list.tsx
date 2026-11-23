@@ -106,10 +106,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
           Nothing needs you right now.
         </p>
       ) : (
-        <ul
-          ref={list}
-          className="-m-[3px] flex max-h-[33vh] flex-col gap-px overflow-y-auto p-[3px]"
-        >
+        <ul ref={list} className="-m-1 flex max-h-[33vh] flex-col gap-px overflow-y-auto p-1">
           {shown.map(({ key, row, testId, label, project, sentence }) => {
             const { projectId, workspace } = row.workspace;
             const current = selected?.projectId === projectId && selected.workspace === workspace;

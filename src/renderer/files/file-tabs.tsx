@@ -11,6 +11,8 @@ interface FileTabsProps {
   onClose: (index: number) => void;
 }
 
+const closeMark =
+  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-hover group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
 const focusRing =
   "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
 
@@ -116,9 +118,11 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
               onClick={() => {
                 close(index);
               }}
-              className={`mr-1 flex size-5 flex-none items-center justify-center rounded-[4px] text-dim hover:bg-hover hover:text-fg ${selected ? "" : "opacity-0 group-hover:opacity-100"} ${focusRing}`}
+              className={`group/close flex size-6 flex-none items-center rounded-[4px] text-dim outline-none ${selected ? "" : "opacity-0 group-hover:opacity-100"}`}
             >
-              <Icon name="close" size={12} />
+              <span className={closeMark}>
+                <Icon name="close" size={12} />
+              </span>
             </button>
           </div>
         );

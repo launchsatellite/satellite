@@ -11,6 +11,7 @@ interface Expected {
 
 const shownMs = 15_000;
 const arrows = new Set(["auto", "default"]);
+const smallTarget = 24;
 
 function byTestId(testId: string): string {
   return `[data-testid="${testId}"]`;
@@ -35,6 +36,30 @@ async function cursorsAre(
     if (!right) wrong.push(`${name} read ${read} instead of ${cursor}`);
   }
   assert.deepEqual(wrong, [], `${when}, ${wrong.join(", ")}`);
+}
+
+async function targetFits(session: AppSession, testId: string, name: string): Promise<void> {
+  const box = await session.page.getByTestId(testId).boundingBox();
+  assert.ok(
+    box !== null && box.width >= smallTarget && box.height >= smallTarget,
+    `${name} measured ${box === null ? "nothing" : `${String(box.width)} by ${String(box.height)}`}, under ${String(smallTarget)} by ${String(smallTarget)}`,
+  );
+}
+
+async function hoverFills(session: AppSession, selector: string, name: string): Promise<void> {
+  const target = session.page.locator(selector).first();
+  const background = () => target.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const resting = await background();
+  await target.hover();
+  let hovered = resting;
+  await waitUntil(
+    async () => {
+      hovered = await background();
+      return hovered !== resting;
+    },
+    shownMs,
+    () => `${name} kept ${hovered} under the pointer`,
+  );
 }
 
 async function run(session: AppSession): Promise<void> {
@@ -98,6 +123,7 @@ async function run(session: AppSession): Promise<void> {
     ],
     "on the Changes tab",
   );
+  await hoverFills(session, '[role="radio"][aria-checked="false"]', "a segmented option");
 
   await page.getByTestId("centre-tab-files").click();
   await visible(session, "files-row-0", "on the Files tab");
@@ -106,6 +132,10 @@ async function run(session: AppSession): Promise<void> {
     [{ name: "a tree row", selector: byTestId("files-row-0"), cursor: "pointer" }],
     "on the Files tab",
   );
+  await page.locator(`[data-testid^="files-row-"][data-path="src"]`).click();
+  await page.locator('[data-testid^="files-row-"][data-path="src/app.ts"]').click();
+  await visible(session, "file-tab-0", "after opening a file");
+  await targetFits(session, "file-tab-0-close", "a file tab's close button");
 
   await startClaude(session, 1);
   await cursorsAre(
@@ -116,6 +146,7 @@ async function run(session: AppSession): Promise<void> {
     ],
     "with Claude Code running",
   );
+  await targetFits(session, "close-session-1", "a session tab's close button");
 
   await page.getByTestId("title-new-workspace").click();
   await visible(session, "workspace-name", "in the New workspace dialog");

@@ -13,6 +13,8 @@ interface SessionTabsProps {
   onClose: (key: string) => void;
 }
 
+const closeMark =
+  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-hover group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -73,7 +75,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
         aria-label="Claude Code sessions"
         data-testid="session-tabs"
         onKeyDown={move}
-        className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
+        className="-mx-1 flex min-w-0 items-center gap-0.5 self-stretch overflow-x-auto px-1 [scrollbar-width:none]"
       >
         {tabs.map((tab) => {
           const selected = tab.key === active;
@@ -115,9 +117,11 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
                 onClick={() => {
                   close(tab.key);
                 }}
-                className={`mr-1 flex size-5 items-center justify-center rounded-[4px] text-dim hover:bg-hover hover:text-fg ${selected ? "" : "opacity-0 group-hover:opacity-100"} ${focusRing}`}
+                className={`group/close flex size-6 flex-none items-center rounded-[4px] text-dim outline-none ${selected ? "" : "opacity-0 group-hover:opacity-100"}`}
               >
-                <Icon name="close" size={12} />
+                <span className={closeMark}>
+                  <Icon name="close" size={12} />
+                </span>
               </button>
             </div>
           );
