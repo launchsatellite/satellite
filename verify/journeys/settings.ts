@@ -133,21 +133,33 @@ async function checkEntryPoints(session: AppSession): Promise<void> {
   await closeSettings(session, "workspace-repo-main", "from the shortcut over the command menu");
 }
 
+async function ghChecks(session: AppSession): Promise<number> {
+  return (await session.standInEvents()).filter(
+    (event) => event.type === "start" && event.tool === "gh" && event.args.includes("--version"),
+  ).length;
+}
+
 async function checkTools(session: AppSession): Promise<void> {
   await visible(session, "settings-check-count", "in the tools section");
   const rows = {
-    "settings-check-git": " found",
-    "settings-check-gh": "Signed in as octo-verify",
-    "settings-check-claude": "2.1.78 found",
+    "settings-check-git": /^Git\s+\d+\.\d+\S* found/,
+    "settings-check-gh": /^GitHub CLI\s+Signed in as octo-verify/,
+    "settings-check-claude": /^Claude Code\s+2\.1\.78 found/,
   };
-  for (const [testId, text] of Object.entries(rows)) {
+  for (const [testId, pattern] of Object.entries(rows)) {
     const shown = await session.page.getByTestId(testId).innerText();
-    assert.ok(shown.includes(text), `${testId} read ${shown}`);
+    assert.match(shown, pattern, `${testId} read ${shown}`);
   }
   assert.ok(
     (await session.page.getByTestId("settings-check-count").innerText()).startsWith("03 / 03"),
   );
+  const before = await ghChecks(session);
   await session.page.getByTestId("settings-check-again").click();
+  await waitUntil(
+    async () => (await ghChecks(session)) > before,
+    waitMs,
+    "Check again ran no second check of gh",
+  );
   await visible(session, "settings-check-count", "after Check again");
 }
 
