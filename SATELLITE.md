@@ -1,6 +1,6 @@
 # Satellite
 
-Satellite is an agentic development environment, a desktop app for developers who build through coding agents. One window holds every project and every parallel piece of work inside each project. Each piece of work gets its own git worktree, its own branch and its own Claude Code sessions.
+Satellite is the development environment for coding agents, a desktop app for developers who build through them. One window holds every project and every parallel piece of work inside each project. Each piece of work gets its own git worktree, its own branch and its own Claude Code sessions.
 
 Agents stay in orbit and do the work. You stay at the centre, see what each one is doing and step in when one needs you.
 
