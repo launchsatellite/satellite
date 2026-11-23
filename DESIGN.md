@@ -71,9 +71,9 @@ Every text pair in use passes WCAG AA at 4.5 to 1, measured with the WCAG formul
 | Funnel Display | 300 to 800, mostly 700 | Display sizes, heroes, titles, section heads, big numbers |
 | Funnel Sans | 300 to 800 | Everything people read. Body 15, lead 18, app 13, headings 17 at 600 |
 | Geist Pixel | 400 | Readouts only, in capitals. Counts, timers, ports, ahead and behind |
-| Geist Mono | 400 to 500 | Code, diffs, paths and terminals |
+| Geist Mono | 400 to 500 | Paths, branches, hashes and code inside text |
 
-All four are bundled with the app and never loaded from the network. Display type sits tight, around −0.04em. Headlines are lowercase and titles never end with a full stop.
+All four are bundled with the app and never loaded from the network. The terminal, the diff and the file viewer draw in the system's code font instead, at its natural line box, so a long session reads like any good terminal. Menlo at 12 on macOS, Consolas at 14 on Windows and Droid Sans Mono at 14 on Linux. The terminal's lines are 1 font tall, 1.1 on Linux, its block cursor holds still and bold text lights up in the bright colours. A line in the viewers is 1.5 times the size on macOS and 1.35 times elsewhere, rounded to a whole pixel. Display type sits tight, around −0.04em. Headlines are lowercase and titles never end with a full stop.
 
 Readouts are how the machine speaks, like `T+04:12`, `↑2 ↓3` and `2/3`. People always speak in sentences.
 
