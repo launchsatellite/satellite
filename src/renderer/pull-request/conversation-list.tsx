@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { PullRequestFound, PullRequestThread } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
@@ -27,6 +27,9 @@ import { conversationItems, drawnBy, drawnCount, type ConversationItem } from ".
 type Spoken = PullRequestThread["comments"][number];
 
 const drawnPage = 40_000;
+
+export const threadHeadControl =
+  "-mx-1 -my-0.5 min-w-0 rounded-[6px] px-1 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function Author({ spoken }: { spoken: Spoken }) {
   const { author: name, at, outside } = spoken;
@@ -164,6 +167,44 @@ export function ThreadHead({ thread }: { thread: PullRequestThread }) {
   );
 }
 
+function ResolvedThread({
+  id,
+  thread,
+  actions,
+  onLink,
+}: {
+  id: string;
+  thread: PullRequestThread;
+  actions: ReactNode;
+  onLink: (address: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-testid={`${id}-toggle`}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => {
+            setOpen((shown) => !shown);
+          }}
+          className={`flex flex-wrap items-center gap-2 hover:bg-hover ${threadHeadControl}`}
+        >
+          <ThreadHead thread={thread} />
+          <span className="text-[12px] text-dim">{open ? "Hide thread" : "Show thread"}</span>
+        </button>
+        {actions}
+      </div>
+      <div id={bodyId} hidden={!open} className="pt-2">
+        <ThreadBody thread={thread} onLink={onLink} />
+      </div>
+    </>
+  );
+}
+
 function Item({
   index,
   item,
@@ -198,17 +239,7 @@ function Item({
     if (thread.resolved) {
       return (
         <Frame id={id} kind="thread" resolved>
-          <details className="group flex flex-col gap-2">
-            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-              <ThreadHead thread={thread} />
-              <span className="text-[12px] text-dim group-open:hidden">Show thread</span>
-              <span className="hidden text-[12px] text-dim group-open:inline">Hide thread</span>
-              {actions}
-            </summary>
-            <div className="pt-2">
-              <ThreadBody thread={thread} onLink={onLink} />
-            </div>
-          </details>
+          <ResolvedThread id={id} thread={thread} actions={actions} onLink={onLink} />
         </Frame>
       );
     }

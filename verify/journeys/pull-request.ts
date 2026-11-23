@@ -14,6 +14,7 @@ import {
   visible,
   waitUntil,
 } from "./conditions.ts";
+import { pointerAndTargets, threadMarkPoints } from "./cursors.ts";
 
 const showMs = 15_000;
 const menuKey = process.platform === "darwin" ? "Meta" : "Control+Shift";
@@ -150,6 +151,8 @@ async function opened(session: AppSession): Promise<void> {
     );
     if (known) assert.ok(folders.has(event.cwd ?? ""), `gh ran in ${event.cwd ?? "no folder"}`);
   }
+  await pointerAndTargets(session);
+  assert.deepEqual(session.consoleErrors, [], "the window logged console errors");
 }
 
 async function appears(session: AppSession): Promise<void> {
@@ -221,6 +224,7 @@ async function checksFailed(session: AppSession): Promise<void> {
 }
 
 const movedOnSentence = "Satellite moved on to a newer read.";
+const resolvedBody = "Could this use a template string?";
 
 async function filesHold(session: AppSession, when: string): Promise<void> {
   for (let look = 0; look < 25; look += 1) {
@@ -244,6 +248,7 @@ async function changesRequested(session: AppSession): Promise<void> {
     showMs,
     "the diff did not hold exactly one thread mark",
   );
+  await threadMarkPoints(session);
   await session.page
     .getByTestId("changes-file-0")
     .waitFor({ state: "attached" })
@@ -258,6 +263,66 @@ async function changesRequested(session: AppSession): Promise<void> {
   await session.mark("answered");
   await endTurn(session, true);
   await rowGone(session, "after the review was answered");
+  await conversationActs(session);
+}
+
+async function bodyShown(
+  session: AppSession,
+  testId: string,
+  shown: boolean,
+  when: string,
+): Promise<void> {
+  const item = session.page.getByTestId(testId);
+  await waitUntil(
+    async () => (await item.innerText()).includes(resolvedBody) === shown,
+    showMs,
+    `${testId} ${shown ? "hid" : "showed"} its body ${when}`,
+  );
+}
+
+async function conversationActs(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.getByTestId("pull-request-section-conversation").click();
+  const resolved = page.locator('li[data-kind="thread"][data-resolved="true"]');
+  const open = page.locator('li[data-kind="thread"][data-resolved="false"]').first();
+  await resolved.waitFor();
+  assert.equal(await page.locator("summary").count(), 0, "a thread still drew a summary");
+  const item = (await resolved.getAttribute("data-testid")) ?? "";
+  const toggle = `${item}-toggle`;
+  assert.equal(
+    await page.getByTestId(toggle).locator("button").count(),
+    0,
+    "the disclosure held a button",
+  );
+  await attributeIs(session, toggle, "aria-expanded", "false", "before Show thread");
+  assert.ok(
+    !(await resolved.innerText()).includes(resolvedBody),
+    "a closed resolved thread showed its body",
+  );
+  await page.getByTestId(toggle).click();
+  await attributeIs(session, toggle, "aria-expanded", "true", "after Show thread");
+  await bodyShown(session, item, true, "after Show thread");
+  await page.getByTestId(toggle).click();
+  await attributeIs(session, toggle, "aria-expanded", "false", "after Hide thread");
+  await bodyShown(session, item, false, "after Hide thread");
+  await page.getByTestId(`${item}-open`).click();
+  await textHolds(session, "link-dialog", "pull/12#discussion_r3003", "after Open on GitHub");
+  await page.keyboard.press("Escape");
+  const from = (await session.standInEvents()).length;
+  await open.locator('[data-testid$="-send"]').click();
+  let typed = "";
+  await waitUntil(
+    async () => {
+      typed = await standInInput(session, from);
+      return typed.includes("pull/12#discussion_r3001");
+    },
+    showMs,
+    () => `Send to Claude Code typed ${JSON.stringify(typed.slice(0, 200))} without its thread`,
+  );
+  assert.ok(
+    !/discussion_r300[23]/.test(typed),
+    "Send to Claude Code typed another thread's address",
+  );
 }
 
 async function conflicts(session: AppSession): Promise<void> {
