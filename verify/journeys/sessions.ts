@@ -103,8 +103,8 @@ async function nextPid(session: AppSession, count: number): Promise<number> {
 }
 
 async function argsOf(session: AppSession, pid: number): Promise<string[]> {
-  const start = (await session.standInEvents()).find(
-    (event) => event.type === "start" && event.pid === pid,
+  const start = (await session.standInEvents()).findLast(
+    (event) => event.type === "start" && event.tool === "claude" && event.pid === pid,
   );
   return start?.type === "start" ? start.args : [];
 }
