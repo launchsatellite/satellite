@@ -10,6 +10,7 @@ import {
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { changesJourney } from "./journeys/changes.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
+import { cursorsJourney } from "./journeys/cursors.ts";
 import { filesJourney } from "./journeys/files.ts";
 import { guideJourney } from "./journeys/guide.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
@@ -40,6 +41,7 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   titleBarJourney,
+  cursorsJourney,
   guideJourney,
   workspacesJourney,
   changesJourney,
