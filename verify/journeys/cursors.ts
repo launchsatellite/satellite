@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import type { AppSession } from "../driver.ts";
-import type { Journey } from "../journeys.ts";
 import { startClaude, visible, waitUntil } from "./conditions.ts";
 
 interface Expected {
@@ -62,16 +61,52 @@ async function hoverFills(session: AppSession, selector: string, name: string): 
   );
 }
 
-async function run(session: AppSession): Promise<void> {
+async function closeStandsOut(session: AppSession, testId: string, name: string): Promise<void> {
+  const close = session.page.getByTestId(testId);
+  await close.hover();
+  let read = { square: "", tab: "" };
+  await waitUntil(
+    async () => {
+      read = await close.evaluate((button) => ({
+        square: getComputedStyle(button.firstElementChild ?? button).backgroundColor,
+        tab: getComputedStyle(button.parentElement ?? button).backgroundColor,
+      }));
+      return read.square !== read.tab && read.square !== "rgba(0, 0, 0, 0)";
+    },
+    shownMs,
+    () => `${name} drew ${read.square} on its tab's ${read.tab} under the pointer`,
+  );
+}
+
+export async function threadMarkPoints(session: AppSession): Promise<void> {
+  let read = "";
+  await waitUntil(
+    async () => {
+      read = await session.page.evaluate(() => {
+        const mark = document.querySelector(".thread-mark");
+        if (mark === null) return "missing";
+        const box = mark.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return hit === null ? "nothing" : getComputedStyle(hit).cursor;
+      });
+      return read === "pointer";
+    },
+    shownMs,
+    () => `the thread mark read ${read} under the pointer`,
+  );
+}
+
+async function openFile(session: AppSession, path: string): Promise<void> {
+  await session.page.locator(`[data-testid^="files-row-"][data-path="${path}"]`).click();
+}
+
+export async function pointerAndTargets(session: AppSession): Promise<void> {
   const { page } = session;
-  await page.getByTestId("workspace-repo-alpha").click();
-  await page.getByTestId("centre-tab-pull-request").click();
   await waitUntil(
     async () => (await page.getByTestId("markdown-link").count()) > 0,
     shownMs,
     "the description drew no link",
   );
-  await visible(session, "inbox-empty", "with nothing waiting");
   await cursorsAre(
     session,
     [
@@ -117,7 +152,7 @@ async function run(session: AppSession): Promise<void> {
   await cursorsAre(
     session,
     [
-      { name: "a file row", selector: '[data-testid="changes-file-0"]', cursor: "pointer" },
+      { name: "a file row", selector: byTestId("changes-file-0"), cursor: "pointer" },
       { name: "a segmented option", selector: '[role="radio"]', cursor: "pointer" },
       { name: "the diff's lines", selector: ".monaco-editor .view-lines", cursor: "text" },
     ],
@@ -132,12 +167,18 @@ async function run(session: AppSession): Promise<void> {
     [{ name: "a tree row", selector: byTestId("files-row-0"), cursor: "pointer" }],
     "on the Files tab",
   );
-  await page.locator(`[data-testid^="files-row-"][data-path="src"]`).click();
-  await page.locator('[data-testid^="files-row-"][data-path="src/app.ts"]').click();
+  await openFile(session, "src");
+  await openFile(session, "src/app.ts");
   await visible(session, "file-tab-0", "after opening a file");
+  await openFile(session, "README.md");
+  await visible(session, "file-tab-1", "after opening a second file");
   await targetFits(session, "file-tab-0-close", "a file tab's close button");
+  await closeStandsOut(session, "file-tab-1-close", "the selected file tab's close square");
+  await closeStandsOut(session, "file-tab-0-close", "a hovered file tab's close square");
 
   await startClaude(session, 1);
+  await page.getByTestId("new-session").click();
+  await visible(session, "session-tab-2", "after a second session");
   await cursorsAre(
     session,
     [
@@ -147,6 +188,8 @@ async function run(session: AppSession): Promise<void> {
     "with Claude Code running",
   );
   await targetFits(session, "close-session-1", "a session tab's close button");
+  await closeStandsOut(session, "close-session-2", "the selected session tab's close square");
+  await closeStandsOut(session, "close-session-1", "a hovered session tab's close square");
 
   await page.getByTestId("title-new-workspace").click();
   await visible(session, "workspace-name", "in the New workspace dialog");
@@ -160,7 +203,4 @@ async function run(session: AppSession): Promise<void> {
     "in the New workspace dialog",
   );
   await page.keyboard.press("Escape");
-  assert.deepEqual(session.consoleErrors, [], "the window logged console errors");
 }
-
-export const cursorsJourney: Journey = { name: "cursors", scenario: "pr-open", run };
