@@ -8,7 +8,8 @@ import {
   type WorkerHandlers,
 } from "../src/renderer/pull-request/markdown-parser.ts";
 
-const deadlineMs = 1500;
+const deadlineMs = 500;
+const patientMs = 5000;
 const thread = new URL("./markdown-test-thread.ts", import.meta.url);
 const parsers: ReturnType<typeof createMarkdownParser>[] = [];
 const started: Worker[] = [];
@@ -28,8 +29,8 @@ function spawnThread({ reply, fail }: WorkerHandlers): ParseWorker {
   };
 }
 
-function parserOver(spawn = spawnThread) {
-  const parser = createMarkdownParser(spawn, deadlineMs);
+function parserOver(spawn = spawnThread, deadline = deadlineMs) {
+  const parser = createMarkdownParser(spawn, deadline);
   parsers.push(parser);
   return parser;
 }
@@ -180,7 +181,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
         },
         stop: real.stop,
       };
-    });
+    }, patientMs);
     const texts = Array.from({ length: 100 }, (_, at) => `# body ${String(at)}`);
     await Promise.all(texts.map((text, at) => answer(parser, text, `owner-${String(at)}`)));
     await new Promise((resolve) => setTimeout(resolve, 300));
