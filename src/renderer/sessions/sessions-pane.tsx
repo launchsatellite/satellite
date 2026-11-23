@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { InstallFix, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { promptText } from "../../shared/prompt-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
@@ -20,6 +20,7 @@ interface SessionsPaneProps {
   sessions: Sessions;
   selected: WorkspaceRef | null;
   hasProjects: boolean;
+  resumeAllowed: boolean;
   onAskLink: (address: string) => void;
   notify: Notify;
 }
@@ -38,6 +39,10 @@ const missingLeads: Record<InstallFix["kind"] | "update", string> = {
   command: "Run this in a terminal to install it.",
   address: "Follow the steps at this address to install it.",
 };
+
+function holdsTab(tabs: Sessions["all"], key: string | undefined): boolean {
+  return key !== undefined && tabs.some((tab) => tab.key === key);
+}
 
 function InstallStep() {
   const [fix, setFix] = useState<InstallFix>();
@@ -74,11 +79,13 @@ function EmptyWorkspace({
   missing,
   atLimit,
   onOpen,
+  onResumeQuietly,
 }: {
   workspace: WorkspaceRef;
   missing: string | undefined;
   atLimit: boolean;
   onOpen: (resume: boolean) => boolean;
+  onResumeQuietly: (() => void) | undefined;
 }) {
   const { projectId, workspace: key } = workspace;
   const [resumable, setResumable] = useState<boolean>();
@@ -98,13 +105,17 @@ function EmptyWorkspace({
       current = false;
     };
   }, [projectId, key]);
+  const resumingQuietly = resumable === true && onResumeQuietly !== undefined;
   useEffect(() => {
-    if (resumable === undefined) return;
+    if (resumingQuietly) onResumeQuietly();
+  }, [resumingQuietly, onResumeQuietly]);
+  useEffect(() => {
+    if (resumable === undefined || resumingQuietly) return;
     const focused = document.activeElement;
     if (focused !== null && focused !== document.body && focused.isConnected) return;
     actions.current?.querySelector("button")?.focus();
-  }, [resumable]);
-  if (resumable === undefined) return <div className="flex-1" />;
+  }, [resumable, resumingQuietly]);
+  if (resumable === undefined || resumingQuietly) return <div className="flex-1" />;
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
       <p
@@ -163,6 +174,7 @@ export function SessionsPane({
   sessions,
   selected,
   hasProjects,
+  resumeAllowed,
   onAskLink,
   notify,
 }: SessionsPaneProps) {
@@ -220,6 +232,20 @@ export function SessionsPane({
       window.removeEventListener(focusSessionEvent, receive);
     };
   }, []);
+  const quietKey = useRef<string>(undefined);
+  const keptFocus = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    if (holdsTab(sessions.all, quietKey.current)) keptFocus.current = document.activeElement;
+  }, [sessions.all]);
+  useEffect(() => {
+    if (!holdsTab(sessions.all, quietKey.current)) return;
+    quietKey.current = undefined;
+    const kept = keptFocus.current;
+    keptFocus.current = null;
+    if (kept instanceof HTMLElement && kept !== document.body && kept.isConnected) {
+      kept.focus({ preventScroll: true });
+    }
+  }, [sessions.all]);
   const offerTarget = useCallback((id: string, target: PromptTarget) => {
     targets.current.set(id, target);
     return () => {
@@ -246,6 +272,13 @@ export function SessionsPane({
           missing={missing}
           atLimit={sessions.all.length >= tabLimit}
           onOpen={(resume) => sessions.open(selected, resume)}
+          onResumeQuietly={
+            resumeAllowed && missing === undefined && sessions.resumesQuietly(selected)
+              ? () => {
+                  quietKey.current = sessions.resumeQuietly(selected) ?? quietKey.current;
+                }
+              : undefined
+          }
         />
       );
     }

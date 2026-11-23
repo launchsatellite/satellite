@@ -28,6 +28,8 @@ export interface Sessions {
   all: SessionTab[];
   activeOf: (ref: WorkspaceRef) => string | undefined;
   open: (ref: WorkspaceRef, resume: boolean) => boolean;
+  resumesQuietly: (ref: WorkspaceRef) => boolean;
+  resumeQuietly: (ref: WorkspaceRef) => string | undefined;
   restart: (key: string) => void;
   close: (key: string) => void;
   activate: (key: string) => void;
@@ -39,6 +41,7 @@ export interface Sessions {
 interface State {
   tabs: SessionTab[];
   active: ReadonlyMap<string, string>;
+  quiet: ReadonlySet<string>;
 }
 
 export const tabLimit = bridgeLimits.terminals;
@@ -80,12 +83,13 @@ function withoutTabs(state: State, dropped: (tab: SessionTab) => boolean): State
     if (next === undefined) active.delete(place);
     else active.set(place, next.key);
   }
-  return { tabs: state.tabs.filter((tab) => !dropped(tab)), active };
+  return { ...state, tabs: state.tabs.filter((tab) => !dropped(tab)), active };
 }
 
 export function useSessions(notify: Notify): Sessions {
-  const [state, setState] = useState<State>({ tabs: [], active: new Map() });
+  const [state, setState] = useState<State>({ tabs: [], active: new Map(), quiet: new Set() });
   const numbers = useRef(new Map<string, number>());
+  const quietTried = useRef(new Set<string>());
   const count = useRef(0);
   useEffect(() => {
     count.current = state.tabs.length;
@@ -118,8 +122,8 @@ export function useSessions(notify: Notify): Sessions {
       }),
     [],
   );
-  const open = useCallback((ref: WorkspaceRef, resume: boolean) => {
-    if (count.current >= tabLimit) return false;
+  const openTab = useCallback((ref: WorkspaceRef, resume: boolean) => {
+    if (count.current >= tabLimit) return undefined;
     count.current += 1;
     const place = placeOf(ref);
     const number = (numbers.current.get(place) ?? 0) + 1;
@@ -136,11 +140,26 @@ export function useSessions(notify: Notify): Sessions {
       needsSince: null,
     };
     setState((current) => ({
+      ...current,
       tabs: [...current.tabs, tab],
       active: new Map(current.active).set(place, tab.key),
     }));
-    return true;
+    return tab.key;
   }, []);
+  const open = useCallback(
+    (ref: WorkspaceRef, resume: boolean) => openTab(ref, resume) !== undefined,
+    [openTab],
+  );
+  const resumeQuietly = useCallback(
+    (ref: WorkspaceRef) => {
+      const place = placeOf(ref);
+      if (quietTried.current.has(place)) return undefined;
+      quietTried.current.add(place);
+      setState((current) => ({ ...current, quiet: new Set(current.quiet).add(place) }));
+      return openTab(ref, true);
+    },
+    [openTab],
+  );
   const restart = useCallback((key: string) => {
     const terminalId = crypto.randomUUID();
     setState((current) => ({
@@ -196,6 +215,8 @@ export function useSessions(notify: Notify): Sessions {
       all: state.tabs,
       activeOf: (ref) => state.active.get(placeOf(ref)),
       open,
+      resumesQuietly: (ref) => !state.quiet.has(placeOf(ref)),
+      resumeQuietly,
       restart,
       close,
       activate,
@@ -205,5 +226,15 @@ export function useSessions(notify: Notify): Sessions {
       pixelFor: (projectId, workspace) =>
         mostUrgent(tabsOf({ projectId, workspace }).map((tab) => tab.status)),
     };
-  }, [state, open, restart, close, activate, forgetWorkspace, forgetGone, forgetProject]);
+  }, [
+    state,
+    open,
+    resumeQuietly,
+    restart,
+    close,
+    activate,
+    forgetWorkspace,
+    forgetGone,
+    forgetProject,
+  ]);
 }
