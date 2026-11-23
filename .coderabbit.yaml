@@ -27,6 +27,7 @@ reviews:
   post_merge_actions: []
 chat:
   allow_non_org_members: false
+  auto_reply: false
 issue_enrichment:
   auto_enrich:
     enabled: false
