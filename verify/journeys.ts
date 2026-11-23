@@ -21,6 +21,7 @@ import { pullRequestJourney } from "./journeys/pull-request.ts";
 import { quitJourney } from "./journeys/quit.ts";
 import { sessionsJourney } from "./journeys/sessions.ts";
 import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
+import { settingsJourney } from "./journeys/settings.ts";
 import { titleBarJourney } from "./journeys/title-bar.ts";
 import { workspacesJourney } from "./journeys/workspaces.ts";
 
@@ -40,6 +41,7 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   titleBarJourney,
+  settingsJourney,
   guideJourney,
   workspacesJourney,
   changesJourney,
