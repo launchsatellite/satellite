@@ -14,7 +14,7 @@ interface SessionTabsProps {
 }
 
 const closeMark =
-  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-hover group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
+  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-ctl group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -75,7 +75,7 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
         aria-label="Claude Code sessions"
         data-testid="session-tabs"
         onKeyDown={move}
-        className="-mx-1 flex min-w-0 items-center gap-0.5 self-stretch overflow-x-auto px-1 [scrollbar-width:none]"
+        className="-mx-1 flex min-w-0 scroll-px-1 items-center gap-0.5 self-stretch overflow-x-auto px-1 [scrollbar-width:none]"
       >
         {tabs.map((tab) => {
           const selected = tab.key === active;

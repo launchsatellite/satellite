@@ -29,7 +29,7 @@ type Spoken = PullRequestThread["comments"][number];
 const drawnPage = 40_000;
 
 export const threadHeadControl =
-  "-mx-1 -my-0.5 min-w-0 rounded-[6px] px-1 py-0.5 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "-mx-1 -my-0.5 min-w-0 rounded-[6px] px-1 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function Author({ spoken }: { spoken: Spoken }) {
   const { author: name, at, outside } = spoken;
@@ -191,7 +191,7 @@ function ResolvedThread({
           onClick={() => {
             setOpen((shown) => !shown);
           }}
-          className={`flex flex-wrap items-center gap-2 ${threadHeadControl}`}
+          className={`flex flex-wrap items-center gap-2 hover:bg-hover ${threadHeadControl}`}
         >
           <ThreadHead thread={thread} />
           <span className="text-[12px] text-dim">{open ? "Hide thread" : "Show thread"}</span>

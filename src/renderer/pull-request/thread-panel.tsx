@@ -66,7 +66,7 @@ function Entries({
                 onClick={() => {
                   onSelect(index);
                 }}
-                className={`flex items-center ${threadHeadControl}`}
+                className={`flex items-center ${current === index ? "" : "hover:bg-hover"} ${threadHeadControl}`}
               >
                 <ThreadHead thread={thread} />
               </button>
