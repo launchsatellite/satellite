@@ -126,6 +126,11 @@ async function checkEntryPoints(session: AppSession): Promise<void> {
   await session.page.getByTestId("workspace-repo-main").focus();
   await openSettings(session, "command");
   await closeSettings(session, "workspace-repo-main", "from the command menu");
+  await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "palette", "before the shortcut over the command menu");
+  await openSettings(session, "keys");
+  await gone(session, "palette", "once settings opened over it");
+  await closeSettings(session, "workspace-repo-main", "from the shortcut over the command menu");
 }
 
 async function checkTools(session: AppSession): Promise<void> {

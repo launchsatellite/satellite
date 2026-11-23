@@ -82,7 +82,9 @@ export function Dialog({
     if (element === null || overlay === null || overlay === undefined) return;
     const focused = document.activeElement;
     const priorFocus =
-      focusedAtRender instanceof HTMLElement && focusedAtRender !== document.body
+      focusedAtRender instanceof HTMLElement &&
+      focusedAtRender !== document.body &&
+      focusedAtRender.isConnected
         ? focusedAtRender
         : focused;
     const opener = priorFocus === document.body || element.contains(priorFocus) ? null : priorFocus;
