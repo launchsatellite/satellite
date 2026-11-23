@@ -114,7 +114,6 @@ export function TerminalView({
     );
     terminal.unicode.activeVersion = "11";
     terminal.open(element);
-    Object.assign(element, { terminal });
     const fitted = () => {
       if (element.clientWidth === 0 || element.clientHeight === 0) return false;
       fit.fit();
@@ -147,6 +146,7 @@ export function TerminalView({
     }).then((result) => {
       if (result.ok) {
         if (result.value.windowsPty !== null) terminal.options.windowsPty = result.value.windowsPty;
+        if (result.value.driven) Object.assign(element, { terminal });
         outward.current.onStarted();
         return;
       }

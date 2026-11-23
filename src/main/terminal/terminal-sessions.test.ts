@@ -178,6 +178,22 @@ describe("createTerminalSessions", () => {
     ]);
   });
 
+  it("hands the page its terminal's screen only under a live verify driver", async () => {
+    const { handlers } = create();
+    const { mine } = owners();
+    vi.stubEnv("SATELLITE_VERIFY_FOLDER_DIALOG", undefined);
+    vi.stubEnv("SATELLITE_VERIFY_DRIVER_PID", String(process.pid));
+    try {
+      const plain = await handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+      expect(plain).toEqual({ windowsPty: null, driven: false });
+      vi.stubEnv("SATELLITE_VERIFY_FOLDER_DIALOG", "/answer");
+      const driven = await handlers["terminal.start"]({ id: terminalId(2), ...size }, mine);
+      expect(driven).toEqual({ windowsPty: null, driven: true });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("refuses to resume a session that is open", async () => {
     const { handlers } = create({ listener: fakeListener(), last: fakeLast(recorded) });
     const { mine } = owners();
