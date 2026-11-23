@@ -340,6 +340,7 @@ describe("readWorktreeSide while the file changes under it", () => {
     const read = await opened(root, async (handle) => {
       const first = await handle.stat({ bigint: true });
       vi.spyOn(handle, "stat").mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
         await writeFile(file, "after!\n");
         await utimes(file, 1000, 1000);
         return first;

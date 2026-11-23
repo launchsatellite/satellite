@@ -9,6 +9,7 @@ export type CommandId =
   | "palette.commands"
   | "palette.switcher"
   | "focus.sidebar"
+  | "sidebar.toggle"
   | "focus.repository"
   | "focus.terminal"
   | "project.add"

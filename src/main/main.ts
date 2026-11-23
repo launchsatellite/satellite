@@ -50,6 +50,7 @@ import {
   mainWindow,
   windowInFront,
 } from "./window/main-window.ts";
+import { windowFrameHandlers } from "./window/window-frame.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
@@ -123,6 +124,7 @@ async function start({
       ...pullRequests.handlers,
       ...processes.handlers,
       ...linkHandlers(),
+      ...windowFrameHandlers,
     },
     allowedOrigin(entryUrl),
   );

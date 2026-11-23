@@ -115,6 +115,9 @@ function spies() {
     ),
     "processes.stop": vi.fn<BridgeHandler<"processes.stop">>(() => Promise.resolve({})),
     "links.open": vi.fn<BridgeHandler<"links.open">>(() => Promise.resolve({})),
+    "window.frame": vi.fn<BridgeHandler<"window.frame">>(() =>
+      Promise.resolve({ frame: "inset", fullScreen: false }),
+    ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
       Promise.resolve({ windowsPty: null }),
     ),

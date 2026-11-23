@@ -48,3 +48,4 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 | 008 | [Pull request](008-pull-request/spec.md) | Done |
 | 009 | [Running processes](009-running-processes/spec.md) | Done |
 | 010 | [First-run guide](010-first-run-guide/spec.md) | Done |
+| 011 | [Title bar](011-title-bar/spec.md) | In progress |

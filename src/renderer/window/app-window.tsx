@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   interfaceLimits,
   type ChangesView as ChangesShown,
   type InterfaceState,
   type ProjectView,
   type ThemeChoice,
+  type WindowFrame,
   type WorkspaceKey,
   type WorkspaceRef,
   type WorkspaceView,
@@ -68,12 +70,14 @@ import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
+import { TitleBar } from "./title-bar.tsx";
 
 type PaletteMode = "commands" | "switcher" | "files";
 type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
 interface AppWindowProps {
   initial: InterfaceState;
+  frame: WindowFrame | null;
   notice: string | null;
 }
 
@@ -82,6 +86,17 @@ const terminalLinkSentence =
   "The text Claude Code showed points to this address. Check it before you open it.";
 const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
+const sidebarId = "sidebar";
+
+function firstVisible(selectors: readonly string[]): HTMLElement | undefined {
+  for (const selector of selectors) {
+    const found = [...document.querySelectorAll<HTMLElement>(selector)].find((element) =>
+      element.checkVisibility(),
+    );
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
 
 function forgotSentence(name: string, workspaces: number, worktrees: string | undefined): string {
   if (workspaces === 0) return `Satellite removed ${name}. Its folder is untouched.`;
@@ -122,7 +137,7 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
   }));
 }
 
-export function AppWindow({ initial, notice }: AppWindowProps) {
+export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const [toasts, setToasts] = useState<QueuedToast[]>(() =>
     notice === null ? [] : [{ id: 1, message: notice, tone: "notice", queuedAt: Date.now() }],
   );
@@ -249,7 +264,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     setToasts((queue) => queue.filter((queued) => queued.message !== guideClosedSentence));
     openGuide();
   }, [openGuide]);
-  const { left, right } = fitColumns(state.columns, width);
+  const sidebarShown = state.sidebar === "shown";
+  const showSidebar = useCallback(() => {
+    if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
+  }, [sidebarShown, update]);
+  const { left, right } = fitColumns(state.columns, width, sidebarShown);
   const reachable = reachableColumns({ left, right }, width);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
@@ -284,9 +303,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
   const dropFolder = useCallback(
     (path: string) => {
       dismissToast();
+      showSidebar();
       void drop(path).then(open);
     },
-    [dismissToast, drop, open],
+    [dismissToast, showSidebar, drop, open],
   );
   const dragging = useFolderDrop({ accepts: acceptsDrop, onFolder: dropFolder, notify });
   const selectedProject = projects?.find((project) => project.id === selectedId);
@@ -640,12 +660,11 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active !== null && active !== document.body && active.isConnected) return;
-      const next =
-        document.querySelector<HTMLElement>("[aria-label='Sidebar'] nav button") ??
-        document.querySelector<HTMLElement>(
-          "[aria-label='Sidebar'] button[aria-label='Add a project']",
-        );
-      next?.focus();
+      firstVisible([
+        "[aria-label='Sidebar'] nav button",
+        "[aria-label='Sidebar'] button[aria-label='Add a project']",
+        "[data-testid='title-sidebar']",
+      ])?.focus();
     });
   }, []);
   const removeProject = useCallback(
@@ -713,6 +732,7 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             available: true,
             run: async () => {
               dismissToast();
+              showSidebar();
               open(await add());
             },
           },
@@ -807,10 +827,36 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             },
           },
           {
+            id: "sidebar.toggle",
+            title: sidebarShown ? "Hide the sidebar" : "Show the sidebar",
+            shortcut: { key: "b" },
+            available: true,
+            run: () => {
+              const inside = document.activeElement?.closest(`#${sidebarId}`) != null;
+              update(
+                (current) => ({
+                  ...current,
+                  sidebar: current.sidebar === "shown" ? "hidden" : "shown",
+                }),
+                true,
+              );
+              if (inside) {
+                requestAnimationFrame(() => {
+                  document.querySelector<HTMLElement>("[data-testid='title-sidebar']")?.focus();
+                });
+              }
+            },
+          },
+          {
             id: "focus.sidebar",
             title: "Focus the sidebar",
             available: true,
             run: () => {
+              if (!sidebarShown) {
+                flushSync(() => {
+                  update((current) => ({ ...current, sidebar: "shown" }), true);
+                });
+              }
               focusColumn("column-projects", '[aria-current="true"]');
             },
           },
@@ -842,7 +888,10 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
             id: "guide.show",
             title: "Show the guide",
             available: guideListed,
-            run: showGuide,
+            run: () => {
+              showSidebar();
+              showGuide();
+            },
           },
           {
             id: "theme.system",
@@ -1055,6 +1104,8 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
     askPullRequestLink,
     guideListed,
     showGuide,
+    sidebarShown,
+    showSidebar,
   ]);
   const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
@@ -1175,84 +1226,110 @@ export function AppWindow({ initial, notice }: AppWindowProps) {
       <div
         ref={windowRef}
         data-testid="app-window"
-        className="relative grid h-full bg-bg text-fg"
-        style={{ gridTemplateColumns: `${String(left)}px minmax(0,1fr) ${String(right)}px` }}
+        className="relative flex h-full flex-col bg-bg text-fg"
       >
-        <GuideLayer
-          step={guide.step}
+        <TitleBar
+          initial={frame}
           covered={modal || palette !== null}
-          focusAsk={guide.focusAsk}
-          onNext={guide.next}
-          onDone={guide.done}
-          onClose={guide.close}
-          onUnplaced={guideUnplaced}
+          place={
+            selectedProject === undefined || selectedWorkspace === undefined
+              ? null
+              : {
+                  project: selectedProject.name,
+                  workspace: selectedWorkspace.name,
+                }
+          }
+          waiting={inbox.length}
+          sidebarShown={sidebarShown}
+          sidebarId={sidebarId}
         />
-        <section
-          ref={projectsRef}
-          data-testid="column-projects"
-          aria-label="Sidebar"
-          className="relative flex min-h-0 flex-col border-r border-line bg-side"
+        <div
+          data-testid="columns"
+          className="grid min-h-0 flex-1"
+          style={{
+            gridTemplateColumns: sidebarShown
+              ? `${String(left)}px minmax(0,1fr) ${String(right)}px`
+              : `minmax(0,1fr) ${String(right)}px`,
+          }}
         >
-          <Sidebar
-            projects={projects}
-            selected={state.selected}
-            onSelect={select}
-            onNewWorkspace={setCreatingIn}
-            focusProjectId={added}
-            pixelFor={pixelFor}
-            pullRequestFor={pullRequestFor}
-            processesFor={processesFor}
-            inbox={
-              projects === undefined ? null : (
-                <InboxList
-                  rows={inbox}
-                  projects={projects}
-                  selected={state.selected}
-                  onOpen={openFromInbox}
-                />
-              )
-            }
+          <GuideLayer
+            step={guide.step}
+            covered={modal || palette !== null}
+            focusAsk={guide.focusAsk}
+            onNext={guide.next}
+            onDone={guide.done}
+            onClose={guide.close}
+            onUnplaced={guideUnplaced}
           />
-          <ColumnDivider
-            side="left"
-            value={left}
-            min={interfaceLimits.left.min}
-            max={reachable.left}
-            onChange={setColumn("left", false)}
-            onCommit={setColumn("left", true)}
-            testId="divider-left"
-          />
-        </section>
-        <main
-          ref={repositoryRef}
-          data-testid="column-repository"
-          aria-label="Repository"
-          className="relative flex min-h-0 min-w-0 flex-col border-r border-line"
-        >
-          {centre()}
-          <ColumnDivider
-            side="right"
-            value={right}
-            min={interfaceLimits.right.min}
-            max={reachable.right}
-            onChange={setColumn("right", false)}
-            onCommit={setColumn("right", true)}
-            testId="divider-right"
-          />
-        </main>
-        <section
-          data-testid="column-sessions"
-          aria-label="Sessions"
-          className="relative min-h-0 bg-bg"
-        >
-          <SessionsPane
-            sessions={sessions}
-            selected={sessionHere ?? null}
-            hasProjects={projects === undefined || projects.length > 0}
-            onAskLink={askTerminalLink}
-            notify={notify}
-          />
-        </section>
+          <section
+            ref={projectsRef}
+            id={sidebarId}
+            hidden={!sidebarShown}
+            data-testid="column-projects"
+            aria-label="Sidebar"
+            className="relative flex min-h-0 flex-col border-r border-line bg-side"
+          >
+            <Sidebar
+              projects={projects}
+              selected={state.selected}
+              onSelect={select}
+              onNewWorkspace={setCreatingIn}
+              focusProjectId={added}
+              pixelFor={pixelFor}
+              pullRequestFor={pullRequestFor}
+              processesFor={processesFor}
+              inbox={
+                projects === undefined ? null : (
+                  <InboxList
+                    rows={inbox}
+                    projects={projects}
+                    selected={state.selected}
+                    onOpen={openFromInbox}
+                  />
+                )
+              }
+            />
+            <ColumnDivider
+              side="left"
+              value={left}
+              min={interfaceLimits.left.min}
+              max={reachable.left}
+              onChange={setColumn("left", false)}
+              onCommit={setColumn("left", true)}
+              testId="divider-left"
+            />
+          </section>
+          <main
+            ref={repositoryRef}
+            data-testid="column-repository"
+            aria-label="Repository"
+            className="relative flex min-h-0 min-w-0 flex-col border-r border-line"
+          >
+            {centre()}
+            <ColumnDivider
+              side="right"
+              value={right}
+              min={interfaceLimits.right.min}
+              max={reachable.right}
+              onChange={setColumn("right", false)}
+              onCommit={setColumn("right", true)}
+              testId="divider-right"
+            />
+          </main>
+          <section
+            data-testid="column-sessions"
+            aria-label="Sessions"
+            className="relative min-h-0 bg-bg"
+          >
+            <SessionsPane
+              sessions={sessions}
+              selected={sessionHere ?? null}
+              hasProjects={projects === undefined || projects.length > 0}
+              onAskLink={askTerminalLink}
+              notify={notify}
+            />
+          </section>
+        </div>
         {dragging && <DropOverlay />}
         {palette !== null && (
           <Palette

@@ -21,6 +21,7 @@ const listeners: { [E in BridgeEventName]: Set<(payload: BridgeEventPayload<E>) 
   "sessions.status": new Set(),
   "notices.open": new Set(),
   "pullRequests.needing": new Set(),
+  "window.frame": new Set(),
 };
 let listening = false;
 
