@@ -36,10 +36,10 @@ Importing a theme from disk or the network, editing a theme, colour for Satellit
 
 A Satellite feature is accepted on macOS, Windows and Linux.
 
-- [ ] Choosing a curated theme in Settings and by its command changes the app tokens, the terminal's ground and colours, the code viewer's ground and at least three syntax colours of a TypeScript file to the published values, and the diff grounds follow. Proof, journey `settings`.
-- [ ] The choice survives a relaunch, and switching back restores Satellite's own tokens, terminal and syntax exactly. Proof, journey `settings`.
-- [ ] The credit's button opens the theme's site only through the link dialog. Proof, journey `settings`.
-- [ ] The mapping accepts only strict hex colours, maps every curated theme fully, and an unknown saved theme reads as System. Proof, `src/shared/themes/theme-look.test.ts` and `src/main/state/interface-file.test.ts`.
-- [ ] The highlighter runs under the unchanged content security policy in the packaged app. Proof, journey `settings` against the packaged app.
-- [ ] The overlay colours follow the theme and fall back to Satellite's dark. Proof, `src/main/platform/title-bar.test.ts`.
+- [x] Choosing a curated theme in Settings and by its command changes the app tokens, the terminal's ground and colours, the code viewer's ground and at least three syntax colours of a TypeScript file to the published values, and the diff grounds follow. Proof, journey `settings`.
+- [x] The choice survives a relaunch, and switching back restores Satellite's own tokens, terminal and syntax exactly. Proof, journey `settings`.
+- [x] The credit's button opens the theme's site only through the link dialog. Proof, journey `settings`.
+- [x] The mapping accepts only strict hex colours, maps every curated theme fully, and an unknown saved theme reads as System. Proof, `src/shared/themes/theme-look.test.ts` and `src/main/state/interface-file.test.ts`.
+- [x] The highlighter runs under the unchanged content security policy in the packaged app. Proof, journey `settings` against the packaged app.
+- [x] The overlay colours follow the theme and fall back to Satellite's dark. Proof, `src/main/platform/title-bar.test.ts`.
 - [ ] The window frame, the overlay and native dialogs turn dark with a curated theme. Proof, a person on each system, since a quiet window shows no frame.

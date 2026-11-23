@@ -38,6 +38,7 @@ The background process has full access to the machine. The interface has none an
 - **Failures are visible.** Every action has an outcome the user sees, and errors say what to do next.
 - **Everything that can grow is bounded**, from lists and retries to scrollback and file watchers.
 - **No comments.** Names, types and small functions carry the meaning. The only comment allowed is a tool directive that carries its reason. Lint refuses the rest.
+- **Outside works stay unnamed** in the repo, except where Satellite ships one, such as a curated theme or a bundled package, which is named there with its credit and its licence in the notices.
 - **Names describe** the domain thing. Files and folders are kebab-case. No `utils` dumping grounds, no `index` files, no barrels.
 - **Named exports only.** A default export appears only where a tool requires one.
 - **File order.** Imports, types, constants, private helpers, then exported functions last.
