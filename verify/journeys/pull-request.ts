@@ -258,6 +258,36 @@ async function changesRequested(session: AppSession): Promise<void> {
   await session.mark("answered");
   await endTurn(session, true);
   await rowGone(session, "after the review was answered");
+  await conversationActs(session);
+}
+
+async function conversationActs(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.getByTestId("pull-request-section-conversation").click();
+  const resolved = page.locator('li[data-kind="thread"][data-resolved="true"]');
+  const open = page.locator('li[data-kind="thread"][data-resolved="false"]').first();
+  await resolved.waitFor();
+  assert.equal(await page.locator("summary").count(), 0, "a thread still drew a summary");
+  const toggle = resolved.locator('[data-testid$="-toggle"]');
+  assert.equal(await toggle.locator("button").count(), 0, "the disclosure held a button");
+  assert.equal(await toggle.getAttribute("aria-expanded"), "false", "a resolved thread was open");
+  await toggle.click();
+  await textHolds(
+    session,
+    (await resolved.getAttribute("data-testid")) ?? "",
+    "template string",
+    "after Show thread",
+  );
+  await resolved.locator('[data-testid$="-open"]').click();
+  await textHolds(session, "link-dialog", "discussion_r3003", "after Open on GitHub");
+  await page.keyboard.press("Escape");
+  const from = (await session.standInEvents()).length;
+  await open.locator('[data-testid$="-send"]').click();
+  await waitUntil(
+    async () => (await standInInput(session, from)).includes("discussion_r300"),
+    showMs,
+    "Send to Claude Code typed no thread address",
+  );
 }
 
 async function conflicts(session: AppSession): Promise<void> {

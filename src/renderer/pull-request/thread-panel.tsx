@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { PullRequestFound, PullRequestThread } from "../../shared/bridge-contract.ts";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
-import { OpenButton, ThreadBody, ThreadHead } from "./conversation-list.tsx";
+import { OpenButton, ThreadBody, ThreadHead, threadHeadControl } from "./conversation-list.tsx";
 import { threadRequest } from "./pull-request-requests.ts";
 import {
   noFileThreadsSentence,
@@ -66,7 +66,7 @@ function Entries({
                 onClick={() => {
                   onSelect(index);
                 }}
-                className="flex min-w-0 items-center rounded-[6px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                className={`flex items-center ${threadHeadControl}`}
               >
                 <ThreadHead thread={thread} />
               </button>
