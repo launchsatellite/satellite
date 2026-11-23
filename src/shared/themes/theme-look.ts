@@ -1,0 +1,311 @@
+import { z } from "zod";
+
+export const appTokens = [
+  "bg",
+  "side",
+  "raised",
+  "sel",
+  "hover",
+  "line",
+  "ctl",
+  "fg",
+  "fg2",
+  "dim",
+  "sigfg",
+  "add",
+  "addfg",
+  "del",
+  "delfg",
+  "accent",
+  "signal",
+  "pri-bg",
+  "pri-fg",
+  "volt",
+  "volt-edge",
+  "lilac",
+  "lilac-edge",
+  "working",
+  "idle",
+  "danger",
+] as const;
+export const terminalColourNames = [
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+] as const;
+
+export type AppToken = (typeof appTokens)[number];
+export type ThemeType = "light" | "dark";
+export interface StateKeys {
+  working: string;
+  needsYou: string;
+  ready: string;
+  done: string;
+  idle: string;
+  danger: string;
+}
+export interface TokenColour {
+  scope: string[];
+  settings: { foreground?: string; fontStyle?: string };
+}
+export interface EditorTheme {
+  name: string;
+  type: ThemeType;
+  colors: Record<string, string>;
+  tokenColors: TokenColour[];
+}
+export type TerminalColours = Record<
+  "background" | "foreground" | "cursor" | "cursorAccent" | "selectionBackground",
+  string
+> &
+  Partial<Record<(typeof terminalColourNames)[number], string>>;
+export interface ThemeLook {
+  type: ThemeType;
+  tokens: Record<AppToken, string>;
+  shadow: string;
+  selection: string;
+  terminal: TerminalColours;
+  editor: EditorTheme;
+  overlay: { color: string; symbolColor: string };
+}
+interface Rgba {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+const strictHex = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const themeName = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const fontStyles = /^(?:[a-z]{1,20}(?: [a-z]{1,20}){0,3})?$/;
+const scopeText = /^[\w.\-+#:()*>^$!&|, ]{1,300}$/u;
+const colourKey = /^[A-Za-z][\w.-]{0,99}$/;
+const shadows: Record<ThemeType, string> = {
+  dark: "0 16px 40px rgb(0 0 0 / 0.55)",
+  light: "0 16px 40px rgb(10 10 11 / 0.12)",
+};
+const publishedTheme = z.object({
+  name: z.string().regex(themeName),
+  type: z.enum(["light", "dark"]),
+  colors: z.record(z.string().max(100), z.unknown()),
+  tokenColors: z.array(z.unknown()).max(4000),
+});
+const tokenColourEntry = z.object({
+  scope: z.union([z.string().max(20_000), z.array(z.string().max(300)).max(500)]).optional(),
+  settings: z.object({ foreground: z.unknown(), fontStyle: z.unknown() }).partial(),
+});
+const formatDefaults = {
+  insertedLine: { r: 155, g: 185, b: 85, a: 0.2 },
+  removedLine: { r: 255, g: 0, b: 0, a: 0.2 },
+};
+const ansiKeys: Record<(typeof terminalColourNames)[number], string> = {
+  black: "terminal.ansiBlack",
+  red: "terminal.ansiRed",
+  green: "terminal.ansiGreen",
+  yellow: "terminal.ansiYellow",
+  blue: "terminal.ansiBlue",
+  magenta: "terminal.ansiMagenta",
+  cyan: "terminal.ansiCyan",
+  white: "terminal.ansiWhite",
+  brightBlack: "terminal.ansiBrightBlack",
+  brightRed: "terminal.ansiBrightRed",
+  brightGreen: "terminal.ansiBrightGreen",
+  brightYellow: "terminal.ansiBrightYellow",
+  brightBlue: "terminal.ansiBrightBlue",
+  brightMagenta: "terminal.ansiBrightMagenta",
+  brightCyan: "terminal.ansiBrightCyan",
+  brightWhite: "terminal.ansiBrightWhite",
+};
+
+export function parseColour(value: unknown): Rgba | undefined {
+  if (typeof value !== "string" || !strictHex.test(value)) return undefined;
+  const digits = value.slice(1);
+  const full = digits.length <= 4 ? digits.replace(/./g, "$&$&") : digits;
+  const channel = (at: number) => Number.parseInt(full.slice(at, at + 2), 16);
+  return {
+    r: channel(0),
+    g: channel(2),
+    b: channel(4),
+    a: full.length === 8 ? channel(6) / 255 : 1,
+  };
+}
+
+function hexOf({ r, g, b, a }: Rgba): string {
+  const pair = (channel: number) => Math.round(channel).toString(16).padStart(2, "0");
+  return `#${pair(r)}${pair(g)}${pair(b)}${a < 1 ? pair(a * 255) : ""}`;
+}
+
+function over(top: Rgba, ground: Rgba): Rgba {
+  const mix = (front: number, back: number) => front * top.a + back * (1 - top.a);
+  return { r: mix(top.r, ground.r), g: mix(top.g, ground.g), b: mix(top.b, ground.b), a: 1 };
+}
+
+function luminance(colour: Rgba): number {
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(colour.r) + 0.7152 * linear(colour.g) + 0.0722 * linear(colour.b);
+}
+
+export function contrastRatio(first: string, second: string): number {
+  const a = parseColour(first);
+  const b = parseColour(second);
+  if (a === undefined || b === undefined) return 0;
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+
+function cleanColours(colors: Record<string, unknown>): Map<string, Rgba> {
+  const clean = new Map<string, Rgba>();
+  for (const [key, value] of Object.entries(colors)) {
+    const colour = parseColour(value);
+    if (colour !== undefined && colourKey.test(key)) clean.set(key, colour);
+  }
+  return clean;
+}
+
+function cleanTokenColours(entries: unknown[]): TokenColour[] {
+  return entries.flatMap((entry) => {
+    const parsed = tokenColourEntry.safeParse(entry);
+    if (!parsed.success) return [];
+    const { scope, settings } = parsed.data;
+    const scopes = (typeof scope === "string" ? scope.split(",") : (scope ?? []))
+      .map((part) => part.trim())
+      .filter((part) => scopeText.test(part));
+    const foreground = parseColour(settings.foreground);
+    const fontStyle =
+      typeof settings.fontStyle === "string" && fontStyles.test(settings.fontStyle)
+        ? settings.fontStyle
+        : undefined;
+    if (scopes.length === 0 || (foreground === undefined && fontStyle === undefined)) return [];
+    return [
+      {
+        scope: scopes,
+        settings: {
+          ...(foreground === undefined ? {} : { foreground: hexOf(foreground) }),
+          ...(fontStyle === undefined ? {} : { fontStyle }),
+        },
+      },
+    ];
+  });
+}
+
+export function themeLook(published: unknown, states: StateKeys): ThemeLook | undefined {
+  const parsed = publishedTheme.safeParse(published);
+  if (!parsed.success) return undefined;
+  const { name, type } = parsed.data;
+  const colours = cleanColours(parsed.data.colors);
+  const pick = (...keys: string[]) =>
+    keys.map((key) => colours.get(key)).find((colour) => colour !== undefined);
+  const editorBackground = pick("editor.background");
+  const editorForeground = pick("foreground", "editor.foreground");
+  const working = pick(states.working);
+  const needsYou = pick(states.needsYou);
+  const ready = pick(states.ready);
+  const done = pick(states.done);
+  const idle = pick(states.idle);
+  const danger = pick(states.danger);
+  if (
+    editorBackground === undefined ||
+    editorForeground === undefined ||
+    working === undefined ||
+    needsYou === undefined ||
+    ready === undefined ||
+    done === undefined ||
+    idle === undefined ||
+    danger === undefined
+  ) {
+    return undefined;
+  }
+  const bg = over(editorBackground, editorBackground);
+  const side = over(pick("sideBar.background") ?? bg, bg);
+  const flat = (colour: Rgba | undefined, ground: Rgba, fallback: Rgba) =>
+    hexOf(over(colour ?? fallback, ground));
+  const fg = over(editorForeground, bg);
+  const faded = (alpha: number) => ({ ...editorForeground, a: editorForeground.a * alpha });
+  const line = flat(pick("sideBar.border", "tab.border", "editorGroup.border"), side, faded(0.12));
+  const tokens: Record<AppToken, string> = {
+    bg: hexOf(bg),
+    side: hexOf(side),
+    raised: flat(pick("quickInput.background", "editorWidget.background"), side, side),
+    sel: flat(pick("list.activeSelectionBackground"), side, faded(0.16)),
+    hover: flat(pick("list.hoverBackground"), side, faded(0.08)),
+    line,
+    ctl: flat(pick("input.border", "dropdown.border"), side, faded(0.2)),
+    fg: hexOf(fg),
+    fg2: flat(pick("descriptionForeground"), bg, faded(0.7)),
+    dim: flat(pick("tab.inactiveForeground", "editorLineNumber.foreground"), bg, faded(0.5)),
+    sigfg: flat(needsYou, bg, needsYou),
+    add: flat(
+      pick("diffEditor.insertedLineBackground", "diffEditor.insertedTextBackground"),
+      bg,
+      bg,
+    ),
+    addfg: flat(
+      pick("gitDecoration.addedResourceForeground", "gitDecoration.untrackedResourceForeground"),
+      bg,
+      ready,
+    ),
+    del: flat(pick("diffEditor.removedLineBackground"), bg, formatDefaults.removedLine),
+    delfg: flat(pick("gitDecoration.deletedResourceForeground"), bg, danger),
+    accent: flat(pick("focusBorder"), bg, working),
+    signal: flat(needsYou, bg, needsYou),
+    "pri-bg": flat(pick("button.background"), bg, working),
+    "pri-fg": flat(pick("button.foreground"), bg, fg),
+    volt: flat(ready, bg, ready),
+    "volt-edge": flat(ready, bg, ready),
+    lilac: flat(done, bg, done),
+    "lilac-edge": flat(done, bg, done),
+    working: flat(working, bg, working),
+    idle: flat(idle, bg, idle),
+    danger: flat(danger, bg, danger),
+  };
+  const terminalGround = over(pick("terminal.background") ?? bg, bg);
+  const terminalText = pick("terminal.foreground") ?? editorForeground;
+  const raw = (colour: Rgba) => hexOf(colour);
+  const ansi = Object.fromEntries(
+    terminalColourNames.flatMap((colourName) => {
+      const colour = pick(ansiKeys[colourName]);
+      return colour === undefined ? [] : [[colourName, raw(colour)]];
+    }),
+  );
+  return {
+    type,
+    tokens,
+    shadow: shadows[type],
+    selection: raw(pick("selection.background", "editor.selectionBackground") ?? faded(0.3)),
+    terminal: {
+      ...ansi,
+      background: hexOf(terminalGround),
+      foreground: raw(terminalText),
+      cursor: raw(pick("terminalCursor.foreground") ?? terminalText),
+      cursorAccent: hexOf(
+        over(pick("terminalCursor.background") ?? terminalGround, terminalGround),
+      ),
+      selectionBackground: raw(
+        pick("terminal.selectionBackground", "editor.selectionBackground") ?? faded(0.3),
+      ),
+    },
+    editor: {
+      name,
+      type,
+      colors: Object.fromEntries([...colours].map(([key, colour]) => [key, raw(colour)])),
+      tokenColors: cleanTokenColours(parsed.data.tokenColors),
+    },
+    overlay: { color: tokens.side, symbolColor: tokens.fg2 },
+  };
+}

@@ -4,6 +4,7 @@ import {
   defaultInterfaceState,
   filesLimits,
   interfaceState,
+  themeChoice,
   type FileTabs,
   type InterfaceState,
 } from "../../shared/bridge-contract.ts";
@@ -22,12 +23,15 @@ interface LoadedInterface {
   writable: boolean;
 }
 
-const version5 = interfaceState.extend({ version: z.literal(5) });
-const version4 = interfaceState
+const storedState = interfaceState.extend({
+  theme: z.string().max(100).pipe(themeChoice).catch("system"),
+});
+const version5 = storedState.extend({ version: z.literal(5) });
+const version4 = storedState
   .omit({ sidebar: true })
   .extend({ version: z.literal(4) })
   .transform((file): z.output<typeof version5> => ({ ...file, version: 5, sidebar: "shown" }));
-const version3 = interfaceState
+const version3 = storedState
   .omit({ sidebar: true, guideSeen: true })
   .extend({ version: z.literal(3) })
   .transform((file): z.output<typeof version5> => ({
@@ -36,7 +40,7 @@ const version3 = interfaceState
     sidebar: "shown",
     guideSeen: true,
   }));
-const version2 = interfaceState
+const version2 = storedState
   .omit({ sidebar: true, files: true, guideSeen: true })
   .extend({ version: z.literal(2) })
   .transform((file): z.output<typeof version5> => ({
@@ -46,7 +50,7 @@ const version2 = interfaceState
     files: [],
     guideSeen: true,
   }));
-const version1 = interfaceState
+const version1 = storedState
   .omit({ sidebar: true, notifications: true, files: true, guideSeen: true })
   .extend({ version: z.literal(1) })
   .transform((file): z.output<typeof version5> => ({
