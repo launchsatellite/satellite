@@ -54,11 +54,13 @@ git push -u origin HEAD
 gh pr create --base main --title "feat(workspaces): create a workspace in one step" --body-file /tmp/pr-body.md
 ```
 
+CodeRabbit then reviews the pull request against `AGENTS.md`, `CLAUDE.md` and these skills, with the settings in `.coderabbit.yaml`, which apply once merged into `main`. Below ten stars it never starts on its own, so request it with `gh pr comment <n> --body "@coderabbitai review"`. It only reviews. Never post a `@coderabbitai` command that writes code, such as `autofix`, `fix comments`, `fix-ci`, `local commit`, `resolve merge conflict`, `generate unit tests`, `simplify`, `run`, `generate configuration` or `emit path instructions`, and never tick its Finishing Touches boxes. Its commits would land as the maintainer and skip the local guards.
+
 Fill every section of `.github/pull_request_template.md`, report the link and what is left for the human, **then stop**. You never approve or enable auto-merge, and you merge only where the maintainer granted it. With the grant, squash-merge your own pull request once CI is fully green and the review is addressed, then bring any branch stacked on it up to date.
 
 ## 9. Follow up until merged
 
 - **CI fails.** `gh pr checks <n>`, then `gh run view <run> --log-failed`. Reproduce locally, fix on the same branch, push once.
-- **Review comments.** Read all of them, verify each against the code, fix on the branch, push once, reply in each thread. Never resolve a human's thread or dismiss a review.
+- **Review comments.** Read all of them, CodeRabbit's included, verify each against the code, fix on the branch, push once, reply in each thread. Never resolve a human's thread or dismiss a review.
 - **Behind main.** Merge `origin/main` into your branch. Never rebase pushed work.
 - **After the merge.** Delete your local branch and worktree.
