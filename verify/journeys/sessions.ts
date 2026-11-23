@@ -530,7 +530,10 @@ async function noticesShown(session: AppSession): Promise<number> {
   return (await session.notices()).filter((line) => line.kind === "notice").length;
 }
 
-async function restart(session: AppSession, alphaPid: number): Promise<number> {
+async function restart(
+  session: AppSession,
+  alphaPid: number,
+): Promise<{ pid: number; shown: number }> {
   const alphaArgs = await argsOf(session, alphaPid);
   const sessionId = alphaArgs[alphaArgs.indexOf("--session-id") + 1];
   assert.ok(sessionId !== undefined && alphaArgs.includes("--session-id"), "alpha had no id");
@@ -547,26 +550,98 @@ async function restart(session: AppSession, alphaPid: number): Promise<number> {
   assert.equal(args[args.indexOf("--resume") + 1], sessionId, "resume named another session");
   await terminalShows(session, "Resumed session", "after resuming by itself");
   await stateIs(session, pixel("alpha"), "idle", "after resuming by itself");
-  assert.equal(await noticesShown(session), shown, "resuming by itself raised a notification");
-  return pid;
+  return { pid, shown };
 }
 
-async function resumesWhenShown(session: AppSession): Promise<void> {
-  const { page } = session;
-  const betaRecord = await recordOf(session.home, await betaId(session.home));
-  const before = (await claudePids(session)).length;
-  assert.deepEqual(await resumes(session, betaRecord), [], "beta resumed before it was shown");
-  await page.evaluate(() => {
+async function switchesQuickly(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const settle = async () => {
+      for (let turn = 0; turn < 50; turn += 1) {
+        await new Promise<void>((done) => {
+          queueMicrotask(done);
+        });
+      }
+    };
     const row = (name: string) =>
       document.querySelector<HTMLElement>(`[data-testid="workspace-repo-${name}"]`);
+    const inPane = (testId: string) =>
+      document.querySelector(`[data-testid="column-sessions"] [data-testid="${testId}"]`) !== null;
+    const shown = (name: string) => {
+      const current = row(name)?.getAttribute("aria-current") === "true";
+      if (inPane("session-tabs")) return `${name} ${String(current)} with tabs`;
+      return `${name} ${String(current)} ${inPane("sessions-empty") ? "answered" : "asking"}`;
+    };
+    const seen: string[] = [];
     row("beta")?.click();
+    await settle();
+    seen.push(shown("beta"));
     row("alpha")?.click();
+    await settle();
+    seen.push(shown("alpha"));
     row("beta")?.click();
+    await settle();
+    seen.push(shown("beta"));
     row("beta")?.focus();
+    return seen;
   });
+}
+
+async function startsAtOnce(
+  page: Page,
+  workspace: { projectId: string; workspace: string },
+): Promise<{ ids: string[]; answers: string[] }> {
+  const ids = [crypto.randomUUID(), crypto.randomUUID()];
+  const answers = await page.evaluate(
+    async ({ ids: pair, ref }) => {
+      const api: unknown = Reflect.get(window, "satellite");
+      const invoke: unknown =
+        typeof api === "object" && api !== null ? Reflect.get(api, "invoke") : undefined;
+      if (typeof invoke !== "function") return ["window.satellite.invoke is missing"];
+      const results: unknown[] = await Promise.all(
+        pair.map((id): unknown =>
+          Reflect.apply(invoke, api, [
+            "terminal.start",
+            { id, program: "claude", workspace: ref, resume: true, cols: 80, rows: 24 },
+          ]),
+        ),
+      );
+      return results.map((result) => {
+        if (typeof result !== "object" || result === null) return "no answer";
+        if (Reflect.get(result, "ok") === true) return "started";
+        const error: unknown = Reflect.get(result, "error");
+        return typeof error === "object" && error !== null
+          ? String(Reflect.get(error, "code"))
+          : "no code";
+      });
+    },
+    { ids, ref: workspace },
+  );
+  return { ids, answers };
+}
+
+async function resumesWhenShown(session: AppSession, shown: number): Promise<void> {
+  const { page } = session;
+  const beta = await betaRef(session.home);
+  const betaRecord = await recordOf(session.home, beta.workspace);
+  const before = (await claudePids(session)).length;
+  const clickedAt = (await session.standInEvents()).length;
+  assert.deepEqual(
+    await switchesQuickly(page),
+    ["beta true asking", "alpha true with tabs", "beta true asking"],
+    "the fast switch did not show beta asking, then alpha, then beta asking again",
+  );
   const pid = await nextPid(session, before + 1);
-  assert.deepEqual(await resumes(session, betaRecord), [pid], "beta did not resume once shown");
   await terminalShows(session, "Resumed session", "in beta after it resumed by itself");
+  const events = await session.standInEvents();
+  const starts = events.flatMap((event, index) =>
+    event.type === "start" &&
+    event.tool === "claude" &&
+    event.args[event.args.indexOf("--resume") + 1] === betaRecord
+      ? [index]
+      : [],
+  );
+  assert.equal(starts.length, 1, "beta resumed more than once around the fast switch");
+  assert.ok((starts[0] ?? -1) >= clickedAt, "beta resumed before it was shown");
   assert.equal(
     await focusedTestId(page),
     "workspace-repo-beta",
@@ -584,11 +659,25 @@ async function resumesWhenShown(session: AppSession): Promise<void> {
   await terminalShows(session, "Resumed session", "back in alpha");
   await select(session, "beta");
   await visible(session, "resume-session", "in beta after a visit to alpha");
+  const forged = await startsAtOnce(page, beta);
+  assert.deepEqual(
+    [...forged.answers].sort(),
+    ["refused", "started"],
+    `two resumes of beta's conversation asked at once answered ${forged.answers.join(" and ")}`,
+  );
+  const forgedPid = await nextPid(session, before + 2);
+  for (const id of forged.ids) await bridgeCode(page, "terminal.close", { id });
+  await waitUntil(
+    () => processGone(forgedPid),
+    goneTimeoutMs,
+    "the forged resume's stand-in still ran after it closed",
+  );
   assert.deepEqual(
     await resumes(session, betaRecord),
-    [pid],
-    "beta resumed again after its resumed tab was closed, or twice after a fast switch",
+    [pid, forgedPid],
+    "beta resumed again after its resumed tab was closed, or two starts at once both ran",
   );
+  assert.equal(await noticesShown(session), shown, "resuming by itself raised a notification");
 }
 
 async function endings(session: AppSession, resumedPid: number, sendFrom: number): Promise<void> {
@@ -628,7 +717,10 @@ const sessionsFile = z.object({
 });
 const projectsFile = z.object({
   projects: z.array(
-    z.object({ workspaces: z.array(z.object({ id: z.string(), path: z.string() })) }),
+    z.object({
+      id: z.string(),
+      workspaces: z.array(z.object({ id: z.string(), path: z.string() })),
+    }),
   ),
 });
 
@@ -669,17 +761,26 @@ async function failedResume(session: AppSession): Promise<void> {
   await select(session, "main");
   await select(session, "alpha");
   await visible(session, "start-claude", "back in alpha after the failed resume");
-  assert.equal((await claudePids(session)).length, 2, "a failed resume started again");
   await session.screenshot("sessions-resume-failed");
+  const fresh = await startClaude(session, 3);
+  assert.ok((await argsOf(session, fresh)).includes("--session-id"), "the new start resumed");
+  const resumed = (await session.standInEvents()).filter(
+    (event) => event.type === "start" && event.tool === "claude" && event.args.includes("--resume"),
+  );
+  assert.equal(resumed.length, 1, "a failed resume started again before the next start");
+}
+
+async function betaRef(home: string): Promise<{ projectId: string; workspace: string }> {
+  const file = projectsFile.parse(JSON.parse(await readFile(join(home, "projects.json"), "utf8")));
+  for (const project of file.projects) {
+    const beta = project.workspaces.find(({ path }) => path.endsWith("beta"));
+    if (beta !== undefined) return { projectId: project.id, workspace: beta.id };
+  }
+  throw new Error("projects.json holds no beta workspace");
 }
 
 async function betaId(home: string): Promise<string> {
-  const file = projectsFile.parse(JSON.parse(await readFile(join(home, "projects.json"), "utf8")));
-  const beta = file.projects
-    .flatMap(({ workspaces }) => workspaces)
-    .find(({ path }) => path.endsWith("beta"));
-  assert.ok(beta !== undefined, "projects.json holds no beta workspace");
-  return beta.id;
+  return (await betaRef(home)).workspace;
 }
 
 async function workspaceLeaves(session: AppSession): Promise<void> {
@@ -719,8 +820,8 @@ async function run(session: AppSession): Promise<void> {
   await links(session);
   await imageAndDrop(session);
   await session.screenshot("sessions");
-  const resumedPid = await restart(session, alphaPid);
-  await resumesWhenShown(session);
+  const { pid: resumedPid, shown } = await restart(session, alphaPid);
+  await resumesWhenShown(session, shown);
   await endings(session, resumedPid, sendFrom);
   if (process.platform !== "win32") await workspaceLeaves(session);
   const answers = (await session.standInEvents()).flatMap((event) =>
