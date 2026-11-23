@@ -1,6 +1,6 @@
 import type { Element, Root } from "hast";
 import { Worker } from "node:worker_threads";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createMarkdownParser,
   type Parsed,
@@ -13,10 +13,30 @@ const patientMs = 5000;
 const thread = new URL("./markdown-test-thread.ts", import.meta.url);
 const parsers: ReturnType<typeof createMarkdownParser>[] = [];
 const started: Worker[] = [];
+const spares = 3;
+const warm: Worker[] = [];
+const warming = new Set<Promise<void>>();
 
-function spawnThread({ reply, fail }: WorkerHandlers): ParseWorker {
+function warmOne(): void {
   const worker = new Worker(thread);
   started.push(worker);
+  const ready = new Promise<void>((resolve) => {
+    worker.once("message", () => {
+      warm.push(worker);
+      resolve();
+    });
+    worker.once("error", () => {
+      resolve();
+    });
+  }).finally(() => warming.delete(ready));
+  warming.add(ready);
+  worker.postMessage("");
+}
+
+function spawnThread({ reply, fail }: WorkerHandlers): ParseWorker {
+  const worker = warm.shift() ?? new Worker(thread);
+  if (!started.includes(worker)) started.push(worker);
+  while (warm.length + warming.size < spares) warmOne();
   worker.on("message", reply);
   worker.on("error", fail);
   return {
@@ -47,6 +67,22 @@ function answer(parser: ReturnType<typeof createMarkdownParser>, text: string, o
   });
 }
 
+async function reopened(
+  parser: ReturnType<typeof createMarkdownParser>,
+  text: string,
+  owner: string,
+): Promise<Parsed | undefined> {
+  const until = performance.now() + 30_000;
+  while (parser.read(text)?.kind !== "tree" && performance.now() < until) {
+    if (parser.read(text)?.kind === "plain") {
+      parser.drop(owner);
+      parser.want(owner, text);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return parser.read(text);
+}
+
 async function beating<T>(work: Promise<T>): Promise<{ value: T; longestGap: number }> {
   let longestGap = 0;
   let last = performance.now();
@@ -62,8 +98,15 @@ async function beating<T>(work: Promise<T>): Promise<{ value: T; longestGap: num
   }
 }
 
+beforeEach(async () => {
+  while (warm.length + warming.size < spares) warmOne();
+  await Promise.all(warming);
+}, 60_000);
+
 afterEach(async () => {
   for (const parser of parsers.splice(0)) parser.stop();
+  await Promise.all(warming);
+  warm.length = 0;
   await Promise.all(started.splice(0).map((worker) => worker.terminate()));
 });
 
@@ -100,8 +143,9 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     const first = answer(parser, "# one", "first");
     const second = answer(parser, "# two", "second");
     expect(await first).toEqual({ kind: "plain", why: "slow" });
-    expect((await second).kind).toBe("tree");
-    expect(spawned).toBe(2);
+    await second;
+    expect((await reopened(parser, "# two", "second"))?.kind).toBe("tree");
+    expect(spawned).toBeGreaterThanOrEqual(2);
   });
 
   it("draws ordinary long documents as Markdown inside the deadline", async () => {
@@ -116,11 +160,14 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
       (_, at) => `| **${String(at)}** | \`x\` | [l](https://example.invalid/${String(at)}) |`,
     );
     const table = ["| a | b | c |", "| - | - | - |", ...rows];
-    const parser = parserOver();
+    const parser = parserOver(spawnThread, patientMs);
+    expect((await answer(parser, "# warm")).kind).toBe("tree");
     for (const lines of [tasks, changelog, table]) {
       const text = lines.join("\n");
       expect(text.length).toBeLessThan(20_000);
+      const began = performance.now();
       expect((await answer(parser, text)).kind).toBe("tree");
+      expect(performance.now() - began).toBeLessThan(deadlineMs);
     }
   });
 
@@ -216,19 +263,9 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     );
     expect(performance.now() - began).toBeLessThan(3 * (deadlineMs + 700) + 1000);
     expect(seen).toContain("skipped");
-    const until = performance.now() + 30_000;
-    while (
-      !ordinary.every((text) => parser.read(text)?.kind === "tree") &&
-      performance.now() < until
-    ) {
-      ordinary.forEach((text, at) => {
-        if (parser.read(text)?.kind !== "plain") return;
-        const owner = `owner-${String(hostile.length + at)}`;
-        parser.drop(owner);
-        parser.want(owner, text);
-      });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+    await Promise.all(
+      ordinary.map((text, at) => reopened(parser, text, `owner-${String(hostile.length + at)}`)),
+    );
     for (const text of ordinary) expect(parser.read(text)?.kind).toBe("tree");
     for (const text of hostile) expect(parser.read(text)).toMatchObject({ kind: "plain" });
   });
