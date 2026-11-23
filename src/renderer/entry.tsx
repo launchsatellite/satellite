@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { defaultInterfaceState } from "../shared/bridge-contract.ts";
 import { invoke } from "./bridge/bridge-client.ts";
 import "./styles/app.css";
+import { showTheme } from "./ui/shown-theme.ts";
 import { AppWindow } from "./window/app-window.tsx";
 
 const fontFamilies = [
@@ -21,13 +22,16 @@ const [, loaded, frame] = await Promise.all([
   invoke("window.frame", {}),
 ]);
 
+const initial = loaded.ok ? loaded.value.state : { ...defaultInterfaceState, guideSeen: true };
+showTheme(initial.theme);
+
 const rootElement = document.getElementById("root");
 if (rootElement === null) throw new Error("The root element is missing from index.html");
 
 createRoot(rootElement).render(
   <StrictMode>
     <AppWindow
-      initial={loaded.ok ? loaded.value.state : { ...defaultInterfaceState, guideSeen: true }}
+      initial={initial}
       frame={frame.ok ? frame.value : null}
       notice={loaded.ok ? loaded.value.notice : loaded.error.message}
     />

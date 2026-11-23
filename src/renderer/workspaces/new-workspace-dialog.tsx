@@ -35,7 +35,7 @@ const stepOrder: readonly CreationStep[] = ["start", "branch", "worktree", "file
 const defaultStart = "default";
 const undoneSteps: readonly CreationStep[] = ["branch", "worktree", "files"];
 const field =
-  "h-8 rounded-[8px] border border-ctl bg-side px-[10px] text-[13px] text-fg outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgb(106_75_255/0.22)] disabled:opacity-[0.38]";
+  "h-8 rounded-[8px] border border-ctl bg-side px-[10px] text-[13px] text-fg outline-none focus:border-accent focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)] disabled:opacity-[0.38]";
 const fieldLabel = "text-[12px] font-semibold text-fg2";
 const readout = "ml-auto font-pixel text-[12px] text-dim uppercase";
 const pixels: Record<StepState, PixelState> = {
@@ -284,7 +284,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     }
     if (phase.kind === "unavailable") {
       return (
-        <p role="alert" data-testid="workspace-failure" className="text-[13px] text-sigfg">
+        <p role="alert" data-testid="workspace-failure" className="text-[13px] text-danger">
           {visibleText(phase.message)}
         </p>
       );
@@ -322,7 +322,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
             id={problemId}
             data-testid="workspace-name-problem"
             role={refusal === null ? undefined : "alert"}
-            className={`text-[12px] ${shownProblem === null ? "text-dim" : "text-sigfg"}`}
+            className={`text-[12px] ${shownProblem === null ? "text-dim" : "text-danger"}`}
           >
             {visibleText(shownProblem ?? "The branch takes the same name.")}
           </p>
@@ -370,7 +370,7 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
             <p
               role={phase.stopped ? "status" : "alert"}
               data-testid="workspace-failure"
-              className={`text-[13px] ${phase.stopped ? "text-fg2" : "text-sigfg"}`}
+              className={`text-[13px] ${phase.stopped ? "text-fg2" : "text-danger"}`}
             >
               {visibleText(phase.message)}
             </p>
