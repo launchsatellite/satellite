@@ -153,7 +153,7 @@ export function useSessions(notify: Notify): Sessions {
   const resumeQuietly = useCallback(
     (ref: WorkspaceRef) => {
       const place = placeOf(ref);
-      if (quietTried.current.has(place)) return undefined;
+      if (quietTried.current.has(place) || count.current >= tabLimit) return undefined;
       quietTried.current.add(place);
       setState((current) => ({ ...current, quiet: new Set(current.quiet).add(place) }));
       return openTab(ref, true);

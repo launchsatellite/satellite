@@ -105,7 +105,9 @@ function EmptyWorkspace({
       current = false;
     };
   }, [projectId, key]);
-  const resumingQuietly = resumable === true && onResumeQuietly !== undefined;
+  const quietly = resumable === true && onResumeQuietly !== undefined;
+  const resumingQuietly = quietly && !atLimit;
+  const limited = atLimit && (full || quietly);
   useEffect(() => {
     if (resumingQuietly) onResumeQuietly();
   }, [resumingQuietly, onResumeQuietly]);
@@ -119,12 +121,12 @@ function EmptyWorkspace({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
       <p
-        role={missing === undefined && !(full && atLimit) ? undefined : "status"}
+        role={missing === undefined && !limited ? undefined : "status"}
         data-testid="sessions-empty"
         className="text-[13px] text-fg2"
       >
         {missing ??
-          (full && atLimit ? tabLimitSentence : undefined) ??
+          (limited ? tabLimitSentence : undefined) ??
           (resumable
             ? "Your last session here can pick up where it left off."
             : "No Claude Code session here yet.")}
@@ -233,6 +235,10 @@ export function SessionsPane({
     };
   }, []);
   const quietKey = useRef<string>(undefined);
+  const { resumeQuietly } = sessions;
+  const resumeHere = useCallback(() => {
+    if (selected !== null) quietKey.current = resumeQuietly(selected) ?? quietKey.current;
+  }, [selected, resumeQuietly]);
   const keptFocus = useRef<Element | null>(null);
   useLayoutEffect(() => {
     if (holdsTab(sessions.all, quietKey.current)) keptFocus.current = document.activeElement;
@@ -274,9 +280,7 @@ export function SessionsPane({
           onOpen={(resume) => sessions.open(selected, resume)}
           onResumeQuietly={
             resumeAllowed && missing === undefined && sessions.resumesQuietly(selected)
-              ? () => {
-                  quietKey.current = sessions.resumeQuietly(selected) ?? quietKey.current;
-                }
+              ? resumeHere
               : undefined
           }
         />
