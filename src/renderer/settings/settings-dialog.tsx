@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
-import type { ThemeChoice } from "../../shared/bridge-contract.ts";
+import { themeChoice, type ThemeChoice } from "../../shared/bridge-contract.ts";
+import { curatedTheme, curatedThemes } from "../../shared/themes/curated-themes.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { ToolChecks } from "../setup/tool-check.tsx";
 import { Button } from "../ui/button.tsx";
@@ -22,16 +23,44 @@ const repositoryAddress = "https://github.com/launchsatellite/satellite";
 const securityAddress = `${repositoryAddress}/security/policy`;
 const repositorySentence = "Satellite's source on GitHub, where its issues and releases live too.";
 const securitySentence = "How to report a vulnerability in Satellite privately, never in public.";
-const themes = [
-  { value: "system", label: "System", testId: "settings-theme-system" },
-  { value: "light", label: "Light", testId: "settings-theme-light" },
-  { value: "dark", label: "Dark", testId: "settings-theme-dark" },
-] as const;
+const themes: { value: ThemeChoice; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  ...curatedThemes.map(({ id, name }) => ({ value: id, label: name })),
+];
 const switches = [
   { value: "on", label: "On", testId: "settings-notifications-on" },
   { value: "off", label: "Off", testId: "settings-notifications-off" },
 ] as const;
 const note = "text-[12px] text-dim";
+
+function ThemeSelect({
+  theme,
+  onTheme,
+}: {
+  theme: ThemeChoice;
+  onTheme: (theme: ThemeChoice) => void;
+}) {
+  return (
+    <select
+      aria-label="Theme"
+      data-testid="settings-theme"
+      value={theme}
+      onChange={(event) => {
+        const chosen = themeChoice.safeParse(event.target.value);
+        if (chosen.success) onTheme(chosen.data);
+      }}
+      className="h-7 min-w-[140px] rounded-[6px] border border-ctl bg-side px-2 text-[13px] text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      {themes.map(({ value, label }) => (
+        <option key={value} value={value}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function Section({
   title,
@@ -112,6 +141,7 @@ export function SettingsDialog({
   onLink,
   onClose,
 }: SettingsDialogProps) {
+  const credited = curatedTheme(theme);
   return (
     <Dialog
       title="Settings"
@@ -126,9 +156,26 @@ export function SettingsDialog({
       }
     >
       <Section title="appearance" testId="settings-appearance">
-        <Setting name="Theme" detail="The terminal, the diff and the window follow it at once.">
-          <Segmented label="Theme" value={theme} options={themes} onChange={onTheme} />
+        <Setting name="Theme" detail="The terminal, the code and the window follow it at once.">
+          <ThemeSelect theme={theme} onTheme={onTheme} />
         </Setting>
+        {credited !== undefined && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p data-testid="settings-theme-credit" className={`min-w-[180px] flex-1 ${note}`}>
+              {credited.credit}
+            </p>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => {
+                onLink(credited.site, `The home of the ${credited.name} theme.`);
+              }}
+              testId="settings-theme-site"
+            >
+              Open the theme&apos;s site
+            </Button>
+          </div>
+        )}
       </Section>
       <Section title="notifications" testId="settings-notifications">
         <Setting

@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { z } from "zod";
+import { curatedThemes } from "../src/shared/themes/curated-themes.ts";
 
 const manifestSchema = z.object({
   name: z.string(),
@@ -36,6 +37,9 @@ async function shippedOutsideTheBundle(listed: string): Promise<string[]> {
     ...(await Promise.all(fonts.map((name) => section(name, "LICENSE")))),
     await section("material-icon-theme", "LICENSE"),
     await section("monaco-editor", "ThirdPartyNotices.txt"),
+    ...curatedThemes.map(
+      ({ name, site, licence }) => `## The ${name} theme, ${site}\n\n${licence}\n`,
+    ),
   ];
 }
 

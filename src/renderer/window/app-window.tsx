@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   interfaceLimits,
@@ -51,6 +51,7 @@ import { linkSentence } from "../pull-request/pull-request-words.ts";
 import { useThreadJump } from "../pull-request/use-thread-jump.ts";
 import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
+import { curatedThemes } from "../../shared/themes/curated-themes.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
@@ -62,6 +63,7 @@ import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
 import { SettingsDialog } from "../settings/settings-dialog.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
+import { showTheme } from "../ui/shown-theme.ts";
 import { Toast, type Notify } from "../ui/toast.tsx";
 import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
@@ -199,6 +201,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const projectsRef = useRef<HTMLElement>(null);
   const repositoryRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
+  useLayoutEffect(() => {
+    showTheme(state.theme);
+  }, [state.theme]);
   useEffect(() => {
     const element = windowRef.current;
     if (element === null) return;
@@ -920,6 +925,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           { id: "theme.light", title: "Use the light theme", available: true, run: theme("light") },
           { id: "theme.dark", title: "Use the dark theme", available: true, run: theme("dark") },
+          ...curatedThemes.map(({ id, name }) => ({
+            id: `theme.${id}` as const,
+            title: `Use the ${name} theme`,
+            available: true,
+            run: theme(id),
+          })),
           {
             id: "notifications.off",
             title: "Turn notifications off",
