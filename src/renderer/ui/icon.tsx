@@ -14,7 +14,8 @@ export type IconName =
   | "running"
   | "chevron-right"
   | "chevron-down"
-  | "sidebar";
+  | "sidebar"
+  | "settings";
 
 const shapes: Record<IconName, ReactNode> = {
   plus: <path d="M8 3v10M3 8h10" />,
@@ -58,6 +59,13 @@ const shapes: Record<IconName, ReactNode> = {
     <>
       <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
       <path d="M6.25 2.75v10.5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="10.25" cy="5" r="1.75" />
+      <circle cx="5.75" cy="11" r="1.75" />
+      <path d="M2 5h6.5M12 5h2M2 11h2M7.5 11h6.5" />
     </>
   ),
 };
