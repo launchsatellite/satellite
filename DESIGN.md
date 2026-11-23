@@ -105,6 +105,7 @@ The signature texture. A field of square blocks in a fixed mix of ultraviolet, p
 BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner for network work, block progress and readouts. Molecules are sidebar rows, tabs (session tabs and open file tabs), segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
 
 - Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
+- The pointer shows over everything a click acts on, every enabled button, link, tab, option, tree row, select, summary and checkbox, the selected row and tab included, so a selection never reads as switched off. A disabled control keeps the arrow, never a not allowed sign, which the system keeps for a drop that cannot land. Text fields, the terminal and read-only code keep the text cursor, the column dividers the resize cursor, and the title bar's drag area the arrow.
 - Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
 - The segmented control is a radio group, a 28px track on `side` with a `ctl` border and a 6px corner, each option 24px with the chosen one on `sel` in `fg` and the others in `fg2`. The arrow keys move the choice and its focus, and only the chosen option is in the tab order.
 - Status is a square pixel, never a dot.

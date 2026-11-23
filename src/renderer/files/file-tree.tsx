@@ -69,7 +69,7 @@ function Row({
       title={label}
       onClick={onActivate}
       style={{ paddingLeft: 8 + (row.level - 1) * indentPx }}
-      className={`flex h-7 cursor-default items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
+      className={`flex h-7 items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
     >
       <span aria-hidden className="flex size-4 flex-none text-dim">
         {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}

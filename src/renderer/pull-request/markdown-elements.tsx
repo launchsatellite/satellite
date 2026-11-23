@@ -14,7 +14,7 @@ export const plainSentences: Record<PlainWhy, string> = {
 const InsideLink = createContext(false);
 
 const linkLook =
-  "inline cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-fg underline decoration-dim underline-offset-2 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "inline border-0 bg-transparent p-0 text-left font-[inherit] text-fg underline decoration-dim underline-offset-2 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const headingLook: Record<string, string> = {
   h1: "mt-4 mb-2 text-[15px] font-semibold text-fg",
   h2: "mt-4 mb-2 text-[14px] font-semibold text-fg",

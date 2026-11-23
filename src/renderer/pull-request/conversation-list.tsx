@@ -199,7 +199,7 @@ function Item({
       return (
         <Frame id={id} kind="thread" resolved>
           <details className="group flex flex-col gap-2">
-            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+            <summary className="flex list-none flex-wrap items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
               <ThreadHead thread={thread} />
               <span className="text-[12px] text-dim group-open:hidden">Show thread</span>
               <span className="hidden text-[12px] text-dim group-open:inline">Hide thread</span>
