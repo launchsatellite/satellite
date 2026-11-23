@@ -93,6 +93,20 @@
   --font-pixel: "Geist Pixel", monospace;
 }
 
+@layer base {
+  :is(button, select, [role="option"], [role="treeitem"]) {
+    cursor: pointer;
+
+    &:is(:disabled, [aria-disabled="true"]) {
+      cursor: default;
+    }
+  }
+
+  [role="treeitem"] > [role="group"] {
+    cursor: auto;
+  }
+}
+
 html,
 body,
 #root {
@@ -104,6 +118,10 @@ body,
   outline: 1px solid var(--sigfg);
   outline-offset: -1px;
   box-shadow: 0 0 0 1px var(--bg);
+}
+
+.thread-mark {
+  cursor: pointer;
 }
 
 .thread-mark::before {
