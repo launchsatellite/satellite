@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { z } from "zod";
 import {
+  bridgeAnswer,
   claudePids,
   goneTimeoutMs,
   hooksAnswered,
@@ -11,6 +13,11 @@ import {
   startClaude,
   waitUntil,
 } from "./conditions.ts";
+
+const processesAnswer = z.object({
+  ok: z.literal(true),
+  value: z.object({ rows: z.array(z.unknown()) }),
+});
 
 interface Started {
   claudePid: number;
@@ -62,7 +69,6 @@ async function questionsAtQuit(session: AppSession): Promise<string[]> {
 }
 
 async function asksOnlyWhileUnfinished(session: AppSession): Promise<void> {
-  if (process.platform === "win32") return;
   await session.page.getByTestId("workspace-repo-alpha").click();
   const idlePid = await startClaude(session, 1);
   await stateIs(session, "session-tab-1", "idle", "in alpha before any prompt");
@@ -84,7 +90,7 @@ async function asksOnlyWhileUnfinished(session: AppSession): Promise<void> {
   const asked = await questionsAtQuit(session);
   assert.deepEqual(
     asked,
-    ["1 Claude Code session is mid-task"],
+    ["Quitting stops 1 Claude Code session mid-task."],
     `quitting with one working and one idle session asked ${JSON.stringify(asked)}`,
   );
   await waitUntil(
@@ -94,9 +100,40 @@ async function asksOnlyWhileUnfinished(session: AppSession): Promise<void> {
   );
 }
 
+async function asksForRunningProcesses(session: AppSession): Promise<void> {
+  await session.page.getByTestId("workspace-repo-main").click();
+  await startClaude(session, 1);
+  await session.page.keyboard.press("Enter");
+  await stateIs(session, "session-tab-1", "done", "after the turn that started a dev server");
+  let rows = 0;
+  await waitUntil(
+    async () => {
+      const answer = processesAnswer.safeParse(
+        await bridgeAnswer(session.page, "processes.list", {}),
+      );
+      rows = answer.success ? answer.data.value.rows.length : 0;
+      return rows > 0;
+    },
+    promptTimeoutMs,
+    "Running processes never listed the dev server",
+  );
+  const asked = await questionsAtQuit(session);
+  assert.deepEqual(
+    asked,
+    [`Quitting stops ${String(rows)} process${rows === 1 ? "" : "es"} Claude Code started.`],
+    `quitting with a done session whose dev server runs asked ${JSON.stringify(asked)}`,
+  );
+}
+
+const systemQuit =
+  process.platform === "win32" ? "SIGTERM ends a process on Windows without a quit" : undefined;
+
 export const quitJourney: Journey = {
   name: "quit",
   scenario: "flood",
   run,
-  then: [{ name: "quit", scenario: "needs-permission", run: asksOnlyWhileUnfinished }],
+  then: [
+    { name: "quit", scenario: "needs-permission", run: asksOnlyWhileUnfinished, skip: systemQuit },
+    { name: "quit", scenario: "dev-server", run: asksForRunningProcesses, skip: systemQuit },
+  ],
 };
