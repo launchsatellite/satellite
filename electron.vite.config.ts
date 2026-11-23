@@ -10,7 +10,7 @@ import { contentSecurityPolicy } from "./src/shared/content-security-policy.ts";
 
 const { version } = z
   .object({ version: z.string().min(1).max(40) })
-  .parse(JSON.parse(readFileSync("package.json", "utf8")));
+  .parse(JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")));
 
 export default defineConfig({
   main: {},
