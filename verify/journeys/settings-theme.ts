@@ -9,6 +9,7 @@ interface Look {
   theme: string | null;
   editorGround: string;
   syntax: Record<string, string>;
+  removedSyntax: Record<string, string>;
   inserted: string;
   removed: string;
   insertedWords: string;
@@ -60,6 +61,11 @@ const publishedSyntax = {
   '"': "rgb(233, 242, 132)",
   return: "rgb(255, 121, 198)",
 };
+const publishedRemoved = {
+  return: "rgb(255, 121, 198)",
+  Hello: "rgb(241, 250, 140)",
+  "+": "rgb(255, 121, 198)",
+};
 const terminalRed = { satellite: "#cc0000", theme: "#ff5555" };
 const shotTolerance = 3;
 
@@ -71,15 +77,20 @@ async function look(session: AppSession): Promise<Look> {
       const found = diff?.querySelector(selector);
       return found === null || found === undefined ? "" : getComputedStyle(found).backgroundColor;
     };
-    const syntax: Record<string, string> = {};
-    for (const span of diff?.querySelectorAll(".view-line span span") ?? []) {
-      const text = span.textContent.trim();
-      const colour = getComputedStyle(span).color;
-      const known = syntax[text];
-      if (text === "") continue;
-      if (known === undefined) syntax[text] = colour;
-      else if (!known.split(" | ").includes(colour)) syntax[text] = `${known} | ${colour}`;
-    }
+    const colours = (spans: NodeListOf<Element> | undefined) => {
+      const read: Record<string, string> = {};
+      for (const span of spans ?? []) {
+        const text = span.textContent.trim();
+        const colour = getComputedStyle(span).color;
+        const known = read[text];
+        if (text === "") continue;
+        if (known === undefined) read[text] = colour;
+        else if (!known.split(" | ").includes(colour)) read[text] = `${known} | ${colour}`;
+      }
+      return read;
+    };
+    const syntax = colours(diff?.querySelectorAll(".view-line span span:not(.view-zones *)"));
+    const removedSyntax = colours(diff?.querySelectorAll(".view-zones .view-line span span"));
     const paint = document.createElement("canvas").getContext("2d");
     const hex = (value: string) => {
       if (paint === null) return value;
@@ -94,6 +105,7 @@ async function look(session: AppSession): Promise<Look> {
       theme: document.documentElement.getAttribute("data-theme"),
       editorGround: background(".monaco-editor-background"),
       syntax,
+      removedSyntax,
       inserted: background(".line-insert"),
       removed: background(".line-delete"),
       insertedWords: background(".char-insert"),
@@ -170,7 +182,10 @@ async function settled(session: AppSession, expected: Look, when: string): Promi
   await waitUntil(
     async () => {
       last = await look(session);
-      return JSON.stringify(last) === JSON.stringify(expected);
+      return (
+        JSON.stringify({ ...last, removedSyntax: {} }) ===
+        JSON.stringify({ ...expected, removedSyntax: {} })
+      );
     },
     waitMs,
     () =>
@@ -183,13 +198,16 @@ async function themedSyntax(session: AppSession, when: string): Promise<void> {
   await waitUntil(
     async () => {
       last = await look(session);
-      return Object.entries(publishedSyntax).every(
-        ([text, colour]) => last?.syntax[text] === colour,
+      return (
+        Object.entries(publishedSyntax).every(([text, colour]) => last?.syntax[text] === colour) &&
+        Object.entries(publishedRemoved).every(
+          ([text, colour]) => last?.removedSyntax[text] === colour,
+        )
       );
     },
     waitMs,
     () =>
-      `the syntax did not take the theme's colours ${when}, it read ${JSON.stringify(last?.syntax)}`,
+      `the syntax did not take the theme's colours ${when}, it read ${JSON.stringify(last?.syntax)} and removed ${JSON.stringify(last?.removedSyntax)}`,
   );
 }
 
