@@ -20,6 +20,7 @@ export type CommandId =
   | "session.close"
   | "session.next"
   | "session.previous"
+  | "settings.show"
   | "tools.check"
   | "guide.show"
   | "theme.system"

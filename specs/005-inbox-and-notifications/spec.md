@@ -25,7 +25,7 @@ With agents in many workspaces, the cost is not knowing which one is blocked. Th
 | One notification per workspace entering the inbox, at most one every 5 seconds, a burst gathered into one | One per session or per request | A burst across many workspaces never floods the system. A need may be announced up to 5 seconds late. |
 | Satellite's own words and cleaned names in a notification | What the session asked | Notifications show on lock screens and stay in the system's history, and some systems read markup in the body. |
 | The switch stops notifications only | Turning off the count too | The count is the inbox's size. A silent app icon is the system's per-app setting. |
-| A setting in `interface.json` with two commands | A settings page | Satellite has no settings pages, and the theme is chosen the same way. |
+| A setting in `interface.json` with two commands, shown in Settings | A store of its own | The theme is chosen the same way, and Settings (spec 012) draws the same state. |
 
 ## Not in scope
 

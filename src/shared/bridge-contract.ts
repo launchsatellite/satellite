@@ -774,6 +774,7 @@ export const bridgeEvents = {
   }),
   "notices.open": z.strictObject({ workspace: workspaceRef }),
   "window.frame": windowFrame,
+  "window.settings": empty,
   "pullRequests.needing": z.strictObject({
     needing: z
       .array(

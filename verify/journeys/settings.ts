@@ -1,185 +1,302 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
-import { promisify } from "node:util";
-import { z } from "zod";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { AppSession } from "../driver.ts";
-import { withoutGitVariables } from "../repo-recipe.ts";
-import { loadScenario } from "../scenario.ts";
 import type { Journey } from "../journeys.ts";
-import {
-  claudePids,
-  goneTimeoutMs,
-  processGone,
-  settingsFileOf,
-  startClaude,
-  stateIs,
-  waitUntil,
-} from "./conditions.ts";
+import { gone, visible, waitUntil } from "./conditions.ts";
 
-interface Snapshot {
-  hashes: Record<string, string>;
-  status: Record<string, string>;
-}
-interface Seeded {
-  path: string;
-  content: string;
+const waitMs = 15_000;
+const mac = process.platform === "darwin";
+const commandModifier = mac ? "Meta" : "Control+Shift";
+const settingsKeys = mac ? "Meta+Comma" : "Control+Comma";
+const repositoryAddress = "https://github.com/launchsatellite/satellite";
+const securityAddress = `${repositoryAddress}/security/policy`;
+
+function keys(key: string, ctrlAlone = false): string {
+  if (mac) return `⌘${key}`;
+  return ctrlAlone ? `Ctrl+${key}` : `Ctrl+Shift+${key}`;
 }
 
-const run = promisify(execFile);
-const ownerOnly = 0o600;
-const scenarioName = "settings-files";
-const settingsFileShape = z.strictObject({
-  hooks: z.record(
-    z.string(),
-    z.array(
-      z.strictObject({
-        hooks: z.array(
-          z.strictObject({
-            type: z.literal("http"),
-            url: z.string(),
-            headers: z.strictObject({ Authorization: z.string() }),
-            timeout: z.number(),
-          }),
-        ),
-      }),
-    ),
-  ),
-});
+const shortcuts = [
+  ["Open the command menu", keys("K")],
+  ["Add a project", keys("O")],
+  ["New workspace", keys("N")],
+  ["New Claude Code session", keys("T")],
+  ["Go to a workspace", keys("P")],
+  ["Hide the sidebar", keys("B")],
+  ["Open settings", keys(",", true)],
+  ["Go to the next unresolved thread", keys("J")],
+  ["Open a file by name", keys("F")],
+  ["Send the selected lines to Claude Code", keys("L")],
+];
 
-function hashOf(content: string | Buffer): string {
-  return createHash("sha256").update(content).digest("hex");
+async function focusedTestId(session: AppSession): Promise<string | null> {
+  return session.page.evaluate(
+    () => document.activeElement?.closest("[data-testid]")?.getAttribute("data-testid") ?? null,
+  );
 }
 
-async function hashesUnder(folder: string, into: Record<string, string>): Promise<void> {
-  const entries = await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const path = join(entry.parentPath, entry.name);
-    into[path] = hashOf(await readFile(path));
-  }
-}
-
-async function gitStatus(session: AppSession, folder: string): Promise<string> {
-  const { stdout } = await run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
-    cwd: folder,
-    env: { ...withoutGitVariables(process.env), ...session.gitEnv },
-    windowsHide: true,
-  });
-  return stdout;
-}
-
-async function snapshot(session: AppSession, alpha: string): Promise<Snapshot> {
-  const hashes: Record<string, string> = {};
-  for (const folder of [
-    join(session.userHome, ".claude"),
-    join(session.repo, ".claude"),
-    join(alpha, ".claude"),
-  ]) {
-    await hashesUnder(folder, hashes);
-  }
-  const state = join(session.userHome, ".claude.json");
-  const stateBytes = await readFile(state).catch(() => undefined);
-  if (stateBytes !== undefined) hashes[state] = hashOf(stateBytes);
-  return {
-    hashes,
-    status: {
-      repo: await gitStatus(session, session.repo),
-      alpha: await gitStatus(session, alpha),
+async function focusReturns(session: AppSession, testId: string, when: string): Promise<void> {
+  let found: string | null = null;
+  await waitUntil(
+    async () => {
+      found = await focusedTestId(session);
+      return found === testId;
     },
+    waitMs,
+    () => `focus was on ${String(found)} instead of ${testId} ${when}`,
+  );
+}
+
+async function checked(session: AppSession, testId: string): Promise<boolean> {
+  return (await session.page.getByTestId(testId).getAttribute("aria-checked")) === "true";
+}
+
+async function shows(
+  session: AppSession,
+  theme: string,
+  notifications: string,
+  when: string,
+): Promise<void> {
+  await waitUntil(
+    () => checked(session, `settings-theme-${theme}`),
+    waitMs,
+    `the theme did not read ${theme} ${when}`,
+  );
+  await waitUntil(
+    () => checked(session, `settings-notifications-${notifications}`),
+    waitMs,
+    `notifications did not read ${notifications} ${when}`,
+  );
+}
+
+async function saved(session: AppSession): Promise<{ theme: unknown; notifications: unknown }> {
+  const state: unknown = JSON.parse(await readFile(join(session.home, "interface.json"), "utf8"));
+  if (typeof state !== "object" || state === null) return { theme: null, notifications: null };
+  return {
+    theme: Reflect.get(state, "theme"),
+    notifications: Reflect.get(state, "notifications"),
   };
 }
 
-async function settingsLeft(home: string): Promise<string[]> {
-  const names = await readdir(join(home, "sessions")).catch(() => []);
-  return names.filter((name) => name.endsWith(".json"));
+async function looksDark(session: AppSession): Promise<boolean> {
+  return session.page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches);
 }
 
-async function promptToDone(session: AppSession, row: string, count: number): Promise<number> {
-  await session.page.getByTestId(row).click();
-  const pid = await startClaude(session, count);
-  await session.page.keyboard.type("go");
-  await session.page.keyboard.press("Enter");
-  await stateIs(session, `${row}-status`, "done", `after the prompt in ${row}`);
-  return pid;
+async function openSettings(session: AppSession, how: "button" | "keys" | "command") {
+  if (how === "button") await session.page.getByTestId("title-settings").click();
+  if (how === "keys") await session.page.keyboard.press(settingsKeys);
+  if (how === "command") {
+    await session.page.keyboard.press(`${commandModifier}+K`);
+    await visible(session, "palette", "after the command menu shortcut");
+    await session.page.getByTestId("command-settings-show").click();
+  }
+  await visible(session, "settings-dialog", `after opening settings by ${how}`);
 }
 
-async function seededHashes(session: AppSession, alpha: string): Promise<Record<string, string>> {
-  const { scenario } = await loadScenario(scenarioName);
-  const committed = scenario.repo.flatMap((step) =>
-    "write" in step && "content" in step.write && step.write.path.startsWith(".claude/")
-      ? [step.write]
-      : [],
+async function closeSettings(session: AppSession, returnTo: string, when: string): Promise<void> {
+  await session.page.keyboard.press("Escape");
+  await gone(session, "settings-dialog", `after Escape ${when}`);
+  await focusReturns(session, returnTo, `after Escape ${when}`);
+}
+
+async function runCommand(session: AppSession, id: string): Promise<void> {
+  await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "palette", "after the command menu shortcut");
+  await session.page.getByTestId(`command-${id}`).click();
+  await gone(session, "palette", `after running ${id}`);
+}
+
+async function checkEntryPoints(session: AppSession): Promise<void> {
+  const button = session.page.getByTestId("title-settings");
+  assert.equal(await button.getAttribute("aria-label"), "Open settings");
+  assert.equal(await button.getAttribute("title"), `Open settings ${keys(",", true)}`);
+  await session.page.getByTestId("workspace-repo-main").click();
+  await session.page.getByTestId("workspace-repo-main").focus();
+  await openSettings(session, "keys");
+  const inside = await session.page.evaluate(
+    () => document.querySelector("[role='dialog']")?.contains(document.activeElement) === true,
   );
-  const seeded: [string, Seeded[]][] = [
-    [session.userHome, scenario.userHome ?? []],
-    [session.repo, committed],
-    [alpha, committed],
-  ];
-  const hashes: Record<string, string> = {};
-  for (const [folder, files] of seeded) {
-    for (const file of files) hashes[join(folder, file.path)] = hashOf(file.content);
-  }
-  return hashes;
+  assert.ok(inside, "focus did not move into settings");
+  assert.equal(await session.page.getByTestId("title-bar").getAttribute("data-drag"), "false");
+  await shows(session, "light", "on", "at launch");
+  await closeSettings(session, "workspace-repo-main", "from the shortcut");
+  await openSettings(session, "button");
+  await session.page.getByTestId("settings-done").click();
+  await gone(session, "settings-dialog", "after Done");
+  await focusReturns(session, "title-settings", "after Done");
+  await session.page.getByTestId("workspace-repo-main").focus();
+  await openSettings(session, "command");
+  await closeSettings(session, "workspace-repo-main", "from the command menu");
+  await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "palette", "before the shortcut over the command menu");
+  await openSettings(session, "keys");
+  await gone(session, "palette", "once settings opened over it");
+  await closeSettings(session, "workspace-repo-main", "from the shortcut over the command menu");
 }
 
-async function checkSettingsFile(session: AppSession, pid: number): Promise<void> {
-  const file = await settingsFileOf(session, pid);
-  const sessions = join(session.home, "sessions");
-  assert.equal(dirname(file), sessions, `the settings file ${file} is outside the sessions folder`);
-  if (process.platform !== "win32") {
-    const mode = (await stat(file)).mode & 0o777;
-    assert.equal(mode, ownerOnly, `the settings file has mode ${mode.toString(8)}, not 600`);
+async function ghChecks(session: AppSession): Promise<number> {
+  return (await session.standInEvents()).filter(
+    (event) => event.type === "start" && event.tool === "gh" && event.args.includes("--version"),
+  ).length;
+}
+
+async function checkTools(session: AppSession): Promise<void> {
+  await visible(session, "settings-check-count", "in the tools section");
+  const rows = {
+    "settings-check-git": /^Git\s+\d+\.\d+\S* found/,
+    "settings-check-gh": /^GitHub CLI\s+Signed in as octo-verify/,
+    "settings-check-claude": /^Claude Code\s+2\.1\.78 found/,
+  };
+  for (const [testId, pattern] of Object.entries(rows)) {
+    const shown = await session.page.getByTestId(testId).innerText();
+    assert.match(shown, pattern, `${testId} read ${shown}`);
   }
-  const text = await readFile(file, "utf8");
-  const parsed = settingsFileShape.safeParse(JSON.parse(text));
-  assert.ok(parsed.success, `the settings file holds more than Satellite's hooks, ${text}`);
-  const launchId = basename(file, ".json");
-  const own = new RegExp(`^http://127\\.0\\.0\\.1:\\d+/hook/${launchId}/([A-Za-z]+)$`);
-  for (const [event, groups] of Object.entries(parsed.data.hooks)) {
-    for (const hook of groups.flatMap((group) => group.hooks)) {
-      assert.equal(own.exec(hook.url)?.[1], event, `the ${event} hook posts to ${hook.url}`);
-    }
-  }
+  assert.ok(
+    (await session.page.getByTestId("settings-check-count").innerText()).startsWith("03 / 03"),
+  );
+  const before = await ghChecks(session);
+  await session.page.getByTestId("settings-check-again").click();
+  await waitUntil(
+    async () => (await ghChecks(session)) > before,
+    waitMs,
+    "Check again ran no second check of gh",
+  );
+  await visible(session, "settings-check-count", "after Check again");
+}
+
+async function checkShortcuts(session: AppSession): Promise<void> {
+  const listed = await session.page
+    .locator("[data-testid^='settings-shortcut-']")
+    .evaluateAll((rows) =>
+      rows.map((row) => [
+        row.querySelector("span")?.textContent ?? "",
+        row.querySelector("kbd")?.textContent ?? "",
+      ]),
+    );
+  assert.deepEqual(listed, shortcuts, "the shortcut list did not match the commands");
+}
+
+async function checkChoices(session: AppSession): Promise<void> {
+  assert.ok(!(await looksDark(session)), "the window was dark before any choice");
+  await session.page.getByTestId("settings-theme-dark").click();
+  await waitUntil(() => looksDark(session), waitMs, "the window stayed light after Dark");
+  await session.page.getByTestId("settings-notifications-off").click();
+  await shows(session, "dark", "off", "after choosing");
+  await waitUntil(
+    async () => {
+      const { theme, notifications } = await saved(session);
+      return theme === "dark" && notifications === false;
+    },
+    waitMs,
+    "the choices were not saved",
+  );
+  await session.screenshot("settings-dark");
+}
+
+async function checkLinks(session: AppSession): Promise<void> {
+  await session.page.getByTestId("settings-repository").click();
+  await visible(session, "link-dialog", "after Open the repository");
+  assert.equal(await session.page.getByTestId("link-address").innerText(), repositoryAddress);
+  await session.page.getByTestId("link-cancel").click();
+  await gone(session, "link-dialog", "after Cancel");
+  await focusReturns(session, "settings-repository", "after cancelling the link");
+  await visible(session, "settings-dialog", "after cancelling the link");
+  await session.page.getByTestId("settings-security").click();
+  await visible(session, "link-dialog", "after Read the security policy");
+  assert.equal(await session.page.getByTestId("link-address").innerText(), securityAddress);
+  await session.page.getByTestId("link-open").click();
+  await gone(session, "link-dialog", "after Open in browser");
+  await waitUntil(
+    async () => (await session.openedLinks()).includes(securityAddress),
+    waitMs,
+    "the security policy was not opened",
+  );
+  assert.deepEqual(await session.openedLinks(), [securityAddress]);
+}
+
+async function fitsSmall(session: AppSession, theme: string): Promise<void> {
+  const dialog = await session.page.getByTestId("settings-dialog").boundingBox();
+  const done = await session.page.getByTestId("settings-done").boundingBox();
+  const button = await session.page.getByTestId("title-settings").boundingBox();
+  assert.ok(
+    dialog !== null && dialog.x >= 0 && dialog.x + dialog.width <= 960 && dialog.y >= 0,
+    `settings ran out of the window at 960 by 600 in ${theme}`,
+  );
+  assert.ok(
+    done !== null &&
+      done.y + done.height <= dialog.y + dialog.height &&
+      done.y + done.height <= 600,
+    `Done was out of view at 960 by 600 in ${theme}`,
+  );
+  assert.ok(
+    button !== null &&
+      button.y >= 0 &&
+      button.y + button.height <= 40 &&
+      button.x + button.width <= 960,
+    `the settings button left the title bar at 960 by 600 in ${theme}`,
+  );
+  await session.page.getByTestId("settings-about").scrollIntoViewIfNeeded();
+  await visible(session, "settings-version", `in the about section in ${theme}`);
+  await session.screenshot(`settings-small-${theme}`);
+}
+
+async function checkSmall(session: AppSession): Promise<void> {
+  await session.page.setViewportSize({ width: 960, height: 600 });
+  await fitsSmall(session, "dark");
+  await session.page.getByTestId("settings-theme-light").click();
+  await waitUntil(async () => !(await looksDark(session)), waitMs, "the window stayed dark");
+  await fitsSmall(session, "light");
+  await session.page.getByTestId("settings-theme-dark").click();
+  await waitUntil(() => looksDark(session), waitMs, "the window stayed light");
+  await session.page.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function checkRelaunch(session: AppSession): Promise<void> {
+  await session.page.keyboard.press("Escape");
+  await gone(session, "settings-dialog", "before the relaunch");
+  await session.relaunch();
+  await visible(session, "title-settings", "after the relaunch");
+  assert.ok(await looksDark(session), "the dark theme did not survive the relaunch");
+  await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "command-notifications-on", "in the command menu with notifications off");
+  assert.equal(await session.page.getByTestId("command-notifications-off").count(), 0);
+  await session.page.keyboard.press("Escape");
+  await gone(session, "palette", "after Escape");
+  await openSettings(session, "button");
+  await shows(session, "dark", "off", "after the relaunch");
+  await session.page.keyboard.press("Escape");
+  await gone(session, "settings-dialog", "after the relaunch");
+  await runCommand(session, "theme-light");
+  await runCommand(session, "notifications-on");
+  await waitUntil(async () => !(await looksDark(session)), waitMs, "Use the light theme failed");
+  await openSettings(session, "button");
+  await shows(session, "light", "on", "after the commands");
+}
+
+async function checkGuide(session: AppSession): Promise<void> {
+  await session.page.getByTestId("settings-show-guide").click();
+  await gone(session, "settings-dialog", "after Show the guide");
+  await visible(session, "guide-title", "after Show the guide in settings");
 }
 
 async function journey(session: AppSession): Promise<void> {
-  const { page } = session;
-  const alpha = join(session.home, "worktrees", "repo", "alpha");
-  const seeded = await seededHashes(session, alpha);
-  const before = await snapshot(session, alpha);
-  assert.deepEqual(before.hashes, seeded, "the settings files differed from the seeded ones");
-  assert.deepEqual(before.status, { repo: "", alpha: "" }, "git status was not clean at launch");
-  const mainPid = await promptToDone(session, "workspace-repo-main", 1);
-  const alphaPid = await promptToDone(session, "workspace-repo-alpha", 2);
-  await checkSettingsFile(session, mainPid);
-  await checkSettingsFile(session, alphaPid);
-  await page.getByTestId("close-session-1").click();
-  await page.getByTestId("workspace-repo-main").click();
-  await page.getByTestId("close-session-1").click();
-  for (const pid of await claudePids(session)) {
-    await waitUntil(
-      () => processGone(pid),
-      goneTimeoutMs,
-      `the stand-in ${String(pid)} still ran after its tab closed`,
-    );
-  }
-  let after: Snapshot | undefined;
-  let left: string[] = [];
-  await session.relaunch(async () => {
-    after = await snapshot(session, alpha);
-    left = await settingsLeft(session.home);
-  });
-  assert.ok(after !== undefined, "nothing was compared while the app was closed");
-  assert.deepEqual(after.hashes, seeded, "a Claude Code settings file changed");
-  assert.deepEqual(after.status, before.status, "git status changed in the repo or alpha");
-  assert.deepEqual(left, [], `settings files outlived their sessions, ${left.join(", ")}`);
+  await visible(session, "workspace-repo-main", "at launch");
+  await checkEntryPoints(session);
+  await openSettings(session, "button");
+  await checkTools(session);
+  await checkShortcuts(session);
+  await session.screenshot("settings-light");
+  await checkChoices(session);
+  await checkLinks(session);
+  await checkSmall(session);
+  await checkRelaunch(session);
+  await checkGuide(session);
+  assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
 
 export const settingsJourney: Journey = {
   name: "settings",
-  scenario: scenarioName,
+  scenario: "settings",
   run: journey,
 };

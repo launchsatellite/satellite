@@ -176,6 +176,17 @@ export function TitleBar({
               testId="title-new-workspace"
             />
           </Control>
+          <Control>
+            <CommandButton
+              command="settings.show"
+              variant="ghost"
+              size="small"
+              icon="settings"
+              label="Open settings"
+              tooltip="Open settings"
+              testId="title-settings"
+            />
+          </Control>
         </span>
       </div>
     </header>

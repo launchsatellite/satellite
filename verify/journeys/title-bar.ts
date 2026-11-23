@@ -79,6 +79,10 @@ async function checkStrip(session: AppSession): Promise<void> {
     "title-inbox": ["0 workspaces need you", "0 workspaces need you"],
     "title-commands": ["Open the command menu", `Open the command menu ${shortcut}K`],
     "title-new-workspace": ["New workspace", `New workspace ${shortcut}N`],
+    "title-settings": [
+      "Open settings",
+      `Open settings ${process.platform === "darwin" ? "⌘," : "Ctrl+,"}`,
+    ],
   };
   for (const [testId, [label, tooltip]] of Object.entries(named)) {
     assert.equal(await attribute(session, testId, "aria-label"), label, `${testId} name`);
@@ -235,6 +239,7 @@ function readTitleBarArea(): { left: number; right: number; controls: Box[] } {
     "title-inbox",
     "title-commands",
     "title-new-workspace",
+    "title-settings",
   ].map((testId) => {
     const box = document.querySelector(`[data-testid='${testId}']`)?.getBoundingClientRect();
     return { left: box?.left ?? -1, right: box?.right ?? -1 };
@@ -260,6 +265,7 @@ async function checkSizes(session: AppSession): Promise<void> {
       "title-inbox",
       "title-commands",
       "title-new-workspace",
+      "title-settings",
     ]) {
       const box = await session.page.getByTestId(testId).boundingBox();
       assert.ok(
@@ -299,11 +305,13 @@ function readStrip(): StripLayout {
   const strip = byTestId("title-bar");
   const middle = strip.getBoundingClientRect().top + strip.getBoundingClientRect().height / 2;
   const hits = Object.fromEntries(
-    ["title-sidebar", "title-inbox", "title-commands", "title-new-workspace"].map((testId) => {
-      const box = byTestId(testId).getBoundingClientRect();
-      const found = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-      return [testId, found?.closest("[data-testid]")?.getAttribute("data-testid") === testId];
-    }),
+    ["title-sidebar", "title-inbox", "title-commands", "title-new-workspace", "title-settings"].map(
+      (testId) => {
+        const box = byTestId(testId).getBoundingClientRect();
+        const found = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return [testId, found?.closest("[data-testid]")?.getAttribute("data-testid") === testId];
+      },
+    ),
   );
   const drags = (x: number) => {
     let element = document.elementFromPoint(x, middle);
@@ -357,6 +365,7 @@ async function checkLongName(session: AppSession): Promise<void> {
       "title-inbox": true,
       "title-commands": true,
       "title-new-workspace": true,
+      "title-settings": true,
     },
     `a control in the strip was covered by the long title ${at}`,
   );

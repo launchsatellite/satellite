@@ -1,4 +1,6 @@
 import { app, Menu, type MenuItemConstructorOptions } from "electron";
+import { bringToFront } from "./main-window.ts";
+import { askForSettings } from "./window-frame.ts";
 
 function menuTemplate(): MenuItemConstructorOptions[] {
   const appMenu: MenuItemConstructorOptions[] =
@@ -6,7 +8,22 @@ function menuTemplate(): MenuItemConstructorOptions[] {
       ? [
           {
             label: app.name,
-            submenu: [{ role: "about" }, { type: "separator" }, { role: "hide" }, { role: "quit" }],
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              {
+                label: "Settings…",
+                accelerator: "CommandOrControl+,",
+                registerAccelerator: false,
+                click: () => {
+                  bringToFront();
+                  askForSettings();
+                },
+              },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "quit" },
+            ],
           },
         ]
       : [];

@@ -1,0 +1,27 @@
+{
+  "description": "A repo with one commit on main and one workspace, a stand-in gh signed in, a stand-in Claude Code at its prompt, the guide already seen and Satellite set to the light theme with notifications on.",
+  "repo": [
+    { "write": { "path": "README.md", "content": "# Verify repo\n" } },
+    { "git": ["init", "-b", "main"] },
+    { "git": ["add", "."] },
+    { "git": ["commit", "-m", "first commit"] }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":5,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"sidebar\":\"shown\",\"theme\":\"light\",\"notifications\":true,\"guideSeen\":true,\"files\":[]}"
+    }
+  ],
+  "workspaces": [{ "name": "feature", "steps": [] }],
+  "gh": [
+    { "args": ["--version"], "stdout": "gh version 2.99.0 (stand-in)\n" },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.1.78 (Claude Code stand-in)",
+    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+  }
+}

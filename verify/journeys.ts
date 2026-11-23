@@ -9,6 +9,7 @@ import {
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { changesJourney } from "./journeys/changes.ts";
+import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
 import { filesJourney } from "./journeys/files.ts";
 import { guideJourney } from "./journeys/guide.ts";
@@ -40,6 +41,7 @@ const journeys: Journey[] = [
   boundaryJourney,
   projectsJourney,
   titleBarJourney,
+  settingsJourney,
   guideJourney,
   workspacesJourney,
   changesJourney,
@@ -50,7 +52,7 @@ const journeys: Journey[] = [
   inboxJourney,
   pullRequestJourney,
   missingJourney,
-  settingsJourney,
+  claudeSettingsJourney,
   quitJourney,
 ];
 const journeyTimeoutMs = 180_000;
