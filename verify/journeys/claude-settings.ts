@@ -178,8 +178,8 @@ async function journey(session: AppSession): Promise<void> {
   assert.deepEqual(left, [], `settings files outlived their sessions, ${left.join(", ")}`);
 }
 
-export const settingsJourney: Journey = {
-  name: "settings",
+export const claudeSettingsJourney: Journey = {
+  name: "claude-settings",
   scenario: scenarioName,
   run: journey,
 };
