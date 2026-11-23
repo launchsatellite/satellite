@@ -16,6 +16,7 @@ export interface KeyPress {
 }
 
 const latinKey = /^[a-z0-9]$/i;
+const otherScript = /^\p{L}$/u;
 
 function physicalCode(key: string): string {
   if (key === ",") return "Comma";
@@ -39,7 +40,9 @@ export function matchesShortcut(
       : press.ctrlKey && press.shiftKey !== (shortcut.ctrlAlone === true) && !press.metaKey;
   if (!held || press.altKey) return false;
   if (press.key.toLowerCase() === key) return true;
-  return !latinKey.test(press.key) && press.code === physicalCode(key);
+  return (
+    otherScript.test(press.key) && !latinKey.test(press.key) && press.code === physicalCode(key)
+  );
 }
 
 export function shortcutLabel(shortcut: Shortcut, platform: KeyboardPlatform): string {

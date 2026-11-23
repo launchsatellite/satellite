@@ -99,6 +99,18 @@ describe("a Ctrl alone shortcut", () => {
     ).toBe(true);
   });
 
+  it("leaves the semicolon on the comma's physical key alone on AZERTY", () => {
+    expect(
+      matchesShortcut(press({ key: ";", code: "Comma", ctrlKey: true }), settings, "other"),
+    ).toBe(false);
+    expect(
+      matchesShortcut(press({ key: ";", code: "Comma", metaKey: true }), settings, "mac"),
+    ).toBe(false);
+    expect(
+      matchesShortcut(press({ key: ",", code: "KeyM", ctrlKey: true }), settings, "other"),
+    ).toBe(true);
+  });
+
   it("labels it without Shift", () => {
     expect(shortcutLabel(settings, "other")).toBe("Ctrl+,");
     expect(shortcutLabel(settings, "mac")).toBe("⌘,");
