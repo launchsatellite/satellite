@@ -58,12 +58,14 @@ async function shows(
   notifications: string,
   when: string,
 ): Promise<void> {
-  assert.ok(
-    await checked(session, `settings-theme-${theme}`),
-    `the theme was not ${theme} ${when}`,
+  await waitUntil(
+    () => checked(session, `settings-theme-${theme}`),
+    waitMs,
+    `the theme did not read ${theme} ${when}`,
   );
-  assert.ok(
-    await checked(session, `settings-notifications-${notifications}`),
+  await waitUntil(
+    () => checked(session, `settings-notifications-${notifications}`),
+    waitMs,
     `notifications did not read ${notifications} ${when}`,
   );
 }
