@@ -13,12 +13,13 @@ import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
+import { codeType } from "../ui/code-type.ts";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
+import { gpuRenderer } from "./gpu-renderer.ts";
 import { createHeldKeyGate } from "./held-keys.ts";
 import { linkFollow } from "./link-follow.ts";
 import { pastedText } from "./pasted-text.ts";
-import "./terminal-font.css";
 import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
 import { terminalTheme } from "./terminal-theme.ts";
 
@@ -71,7 +72,7 @@ export function TerminalView({
 }: TerminalViewProps) {
   const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
-  const show = useRef<() => void>(undefined);
+  const show = useRef<(shown: boolean) => void>(undefined);
   const prompt = useRef<PromptTarget>(undefined);
   const noticedNow = useRef(false);
   const outward = useRef({ onAskLink, notify, onMissing, onStarted });
@@ -89,11 +90,13 @@ export function TerminalView({
       else tell(step.refuse, "error");
     };
     const terminal = new Terminal({
-      fontFamily: '"Satellite Terminal Mono", monospace',
-      fontSize: 13,
+      fontFamily: codeType.fontFamily,
+      fontSize: codeType.fontSize,
+      lineHeight: codeType.terminalLineHeight,
+      minimumContrastRatio: 4.5,
+      rescaleOverlappingGlyphs: true,
       scrollback: 5000,
       allowProposedApi: true,
-      cursorBlink: !matchMedia("(prefers-reduced-motion: reduce)").matches,
       theme: terminalTheme(),
       linkHandler: {
         activate: (event, text) => {
@@ -111,6 +114,10 @@ export function TerminalView({
     );
     terminal.unicode.activeVersion = "11";
     terminal.open(element);
+    Object.assign(element, { terminal });
+    const gpu = gpuRenderer(terminal, (renderer) => {
+      element.setAttribute("data-renderer", renderer);
+    });
     const fitted = () => {
       if (element.clientWidth === 0 || element.clientHeight === 0) return false;
       fit.fit();
@@ -226,7 +233,12 @@ export function TerminalView({
       frame = requestAnimationFrame(sendSize);
     });
     observer.observe(element);
-    show.current = () => {
+    show.current = (shown) => {
+      if (!shown) {
+        gpu.release();
+        return;
+      }
+      gpu.take();
       sendSize();
       if (!noticedNow.current) terminal.focus();
     };
@@ -256,6 +268,7 @@ export function TerminalView({
       input.dispose();
       stopData();
       stopExit();
+      gpu.release();
       terminal.dispose();
       void invoke("terminal.close", { id: terminalId });
     };
@@ -276,7 +289,7 @@ export function TerminalView({
   }, [onAskLink, notify, onMissing, onStarted]);
 
   useEffect(() => {
-    if (shown) show.current?.();
+    show.current?.(shown);
   }, [shown]);
 
   return (

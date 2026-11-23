@@ -1,4 +1,5 @@
 import type { editor } from "monaco-editor/editor/editor.api";
+import { codeType } from "../ui/code-type.ts";
 
 export const drawnColumns = 10_000;
 
@@ -12,8 +13,8 @@ export const readOnlyOptions = {
   overviewRulerLanes: 0,
   overviewRulerBorder: false,
   scrollbar: { useShadows: false },
-  fontFamily: '"Geist Mono Variable", monospace',
-  fontSize: 13,
+  fontFamily: codeType.fontFamily,
+  fontSize: codeType.fontSize,
   stopRenderingLineAfter: drawnColumns,
   unicodeHighlight: {
     invisibleCharacters: false,
