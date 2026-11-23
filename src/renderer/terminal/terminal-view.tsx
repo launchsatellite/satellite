@@ -115,9 +115,6 @@ export function TerminalView({
     terminal.unicode.activeVersion = "11";
     terminal.open(element);
     Object.assign(element, { terminal });
-    const gpu = gpuRenderer(terminal, (renderer) => {
-      element.setAttribute("data-renderer", renderer);
-    });
     const fitted = () => {
       if (element.clientWidth === 0 || element.clientHeight === 0) return false;
       fit.fit();
@@ -168,6 +165,10 @@ export function TerminalView({
       sent = { cols, rows };
       queue = queue.then(() => invoke("terminal.resize", { id: terminalId, cols, rows }));
     };
+    const gpu = gpuRenderer(terminal, (renderer) => {
+      element.setAttribute("data-renderer", renderer);
+      sendSize();
+    });
 
     const input = terminal.onData(send);
     const paste = (text: string) => {
