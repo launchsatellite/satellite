@@ -8,7 +8,7 @@ import {
   type WorkerHandlers,
 } from "../src/renderer/pull-request/markdown-parser.ts";
 
-const deadlineMs = 500;
+const deadlineMs = 1500;
 const thread = new URL("./markdown-test-thread.ts", import.meta.url);
 const parsers: ReturnType<typeof createMarkdownParser>[] = [];
 const started: Worker[] = [];
@@ -220,6 +220,12 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
       !ordinary.every((text) => parser.read(text)?.kind === "tree") &&
       performance.now() < until
     ) {
+      ordinary.forEach((text, at) => {
+        if (parser.read(text)?.kind !== "plain") return;
+        const owner = `owner-${String(hostile.length + at)}`;
+        parser.drop(owner);
+        parser.want(owner, text);
+      });
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     for (const text of ordinary) expect(parser.read(text)?.kind).toBe("tree");

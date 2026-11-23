@@ -22,31 +22,42 @@ interface LoadedInterface {
   writable: boolean;
 }
 
-const version4 = interfaceState.extend({ version: z.literal(4) });
+const version5 = interfaceState.extend({ version: z.literal(5) });
+const version4 = interfaceState
+  .omit({ sidebar: true })
+  .extend({ version: z.literal(4) })
+  .transform((file): z.output<typeof version5> => ({ ...file, version: 5, sidebar: "shown" }));
 const version3 = interfaceState
-  .omit({ guideSeen: true })
+  .omit({ sidebar: true, guideSeen: true })
   .extend({ version: z.literal(3) })
-  .transform((file): z.output<typeof version4> => ({ ...file, version: 4, guideSeen: true }));
-const version2 = interfaceState
-  .omit({ files: true, guideSeen: true })
-  .extend({ version: z.literal(2) })
-  .transform((file): z.output<typeof version4> => ({
+  .transform((file): z.output<typeof version5> => ({
     ...file,
-    version: 4,
+    version: 5,
+    sidebar: "shown",
+    guideSeen: true,
+  }));
+const version2 = interfaceState
+  .omit({ sidebar: true, files: true, guideSeen: true })
+  .extend({ version: z.literal(2) })
+  .transform((file): z.output<typeof version5> => ({
+    ...file,
+    version: 5,
+    sidebar: "shown",
     files: [],
     guideSeen: true,
   }));
 const version1 = interfaceState
-  .omit({ notifications: true, files: true, guideSeen: true })
+  .omit({ sidebar: true, notifications: true, files: true, guideSeen: true })
   .extend({ version: z.literal(1) })
-  .transform((file): z.output<typeof version4> => ({
+  .transform((file): z.output<typeof version5> => ({
     ...file,
-    version: 4,
+    version: 5,
+    sidebar: "shown",
     notifications: true,
     files: [],
     guideSeen: true,
   }));
-const fileSchema = z.union([version1, version2, version3, version4]);
+const fileSchema = z.union([version1, version2, version3, version4, version5]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -64,12 +75,13 @@ const saveFailure =
 async function readInterfaceFile(file: string): Promise<LoadedInterface> {
   const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
-    version: 4,
+    version: 5,
   });
   return {
     state: {
       selected: value.selected,
       columns: value.columns,
+      sidebar: value.sidebar,
       theme: value.theme,
       notifications: value.notifications,
       files: value.files,
@@ -87,7 +99,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
   const load = () => {
     cached ??= readInterfaceFile(file).then(async (loaded) => {
       if (loaded.notice !== null && loaded.writable) {
-        await writer.write({ version: 4, ...loaded.state }).catch(() => undefined);
+        await writer.write({ version: 5, ...loaded.state }).catch(() => undefined);
       }
       return loaded;
     });
@@ -101,7 +113,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
     async save(state) {
       const loaded = await load();
       cached = Promise.resolve({ ...loaded, state });
-      if (loaded.writable) await writer.write({ version: 4, ...state });
+      if (loaded.writable) await writer.write({ version: 5, ...state });
     },
     flush: () => writer.flush(),
   };

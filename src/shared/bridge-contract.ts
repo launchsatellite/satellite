@@ -17,6 +17,8 @@ export type BridgeEventName = keyof typeof bridgeEvents;
 export type BridgeEventPayload<E extends BridgeEventName> = z.output<(typeof bridgeEvents)[E]>;
 export type BridgeErrorCode = z.output<typeof bridgeErrorCode>;
 export type ThemeChoice = z.output<typeof themeChoice>;
+export type TitleBarFrame = z.output<typeof titleBarFrame>;
+export type WindowFrame = z.output<typeof windowFrame>;
 export type SessionStatus = z.output<typeof sessionStatus>;
 export type SessionEnding = z.output<typeof sessionEnding>;
 export type WorkspaceKey = z.output<typeof workspaceKey>;
@@ -100,6 +102,8 @@ export const interfaceLimits = {
 };
 
 export const themeChoice = z.enum(["system", "light", "dark"]);
+export const titleBarFrame = z.enum(["inset", "overlay", "native"]);
+export const windowFrame = z.strictObject({ frame: titleBarFrame, fullScreen: z.boolean() });
 export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);
 export const sessionEnding = z.enum(["ended", "unexpected", "resume-failed"]);
 export const workspaceKey = z.union([z.literal("main"), z.uuid()]);
@@ -161,6 +165,7 @@ export const interfaceState = z.strictObject({
     left: z.int().min(interfaceLimits.left.min).max(interfaceLimits.left.max),
     right: z.int().min(interfaceLimits.right.min).max(interfaceLimits.right.max),
   }),
+  sidebar: z.enum(["shown", "hidden"]),
   theme: themeChoice,
   notifications: z.boolean(),
   guideSeen: z.boolean(),
@@ -412,6 +417,7 @@ export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: c
 export const defaultInterfaceState: InterfaceState = {
   selected: null,
   columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
+  sidebar: "shown",
   theme: "system",
   notifications: true,
   guideSeen: false,
@@ -701,6 +707,7 @@ export const bridgeRequests = {
     request: z.strictObject({ pid: processId, started: processStart }),
     response: empty,
   },
+  "window.frame": { request: empty, response: windowFrame },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),
     response: empty,
@@ -766,6 +773,7 @@ export const bridgeEvents = {
     hooksOff: z.boolean(),
   }),
   "notices.open": z.strictObject({ workspace: workspaceRef }),
+  "window.frame": windowFrame,
   "pullRequests.needing": z.strictObject({
     needing: z
       .array(

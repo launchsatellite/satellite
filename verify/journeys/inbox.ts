@@ -45,7 +45,7 @@ const betaNotice: Shown = {
 const cleared: RecordedNotice = { kind: "badge", count: 0 };
 const turnedOff = "Notifications are off. The inbox still shows what needs you.";
 const turnedOn = "Notifications are on for every workspace that needs you.";
-const savedInterface = z.object({ version: z.literal(4), notifications: z.boolean() });
+const savedInterface = z.object({ version: z.literal(5), notifications: z.boolean() });
 
 function shownOf(lines: readonly RecordedNotice[]): Shown[] {
   return lines.flatMap((line) => (line.kind === "badge" ? [] : [line]));

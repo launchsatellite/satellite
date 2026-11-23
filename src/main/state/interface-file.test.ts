@@ -57,14 +57,15 @@ describe("createInterfaceFile", () => {
     expect(notice).toMatch(/set that file aside and started fresh\.$/);
   });
 
-  it("writes the layout as version 4 with whether the guide was seen", async () => {
+  it("writes the layout as version 5 with whether the guide was seen and the sidebar", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const interfaceFile = createInterfaceFile(home);
-    await interfaceFile.save({ ...saved, notifications: false });
+    await interfaceFile.save({ ...saved, notifications: false, sidebar: "hidden" });
     await interfaceFile.flush();
     const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
     expect(written).toMatchObject({
-      version: 4,
+      version: 5,
+      sidebar: "hidden",
       notifications: false,
       files: [],
       guideSeen: false,
@@ -100,30 +101,32 @@ describe("createInterfaceFile", () => {
     const next = await createInterfaceFile(home).load();
     expect(JSON.parse(await readFile(file, "utf8"))).toEqual({
       ...defaultInterfaceState,
-      version: 4,
+      version: 5,
       guideSeen: true,
     });
     expect(next).toEqual({ state: { ...defaultInterfaceState, guideSeen: true }, notice: null });
   });
 
-  it("reads a version 1, 2 and 3 file as one whose guide was seen and keeps the rest", async () => {
+  it("reads a version 1, 2 and 3 file as one whose guide was seen, a version 4 file as it is, each with the sidebar shown", async () => {
     const layout = '"selected":null,"columns":{"left":300,"right":500},"theme":"dark"';
     const files = [
-      [`{"version":1,${layout}}`, true],
-      [`{"version":2,${layout},"notifications":false}`, false],
-      [`{"version":3,${layout},"notifications":false,"files":[]}`, false],
+      [`{"version":1,${layout}}`, true, true],
+      [`{"version":2,${layout},"notifications":false}`, false, true],
+      [`{"version":3,${layout},"notifications":false,"files":[]}`, false, true],
+      [`{"version":4,${layout},"notifications":false,"files":[],"guideSeen":false}`, false, false],
     ] as const;
-    for (const [text, notifications] of files) {
+    for (const [text, notifications, guideSeen] of files) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
       await writeFile(join(home, "interface.json"), text);
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({
         selected: null,
         columns: { left: 300, right: 500 },
+        sidebar: "shown",
         theme: "dark",
         notifications,
         files: [],
-        guideSeen: true,
+        guideSeen,
       });
       expect(notice).toBeNull();
     }
@@ -160,7 +163,7 @@ describe("createInterfaceFile", () => {
     ];
     for (const files of damaged) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
-      const text = JSON.stringify({ version: 4, ...saved, files });
+      const text = JSON.stringify({ version: 5, ...saved, files });
       await writeFile(join(home, "interface.json"), text);
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({ ...defaultInterfaceState, guideSeen: true });
@@ -168,10 +171,11 @@ describe("createInterfaceFile", () => {
     }
   });
 
-  it("sets aside a version 4 file with a field it does not know and a version 5 file", async () => {
+  it("sets aside a version 5 file with a field it does not know, a version 4 file with a sidebar and a version 6 file", async () => {
     const files = [
-      { version: 5, ...saved },
-      { version: 4, ...saved, extra: true },
+      { version: 6, ...saved },
+      { version: 5, ...saved, extra: true },
+      { version: 4, ...saved },
     ];
     for (const content of files) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
@@ -310,7 +314,7 @@ describe("saved tabs hold only what could be loaded again", () => {
 
   it("keeps the saved tabs, path checked, when the project list fails, and writes nothing on load", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
-    const text = JSON.stringify({ version: 4, ...hostile });
+    const text = JSON.stringify({ version: 5, ...hostile });
     await writeFile(join(home, "interface.json"), text);
     const file = createInterfaceFile(home);
     const handlers = interfaceHandlers(

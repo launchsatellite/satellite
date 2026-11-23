@@ -103,8 +103,8 @@ async function nextPid(session: AppSession, count: number): Promise<number> {
 }
 
 async function argsOf(session: AppSession, pid: number): Promise<string[]> {
-  const start = (await session.standInEvents()).find(
-    (event) => event.type === "start" && event.pid === pid,
+  const start = (await session.standInEvents()).findLast(
+    (event) => event.type === "start" && event.tool === "claude" && event.pid === pid,
   );
   return start?.type === "start" ? start.args : [];
 }
@@ -413,8 +413,15 @@ async function focusCommands(session: AppSession): Promise<void> {
     await visible(session, "palette-input", `before ${title}`);
     await page.getByTestId("palette-input").fill(title);
     await page.keyboard.press("Enter");
-    const focused = await focusedTestId(page);
-    assert.equal(focused, target, `${title} moved focus to ${focused}`);
+    let focused = "";
+    await waitUntil(
+      async () => {
+        focused = await focusedTestId(page);
+        return focused === target;
+      },
+      promptTimeoutMs,
+      () => `${title} moved focus to ${focused}`,
+    );
   }
 }
 

@@ -49,7 +49,7 @@ const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift"
 const narrowest: Size = { width: 960, height: 600 };
 const tolerance = 1;
 const closedSentence = "The guide is closed. Show the guide in the command menu opens it again.";
-const savedFile = z.object({ version: z.literal(4), guideSeen: z.literal(true) });
+const savedFile = z.object({ version: z.literal(5), guideSeen: z.literal(true) });
 const legendWords = ["idle", "working", "needs you", "done"];
 const anchors: Record<
   GuideStep,
@@ -309,7 +309,7 @@ async function savedAsSeen(session: AppSession): Promise<void> {
       }
     },
     promptTimeoutMs,
-    () => `interface.json did not hold version 4 with guideSeen true, it read ${read.slice(0, 80)}`,
+    () => `interface.json did not hold version 5 with guideSeen true, it read ${read.slice(0, 80)}`,
   );
 }
 

@@ -11,6 +11,9 @@ interface CommandButtonProps {
   size?: ButtonProps["size"];
   icon?: IconName;
   label?: string;
+  tooltip?: string;
+  expanded?: boolean;
+  controls?: string;
   testId?: string;
 }
 
@@ -62,10 +65,14 @@ export function CommandButton({
   size,
   icon,
   label,
+  tooltip,
+  expanded,
+  controls,
   testId,
 }: CommandButtonProps) {
   const found = useCommands().get(command);
   if (found === undefined) throw new Error(`The command ${command} is not registered.`);
+  const shortcut = commandShortcut(found);
   return (
     <Button
       onClick={found.run}
@@ -73,9 +80,12 @@ export function CommandButton({
       variant={variant}
       size={size}
       icon={icon}
-      shortcut={commandShortcut(found)}
+      shortcut={shortcut}
       disabled={!found.available}
       label={label}
+      title={tooltip === undefined || shortcut === undefined ? tooltip : `${tooltip} ${shortcut}`}
+      expanded={expanded}
+      controls={controls}
     >
       {label === undefined ? (children ?? found.title) : children}
     </Button>

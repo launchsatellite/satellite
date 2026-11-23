@@ -13,11 +13,12 @@ const fontFamilies = [
   "Satellite Terminal Mono",
 ];
 
-const [, loaded] = await Promise.all([
+const [, loaded, frame] = await Promise.all([
   Promise.allSettled(
     fontFamilies.map((family) => document.fonts.load(`13px "${family}"`, " \u2588")),
   ),
   invoke("interface.load", {}),
+  invoke("window.frame", {}),
 ]);
 
 const rootElement = document.getElementById("root");
@@ -27,6 +28,7 @@ createRoot(rootElement).render(
   <StrictMode>
     <AppWindow
       initial={loaded.ok ? loaded.value.state : { ...defaultInterfaceState, guideSeen: true }}
+      frame={frame.ok ? frame.value : null}
       notice={loaded.ok ? loaded.value.notice : loaded.error.message}
     />
   </StrictMode>,

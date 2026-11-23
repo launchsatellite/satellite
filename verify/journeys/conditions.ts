@@ -135,8 +135,8 @@ export async function hooksAnswered(session: AppSession, name: string): Promise<
 }
 
 export async function settingsFileOf(session: AppSession, pid: number): Promise<string> {
-  const start = (await session.standInEvents()).find(
-    (event) => event.type === "start" && event.pid === pid,
+  const start = (await session.standInEvents()).findLast(
+    (event) => event.type === "start" && event.tool === "claude" && event.pid === pid,
   );
   const args = start?.type === "start" ? start.args : [];
   const file = args[args.indexOf("--settings") + 1];
