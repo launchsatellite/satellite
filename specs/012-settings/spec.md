@@ -24,7 +24,7 @@ The theme and notifications change only through commands nobody discovers, and n
 | Chosen | Rejected | Why |
 | --- | --- | --- |
 | A dialog over the window | A settings window, a full page in the centre column | Six short sections fit one scrolling column, the window stays one window, and the kit's dialog already owns focus, Escape and the scrim. |
-| Ctrl+Comma on Windows and Linux, Cmd+Comma on macOS | Ctrl+Shift+Comma like every other command | Ctrl+Comma is the standard there, GNOME's guidelines name it for Preferences, and the terminal has no code for it, so it never reaches Claude Code and taking it costs nothing. |
+| Ctrl+Comma on Windows and Linux, Cmd+Comma on macOS | Ctrl+Shift+Comma like every other command | Ctrl+Comma is the standard there, the Linux desktop guidelines name it for preferences, and the terminal has no code for it, so it never reaches Claude Code and taking it costs nothing. |
 | The version built into the page from `package.json` | A new bridge channel that answers the version | The packaged app takes its version from the same file, and a constant gives a hostile page nothing new. |
 | The Settings… item in the macOS app menu shows ⌘, but leaves the key to the page, and a click sends the `window.settings` event | A menu accelerator that catches the key | The page's shortcut matcher stays the one place keys run commands, so the key behaves the same on every system and in every quiet run. |
 | On or Off for notifications, plus a sentence about the system | The system's own permission state | Electron reads no notification permission on macOS, so showing it would need a new capability that still could not be honest. |
