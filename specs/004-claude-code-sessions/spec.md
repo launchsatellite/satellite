@@ -1,6 +1,6 @@
 # 004 Claude Code sessions
 
-Status **In progress** · Depends on **003**
+Status **Done** · Depends on **003**
 
 ## Why
 
@@ -46,10 +46,10 @@ The inbox and notifications belong to spec 005.
 - [x] A hook request without the secret is refused. Proof, a unit test.
 - [x] Two sessions in two workspaces run at once and each keeps its own screen. Proof, a journey.
 - [x] After a restart the workspace offers to resume and the resumed session shows its history. Proof, a run in the real app.
-- [ ] After a relaunch the selected workspace resumes with no click, the stand-in gets `--resume` with the recorded id, and the pixel stays idle with no notification. Proof, journey `sessions`.
-- [ ] A second workspace starts nothing until it is selected, then resumes once, a fast switch away and back included, with focus left on its row. Proof, journey `sessions`.
-- [ ] Closing the resumed tab brings nothing back, and a resume that fails shows its sentence and never retries. Proof, journey `sessions`.
-- [ ] Quitting with only idle sessions asks nothing, and with a working session asks and counts it. Proof, journey `quit`.
+- [x] After a relaunch the selected workspace resumes with no click, the stand-in gets `--resume` with the recorded id, and the pixel stays idle with no notification. Proof, journey `sessions`.
+- [x] A second workspace starts nothing until it is selected, then resumes once, a fast switch away and back included, with focus left on its row. Proof, journey `sessions`.
+- [x] Closing the resumed tab brings nothing back, and a resume that fails shows its sentence and never retries. Proof, journey `sessions`.
+- [x] Quitting with only idle sessions asks nothing, and with a working session asks and counts it. Proof, journey `quit` on macOS and Linux, since it quits through `SIGTERM`.
 - [x] Send to Claude Code places the text in the prompt and does not submit it. Proof, the driver.
 - [x] With `claude` missing the pane says so and names the fix. Proof, scenario `claude-missing`.
 - [x] The user's Claude Code settings files are byte for byte unchanged after a session. Proof, a journey that compares them.
