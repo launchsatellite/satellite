@@ -12,8 +12,8 @@ describe("quitQuestion", () => {
   it("keeps both answers plain buttons and counts the sessions", () => {
     expect(quitQuestion(1)).toMatchObject({
       noLink: true,
-      message: "1 Claude Code session is running",
+      message: "1 Claude Code session is mid-task",
     });
-    expect(quitQuestion(3).message).toBe("3 Claude Code sessions are running");
+    expect(quitQuestion(3).message).toBe("3 Claude Code sessions are mid-task");
   });
 });

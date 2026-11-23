@@ -48,7 +48,7 @@ const turnedOn = "Notifications are on for every workspace that needs you.";
 const savedInterface = z.object({ version: z.literal(5), notifications: z.boolean() });
 
 function shownOf(lines: readonly RecordedNotice[]): Shown[] {
-  return lines.flatMap((line) => (line.kind === "badge" ? [] : [line]));
+  return lines.flatMap((line) => (line.kind === "notice" || line.kind === "close" ? [line] : []));
 }
 
 function countsOf(lines: readonly RecordedNotice[]): number[] {

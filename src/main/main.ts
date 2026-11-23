@@ -54,7 +54,7 @@ import { windowFrameHandlers } from "./window/window-frame.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
-import { prepareVerification, startedByDriver, underVerification } from "./window/verification.ts";
+import { prepareVerification, underVerification } from "./window/verification.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -269,10 +269,7 @@ if (parts !== undefined) {
 app.on(
   "before-quit",
   createQuitGate(
-    () =>
-      startedByDriver() || parts === undefined
-        ? Promise.resolve(true)
-        : askToQuit(parts.terminals.roots().length),
+    () => (parts === undefined ? Promise.resolve(true) : askToQuit(parts.terminals.unfinished())),
     () => settleForQuit(parts, quitBoundMs),
     () => {
       leaving = true;

@@ -95,6 +95,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: (whileClosed) => session.relaunch(whileClosed),
+    quit: () => session.quit(),
     close: () => session.close(),
     async screenshot(name) {
       const path = await session.screenshot(name);
