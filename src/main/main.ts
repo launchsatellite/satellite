@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, dialog, nativeTheme, session } from "electron";
+import { app, dialog, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
 import { registerBridge } from "./bridge/bridge-ipc.ts";
 import { createChanges, type Changes } from "./changes/changes-handlers.ts";
@@ -48,6 +48,7 @@ import {
   bringToFront,
   createMainWindow,
   mainWindow,
+  showTheme,
   windowInFront,
 } from "./window/main-window.ts";
 import { windowFrameHandlers } from "./window/window-frame.ts";
@@ -95,7 +96,7 @@ async function start({
   prepareSystemNotices();
   await listening;
   const applyInterface = (state: InterfaceState) => {
-    nativeTheme.themeSource = state.theme;
+    showTheme(state.theme);
     notices.setEnabled(state.notifications);
   };
   applyInterface((await interfaceFile.load()).state);
