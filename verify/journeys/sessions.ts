@@ -137,9 +137,10 @@ async function cellOf(page: Page, text: string, last: boolean): Promise<Cell | n
   if (screen === null) return null;
   for (const [row, line] of screen.lines.entries()) {
     const at = last ? line.lastIndexOf(text) : line.indexOf(text);
-    if (at === -1) continue;
+    const column = screen.columns[row]?.[at];
+    if (column === undefined) continue;
     return {
-      x: screen.left + (at + 2.5) * screen.cellWidth,
+      x: screen.left + (column + 2.5) * screen.cellWidth,
       y: screen.top + (row + 0.5) * screen.cellHeight,
       width: screen.cellWidth,
     };

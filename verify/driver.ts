@@ -7,6 +7,7 @@ import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
+import type { Terminal } from "@xterm/xterm";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { z } from "zod";
 import { endWindowsTree } from "../src/main/platform/process-tree.ts";
@@ -518,7 +519,16 @@ export async function readTree(page: Page): Promise<WindowTree> {
       (elements, limit) =>
         elements.map((element) => {
           const box = element.getBoundingClientRect();
-          const text = element instanceof HTMLElement ? element.innerText : element.textContent;
+          const terminal = element.querySelector<HTMLElement & { terminal?: Terminal }>(
+            "[data-renderer]",
+          )?.terminal;
+          const rows = [];
+          for (let row = 0; terminal !== undefined && row < terminal.rows; row += 1) {
+            const buffer = terminal.buffer.active;
+            rows.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? "");
+          }
+          const shown = element instanceof HTMLElement ? element.innerText : element.textContent;
+          const text = terminal === undefined ? shown : [...rows, shown].join("\n");
           return {
             testId: element.getAttribute("data-testid") ?? "",
             visible:
