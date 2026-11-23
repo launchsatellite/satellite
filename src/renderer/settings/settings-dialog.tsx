@@ -136,7 +136,7 @@ export function SettingsDialog({
           detail="Only when a workspace needs you and the window is out of sight. The inbox fills either way, and your system's settings for Satellite still decide whether they show."
         >
           <Segmented
-            label="Notifications"
+            label="System notifications"
             value={notifications ? "on" : "off"}
             options={switches}
             onChange={(value) => {
