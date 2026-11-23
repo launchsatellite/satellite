@@ -7,7 +7,7 @@
 deny git[^;&|]*[[:space:]]push[^;&|]*[[:space:]:+](main|master)([[:space:]]|$) => Never push to main. Push your branch and open a pull request.
 deny git[^;&|]*[[:space:]]push[^;&|]*[[:space:]](-[a-z]*f[a-z]*|--force[a-z-]*|--mirror|[+][^[:space:]]+)([[:space:]]|$) => Never force-push. Merge instead of rewriting pushed work.
 deny --no-verify|core[.]hookspath|git[^;&|]*[[:space:]]commit[^;&|]*[[:space:]]-[a-z]*n[a-z]*([[:space:]]|$) => Never skip or rewire the Git hooks.
-deny gh[[:space:]]+pr[[:space:]]+review[^;&|]*(--approve|[[:space:]]-a([[:space:]]|$)) => A human approves every pull request.
+deny gh[[:space:]]+pr[[:space:]]+review[^;&|]*(--approve|[[:space:]]-a([[:space:]]|$)) => Agents never approve a pull request. CodeRabbit's approval is the signal, and the maintainer decides.
 merge gh[[:space:]]+pr[[:space:]]+merge|gh[[:space:]]+api[^;&|]*/merge => A human merges every pull request, unless the maintainer granted merging on this machine (CONTRIBUTING.md).
 deny gh[[:space:]]+repo[[:space:]]+(edit|delete)|gh[[:space:]]+auth[[:space:]]+token => Repository settings and tokens belong to the maintainer.
 deny (>|(^|[[:space:];&|(])(tee|touch|rm|mv|cp|ln|chmod|truncate)[[:space:]]|sed[[:space:]]+-[a-z]*i|git[[:space:]]+(rm|mv|checkout|restore)[[:space:]])[^;&|]*(guards/|[.]githooks/|[.]claude/settings|merge-granted) => Guard files belong to the maintainer. Propose the change in your report.
