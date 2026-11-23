@@ -1,4 +1,5 @@
 import { app, Menu, type MenuItemConstructorOptions } from "electron";
+import { bringToFront } from "./main-window.ts";
 import { askForSettings } from "./window-frame.ts";
 
 function menuTemplate(): MenuItemConstructorOptions[] {
@@ -14,7 +15,10 @@ function menuTemplate(): MenuItemConstructorOptions[] {
                 label: "Settings…",
                 accelerator: "CommandOrControl+,",
                 registerAccelerator: false,
-                click: askForSettings,
+                click: () => {
+                  bringToFront();
+                  askForSettings();
+                },
               },
               { type: "separator" },
               { role: "hide" },
