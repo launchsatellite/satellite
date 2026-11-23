@@ -9,6 +9,7 @@ import {
 } from "./driver.ts";
 import { boundaryJourney } from "./journeys/boundary.ts";
 import { changesJourney } from "./journeys/changes.ts";
+import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
 import { filesJourney } from "./journeys/files.ts";
 import { guideJourney } from "./journeys/guide.ts";
@@ -20,7 +21,6 @@ import { projectsJourney } from "./journeys/projects.ts";
 import { pullRequestJourney } from "./journeys/pull-request.ts";
 import { quitJourney } from "./journeys/quit.ts";
 import { sessionsJourney } from "./journeys/sessions.ts";
-import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { settingsJourney } from "./journeys/settings.ts";
 import { titleBarJourney } from "./journeys/title-bar.ts";
 import { workspacesJourney } from "./journeys/workspaces.ts";
