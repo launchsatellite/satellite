@@ -531,6 +531,13 @@ describe("createTerminalSessions", () => {
       expect(sessions.quitStates()).toEqual({ sessions: 5, midTask: 2, unseen: 1 });
     });
 
+    it("counts a session launched without a hook listener as unseen from its first moment", async () => {
+      const sessions = create();
+      const { mine } = owners();
+      await sessions.handlers["terminal.start"]({ id: terminalId(1), ...size }, mine);
+      expect(sessions.quitStates()).toEqual({ sessions: 1, midTask: 0, unseen: 1 });
+    });
+
     it("says hooks are off once Claude Code works on after Enter without any hook", async () => {
       const { id, latest, write, hook } = await started();
       await write("\r");

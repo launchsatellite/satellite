@@ -571,10 +571,12 @@ export function createTerminalSessions({
       return {
         sessions: live.length,
         midTask: live.filter(
-          ({ hooksOff, state }) =>
-            !hooksOff && (state.status === "working" || needsYou(state.status)),
+          ({ hooks, hooksOff, state }) =>
+            hooks !== undefined &&
+            !hooksOff &&
+            (state.status === "working" || needsYou(state.status)),
         ).length,
-        unseen: live.filter(({ hooksOff }) => hooksOff).length,
+        unseen: live.filter(({ hooks, hooksOff }) => hooks === undefined || hooksOff).length,
       };
     },
     async closeAll() {
