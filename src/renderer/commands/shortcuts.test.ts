@@ -68,6 +68,43 @@ describe("matchesShortcut", () => {
   });
 });
 
+describe("a Ctrl alone shortcut", () => {
+  const settings = { key: ",", ctrlAlone: true };
+
+  it("takes Ctrl+Comma on Windows and Linux and leaves Ctrl+Shift+Comma alone", () => {
+    expect(
+      matchesShortcut(press({ key: ",", code: "Comma", ctrlKey: true }), settings, "other"),
+    ).toBe(true);
+    expect(
+      matchesShortcut(
+        press({ key: "<", code: "Comma", ctrlKey: true, shiftKey: true }),
+        settings,
+        "other",
+      ),
+    ).toBe(false);
+  });
+
+  it("stays Cmd+Comma on macOS", () => {
+    expect(
+      matchesShortcut(press({ key: ",", code: "Comma", metaKey: true }), settings, "mac"),
+    ).toBe(true);
+    expect(
+      matchesShortcut(press({ key: ",", code: "Comma", ctrlKey: true }), settings, "mac"),
+    ).toBe(false);
+  });
+
+  it("finds the comma's physical key on a non-Latin layout", () => {
+    expect(
+      matchesShortcut(press({ key: "б", code: "Comma", ctrlKey: true }), settings, "other"),
+    ).toBe(true);
+  });
+
+  it("labels it without Shift", () => {
+    expect(shortcutLabel(settings, "other")).toBe("Ctrl+,");
+    expect(shortcutLabel(settings, "mac")).toBe("⌘,");
+  });
+});
+
 describe("shortcutLabel", () => {
   it("labels shortcuts for each platform", () => {
     expect(shortcutLabel(modK, "mac")).toBe("⌘K");
