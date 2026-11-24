@@ -265,7 +265,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
     }
     if (phase.kind === "unreadable") {
       return (
-        <p role="alert" data-testid="archive-failure" className="text-[13px] text-sigfg">
+        <p role="alert" data-testid="archive-failure" className="text-[13px] text-danger">
           {visibleText(
             phase.failure === null ? phase.message : `${phase.failure} ${phase.message}`,
           )}
@@ -322,7 +322,7 @@ export function ArchiveDialog({ project, workspace, onClose, onArchived }: Archi
           )}
         </div>
         {phase.kind === "ready" && phase.failure !== null && (
-          <p role="alert" data-testid="archive-failure" className="text-[13px] text-sigfg">
+          <p role="alert" data-testid="archive-failure" className="text-[13px] text-danger">
             {visibleText(phase.failure)}
           </p>
         )}

@@ -8,8 +8,8 @@ interface StatusPixelProps {
 }
 
 const looks: Record<PixelState, string> = {
-  idle: "bg-dim",
-  working: "bg-accent",
+  idle: "bg-idle",
+  working: "bg-working",
   ready: "bg-volt shadow-[inset_0_0_0_1.5px_var(--volt-edge)]",
   done: "bg-lilac shadow-[inset_0_0_0_1.5px_var(--lilac-edge)]",
   "needs-you": "bg-signal shadow-[inset_0_0_0_1.5px_var(--sigfg)]",

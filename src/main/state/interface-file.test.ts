@@ -132,6 +132,25 @@ describe("createInterfaceFile", () => {
     }
   });
 
+  it("reads a curated theme back and an unknown or malformed theme as System without setting the file aside", async () => {
+    const themes = [
+      ["dracula", "dracula"],
+      ["solarized-neon", "system"],
+      [7, "system"],
+      ["x".repeat(500), "system"],
+    ] as const;
+    for (const [theme, read] of themes) {
+      const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+      await writeFile(
+        join(home, "interface.json"),
+        JSON.stringify({ version: 5, ...saved, theme }),
+      );
+      const { state, notice } = await createInterfaceFile(home).load();
+      expect(state).toEqual({ ...saved, theme: read });
+      expect(notice).toBeNull();
+    }
+  });
+
   it("round-trips tabs", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const files = [{ projectId, workspace: "main", paths: ["a.ts", "b/c.ts"], active: 1 }];
