@@ -30,10 +30,12 @@ export interface Journey {
   scenario: string;
   run(session: AppSession): Promise<void>;
   then?: readonly Journey[];
+  skip?: string;
 }
 interface Outcome {
   failure?: string;
   screenshots: string[];
+  skipped?: string[];
 }
 
 const journeys: Journey[] = [
@@ -95,6 +97,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     consoleErrors: session.consoleErrors,
     standInEvents: () => session.standInEvents(),
     relaunch: (whileClosed) => session.relaunch(whileClosed),
+    quit: () => session.quit(),
     close: () => session.close(),
     async screenshot(name) {
       const path = await session.screenshot(name);
@@ -120,21 +123,31 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
 }
 
 async function runWithParts(journey: Journey, target: AppTarget): Promise<Outcome> {
-  const first = await runJourney(journey, target);
-  const screenshots = [...first.screenshots];
-  let failure = first.failure;
-  for (const part of journey.then ?? []) {
+  const screenshots: string[] = [];
+  const skipped: string[] = [];
+  let failure: string | undefined;
+  for (const [index, part] of [journey, ...(journey.then ?? [])].entries()) {
     if (failure !== undefined) break;
+    if (part.skip !== undefined) {
+      skipped.push(`${part.scenario}, ${part.skip}`);
+      continue;
+    }
     const outcome = await runJourney(part, target);
     screenshots.push(...outcome.screenshots);
-    failure = outcome.failure === undefined ? undefined : `${part.scenario}, ${outcome.failure}`;
+    if (outcome.failure !== undefined) {
+      failure = index === 0 ? outcome.failure : `${part.scenario}, ${outcome.failure}`;
+    }
   }
-  return failure === undefined ? { screenshots } : { failure, screenshots };
+  return failure === undefined ? { screenshots, skipped } : { failure, screenshots, skipped };
 }
 
-function report(name: string, { failure, screenshots }: Outcome): void {
+function report(name: string, { failure, screenshots, skipped = [] }: Outcome): void {
   const verdict = failure === undefined ? `pass ${name}` : `fail ${name} ${failure}`;
-  const lines = [verdict, ...screenshots.map((path) => `  ${path}`)];
+  const lines = [
+    verdict,
+    ...skipped.map((reason) => `  skipped ${reason}`),
+    ...screenshots.map((path) => `  ${path}`),
+  ];
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 

@@ -47,6 +47,7 @@ export interface AppSession {
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
   relaunch(whileClosed?: () => Promise<void>): Promise<void>;
+  quit(): Promise<void>;
   close(): Promise<CloseResult>;
 }
 export interface WindowTree {
@@ -82,6 +83,7 @@ const recordedNotice = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("notice"), title: z.string(), body: z.string() }),
   z.strictObject({ kind: z.literal("close") }),
   z.strictObject({ kind: z.literal("badge"), count: z.int() }),
+  z.strictObject({ kind: z.literal("question"), message: z.string() }),
 ]);
 const repoRoot = join(import.meta.dirname, "..");
 const electronVite = join(repoRoot, "node_modules/electron-vite/bin/electron-vite.js");
@@ -729,6 +731,15 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
       relaunching = relaunchOnce(whileClosed);
       return relaunching;
+    },
+    async quit() {
+      const { child } = running;
+      if (process.platform === "win32") throw new Error("quit sends SIGTERM, which Windows lacks");
+      if (child === undefined || hasExited(child)) return;
+      child.kill("SIGTERM");
+      if (!(await waitForExit(child, exitTimeoutMs))) {
+        throw new Error("the app was still running 10 seconds after SIGTERM");
+      }
     },
     close() {
       closing ??= closeOnce();

@@ -9,7 +9,8 @@ import { drivenByVerify } from "../window/verification.ts";
 type RecordedLine =
   | { kind: "notice"; title: string; body: string }
   | { kind: "close" }
-  | { kind: "badge"; count: number };
+  | { kind: "badge"; count: number }
+  | { kind: "question"; message: string };
 
 export const appUserModelId = "app.satellite.desktop";
 
@@ -75,6 +76,13 @@ function showSystemNotice(
 
 export function recordedLines(): Promise<void> {
   return recording;
+}
+
+export async function recordQuestion(message: string): Promise<void> {
+  const file = recordFile();
+  if (file === undefined) return;
+  record(file, { kind: "question", message });
+  await recording;
 }
 
 export function noticesRecorded(): boolean {
