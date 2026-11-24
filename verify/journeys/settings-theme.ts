@@ -311,7 +311,7 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
         selected === null ? "" : getComputedStyle(selected).getPropertyValue(name).trim();
       return { dim: read("--dim"), idle: read("--idle") };
     }),
-    { dim: "#f8f8f2", idle: "#8894b8" },
+    { dim: "#b1b8cd", idle: "#8894b8" },
     "a selected row did not lift its dim text and idle pixel to the bar",
   );
   assert.equal(themed.editorGround, "rgb(40, 42, 54)");

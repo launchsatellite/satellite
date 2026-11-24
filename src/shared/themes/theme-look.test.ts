@@ -3,7 +3,6 @@ import { curatedLook, curatedThemes, themeSource } from "./curated-themes.ts";
 import {
   appTokens,
   contrastFloors,
-  contrastRatio,
   pairedGrounds,
   pixelTokens,
   textTokens,
@@ -35,6 +34,20 @@ const minimal = {
   },
   tokenColors: [],
 };
+function contrastRatio(first: string, second: string): number {
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string) => {
+    const colour = parseColour(hex);
+    if (colour === undefined) throw new Error(hex);
+    return 0.2126 * linear(colour.r) + 0.7152 * linear(colour.g) + 0.0722 * linear(colour.b);
+  };
+  const [light = 0, dark = 0] = [luminance(first), luminance(second)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
 const themeOwnPairs: Record<string, string[]> = {
   dracula: ["dim on bg 3.03", "dim on side 3.36"],
 };
@@ -133,6 +146,12 @@ describe("themeLook", () => {
       for (const ground of ["side", "raised", "bg"] as const)
         measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
       expect(tokens.raised).not.toBe(tokens.side);
+      for (const ground of pairedGrounds) {
+        const order = (["fg", "fg2", "dim"] as const).map((token) =>
+          contrastRatio(paired[ground][token], tokens[ground]),
+        );
+        expect(order, `${id} text order on ${ground}`).toEqual([...order].sort((x, y) => y - x));
+      }
       expect(below, id).toEqual(themeOwnPairs[id]);
     }
   });

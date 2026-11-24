@@ -182,12 +182,6 @@ function ratioOf(a: Rgba, b: Rgba): number {
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
 
-export function contrastRatio(first: string, second: string): number {
-  const a = parseColour(first);
-  const b = parseColour(second);
-  return a === undefined || b === undefined ? 0 : ratioOf(a, b);
-}
-
 function mixed(from: Rgba, to: Rgba, amount: number): Rgba {
   return over({ ...to, a: amount }, from);
 }
@@ -324,22 +318,29 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
     const ownText = groundForeground[groundName]
       .map((key) => colours.get(key))
       .find((colour) => colour !== undefined);
-    const floored = (token: PairedToken, ratio: number): string => {
+    const floored = (token: PairedToken, ratio: number, above?: string): string => {
       const colour = parseColour(tokens[token]) ?? fg;
       if (ratioOf(colour, ground) >= ratio) return tokens[token];
-      if (neutralText.has(token)) {
-        const own = ownText === undefined ? undefined : over(ownText, ground);
-        if (own !== undefined && ratioOf(own, ground) >= ratio) return hexOf(own);
-        return hexOf(reach(ground, fg, [ground], ratio));
-      }
-      return hexOf(reach(colour, fg, [ground], ratio));
+      const ceiling = parseColour(above ?? "");
+      const own = ownText === undefined ? undefined : over(ownText, ground);
+      const ownFits =
+        own !== undefined &&
+        ratioOf(own, ground) >= ratio &&
+        (ceiling === undefined || ratioOf(own, ground) <= ratioOf(ceiling, ground));
+      if (neutralText.has(token) && ownFits) return hexOf(own);
+      const mixed = reach(colour, fg, [ground], ratio);
+      return ceiling !== undefined && ratioOf(mixed, ground) > ratioOf(ceiling, ground)
+        ? hexOf(ceiling)
+        : hexOf(mixed);
     };
-    const text = (token: PairedToken) => floored(token, contrastFloors.text);
+    const text = (token: PairedToken, above?: string) => floored(token, contrastFloors.text, above);
     const pixel = (token: PairedToken) => floored(token, contrastFloors.edge);
+    const shownFg = text("fg");
+    const shownFg2 = text("fg2", shownFg);
     return {
-      fg: text("fg"),
-      fg2: text("fg2"),
-      dim: text("dim"),
+      fg: shownFg,
+      fg2: shownFg2,
+      dim: text("dim", shownFg2),
       sigfg: text("sigfg"),
       addfg: text("addfg"),
       delfg: text("delfg"),
