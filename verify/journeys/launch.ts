@@ -311,6 +311,77 @@ async function switchWatched(page: Page): Promise<{ rows?: string; swapDrawn?: b
   return switchWatch.parse(JSON.parse(kept));
 }
 
+async function checkQuickReturn(session: AppSession, gpu: boolean, pids: number[]): Promise<void> {
+  const { page } = session;
+  const back = maxTerminals;
+  const away = maxTerminals - 1;
+  const painted = await page.evaluate(
+    async ([away, back]) => {
+      const tab = (number: number) =>
+        document.querySelector<HTMLElement>(`[data-testid="session-tab-${String(number)}"]`);
+      const committed = () =>
+        new Promise<void>((settle) => {
+          queueMicrotask(settle);
+        });
+      tab(away)?.click();
+      await committed();
+      tab(back)?.click();
+      await committed();
+      const host = document.querySelector<HTMLElement & { terminal?: Terminal }>(
+        '[data-testid="terminal"] [data-renderer]',
+      );
+      const watch: { rows?: string; swapDrawn?: boolean } = {};
+      document.body.dataset["switchWatch"] = "{}";
+      let drawn = false;
+      const rendering = host?.terminal?.onRender(() => {
+        drawn = true;
+      });
+      const swap = new MutationObserver(() => {
+        if (host?.getAttribute("data-renderer") !== "webgl") return;
+        swap.disconnect();
+        drawn = false;
+        requestAnimationFrame(() => {
+          watch.swapDrawn = drawn;
+          document.body.dataset["switchWatch"] = JSON.stringify(watch);
+          rendering?.dispose();
+        });
+      });
+      if (host !== null) swap.observe(host, { attributeFilter: ["data-renderer"] });
+      return new Promise<string>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve(host?.querySelector(".xterm-rows")?.textContent ?? "");
+        });
+      });
+    },
+    [away, back] as const,
+  );
+  assert.ok(painted.trim() !== "", "a terminal hidden and shown within one frame painted no rows");
+  let live: string[] = [];
+  let shown: string | undefined;
+  await waitUntil(
+    async () => {
+      live = await liveRenderers(page);
+      shown = (await readTerminal(page))?.renderer;
+      const webgl = live.filter((renderer) => renderer === "webgl").length;
+      return (
+        shown === (gpu ? "webgl" : "dom") &&
+        webgl === (gpu ? 1 : 0) &&
+        (!gpu || (await switchWatched(page)).swapDrawn !== undefined)
+      );
+    },
+    promptTimeoutMs,
+    () =>
+      `a terminal hidden and shown within one frame was drawn by ${String(shown)} with the renderers ${JSON.stringify(live)}`,
+  );
+  assert.ok(
+    !gpu || (await switchWatched(page)).swapDrawn === true,
+    "a terminal hidden and shown within one frame took WebGL and a frame was painted before it drew",
+  );
+  const pid = pids[back - 1];
+  assert.ok(pid !== undefined, "the last tab has no stand-in");
+  await checkSizeHeld(session, pid, "after a terminal was hidden and shown within one frame");
+}
+
 async function checkGpuShared(session: AppSession, firstPid: number): Promise<void> {
   const { page } = session;
   const gpu = await gpuAvailable(page);
@@ -375,6 +446,7 @@ async function checkGpuShared(session: AppSession, firstPid: number): Promise<vo
         await checkSizeHeld(session, pid, where);
       }
     }
+    await checkQuickReturn(session, gpu, pids);
   } finally {
     page.off("console", listen);
   }
