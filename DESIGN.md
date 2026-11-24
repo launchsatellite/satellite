@@ -56,13 +56,13 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `add` / `addfg` | `#15122B` / `#A493FF` | `#EEEBFF` / `#4A2EE0` | Added lines |
 | `del` / `delfg` | `#2A130B` / `#FF8A5C` | `#FFEDE6` / `#BE400C` | Removed lines |
 | `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
-| `signal` | `#FF5A1F` | `#FF5A1F` | Needs you, destructive actions |
+| `signal` | `#FF5A1F` | `#FF5A1F` | Needs you |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
 | `volt` / `volt-edge` | `#DCFF3D` / `#DCFF3D` | `#DCFF3D` / `#6B7800` | Ready and passing, with the inner edge that keeps a volt pixel visible on light |
 | `lilac` / `lilac-edge` | `#C7B9FF` / `#C7B9FF` | `#C7B9FF` / `#8066D6` | Merged, approved, secondary state, with the darker lilac that keeps a small lilac shape visible on light |
 | `working` | `#6A4BFF` | `#6A4BFF` | The working pixel |
 | `idle` | `#82828A` | `#68686F` | The idle pixel |
-| `danger` | `#FF5A1F` | `#BE400C` | Destructive actions, errors and their pixels |
+| `danger` | `#FF5A1F` | `#BE400C` | Destructive actions, errors and their pixels, so an error toast's pixel is `#BE400C` in light |
 | `shadow` | `0 16px 40px rgb(0 0 0 / 0.55)` | `0 16px 40px rgb(10 10 11 / 0.12)` | The one shadow, on menus, the palette, dialogs, toasts and the guide card |
 
 Every text pair in use passes WCAG AA at 4.5 to 1, measured with the WCAG formula, the closest being light `sigfg` and `delfg` on `sel` at 4.51. On light grounds the volt, done and needs you pixels get a 1.5px inner edge, `volt-edge`, `lilac-edge` and `sigfg`, so each pixel measures at least 3 to 1 on `bg`, `side`, `sel` and `hover`, the lowest being lilac on `sel` at 3.7. In dark the edges equal their fills. Shapes too small for an edge, like the cells of a project avatar, draw volt and lilac in their edge colours, `volt-edge` and `lilac-edge`, which pass 3 to 1 against `side` and `sel` in both themes.
@@ -114,7 +114,7 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - A close button on a tab is a 24px target flush with the tab's right edge. Inside it a 20px square, 4px in from that edge, holds the 12px close glyph and the focus ring, so the target meets the small button's size and the tab never grows to hold it. Under the pointer the square fills with `ctl` and the glyph turns `fg`, since `ctl` is the first token that stands out on both the selected tab's `sel` and a hovered tab's `hover`.
 - Status is a square pixel, never a dot.
 - One primary action per view.
-- An action that loses work is a danger button, signal text on the plain ground with a control border, never a signal fill. It replaces the primary action only while something would be lost, as Archive anyway.
+- An action that loses work is a danger button, `danger` text on the plain ground with a control border, never a filled one. It replaces the primary action only while something would be lost, as Archive anyway.
 - A dialog opens over the window dimmed behind a scrim, takes the keyboard until it closes and ends in a footer on `side` with its actions on the right, Cancel beside the main action, and any note on the left. Escape and a click outside close it only while nothing runs.
 - A control's accessible name starts with the text it shows, for a file row its Git letter, path and counts, then says the rest in words, so voice control finds it by what is on screen. The repository column is the window's main landmark.
 - Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
@@ -145,30 +145,35 @@ A curated theme is a published colour theme Satellite ships whole, in the standa
 - One mapping turns any curated theme into the tokens, in `theme-look.ts`. A colour with alpha is laid over the ground it sits on, so every token is opaque.
 - Each theme names the six colours that carry state, working, needs you, ready, done, idle and destructive, as keys of its own `colors`, so the states keep their meaning in its palette.
 - Syntax takes the theme's own `tokenColors`, matched by the theme's grammars, and the code viewer and the diff take its `colors`, so lines read exactly as the theme draws them. The terminal takes its `terminal.*` colours.
+- Colouring never holds the window. A line longer than its grammar's measured limit, the rest of a file once a second of colouring is spent, and a language without a grammar whose licence lets Satellite ship it all show as plain text in the theme's text colour.
 - The window frame, the title bar overlay and the native dialogs follow the theme's type, light or dark.
-- A theme's colours are shown as published, so a pair it draws below 4.5 to 1 stays its makers' choice. The mapping never makes a pair worse than the theme does.
+- A colour the theme defines for a thing is used as published, so a pair the theme itself draws below 4.5 to 1 stays its makers' choice.
+- Where Satellite draws on a surface the theme has no key for, or pairs two theme colours the theme never pairs, the mapping reaches 4.5 to 1 for text and 3 to 1 for control edges and status pixels on their ground. It takes the theme's own key first, like the selection's own foreground on a selected row, and only then mixes the theme's text colour into the ground, or into the state colour for a state, until the pair passes.
+- Text and pixels on `raised`, `sel` and `hover` take those floored values through scoped tokens, so `dim` on a selected row reads the selection's foreground. `raised` is the first of its keys that differs from `side`, so a dialog stands off the sidebar, and fields and selects get a `ctl` edge at 3 to 1 against `side`, `raised` and `bg`.
+- `theme-look.test.ts` measures every pair for every curated theme and lists the ones still under the bar. For Dracula those are `dim` on `bg` at 3.03 and on `side` at 3.36, its line numbers on the editor and its inactive tab text on its tab, both drawn so by the theme.
+- Each theme picks its state colours so the states a person tells apart at a glance also differ in brightness, as Satellite's own do. Dracula's working is its bright cyan, ready its green and done its purple.
 
 | Token | From the theme's `colors`, first one present | Otherwise |
 | --- | --- | --- |
-| `bg` | `editor.background` | required |
+| `bg` | `editor.background` over black for a dark theme or white for a light one | required |
 | `side` | `sideBar.background` | `bg` |
-| `raised` | `quickInput.background`, `editorWidget.background` | `side` |
+| `raised` | `quickInput.background`, `editorWidget.background`, `dropdown.background`, `editor.background`, the first that differs from `side` | `side` |
 | `sel` | `list.activeSelectionBackground` over `side` | `fg` at 16% over `side` |
 | `hover` | `list.hoverBackground` over `side` | `fg` at 8% over `side` |
 | `line` | `sideBar.border`, `tab.border`, `editorGroup.border` over `side` | `fg` at 12% over `side` |
-| `ctl` | `input.border`, `dropdown.border` over `side` | `fg` at 20% over `side` |
+| `ctl` | `input.border`, `dropdown.border`, `settings.textInputBorder` over `side`, the first at 3 to 1 against `side`, `raised` and `bg` | `fg` mixed into `side` until it is |
 | `fg` | `foreground`, `editor.foreground` | required |
 | `fg2` | `descriptionForeground` | `fg` at 70% |
 | `dim` | `tab.inactiveForeground`, `editorLineNumber.foreground` | `fg` at 50% |
-| `add` / `del` | `diffEditor.insertedLineBackground` / `diffEditor.removedLineBackground` over `bg` | the format's own line defaults |
-| `addfg` / `delfg` | `gitDecoration.addedResourceForeground` / `gitDecoration.deletedResourceForeground` | ready / destructive |
+| `add` / `del` | `diffEditor.insertedLineBackground` / `diffEditor.removedLineBackground` over `bg` | the format's own line defaults, as the diff draws them |
+| `addfg` / `delfg` | `gitDecoration.addedResourceForeground`, `gitDecoration.untrackedResourceForeground` / `gitDecoration.deletedResourceForeground` | ready / destructive |
 | `accent` | `focusBorder` | working |
 | `pri-bg` / `pri-fg` | `button.background` / `button.foreground` | working / `fg` |
 | `signal`, `sigfg` | needs you | required |
-| `volt`, `volt-edge` | ready | required |
-| `lilac`, `lilac-edge` | done | required |
+| `volt`, `volt-edge` | ready, with a light theme's edge mixed toward `fg` to 3 to 1 on `bg` and `side` | required |
+| `lilac`, `lilac-edge` | done, with the same edge on a light theme | required |
 | `working`, `idle`, `danger` | working, idle, destructive | required |
-| selection | `selection.background`, `editor.selectionBackground` | the browser's |
+| selection | `selection.background`, `editor.selectionBackground` | `fg` at 30% |
 
 The shadow keeps Satellite's value for the theme's type, and the title bar overlay takes `side` with `fg2` for its symbols.
 
