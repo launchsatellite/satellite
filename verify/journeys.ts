@@ -123,11 +123,10 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
 }
 
 async function runWithParts(journey: Journey, target: AppTarget): Promise<Outcome> {
-  const first = await runJourney(journey, target);
-  const screenshots = [...first.screenshots];
+  const screenshots: string[] = [];
   const skipped: string[] = [];
-  let failure = first.failure;
-  for (const part of journey.then ?? []) {
+  let failure: string | undefined;
+  for (const [index, part] of [journey, ...(journey.then ?? [])].entries()) {
     if (failure !== undefined) break;
     if (part.skip !== undefined) {
       skipped.push(`${part.scenario}, ${part.skip}`);
@@ -135,7 +134,9 @@ async function runWithParts(journey: Journey, target: AppTarget): Promise<Outcom
     }
     const outcome = await runJourney(part, target);
     screenshots.push(...outcome.screenshots);
-    failure = outcome.failure === undefined ? undefined : `${part.scenario}, ${outcome.failure}`;
+    if (outcome.failure !== undefined) {
+      failure = index === 0 ? outcome.failure : `${part.scenario}, ${outcome.failure}`;
+    }
   }
   return failure === undefined ? { screenshots, skipped } : { failure, screenshots, skipped };
 }
