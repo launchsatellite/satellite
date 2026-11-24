@@ -3,6 +3,12 @@ import { join } from "node:path";
 import type { Plugin } from "vite";
 import { z } from "zod";
 import { curatedThemes } from "../src/shared/themes/curated-themes.ts";
+import {
+  grammarName,
+  grammarNotice,
+  grammarNotices,
+  unlicensedGrammarStub,
+} from "./grammar-notices.ts";
 
 const manifestSchema = z.object({
   name: z.string(),
@@ -26,7 +32,16 @@ async function section(name: string, file: string): Promise<string> {
   return `## ${name} - ${version} ${label}\n\n${text.trim()}\n`;
 }
 
-async function shippedOutsideTheBundle(listed: string): Promise<string[]> {
+async function grammarSection(grammars: Set<string>): Promise<string[]> {
+  if (grammars.size === 0) return [];
+  const { version } = await manifest(join("node_modules", "tm-grammars"));
+  const heading = `## The code viewer's grammars, from tm-grammars - ${version}`;
+  return [
+    `${heading}\n\nGrammars ${[...grammars].sort().join(", ")}.\n\n${grammarNotices(grammars)}\n`,
+  ];
+}
+
+async function shippedOutsideTheBundle(listed: string, grammars: Set<string>): Promise<string[]> {
   const { dependencies = {}, devDependencies = {} } = await manifest(".");
   const runtime = Object.keys(dependencies).filter((name) => !listed.includes(`## ${name} - `));
   const fonts = Object.keys(devDependencies).filter((name) =>
@@ -40,18 +55,33 @@ async function shippedOutsideTheBundle(listed: string): Promise<string[]> {
     ...curatedThemes.map(
       ({ name, site, licence }) => `## The ${name} theme, ${site}\n\n${licence}\n`,
     ),
+    ...(await grammarSection(grammars)),
   ];
 }
 
 export function thirdPartyLicenses(): Plugin {
+  const grammars = new Set<string>();
   return {
     name: "satellite-third-party-licenses",
     apply: "build",
+    load(id) {
+      return unlicensedGrammarStub(id);
+    },
+    generateBundle(_options, bundle) {
+      grammars.clear();
+      for (const output of Object.values(bundle)) {
+        if (output.type !== "chunk") continue;
+        for (const id of output.moduleIds) {
+          const name = grammarName(id);
+          if (name !== undefined && grammarNotice(name) !== undefined) grammars.add(name);
+        }
+      }
+    },
     async writeBundle({ dir }) {
       if (dir === undefined) return;
       const path = join(dir, thirdPartyLicensesFile);
       const listed = await readFile(path, "utf8");
-      const extra = await shippedOutsideTheBundle(listed);
+      const extra = await shippedOutsideTheBundle(listed, grammars);
       await writeFile(path, [listed.trimEnd(), ...extra].join("\n\n"));
     },
   };
