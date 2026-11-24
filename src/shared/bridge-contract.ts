@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { curatedThemeIds } from "./themes/curated-themes.ts";
 import {
   isBranchName,
   isStartRef,
@@ -101,7 +102,7 @@ export const interfaceLimits = {
   centreMin: 400,
 };
 
-export const themeChoice = z.enum(["system", "light", "dark"]);
+export const themeChoice = z.enum(["system", "light", "dark", ...curatedThemeIds]);
 export const titleBarFrame = z.enum(["inset", "overlay", "native"]);
 export const windowFrame = z.strictObject({ frame: titleBarFrame, fullScreen: z.boolean() });
 export const sessionStatus = z.enum(["idle", "working", "needs-you", "done", "stopped"]);

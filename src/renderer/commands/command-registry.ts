@@ -1,3 +1,4 @@
+import type { CuratedThemeId } from "../../shared/themes/curated-themes.ts";
 import {
   matchesShortcut,
   type KeyPress,
@@ -26,6 +27,7 @@ export type CommandId =
   | "theme.system"
   | "theme.light"
   | "theme.dark"
+  | `theme.${CuratedThemeId}`
   | "notifications.off"
   | "notifications.on"
   | "inbox.newest"

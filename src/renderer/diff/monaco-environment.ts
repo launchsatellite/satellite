@@ -1,5 +1,6 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
+import { showThemeSyntax } from "./theme-syntax.ts";
 
 const lowAlpha = "33";
 const sixDigitHex = /^#[0-9a-f]{6}$/;
@@ -20,6 +21,7 @@ function hexToken(styles: CSSStyleDeclaration, paint: CanvasRenderingContext2D, 
 
 export function applyMonacoTheme(): void {
   self.MonacoEnvironment ??= { getWorker: () => new EditorWorker() };
+  if (showThemeSyntax()) return;
   const styles = getComputedStyle(document.documentElement);
   const paint = document.createElement("canvas").getContext("2d");
   if (paint === null) throw new Error("A canvas is needed to read the theme colours");

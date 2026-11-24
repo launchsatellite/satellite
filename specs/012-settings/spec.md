@@ -9,7 +9,7 @@ The theme and notifications change only through commands nobody discovers, and n
 ## Scope
 
 - A Settings dialog built from the kit's dialog, one column of sections with lowercase headlines, scrolling inside its body when the window is short. Every change applies at once and is saved the way it is saved today, in `interface.json`, with no Save button. Done closes it.
-- **appearance.** The theme as one segmented choice, System, Light or Dark, showing the current one.
+- **appearance.** The theme as one choice, System, Light, Dark or a curated theme (spec 013), showing the current one.
 - **notifications.** On or Off as one segmented choice showing the current one, with one sentence saying they only come when a workspace needs you and that the system's own notification settings for Satellite still decide whether they show.
 - **tools.** The first-run check of git, the GitHub CLI and Claude Code, each with its found version or its problem and the existing fix text, the ready count and Check again, the same rows and the same `tools.check` channel the check card uses.
 - **guide.** Show the guide, which closes Settings and starts the guide as the command does, unavailable with a sentence until a project is added.
