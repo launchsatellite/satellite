@@ -4,6 +4,8 @@ import type { Plugin } from "vite";
 import { z } from "zod";
 import { curatedThemes } from "../src/shared/themes/curated-themes.ts";
 import {
+  checkEntryGrammars,
+  checkSameGrammar,
   grammarName,
   grammarNotice,
   grammarNotices,
@@ -96,9 +98,13 @@ export function thirdPartyLicenses(): { page: Plugin; worker: Plugin } {
     page: {
       name: "satellite-third-party-licenses",
       apply: "build",
+      buildStart() {
+        checkEntryGrammars();
+      },
       load: stub,
       generateBundle(_options, bundle) {
         collect(bundle);
+        for (const name of grammars) checkSameGrammar(name);
       },
       async writeBundle({ dir }) {
         if (dir === undefined) return;

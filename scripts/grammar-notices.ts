@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { grammars } from "tm-grammars";
+import { z } from "zod";
 
 interface GrammarNotice {
   files: string[];
@@ -58,4 +60,34 @@ export function grammarNotices(names: Iterable<string>): string {
     texts.add(text);
   }
   return [...texts].join("\n\n");
+}
+
+const highlighterKeys = new Set(["aliases", "embeddedLangs", "embeddedLangsLazy"]);
+const shippedFrom = /JSON\.parse\(("(?:[^"\\]|\\.)*")\)/;
+const entryImport = /shiki\/langs\/([a-z0-9-]+)\.mjs/g;
+
+export function checkEntryGrammars(): void {
+  const table = readFileSync("src/renderer/diff/syntax-grammars.ts", "utf8");
+  for (const [, name = ""] of table.matchAll(entryImport)) {
+    if (grammarNotice(name) === undefined) {
+      throw new Error(`the grammar ${name} has no licence Satellite can ship`);
+    }
+  }
+}
+
+export function checkSameGrammar(name: string): void {
+  const shipped = readFileSync(`node_modules/@shikijs/langs/dist/${name}.mjs`, "utf8");
+  const literal = shippedFrom.exec(shipped)?.[1];
+  const noticed: unknown = JSON.parse(
+    readFileSync(`node_modules/tm-grammars/grammars/${name}.json`, "utf8"),
+  );
+  const parsed: unknown =
+    literal === undefined ? undefined : JSON.parse(z.string().parse(JSON.parse(literal)));
+  const grammar = z.record(z.string(), z.unknown()).parse(parsed);
+  const own = Object.fromEntries(
+    Object.entries(grammar).filter(([key]) => !highlighterKeys.has(key)),
+  );
+  if (!isDeepStrictEqual(own, noticed)) {
+    throw new Error(`the shipped ${name} grammar differs from the one tm-grammars licenses`);
+  }
 }
