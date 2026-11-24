@@ -6,7 +6,6 @@ import { samePath } from "./paths.ts";
 export interface FolderIdentity {
   dev: bigint;
   ino: bigint;
-  born: bigint;
 }
 
 const windowsPathLimit = 150;
@@ -29,16 +28,14 @@ export function isMissing(error: unknown): boolean {
 export async function folderIdentity(path: string): Promise<FolderIdentity | undefined> {
   try {
     const entry = await lstat(path, { bigint: true });
-    return entry.isDirectory()
-      ? { dev: entry.dev, ino: entry.ino, born: entry.birthtimeNs }
-      : undefined;
+    return entry.isDirectory() ? { dev: entry.dev, ino: entry.ino } : undefined;
   } catch {
     return undefined;
   }
 }
 
 export function sameIdentity(a: FolderIdentity | undefined, b: FolderIdentity): boolean {
-  return a?.dev === b.dev && a.ino === b.ino && a.born === b.born;
+  return a?.dev === b.dev && a.ino === b.ino;
 }
 
 export function isSafeFileName(name: string, platform: NodeJS.Platform = process.platform) {

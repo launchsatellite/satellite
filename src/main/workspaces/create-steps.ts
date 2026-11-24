@@ -483,10 +483,7 @@ function worktreeStep(context: CreationContext, shared: Shared): CreationStepRun
   };
 }
 
-async function readAll(
-  path: string,
-  expected: Pick<FolderIdentity, "dev" | "ino">,
-): Promise<string> {
+async function readAll(path: string, expected: FolderIdentity): Promise<string> {
   let handle;
   try {
     handle = await open(path, constants.O_RDONLY | noFollow | nonBlocking);
