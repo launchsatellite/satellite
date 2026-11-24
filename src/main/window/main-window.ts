@@ -22,6 +22,7 @@ export function mainWindow(): BrowserWindow | undefined {
 }
 
 export function showTheme(choice: ThemeChoice): void {
+  if (choice === theme) return;
   theme = choice;
   nativeTheme.themeSource = themeSource(choice);
   recolour?.();
