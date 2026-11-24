@@ -1,5 +1,5 @@
 {
-  "description": "A fresh repo with one commit on main, a stand-in gh, a stand-in Claude Code at its prompt and Satellite set to the light theme.",
+  "description": "A fresh repo with one commit on main, a stand-in gh, a stand-in Claude Code that prints its logo in block characters and a box in box drawing characters, then waits at its prompt, and Satellite set to the light theme.",
   "repo": [
     { "write": { "path": "README.md", "content": "# Verify repo\n" } },
     { "git": ["init", "-b", "main"] },
@@ -21,6 +21,15 @@
   ],
   "claude": {
     "version": "2.1.78 (Claude Code stand-in)",
-    "script": [{ "print": "Claude Code stand-in\r\n" }, { "print": "> " }]
+    "script": [
+      { "print": "Claude Code stand-in\r\n" },
+      {
+        "print": " \u2590\u259b\u2588\u2588\u2588\u259c\u258c\r\n\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u259b\u2598\r\n  \u2598\u2598 \u259d\u259d\r\n"
+      },
+      {
+        "print": "\u256d\u2500\u2500\u2500\u2500\u256e\r\n\u2502 ok \u2502\r\n\u2570\u2500\u2500\u2500\u2500\u256f\r\n"
+      },
+      { "print": "> " }
+    ]
   }
 }

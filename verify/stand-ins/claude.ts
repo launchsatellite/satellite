@@ -188,13 +188,16 @@ async function main(): Promise<void> {
     return;
   }
   appendStandInEvent({ type: "start", tool: "claude", pid: process.pid, args });
-  process.stdout.on("resize", () => {
+  const logSize = () => {
     appendStandInEvent({
       type: "resize",
+      pid: process.pid,
       cols: process.stdout.columns,
       rows: process.stdout.rows,
     });
-  });
+  };
+  if (process.stdout.isTTY) logSize();
+  process.stdout.on("resize", logSize);
   const settings = await readSettings();
   trusted = !claude.script.some((step) => "trust" in step);
   listen();

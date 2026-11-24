@@ -6,6 +6,7 @@ import { z } from "zod";
 import { noticeGapMs } from "../../src/main/inbox/notices.ts";
 import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { terminalText } from "../terminal-screen.ts";
 import {
   claudePids,
   gone,
@@ -48,7 +49,7 @@ const turnedOn = "Notifications are on for every workspace that needs you.";
 const savedInterface = z.object({ version: z.literal(5), notifications: z.boolean() });
 
 function shownOf(lines: readonly RecordedNotice[]): Shown[] {
-  return lines.flatMap((line) => (line.kind === "badge" ? [] : [line]));
+  return lines.flatMap((line) => (line.kind === "notice" || line.kind === "close" ? [line] : []));
 }
 
 function countsOf(lines: readonly RecordedNotice[]): number[] {
@@ -142,11 +143,10 @@ async function focusTerminal(session: AppSession): Promise<void> {
 }
 
 async function terminalShows(session: AppSession, text: string, when: string): Promise<void> {
-  const terminal = session.page.getByTestId("terminal");
   let read = "";
   await waitUntil(
     async () => {
-      read = (await terminal.count()) === 0 ? "" : await terminal.innerText();
+      read = await terminalText(session.page);
       return read.includes(text);
     },
     promptTimeoutMs,
@@ -390,7 +390,13 @@ async function keptAfterRestart(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Escape");
   await gone(session, "palette-input", "after closing the command menu");
   await attributeIs(session, "workspace-repo-beta", "aria-current", "after the restart");
-  await startClaude(session, pids.length + 1);
+  await waitUntil(
+    async () => (await claudePids(session)).length === pids.length + 1,
+    promptTimeoutMs,
+    "beta did not resume by itself after the restart",
+  );
+  await terminalShows(session, "Resumed session", "in beta after the restart");
+  await session.page.getByTestId("terminal").locator("textarea").focus();
   await prompt(session, "beta");
   await session.page.keyboard.press("Enter");
   await terminalShows(session, "Allow Bash for both", "in beta after the restart");

@@ -119,7 +119,7 @@ function spies() {
       Promise.resolve({ frame: "inset", fullScreen: false }),
     ),
     "terminal.start": vi.fn<BridgeHandler<"terminal.start">>(() =>
-      Promise.resolve({ windowsPty: null }),
+      Promise.resolve({ windowsPty: null, driven: false }),
     ),
     "terminal.write": vi.fn<BridgeHandler<"terminal.write">>(() => Promise.resolve({})),
     "terminal.resize": vi.fn<BridgeHandler<"terminal.resize">>(() => Promise.resolve({})),

@@ -18,6 +18,7 @@ import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import type { RunningRoot } from "../processes/processes-handlers.ts";
 import { launchableClaude } from "../tools/tool-check.ts";
+import { drivenByVerify } from "../window/verification.ts";
 import {
   answersQuestion,
   declinesQuestion,
@@ -53,6 +54,7 @@ export interface TerminalSessions {
   sessionsInside: WorkspaceSessions;
   hookEvent(launchId: string, event: SessionEvent, sessionId: string | null): void;
   roots(): RunningRoot[];
+  quitStates(): { sessions: number; midTask: number; unseen: number };
   closeAll(): Promise<void>;
 }
 interface TerminalOptions {
@@ -145,6 +147,7 @@ export function createTerminalSessions({
   const running = new Set<Session>();
   const launches = new Map<string, Session>();
   const watchedOwners = new WeakSet<BridgeOwner>();
+  const goneOwners = new WeakSet<BridgeOwner>();
   let sweeping: Promise<void> | undefined;
   let closed = false;
   let stopping: Promise<void> | undefined;
@@ -325,6 +328,7 @@ export function createTerminalSessions({
     if (watchedOwners.has(owner)) return;
     watchedOwners.add(owner);
     owner.onGone(() => {
+      goneOwners.add(owner);
       for (const [id, session] of sessions) if (session.owner === owner) end(id, session);
     });
   };
@@ -444,7 +448,9 @@ export function createTerminalSessions({
 
   const start = async (request: StartRequest, owner: BridgeOwner) => {
     const { id, workspace, resume, cols, rows } = request;
+    if (unsettled.size >= bridgeLimits.terminals) await settled([...unsettled].filter(isEnded));
     if (closed) throw new BridgeFailure("failed", "Satellite is quitting.");
+    if (goneOwners.has(owner)) throw new BridgeFailure("failed", "That window is gone.");
     if (sessions.has(id)) {
       throw new BridgeFailure("invalid-request", "That terminal is already running.");
     }
@@ -490,7 +496,7 @@ export function createTerminalSessions({
       settle(session);
       tellExit(session, 0, "ended");
     }
-    return { windowsPty: windowsPty() };
+    return { windowsPty: windowsPty(), driven: drivenByVerify() };
   };
 
   return {
@@ -564,6 +570,19 @@ export function createTerminalSessions({
           ? []
           : [{ owner, root: { session: id, workspace, pid: pty.pid, spawnedAt } }],
       );
+    },
+    quitStates() {
+      const live = [...running].filter(({ ended }) => !ended);
+      return {
+        sessions: live.length,
+        midTask: live.filter(
+          ({ hooks, hooksOff, state }) =>
+            hooks !== undefined &&
+            !hooksOff &&
+            (state.status === "working" || needsYou(state.status)),
+        ).length,
+        unseen: live.filter(({ hooks, hooksOff }) => hooks === undefined || hooksOff).length,
+      };
     },
     async closeAll() {
       closed = true;

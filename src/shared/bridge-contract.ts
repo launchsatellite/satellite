@@ -722,7 +722,7 @@ export const bridgeRequests = {
       cols,
       rows,
     }),
-    response: z.strictObject({ windowsPty: windowsPty.nullable() }),
+    response: z.strictObject({ windowsPty: windowsPty.nullable(), driven: z.boolean() }),
   },
   "terminal.write": {
     request: z.strictObject({

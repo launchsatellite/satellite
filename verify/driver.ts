@@ -7,6 +7,7 @@ import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
+import type { Terminal } from "@xterm/xterm";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { z } from "zod";
 import { endWindowsTree } from "../src/main/platform/process-tree.ts";
@@ -46,6 +47,7 @@ export interface AppSession {
   consoleErrors: string[];
   screenshot(name: string): Promise<string>;
   relaunch(whileClosed?: () => Promise<void>): Promise<void>;
+  quit(): Promise<void>;
   close(): Promise<CloseResult>;
 }
 export interface WindowTree {
@@ -81,6 +83,7 @@ const recordedNotice = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("notice"), title: z.string(), body: z.string() }),
   z.strictObject({ kind: z.literal("close") }),
   z.strictObject({ kind: z.literal("badge"), count: z.int() }),
+  z.strictObject({ kind: z.literal("question"), message: z.string() }),
 ]);
 const repoRoot = join(import.meta.dirname, "..");
 const electronVite = join(repoRoot, "node_modules/electron-vite/bin/electron-vite.js");
@@ -518,7 +521,16 @@ export async function readTree(page: Page): Promise<WindowTree> {
       (elements, limit) =>
         elements.map((element) => {
           const box = element.getBoundingClientRect();
-          const text = element instanceof HTMLElement ? element.innerText : element.textContent;
+          const terminal = [
+            ...element.querySelectorAll<HTMLElement & { terminal?: Terminal }>("[data-renderer]"),
+          ].find((host) => host.checkVisibility())?.terminal;
+          const rows = [];
+          for (let row = 0; terminal !== undefined && row < terminal.rows; row += 1) {
+            const buffer = terminal.buffer.active;
+            rows.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? "");
+          }
+          const shown = element instanceof HTMLElement ? element.innerText : element.textContent;
+          const text = terminal === undefined ? shown : [...rows, shown].join("\n");
           return {
             testId: element.getAttribute("data-testid") ?? "",
             visible:
@@ -719,6 +731,15 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       if (closing !== undefined) return Promise.reject(new Error("the app is already closed"));
       relaunching = relaunchOnce(whileClosed);
       return relaunching;
+    },
+    async quit() {
+      const { child } = running;
+      if (process.platform === "win32") throw new Error("quit sends SIGTERM, which Windows lacks");
+      if (child === undefined || hasExited(child)) return;
+      child.kill("SIGTERM");
+      if (!(await waitForExit(child, exitTimeoutMs))) {
+        throw new Error("the app was still running 10 seconds after SIGTERM");
+      }
     },
     close() {
       closing ??= closeOnce();

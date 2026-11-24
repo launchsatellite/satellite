@@ -28,7 +28,7 @@ function alphaFolder(session: AppSession): string {
 }
 
 function shownOf(lines: readonly RecordedNotice[]) {
-  return lines.flatMap((line) => (line.kind === "badge" ? [] : [line]));
+  return lines.flatMap((line) => (line.kind === "notice" || line.kind === "close" ? [line] : []));
 }
 
 async function select(session: AppSession, name: string): Promise<void> {

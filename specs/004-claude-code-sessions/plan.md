@@ -1,0 +1,6 @@
+# 004 Claude Code sessions plan, resume on open
+
+1. **Resume by itself.** `src/renderer/sessions/use-sessions.ts` keeps the workspaces that already resumed by themselves in this load of the window, and keeps the try at the terminal limit. `src/renderer/sessions/sessions-pane.tsx` resumes once `sessions.resumable` says yes and nothing stands in the way, shows the limit sentence when there is no room, and puts focus back where it was. `src/renderer/window/app-window.tsx` says when the guide or the tool check stands in the way. Proof, journey `sessions`.
+2. **Quit question.** `src/main/terminal/terminal-sessions.ts` counts sessions mid-task and those whose hooks are off, `src/main/processes/processes-handlers.ts` counts what Running processes lists, `src/main/main.ts` bounds that read at 2 seconds, `src/main/window/quit-question.ts` decides and words it. A run started by the driver records the question through the notification recorder. Proof, `quit-question.test.ts`, `terminal-sessions.test.ts`, `processes-handlers.test.ts` and journey `quit`.
+3. **Docs.** `SATELLITE.md`, `ARCHITECTURE.md`, `DESIGN.md` and skill `satellite-verify`.
+4. **Acceptance on each system.** The quit question through the close button on Windows, then this spec turns Done and this plan goes.
