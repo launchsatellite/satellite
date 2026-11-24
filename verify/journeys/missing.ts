@@ -3,6 +3,7 @@ import { chmod, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
+import { terminalText } from "../terminal-screen.ts";
 import { claudePids, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
@@ -36,8 +37,7 @@ async function tabCount(session: AppSession, expected: number, when: string): Pr
 
 async function bannerShown(session: AppSession, when: string): Promise<void> {
   await waitUntil(
-    async () =>
-      (await session.page.getByTestId("terminal").textContent())?.includes(banner) === true,
+    async () => (await terminalText(session.page)).includes(banner),
     promptTimeoutMs,
     `${when} the terminal never showed Claude Code`,
   );

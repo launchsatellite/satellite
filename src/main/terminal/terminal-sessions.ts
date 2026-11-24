@@ -18,6 +18,7 @@ import type { HookListener } from "../sessions/hook-listener.ts";
 import type { LastSessions } from "../sessions/last-sessions.ts";
 import type { RunningRoot } from "../processes/processes-handlers.ts";
 import { launchableClaude } from "../tools/tool-check.ts";
+import { drivenByVerify } from "../window/verification.ts";
 import {
   answersQuestion,
   declinesQuestion,
@@ -495,7 +496,7 @@ export function createTerminalSessions({
       settle(session);
       tellExit(session, 0, "ended");
     }
-    return { windowsPty: windowsPty() };
+    return { windowsPty: windowsPty(), driven: drivenByVerify() };
   };
 
   return {

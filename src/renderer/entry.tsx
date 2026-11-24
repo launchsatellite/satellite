@@ -10,7 +10,6 @@ const fontFamilies = [
   "Funnel Display Variable",
   "Geist Mono Variable",
   "Geist Pixel",
-  "Satellite Terminal Mono",
 ];
 
 const [, loaded, frame] = await Promise.all([

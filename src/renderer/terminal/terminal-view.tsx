@@ -3,7 +3,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   bridgeLimits,
   type SessionEnding,
@@ -13,12 +13,13 @@ import { textChunks } from "../../shared/text-chunks.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
+import { codeType } from "../ui/code-type.ts";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
+import { gpuRenderer } from "./gpu-renderer.ts";
 import { createHeldKeyGate } from "./held-keys.ts";
 import { linkFollow } from "./link-follow.ts";
 import { pastedText } from "./pasted-text.ts";
-import "./terminal-font.css";
 import { imagePasteSequence, isShiftEnter, newlineSequence, opensLink } from "./terminal-keys.ts";
 import { terminalTheme } from "./terminal-theme.ts";
 
@@ -72,6 +73,7 @@ export function TerminalView({
   const { projectId, workspace: key } = workspace;
   const host = useRef<HTMLDivElement>(null);
   const show = useRef<() => void>(undefined);
+  const hide = useRef<() => void>(undefined);
   const prompt = useRef<PromptTarget>(undefined);
   const noticedNow = useRef(false);
   const outward = useRef({ onAskLink, notify, onMissing, onStarted });
@@ -89,11 +91,13 @@ export function TerminalView({
       else tell(step.refuse, "error");
     };
     const terminal = new Terminal({
-      fontFamily: '"Satellite Terminal Mono", monospace',
-      fontSize: 13,
+      fontFamily: codeType.fontFamily,
+      fontSize: codeType.fontSize,
+      lineHeight: codeType.terminalLineHeight,
+      minimumContrastRatio: 4.5,
+      rescaleOverlappingGlyphs: true,
       scrollback: 5000,
       allowProposedApi: true,
-      cursorBlink: !matchMedia("(prefers-reduced-motion: reduce)").matches,
       theme: terminalTheme(),
       linkHandler: {
         activate: (event, text) => {
@@ -133,6 +137,7 @@ export function TerminalView({
     const stopExit = subscribe("terminal.exit", ({ id, ending }) => {
       if (id === terminalId) end(endings[ending]);
     });
+    let current = true;
     let queue: Promise<unknown> = invoke("terminal.start", {
       id: terminalId,
       program: "claude",
@@ -141,8 +146,10 @@ export function TerminalView({
       cols: sent.cols,
       rows: sent.rows,
     }).then((result) => {
+      if (!current) return;
       if (result.ok) {
         if (result.value.windowsPty !== null) terminal.options.windowsPty = result.value.windowsPty;
+        if (result.value.driven) Object.assign(element, { terminal });
         outward.current.onStarted();
         return;
       }
@@ -161,6 +168,10 @@ export function TerminalView({
       sent = { cols, rows };
       queue = queue.then(() => invoke("terminal.resize", { id: terminalId, cols, rows }));
     };
+    const gpu = gpuRenderer(terminal, (renderer) => {
+      element.setAttribute("data-renderer", renderer);
+      sendSize();
+    });
 
     const input = terminal.onData(send);
     const paste = (text: string) => {
@@ -221,14 +232,33 @@ export function TerminalView({
     });
 
     let frame = 0;
-    const observer = new ResizeObserver(() => {
+    const refit = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(sendSize);
-    });
+    };
+    const observer = new ResizeObserver(refit);
     observer.observe(element);
-    show.current = () => {
+    let scale = matchMedia(`(resolution: ${String(devicePixelRatio)}dppx)`);
+    const rescaled = () => {
+      scale.removeEventListener("change", rescaled);
+      scale = matchMedia(`(resolution: ${String(devicePixelRatio)}dppx)`);
+      scale.addEventListener("change", rescaled);
+      refit();
+    };
+    scale.addEventListener("change", rescaled);
+    const sight = new IntersectionObserver((entries) => {
+      if (entries.at(-1)?.isIntersecting !== true || !element.checkVisibility()) return;
+      gpu.take();
       sendSize();
+    });
+    sight.observe(element);
+    show.current = () => {
       if (!noticedNow.current) terminal.focus();
+    };
+    hide.current = () => {
+      gpu.release();
+      sight.unobserve(element);
+      sight.observe(element);
     };
     prompt.current = {
       paste,
@@ -244,7 +274,9 @@ export function TerminalView({
     darkScheme.addEventListener("change", retheme);
 
     return () => {
+      current = false;
       show.current = undefined;
+      hide.current = undefined;
       prompt.current = undefined;
       element.removeEventListener("paste", pasteClipboard, true);
       element.removeEventListener("dragover", dragOver);
@@ -252,11 +284,13 @@ export function TerminalView({
       element.removeEventListener("focusin", tookFocus);
       darkScheme.removeEventListener("change", retheme);
       observer.disconnect();
+      sight.disconnect();
+      scale.removeEventListener("change", rescaled);
       cancelAnimationFrame(frame);
       input.dispose();
       stopData();
       stopExit();
-      terminal.dispose();
+      gpu.end();
       void invoke("terminal.close", { id: terminalId });
     };
   }, [terminalId, projectId, key, resume]);
@@ -274,6 +308,10 @@ export function TerminalView({
   useEffect(() => {
     outward.current = { onAskLink, notify, onMissing, onStarted };
   }, [onAskLink, notify, onMissing, onStarted]);
+
+  useLayoutEffect(() => {
+    if (!shown) hide.current?.();
+  }, [shown]);
 
   useEffect(() => {
     if (shown) show.current?.();
