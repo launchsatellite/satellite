@@ -26,10 +26,10 @@ export const curatedThemes = [
     ].join("\n\n"),
     theme: dracula,
     states: {
-      working: "terminal.ansiBlue",
+      working: "terminal.ansiBrightCyan",
       needsYou: "list.warningForeground",
       ready: "terminal.ansiGreen",
-      done: "terminal.ansiCyan",
+      done: "terminal.ansiBlue",
       idle: "terminal.ansiBrightBlack",
       danger: "errorForeground",
     },
