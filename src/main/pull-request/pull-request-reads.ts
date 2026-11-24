@@ -168,8 +168,7 @@ export function createPullRequests({
   const pace = createPace({ now, after });
   const memory = new Map<string, Remembered>();
   const running = new Map<string, Running>();
-  const newestAsk = new Map<string, number>();
-  let asks = 0;
+  const newestAsk = new Map<string, BridgeOwner>();
   const active = new Set<ActiveRead>();
   const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
   const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
@@ -524,31 +523,29 @@ export function createPullRequests({
     handlers: {
       "pullRequest.read": async ({ workspace, detail, fresh = false }, owner) => {
         const key = keyOf(workspace);
-        asks += 1;
-        const asked = asks;
-        newestAsk.set(key, asked);
+        newestAsk.set(key, owner);
+        const asker = () => newestAsk.get(key) ?? owner;
         const folder = await sessionFolder(home, store, workspace, sentences);
-        const newest = newestAsk.get(key) === asked;
         let joined = running.get(key);
         if (joined !== undefined && !joined.detail && detail) {
           await joined.answer.catch(() => undefined);
           joined = running.get(key);
         }
         if (joined !== undefined && (joined.detail || !detail)) {
-          if (newest) joined.asker.owner = owner;
+          joined.asker.owner = asker();
           return joined.answer;
         }
         const held = memory.get(key);
         if (held !== undefined) {
-          if (newest && held.owner !== owner) {
-            held.owner = owner;
+          if (held.owner !== asker()) {
+            held.owner = asker();
             tellNeeding();
           }
           const reused = answerFrom(held, detail, fresh);
           if (reused !== undefined) return reused;
         }
         if (pace.paused()) return unavailable("rate-limited");
-        return start(key, workspace, folder, detail, owner).answer;
+        return start(key, workspace, folder, detail, asker()).answer;
       },
       "pullRequest.log": async ({ workspace, job }) => {
         const folder = await sessionFolder(home, store, workspace, sentences);
@@ -583,6 +580,7 @@ export function createPullRequests({
       for (const [key, held] of memory) {
         if (!isInsidePath(folder, held.folder)) continue;
         memory.delete(key);
+        newestAsk.delete(key);
         for (const asked of lastLogs.keys()) {
           if (asked.startsWith(`${key}/`)) lastLogs.delete(asked);
         }

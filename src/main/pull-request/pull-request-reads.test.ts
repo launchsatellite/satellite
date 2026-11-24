@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -36,6 +36,7 @@ const { join } = require("node:path");
 const dir = process.argv[2];
 const args = process.argv.slice(3);
 appendFileSync(join(dir, "calls.jsonl"), JSON.stringify({ args, cwd: process.cwd() }) + "\\n");
+while (existsSync(join(dir, "hold"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
 const numbered = args[0] === "pr" && /^[0-9]+$/.test(args[2]);
 const name = numbered ? "view-" + args[2] : { pr: "view", api: args[1] === "graphql" ? "threads" : "log" }[args[0]];
 const file = join(dir, name + ".json");
@@ -185,6 +186,8 @@ async function setup(options: { push?: boolean } = {}) {
       .filter((line) => line !== "")
       .map((line) => recorded.parse(JSON.parse(line)));
   };
+  const hold = (held: boolean) =>
+    held ? writeFile(join(dir, "hold"), "") : rm(join(dir, "hold"), { force: true });
   const read = (workspace: WorkspaceRef, detail = false, fresh = false) =>
     reads.handlers["pullRequest.read"]({ workspace, detail, fresh }, owner);
   return {
@@ -194,6 +197,7 @@ async function setup(options: { push?: boolean } = {}) {
     needing,
     answer,
     calls,
+    hold,
     read,
     advance: (ms: number) => {
       time += ms;
@@ -644,6 +648,33 @@ describe("pull request reads", { timeout: 30_000 }, () => {
       read({ workspace: first, detail: false }, page),
     ]);
     expect(reloaded).toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
+  it("keeps a newer page that joined a read while an older detail read waited for it", async () => {
+    const { answer, reads, calls, hold } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const older = vi.fn<BridgeOwner["emit"]>();
+    const newer = vi.fn<BridgeOwner["emit"]>();
+    const olderPage: BridgeOwner = { id: 3, emit: older, onGone: () => undefined };
+    const newerPage: BridgeOwner = { id: 4, emit: newer, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await hold(true);
+    const summary = read({ workspace: first, detail: false }, owner);
+    await vi.waitFor(async () => {
+      expect((await calls()).length).toBeGreaterThan(0);
+    });
+    const detailed = read({ workspace: first, detail: true }, olderPage);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const joined = read({ workspace: first, detail: false }, newerPage);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await hold(false);
+    await Promise.all([summary, detailed, joined]);
+    expect(newer).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    expect(older).not.toHaveBeenCalledWith("pullRequests.needing", {
       needing: [{ workspace: first, needs: ["checks"] }],
     });
   });
