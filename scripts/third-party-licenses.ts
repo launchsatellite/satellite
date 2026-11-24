@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { z } from "zod";
@@ -32,6 +32,18 @@ async function section(name: string, file: string): Promise<string> {
   return `## ${name} - ${version} ${label}\n\n${text.trim()}\n`;
 }
 
+const packageFolder = /^(.*[\\/]node_modules[\\/](?:@[^\\/]+[\\/])?[^\\/@]+)[\\/]/;
+const licenceFile = /^licen[cs]e(?:\.md|\.txt)?$/i;
+
+async function workerPackageSection(folder: string, listed: string): Promise<string | undefined> {
+  const { name, version, license } = await manifest(folder);
+  if (listed.includes(`## ${name} - `)) return undefined;
+  const file = (await readdir(folder)).find((entry) => licenceFile.test(entry));
+  if (file === undefined) throw new Error(`${name} ships in a worker without a licence file`);
+  const text = await readFile(join(folder, file), "utf8");
+  return `## ${name} - ${version} (${license ?? "see below"})\n\n${text.trim()}\n`;
+}
+
 async function grammarSection(grammars: Set<string>): Promise<string[]> {
   if (grammars.size === 0) return [];
   const { version } = await manifest(join("node_modules", "tm-grammars"));
@@ -41,7 +53,11 @@ async function grammarSection(grammars: Set<string>): Promise<string[]> {
   ];
 }
 
-async function shippedOutsideTheBundle(listed: string, grammars: Set<string>): Promise<string[]> {
+async function shippedOutsideTheBundle(
+  listed: string,
+  grammars: Set<string>,
+  workerPackages: Set<string>,
+): Promise<string[]> {
   const { dependencies = {}, devDependencies = {} } = await manifest(".");
   const runtime = Object.keys(dependencies).filter((name) => !listed.includes(`## ${name} - `));
   const fonts = Object.keys(devDependencies).filter((name) =>
@@ -55,34 +71,57 @@ async function shippedOutsideTheBundle(listed: string, grammars: Set<string>): P
     ...curatedThemes.map(
       ({ name, site, licence }) => `## The ${name} theme, ${site}\n\n${licence}\n`,
     ),
+    ...(
+      await Promise.all(
+        [...workerPackages].sort().map((folder) => workerPackageSection(folder, listed)),
+      )
+    ).filter((text) => text !== undefined),
     ...(await grammarSection(grammars)),
   ];
 }
 
-export function thirdPartyLicenses(): Plugin {
+export function thirdPartyLicenses(): { page: Plugin; worker: Plugin } {
   const grammars = new Set<string>();
-  return {
-    name: "satellite-third-party-licenses",
-    apply: "build",
-    load(id) {
-      return unlicensedGrammarStub(id);
-    },
-    generateBundle(_options, bundle) {
-      grammars.clear();
-      for (const output of Object.values(bundle)) {
-        if (output.type !== "chunk") continue;
-        for (const id of output.moduleIds) {
-          const name = grammarName(id);
-          if (name !== undefined && grammarNotice(name) !== undefined) grammars.add(name);
-        }
+  const workerPackages = new Set<string>();
+  const collect = (bundle: Record<string, { type: string; moduleIds?: string[] }>) => {
+    for (const output of Object.values(bundle)) {
+      for (const id of output.moduleIds ?? []) {
+        const name = grammarName(id);
+        if (name !== undefined && grammarNotice(name) !== undefined) grammars.add(name);
       }
+    }
+  };
+  const stub = (id: string) => unlicensedGrammarStub(id);
+  return {
+    page: {
+      name: "satellite-third-party-licenses",
+      apply: "build",
+      load: stub,
+      generateBundle(_options, bundle) {
+        collect(bundle);
+      },
+      async writeBundle({ dir }) {
+        if (dir === undefined) return;
+        const path = join(dir, thirdPartyLicensesFile);
+        const listed = await readFile(path, "utf8");
+        const extra = await shippedOutsideTheBundle(listed, grammars, workerPackages);
+        await writeFile(path, [listed.trimEnd(), ...extra].join("\n\n"));
+      },
     },
-    async writeBundle({ dir }) {
-      if (dir === undefined) return;
-      const path = join(dir, thirdPartyLicensesFile);
-      const listed = await readFile(path, "utf8");
-      const extra = await shippedOutsideTheBundle(listed, grammars);
-      await writeFile(path, [listed.trimEnd(), ...extra].join("\n\n"));
+    worker: {
+      name: "satellite-third-party-licenses-worker",
+      apply: "build",
+      load: stub,
+      generateBundle(_options, bundle) {
+        collect(bundle);
+        for (const output of Object.values(bundle)) {
+          if (output.type !== "chunk") continue;
+          for (const id of output.moduleIds) {
+            const folder = packageFolder.exec(id)?.[1];
+            if (folder !== undefined) workerPackages.add(folder);
+          }
+        }
+      },
     },
   };
 }

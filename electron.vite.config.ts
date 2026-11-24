@@ -12,6 +12,8 @@ const { version } = z
   .object({ version: z.string().min(1).max(40) })
   .parse(JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")));
 
+const licences = thirdPartyLicenses();
+
 export default defineConfig({
   main: {},
   preload: {
@@ -29,8 +31,8 @@ export default defineConfig({
         ),
       },
     },
-    plugins: [react(), tailwindcss(), thirdPartyLicenses()],
-    worker: { format: "es" },
+    plugins: [react(), tailwindcss(), licences.page],
+    worker: { format: "es", plugins: () => [licences.worker] },
     build: {
       minify: true,
       assetsInlineLimit: assetInlineLimit,
