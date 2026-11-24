@@ -4,7 +4,7 @@ import { installCommand } from "../platform/install-commands.ts";
 import { runTool, type ResolvedCommand, type Tool } from "../platform/tools.ts";
 import { parseGhAuthStatus, type GhSignIn } from "./gh-auth.ts";
 
-const versionTimeoutMs = 5000;
+const versionTimeoutMs = 20_000;
 const authTimeoutMs = 10_000;
 const versionLimit = 200;
 const firstWithActive = [2, 40, 0];
