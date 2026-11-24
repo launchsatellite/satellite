@@ -519,9 +519,9 @@ export async function readTree(page: Page): Promise<WindowTree> {
       (elements, limit) =>
         elements.map((element) => {
           const box = element.getBoundingClientRect();
-          const terminal = element.querySelector<HTMLElement & { terminal?: Terminal }>(
-            "[data-renderer]",
-          )?.terminal;
+          const terminal = [
+            ...element.querySelectorAll<HTMLElement & { terminal?: Terminal }>("[data-renderer]"),
+          ].find((host) => host.checkVisibility())?.terminal;
           const rows = [];
           for (let row = 0; terminal !== undefined && row < terminal.rows; row += 1) {
             const buffer = terminal.buffer.active;
