@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -36,6 +36,7 @@ const { join } = require("node:path");
 const dir = process.argv[2];
 const args = process.argv.slice(3);
 appendFileSync(join(dir, "calls.jsonl"), JSON.stringify({ args, cwd: process.cwd() }) + "\\n");
+while (existsSync(join(dir, "hold"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
 const numbered = args[0] === "pr" && /^[0-9]+$/.test(args[2]);
 const name = numbered ? "view-" + args[2] : { pr: "view", api: args[1] === "graphql" ? "threads" : "log" }[args[0]];
 const file = join(dir, name + ".json");
@@ -129,13 +130,17 @@ async function repository(base: string, name: string, push: boolean) {
   return repo;
 }
 
-function storeOf(projects: { id: string; path: string }[]): ProjectStore {
-  const find = (id: string) => {
+function storeOf(
+  projects: { id: string; path: string }[],
+  lookups: () => Promise<void> = () => Promise.resolve(),
+): ProjectStore {
+  const find = async (id: string) => {
+    await lookups();
     const found = projects.find((project) => project.id === id);
     if (found === undefined) {
       throw new BridgeFailure("not-found", "That project is not in Satellite.");
     }
-    return Promise.resolve({ ...found, workspaces: [] });
+    return { ...found, workspaces: [] };
   };
   return {
     list: () => Promise.all(projects.map(({ id }) => find(id))),
@@ -166,12 +171,16 @@ async function setup(options: { push?: boolean } = {}) {
   const other = await repository(base, "two", true);
   let time = 1_000_000;
   const needing = vi.fn<(list: readonly Needing[]) => void>();
+  let lookups = Promise.resolve();
   const reads = createPullRequests({
     home: base,
-    store: storeOf([
-      { id: firstId, path: repo },
-      { id: secondId, path: other },
-    ]),
+    store: storeOf(
+      [
+        { id: firstId, path: repo },
+        { id: secondId, path: other },
+      ],
+      () => lookups,
+    ),
     onNeeding: needing,
     now: () => time,
     after: () => Promise.resolve(),
@@ -185,6 +194,29 @@ async function setup(options: { push?: boolean } = {}) {
       .filter((line) => line !== "")
       .map((line) => recorded.parse(JSON.parse(line)));
   };
+  const pauseLookups = () => {
+    const paused = Promise.withResolvers<undefined>();
+    lookups = paused.promise;
+    const resume = () => {
+      lookups = Promise.resolve();
+      paused.resolve(undefined);
+    };
+    return Object.assign(resume, {
+      fail: () => {
+        lookups = Promise.resolve();
+        paused.reject(new BridgeFailure("not-found", "That folder is gone."));
+      },
+    });
+  };
+  const ghStarted = () =>
+    vi.waitFor(
+      async () => {
+        expect((await calls()).length).toBeGreaterThan(0);
+      },
+      { timeout: 20_000 },
+    );
+  const hold = (held: boolean) =>
+    held ? writeFile(join(dir, "hold"), "") : rm(join(dir, "hold"), { force: true });
   const read = (workspace: WorkspaceRef, detail = false, fresh = false) =>
     reads.handlers["pullRequest.read"]({ workspace, detail, fresh }, owner);
   return {
@@ -194,6 +226,9 @@ async function setup(options: { push?: boolean } = {}) {
     needing,
     answer,
     calls,
+    hold,
+    ghStarted,
+    pauseLookups,
     read,
     advance: (ms: number) => {
       time += ms;
@@ -644,6 +679,73 @@ describe("pull request reads", { timeout: 30_000 }, () => {
       read({ workspace: first, detail: false }, page),
     ]);
     expect(reloaded).toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
+  it("keeps a newer page that joined a read while an older detail read waited for it", async () => {
+    const { answer, reads, ghStarted, hold } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const older = vi.fn<BridgeOwner["emit"]>();
+    const newer = vi.fn<BridgeOwner["emit"]>();
+    const olderPage: BridgeOwner = { id: 3, emit: older, onGone: () => undefined };
+    const newerPage: BridgeOwner = { id: 4, emit: newer, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await hold(true);
+    const summary = read({ workspace: first, detail: false }, owner);
+    await ghStarted();
+    const detailed = read({ workspace: first, detail: true }, olderPage);
+    const joined = read({ workspace: first, detail: false }, newerPage);
+    await hold(false);
+    await Promise.all([summary, detailed, joined]);
+    expect(newer).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    expect(older).not.toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+  });
+
+  it("tells a read's needs to a newer page still waiting for its folder", async () => {
+    const { answer, reads, ghStarted, hold, pauseLookups } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const older = vi.fn<BridgeOwner["emit"]>();
+    const newer = vi.fn<BridgeOwner["emit"]>();
+    const olderPage: BridgeOwner = { id: 3, emit: older, onGone: () => undefined };
+    const newerPage: BridgeOwner = { id: 4, emit: newer, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await hold(true);
+    const started = read({ workspace: first, detail: false }, olderPage);
+    await ghStarted();
+    const resume = pauseLookups();
+    const waiting = read({ workspace: first, detail: false }, newerPage);
+    await hold(false);
+    await started;
+    expect(newer).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    expect(older).not.toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    resume();
+    await waiting;
+  });
+
+  it("keeps a page's ownership when one of its asks fails while another still waits", async () => {
+    const { answer, reads, pauseLookups } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const emit = vi.fn<BridgeOwner["emit"]>();
+    const page: BridgeOwner = { id: 5, emit, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    const failing = pauseLookups();
+    const failed = read({ workspace: first, detail: false }, page);
+    const passing = pauseLookups();
+    const passed = read({ workspace: first, detail: false }, page);
+    failing.fail();
+    await expect(failed).rejects.toMatchObject({ code: "not-found" });
+    passing();
+    await passed;
+    expect(emit).toHaveBeenLastCalledWith("pullRequests.needing", {
       needing: [{ workspace: first, needs: ["checks"] }],
     });
   });

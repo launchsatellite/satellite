@@ -53,7 +53,6 @@ interface Remembered {
   at: number;
   folder: string;
   workspace: WorkspaceRef;
-  owner: BridgeOwner;
   kept: PullRequestFound | null;
   branch: string | null;
   place: PullRequestPlace | null;
@@ -65,7 +64,6 @@ interface Remembered {
 
 interface Running {
   detail: boolean;
-  asker: { owner: BridgeOwner };
   answer: Promise<PullRequestAnswer>;
 }
 
@@ -168,6 +166,7 @@ export function createPullRequests({
   const pace = createPace({ now, after });
   const memory = new Map<string, Remembered>();
   const running = new Map<string, Running>();
+  const owners = new Map<string, BridgeOwner>();
   const active = new Set<ActiveRead>();
   const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
   const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
@@ -189,11 +188,12 @@ export function createPullRequests({
   };
 
   const tellNeeding = () => {
-    const needing = [...memory.values()].flatMap(({ kept, workspace, owner }) =>
-      kept !== null && kept.needs.length > 0
+    const needing = [...memory].flatMap(([key, { kept, workspace }]) => {
+      const owner = owners.get(key);
+      return owner !== undefined && kept !== null && kept.needs.length > 0
         ? [{ workspace, owner, reason: "pull-request" as const, needs: kept.needs }]
-        : [],
-    );
+        : [];
+    });
     tellPages(needing);
     const signature = needing
       .map(({ workspace, owner }) => `${keyOf(workspace)}@${String(owner.id)}`)
@@ -205,7 +205,7 @@ export function createPullRequests({
 
   const remember = (
     key: string,
-    base: Pick<Remembered, "folder" | "workspace" | "owner">,
+    base: Pick<Remembered, "folder" | "workspace">,
     {
       answer,
       place,
@@ -431,12 +431,10 @@ export function createPullRequests({
     workspace: WorkspaceRef,
     folder: string,
     detail: boolean,
-    owner: BridgeOwner,
   ): Running => {
     const controller = new AbortController();
     const read: ActiveRead = { controller, folder, done: Promise.resolve() };
     active.add(read);
-    const asker = { owner };
     const answer = (async () => {
       const result = await readView(
         folder,
@@ -445,7 +443,7 @@ export function createPullRequests({
         memory.get(key)?.verified ?? null,
       );
       controller.signal.throwIfAborted();
-      remember(key, { folder, workspace, owner: asker.owner }, result);
+      remember(key, { folder, workspace }, result);
       return result.answer;
     })().finally(() => {
       active.delete(read);
@@ -455,7 +453,7 @@ export function createPullRequests({
       () => undefined,
       () => undefined,
     );
-    const entry = { detail, asker, answer };
+    const entry = { detail, answer };
     running.set(key, entry);
     return entry;
   };
@@ -504,9 +502,7 @@ export function createPullRequests({
     for (const [key, held] of stale) {
       if (closing || pace.paused()) return;
       if (running.has(key) || memory.get(key) !== held) continue;
-      await start(key, held.workspace, held.folder, false, held.owner).answer.catch(
-        () => undefined,
-      );
+      await start(key, held.workspace, held.folder, false).answer.catch(() => undefined);
     }
   };
   const sweeper =
@@ -521,28 +517,25 @@ export function createPullRequests({
     sweepStale,
     handlers: {
       "pullRequest.read": async ({ workspace, detail, fresh = false }, owner) => {
-        const folder = await sessionFolder(home, store, workspace, sentences);
         const key = keyOf(workspace);
+        if (owners.get(key) !== owner) {
+          owners.set(key, owner);
+          if (memory.has(key)) tellNeeding();
+        }
+        const folder = await sessionFolder(home, store, workspace, sentences);
         let joined = running.get(key);
         if (joined !== undefined && !joined.detail && detail) {
           await joined.answer.catch(() => undefined);
           joined = running.get(key);
         }
-        if (joined !== undefined && (joined.detail || !detail)) {
-          joined.asker.owner = owner;
-          return joined.answer;
-        }
+        if (joined !== undefined && (joined.detail || !detail)) return joined.answer;
         const held = memory.get(key);
         if (held !== undefined) {
-          if (held.owner !== owner) {
-            held.owner = owner;
-            tellNeeding();
-          }
           const reused = answerFrom(held, detail, fresh);
           if (reused !== undefined) return reused;
         }
         if (pace.paused()) return unavailable("rate-limited");
-        return start(key, workspace, folder, detail, owner).answer;
+        return start(key, workspace, folder, detail).answer;
       },
       "pullRequest.log": async ({ workspace, job }) => {
         const folder = await sessionFolder(home, store, workspace, sentences);
@@ -577,6 +570,7 @@ export function createPullRequests({
       for (const [key, held] of memory) {
         if (!isInsidePath(folder, held.folder)) continue;
         memory.delete(key);
+        owners.delete(key);
         for (const asked of lastLogs.keys()) {
           if (asked.startsWith(`${key}/`)) lastLogs.delete(asked);
         }
