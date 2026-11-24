@@ -84,7 +84,7 @@ async function reopened(
   return parser.read(text);
 }
 
-async function beating<T>(work: Promise<T>): Promise<{ value: T; longestGap: number }> {
+async function beating(work: () => Promise<unknown>): Promise<number> {
   let longestGap = 0;
   let last = performance.now();
   const timer = setInterval(() => {
@@ -93,9 +93,8 @@ async function beating<T>(work: Promise<T>): Promise<{ value: T; longestGap: num
     last = now;
   }, 10);
   try {
-    const value = await work;
-    longestGap = Math.max(longestGap, performance.now() - last);
-    return { value, longestGap };
+    await work();
+    return Math.max(longestGap, performance.now() - last);
   } finally {
     clearInterval(timer);
   }
@@ -130,7 +129,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
       const text = shape.repeat(Math.ceil(20_000 / shape.length)).slice(0, 20_000);
       const parser = parserOver();
       const began = performance.now();
-      const { longestGap } = await beating(answer(parser, text));
+      const longestGap = await beating(() => answer(parser, text));
       const took = performance.now() - began;
       expect(took, shape).toBeLessThan(deadlineMs + 700);
       expect(longestGap, shape).toBeLessThan(250);
