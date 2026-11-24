@@ -62,10 +62,24 @@ const beforeRemove = vi.hoisted(() => {
   const state: { hook?: () => Promise<void> } = {};
   return state;
 });
+const reusedNumber = vi.hoisted(() => {
+  const state: { path?: string; ino?: bigint; born?: bigint } = {};
+  return state;
+});
 vi.mock("node:fs/promises", async (original) => {
   const actual = await original<typeof import("node:fs/promises")>();
   return {
     ...actual,
+    lstat: async (...args: Parameters<typeof actual.lstat>) => {
+      const stats = await actual.lstat(...args);
+      if (args[0] === reusedNumber.path && typeof stats.ino === "bigint") {
+        if (reusedNumber.ino !== undefined) {
+          Object.defineProperty(stats, "ino", { value: reusedNumber.ino });
+        }
+        Object.defineProperty(stats, "birthtimeNs", { value: reusedNumber.born });
+      }
+      return stats;
+    },
     rm: async (...args: Parameters<typeof actual.rm>) => {
       await beforeRemove.hook?.();
       return actual.rm(...args);
@@ -187,6 +201,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  delete reusedNumber.path;
+  delete reusedNumber.ino;
+  delete reusedNumber.born;
 });
 
 describe("parseIndex", () => {
@@ -353,6 +370,28 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     expect(sessions.stopped).toEqual([]);
     expect(removeCalls()).toEqual([]);
     expect(await exists(join(record.path, "late.md"))).toBe(true);
+  });
+
+  it("refuses a folder put in the place of the inspected one under the same inode number", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "fix-login");
+    reusedNumber.path = record.path;
+    reusedNumber.born = 1_000_000_000_000_000_000n;
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const inspected = await lstat(record.path, { bigint: true });
+    const aside = join(base, "aside");
+    await rename(record.path, aside);
+    await cp(aside, record.path, { recursive: true });
+    reusedNumber.ino = inspected.ino;
+    reusedNumber.born = 2_000_000_000_000_000_000n;
+    await expect(
+      archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+    ).rejects.toMatchObject({
+      code: "refused",
+      message: "Something changed in fix-login since you looked. Here is the latest.",
+    });
+    expect(removeCalls()).toEqual([]);
+    expect(await exists(record.path)).toBe(true);
   });
 
   it("refuses a locked worktree and never forces twice", async () => {

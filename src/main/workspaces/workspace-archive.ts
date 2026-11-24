@@ -3,12 +3,7 @@ import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { BridgeResponse, LossView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
-import {
-  folderIdentity,
-  isMissing,
-  sameIdentity,
-  type FolderIdentity,
-} from "../platform/file-system.ts";
+import { isMissing, sameIdentity, type FolderIdentity } from "../platform/file-system.ts";
 import { samePath } from "../platform/paths.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
@@ -31,10 +26,13 @@ import {
 export type InspectView = BridgeResponse<"workspaces.inspect">;
 export type ArchiveResult = BridgeResponse<"workspaces.archive">;
 type Submodules = InspectView["submodules"];
+interface InspectedFolder extends FolderIdentity {
+  born: bigint;
+}
 interface Inspection {
   view: Omit<InspectView, "boundary" | "sessions" | "fingerprint">;
   core: string;
-  identity: FolderIdentity;
+  identity: InspectedFolder;
 }
 interface IndexRead {
   hidden: number;
@@ -177,7 +175,7 @@ async function readInspection(
       `Satellite can't find ${record.name}'s folder ${folder} in the Satellite home, so it won't archive it.`,
     );
   }
-  const identity = await folderIdentity(record.path);
+  const identity = await inspectedFolder(record.path);
   if (identity === undefined) throw failure;
   const listing = await listWorktrees(project.path);
   if (listing === undefined) throw failure;
@@ -214,8 +212,26 @@ async function readInspection(
     commits,
     locked: listed.locked,
   };
-  const core = hashOf([String(identity.dev), String(identity.ino), listed.head, status.raw, view]);
+  const core = hashOf([
+    String(identity.dev),
+    String(identity.ino),
+    String(identity.born),
+    listed.head,
+    status.raw,
+    view,
+  ]);
   return { identity, core, view };
+}
+
+async function inspectedFolder(path: string): Promise<InspectedFolder | undefined> {
+  const entry = await lstat(path, { bigint: true }).catch(() => undefined);
+  return entry?.isDirectory() === true
+    ? { dev: entry.dev, ino: entry.ino, born: entry.birthtimeNs }
+    : undefined;
+}
+
+function sameFolder(now: InspectedFolder | undefined, inspected: InspectedFolder): boolean {
+  return sameIdentity(now, inspected) && now?.born === inspected.born;
 }
 
 function fingerprintOf(core: string, sessions: number): string {
@@ -346,7 +362,7 @@ export async function archiveWorkspace(
   if (latest.core !== seen.core) throw changed;
   await removeFromGit(project.path, walked, name, latest.view.files.length > 0);
   if (
-    sameIdentity(await folderIdentity(path), latest.identity) &&
+    sameFolder(await inspectedFolder(path), latest.identity) &&
     (await isConfined(home, project, record))
   ) {
     await rm(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(
