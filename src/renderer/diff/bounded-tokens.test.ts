@@ -75,6 +75,30 @@ describe("fileTokenizer", () => {
     120_000,
   );
 
+  it.each(["typescriptreact", "javascriptreact"])(
+    "colours JSX tags and attributes in %s as the theme's own editor does",
+    async (language) => {
+      const grammar = grammars[language];
+      if (grammar === undefined) throw new Error(language);
+      const { default: registrations } = await grammar.load();
+      await highlighter.loadLanguage(...registrations);
+      const name = registrations.at(-1)?.name ?? language;
+      const { colorMap } = highlighter.setTheme("dracula");
+      const line = 'return <div className="row">{name}</div>;';
+      const tokens =
+        fileTokenizer(
+          highlighter.getLanguage(name),
+          colorMap,
+          (colour) => colour.toLowerCase(),
+          grammar.longestLine,
+          { ms: 1000 },
+        )(line) ?? [];
+      const colourAt = (text: string) =>
+        tokens.findLast(([start]) => start <= line.indexOf(text))?.[1];
+      expect([colourAt("div"), colourAt("className")]).toEqual(["#ff79c6", "#50fa7b"]);
+    },
+  );
+
   it("shows a line past the longest as plain text without scanning it", async () => {
     const { fresh, longestLine } = await tokenizerFor("typescript");
     expect(fresh()("_".repeat(longestLine + 1))).toBeNull();

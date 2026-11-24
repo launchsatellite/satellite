@@ -48,9 +48,7 @@ export function fileTokenizer(
     if (line.length > longestLine || spentMs >= tokenBounds.fileMs) return null;
     const started = performance.now();
     let result = grammar.tokenizeLine2(line, stack, tokenBounds.lineLimitMs);
-    let reached = -1;
-    while (result.stoppedEarly && result.tokens.length > reached && allowance.ms > 0) {
-      reached = result.tokens.length;
+    while (result.stoppedEarly && allowance.ms > 0) {
       const retried = performance.now();
       result = grammar.tokenizeLine2(line, stack, tokenBounds.lineLimitMs);
       allowance.ms -= performance.now() - retried;
