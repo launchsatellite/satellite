@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { overlayColours, titleBarFor } from "./title-bar.ts";
+import { curatedLook, curatedThemes } from "../../shared/themes/curated-themes.ts";
+import { overlayColours, overlayStyle, titleBarFor } from "./title-bar.ts";
 
 const css = readFileSync(join(import.meta.dirname, "../../renderer/styles/app.css"), "utf8");
 
@@ -12,7 +13,7 @@ function token(block: string, name: string): string | undefined {
 describe("titleBarFor", () => {
   it("keeps the system title bar on a system without a documented integrated one", () => {
     for (const platform of ["freebsd", "openbsd", "sunos", "aix"] as const) {
-      expect(titleBarFor(platform, false)).toEqual({ frame: "native", options: {} });
+      expect(titleBarFor(platform, "system", false)).toEqual({ frame: "native", options: {} });
     }
   });
 
@@ -25,5 +26,30 @@ describe("titleBarFor", () => {
         symbolColor: token(blocks[theme], "fg2"),
       });
     }
+  });
+});
+
+describe("overlayStyle", () => {
+  it("colours the overlay with a curated theme's side and fg2 whatever the system says", () => {
+    for (const { id } of curatedThemes) {
+      const tokens = curatedLook(id)?.tokens;
+      for (const dark of [false, true]) {
+        expect(overlayStyle(id, dark)).toMatchObject({
+          color: tokens?.side,
+          symbolColor: tokens?.fg2,
+        });
+      }
+    }
+  });
+
+  it("falls back to the plain dark overlay for a curated theme that does not map", () => {
+    for (const { id } of curatedThemes) {
+      expect(overlayStyle(id, false, () => undefined)).toMatchObject(overlayColours.dark);
+    }
+  });
+
+  it("follows the system for Satellite's own themes", () => {
+    expect(overlayStyle("system", true)).toMatchObject(overlayColours.dark);
+    expect(overlayStyle("light", false)).toMatchObject(overlayColours.light);
   });
 });

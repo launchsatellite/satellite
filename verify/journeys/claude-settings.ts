@@ -10,7 +10,6 @@ import { withoutGitVariables } from "../repo-recipe.ts";
 import { loadScenario } from "../scenario.ts";
 import type { Journey } from "../journeys.ts";
 import {
-  claudePids,
   goneTimeoutMs,
   processGone,
   settingsFileOf,
@@ -159,7 +158,7 @@ async function journey(session: AppSession): Promise<void> {
   await page.getByTestId("close-session-1").click();
   await page.getByTestId("workspace-repo-main").click();
   await page.getByTestId("close-session-1").click();
-  for (const pid of await claudePids(session)) {
+  for (const pid of [mainPid, alphaPid]) {
     await waitUntil(
       () => processGone(pid),
       goneTimeoutMs,

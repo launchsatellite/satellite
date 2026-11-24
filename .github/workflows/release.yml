@@ -1,12 +1,10 @@
 name: Release
 
-# Runs the green checkpoint, packages Satellite on three platforms, checks the fuses and proves each
-# packaged app with the journeys. A tag drafts a release once its name matches the package version,
-# a platforms/ branch only builds and proves, so the matrix can run before a merge.
+# Builds and proves every installer through the platforms workflow. A pushed tag drafts a release
+# once its name matches the package version, and a manual run only builds and proves.
 on:
   push:
     tags: ["v*"]
-    branches: ["platforms/**"]
   workflow_dispatch:
 
 permissions:
@@ -18,89 +16,9 @@ concurrency:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-26
-            label: macos
-            package: --mac --arm64 --x64
-            app: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite
-            fused: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite release/mac/Satellite.app/Contents/MacOS/Satellite
-          - os: windows-2025
-            label: windows
-            package: --win --x64
-            app: release/win-unpacked/Satellite.exe
-            fused: release/win-unpacked/Satellite.exe
-          - os: ubuntu-24.04
-            label: linux
-            package: --linux --x64
-            app: release/linux-unpacked/satellite
-            fused: release/linux-unpacked/satellite
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: ${{ !startsWith(github.ref, 'refs/tags/') && 'npm' || '' }}
-      - if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          version="v$(node -p "require('./package.json').version")"
-          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME and package version $version differ"; exit 1; }
-      - run: npm ci
-      - run: ./scripts/check
-      - run: npm run build
-      - run: npx electron-builder ${{ matrix.package }} --publish never
-      - run: |
-          for app in ${{ matrix.fused }}; do
-            fuses=$(npx @electron/fuses read --app "$app")
-            echo "$fuses"
-            for fuse in "RunAsNode is Disabled" "EnableCookieEncryption is Disabled" \
-              "EnableNodeOptionsEnvironmentVariable is Disabled" "EnableNodeCliInspectArguments is Disabled" \
-              "EnableEmbeddedAsarIntegrityValidation is Enabled" "OnlyLoadAppFromAsar is Enabled" \
-              "GrantFileProtocolExtraPrivileges is Disabled"; do
-              grep -Fqx "  $fuse" <<<"$fuses" || { echo "::error::Expected $fuse in $app"; exit 1; }
-            done
-          done
-        env:
-          FORCE_COLOR: "0"
-      - if: runner.os == 'Linux'
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
-      - if: runner.os == 'Linux'
-        run: xvfb-run -a npm run journeys -- --app "${{ matrix.app }}"
-      - if: runner.os != 'Linux'
-        run: npm run journeys -- --app "${{ matrix.app }}"
-        env:
-          SATELLITE_VERIFY_FOREGROUND: "1"
-      - if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: verify-output-${{ matrix.label }}
-          if-no-files-found: ignore
-          path: verify-output/
-      - run: node scripts/checksums.ts release ${{ matrix.label }}
-      - run: cp out/renderer/third-party-licenses.md release/third-party-licenses.md
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: satellite-${{ matrix.label }}
-          if-no-files-found: error
-          path: |
-            release/Satellite-*.dmg
-            release/Satellite-*.zip
-            release/Satellite-*.exe
-            release/Satellite-*.AppImage
-            release/Satellite-*.deb
-            release/SHA256SUMS-*.txt
-            release/third-party-licenses.md
+    uses: ./.github/workflows/platforms.yml
+    with:
+      release: true
 
   publish:
     needs: build

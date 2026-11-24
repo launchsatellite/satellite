@@ -30,7 +30,7 @@ const variants: Record<ButtonVariant, { look: string; hover: string }> = {
   },
   secondary: { look: "border-ctl bg-bg text-fg", hover: "hover:bg-hover" },
   ghost: { look: "border-transparent text-fg2", hover: "hover:bg-hover" },
-  danger: { look: "border-ctl bg-bg text-sigfg", hover: "hover:bg-hover" },
+  danger: { look: "border-ctl bg-bg text-danger", hover: "hover:bg-hover" },
 };
 const sizes: Record<ButtonSize, { text: string; square: string }> = {
   default: { text: "h-7 px-3 text-[13px]", square: "h-7 w-7" },

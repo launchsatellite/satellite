@@ -17,7 +17,7 @@ npm ci
 
 1. A new feature starts as a spec in `specs/` and gets the maintainer's approval before anyone builds it ([specs/README.md](specs/README.md)). Fixes, refactors, docs, CI and tooling go straight to a branch.
 2. `main` is the only long-lived branch and is always green. One short branch per change, conventional commits.
-3. `./scripts/check` passes locally and in CI.
+3. `./scripts/check` passes locally and in CI, and CI proves every pull request that changes more than docs on macOS, Windows and Linux.
 4. The change fixes every doc, spec and skill it made wrong, in the same pull request.
 5. A finished branch gets an independent review, then a pull request with the template filled in and a conventional-commit title.
 6. **A human merges it.** Pull requests are squash-merged, so the title becomes the one commit on `main`. A maintainer who wants agents to merge their own green pull requests on a machine creates the empty file `~/.config/satellite/merge-granted` there. It lives outside the repo, and deleting it takes the grant back.

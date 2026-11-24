@@ -1,0 +1,66 @@
+{
+  "description": "A repo with one commit on main holding src/long.ts, 120 exported constants, and one workspace whose uncommitted work changes the third and the 110th so the diff hides the lines between, a stand-in gh signed in, a stand-in Claude Code redrawing its working line every 100 ms for a minute, the guide already seen and Satellite set to the curated theme. The journey writes the hostile file into the workspace itself.",
+  "repo": [
+    {
+      "write": {
+        "path": "README.md",
+        "content": "# Verify repo\n"
+      }
+    },
+    {
+      "write": {
+        "path": "src/long.ts",
+        "content": "export const value1 = 1;\nexport const value2 = 2;\nexport const value3 = 3;\nexport const value4 = 4;\nexport const value5 = 5;\nexport const value6 = 6;\nexport const value7 = 7;\nexport const value8 = 8;\nexport const value9 = 9;\nexport const value10 = 10;\nexport const value11 = 11;\nexport const value12 = 12;\nexport const value13 = 13;\nexport const value14 = 14;\nexport const value15 = 15;\nexport const value16 = 16;\nexport const value17 = 17;\nexport const value18 = 18;\nexport const value19 = 19;\nexport const value20 = 20;\nexport const value21 = 21;\nexport const value22 = 22;\nexport const value23 = 23;\nexport const value24 = 24;\nexport const value25 = 25;\nexport const value26 = 26;\nexport const value27 = 27;\nexport const value28 = 28;\nexport const value29 = 29;\nexport const value30 = 30;\nexport const value31 = 31;\nexport const value32 = 32;\nexport const value33 = 33;\nexport const value34 = 34;\nexport const value35 = 35;\nexport const value36 = 36;\nexport const value37 = 37;\nexport const value38 = 38;\nexport const value39 = 39;\nexport const value40 = 40;\nexport const value41 = 41;\nexport const value42 = 42;\nexport const value43 = 43;\nexport const value44 = 44;\nexport const value45 = 45;\nexport const value46 = 46;\nexport const value47 = 47;\nexport const value48 = 48;\nexport const value49 = 49;\nexport const value50 = 50;\nexport const value51 = 51;\nexport const value52 = 52;\nexport const value53 = 53;\nexport const value54 = 54;\nexport const value55 = 55;\nexport const value56 = 56;\nexport const value57 = 57;\nexport const value58 = 58;\nexport const value59 = 59;\nexport const value60 = 60;\nexport const value61 = 61;\nexport const value62 = 62;\nexport const value63 = 63;\nexport const value64 = 64;\nexport const value65 = 65;\nexport const value66 = 66;\nexport const value67 = 67;\nexport const value68 = 68;\nexport const value69 = 69;\nexport const value70 = 70;\nexport const value71 = 71;\nexport const value72 = 72;\nexport const value73 = 73;\nexport const value74 = 74;\nexport const value75 = 75;\nexport const value76 = 76;\nexport const value77 = 77;\nexport const value78 = 78;\nexport const value79 = 79;\nexport const value80 = 80;\nexport const value81 = 81;\nexport const value82 = 82;\nexport const value83 = 83;\nexport const value84 = 84;\nexport const value85 = 85;\nexport const value86 = 86;\nexport const value87 = 87;\nexport const value88 = 88;\nexport const value89 = 89;\nexport const value90 = 90;\nexport const value91 = 91;\nexport const value92 = 92;\nexport const value93 = 93;\nexport const value94 = 94;\nexport const value95 = 95;\nexport const value96 = 96;\nexport const value97 = 97;\nexport const value98 = 98;\nexport const value99 = 99;\nexport const value100 = 100;\nexport const value101 = 101;\nexport const value102 = 102;\nexport const value103 = 103;\nexport const value104 = 104;\nexport const value105 = 105;\nexport const value106 = 106;\nexport const value107 = 107;\nexport const value108 = 108;\nexport const value109 = 109;\nexport const value110 = 110;\nexport const value111 = 111;\nexport const value112 = 112;\nexport const value113 = 113;\nexport const value114 = 114;\nexport const value115 = 115;\nexport const value116 = 116;\nexport const value117 = 117;\nexport const value118 = 118;\nexport const value119 = 119;\nexport const value120 = 120;\n"
+      }
+    },
+    {
+      "git": ["init", "-b", "main"]
+    },
+    {
+      "git": ["add", "."]
+    },
+    {
+      "git": ["commit", "-m", "first commit"]
+    }
+  ],
+  "home": [
+    {
+      "path": "interface.json",
+      "content": "{\"version\":5,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"sidebar\":\"shown\",\"theme\":\"dracula\",\"notifications\":false,\"guideSeen\":true,\"files\":[]}"
+    }
+  ],
+  "workspaces": [
+    {
+      "name": "feature",
+      "steps": [
+        {
+          "write": {
+            "path": "src/long.ts",
+            "content": "export const value1 = 1;\nexport const value2 = 2;\nexport const value3 = 30;\nexport const value4 = 4;\nexport const value5 = 5;\nexport const value6 = 6;\nexport const value7 = 7;\nexport const value8 = 8;\nexport const value9 = 9;\nexport const value10 = 10;\nexport const value11 = 11;\nexport const value12 = 12;\nexport const value13 = 13;\nexport const value14 = 14;\nexport const value15 = 15;\nexport const value16 = 16;\nexport const value17 = 17;\nexport const value18 = 18;\nexport const value19 = 19;\nexport const value20 = 20;\nexport const value21 = 21;\nexport const value22 = 22;\nexport const value23 = 23;\nexport const value24 = 24;\nexport const value25 = 25;\nexport const value26 = 26;\nexport const value27 = 27;\nexport const value28 = 28;\nexport const value29 = 29;\nexport const value30 = 30;\nexport const value31 = 31;\nexport const value32 = 32;\nexport const value33 = 33;\nexport const value34 = 34;\nexport const value35 = 35;\nexport const value36 = 36;\nexport const value37 = 37;\nexport const value38 = 38;\nexport const value39 = 39;\nexport const value40 = 40;\nexport const value41 = 41;\nexport const value42 = 42;\nexport const value43 = 43;\nexport const value44 = 44;\nexport const value45 = 45;\nexport const value46 = 46;\nexport const value47 = 47;\nexport const value48 = 48;\nexport const value49 = 49;\nexport const value50 = 50;\nexport const value51 = 51;\nexport const value52 = 52;\nexport const value53 = 53;\nexport const value54 = 54;\nexport const value55 = 55;\nexport const value56 = 56;\nexport const value57 = 57;\nexport const value58 = 58;\nexport const value59 = 59;\nexport const value60 = 60;\nexport const value61 = 61;\nexport const value62 = 62;\nexport const value63 = 63;\nexport const value64 = 64;\nexport const value65 = 65;\nexport const value66 = 66;\nexport const value67 = 67;\nexport const value68 = 68;\nexport const value69 = 69;\nexport const value70 = 70;\nexport const value71 = 71;\nexport const value72 = 72;\nexport const value73 = 73;\nexport const value74 = 74;\nexport const value75 = 75;\nexport const value76 = 76;\nexport const value77 = 77;\nexport const value78 = 78;\nexport const value79 = 79;\nexport const value80 = 80;\nexport const value81 = 81;\nexport const value82 = 82;\nexport const value83 = 83;\nexport const value84 = 84;\nexport const value85 = 85;\nexport const value86 = 86;\nexport const value87 = 87;\nexport const value88 = 88;\nexport const value89 = 89;\nexport const value90 = 90;\nexport const value91 = 91;\nexport const value92 = 92;\nexport const value93 = 93;\nexport const value94 = 94;\nexport const value95 = 95;\nexport const value96 = 96;\nexport const value97 = 97;\nexport const value98 = 98;\nexport const value99 = 99;\nexport const value100 = 100;\nexport const value101 = 101;\nexport const value102 = 102;\nexport const value103 = 103;\nexport const value104 = 104;\nexport const value105 = 105;\nexport const value106 = 106;\nexport const value107 = 107;\nexport const value108 = 108;\nexport const value109 = 109;\nexport const value110 = 1100;\nexport const value111 = 111;\nexport const value112 = 112;\nexport const value113 = 113;\nexport const value114 = 114;\nexport const value115 = 115;\nexport const value116 = 116;\nexport const value117 = 117;\nexport const value118 = 118;\nexport const value119 = 119;\nexport const value120 = 120;\n"
+          }
+        }
+      ]
+    }
+  ],
+  "gh": [
+    {
+      "args": ["--version"],
+      "stdout": "gh version 2.99.0 (stand-in)\n"
+    },
+    {
+      "args": ["auth", "status", "--active"],
+      "stdout": "github.com\n  ✓ Logged in to github.com account octo-verify (keyring)\n  - Active account: true\n"
+    }
+  ],
+  "claude": {
+    "version": "2.1.78 (Claude Code stand-in)",
+    "script": [
+      {
+        "print": "Claude Code stand-in\r\n"
+      },
+      {
+        "spin": 60000
+      }
+    ]
+  }
+}

@@ -17,7 +17,8 @@ Nothing can be built or proven until the app starts, the checks run and an agent
 - Design tokens from `DESIGN.md` as variables, light and dark, with the four typefaces bundled so the app never loads anything remote.
 - `./scripts/check` runs format, lint, typecheck and unit tests. Lint refuses comments, default exports and files that are not kebab-case.
 - CI runs `./scripts/check` on one Linux runner for every pull request and every push to `main`.
-- A release workflow, started by a version tag, by hand or by a push to a `platforms/` branch, that packages for macOS, Windows and Linux, reads the fuses, runs the journeys against each packaged app and writes checksums. Only a pushed tag drafts a release, and only when all three pass.
+- A platforms workflow that packages for macOS, Windows and Linux, reads the fuses and runs the journeys against each packaged app. CI runs it on every pull request that changes more than docs, with the unpacked app only.
+- A release workflow, started by a version tag or by hand, that runs the platforms workflow with every installer and writes checksums. Only a pushed tag drafts a release, and only when all three pass.
 - The verify harness. A scenario is a folder holding a recipe for a throwaway repo, canned `gh` answers and a script for a stand-in `claude`. One driver command launches the app in a scenario with a temporary home folder and lets an agent click, type, read the window as structured data and take screenshots. Three journeys, `launch`, `boundary` and `quit`, prove the first run, the security boundary and process cleanup.
 - Skill `satellite-stack` for how the code is organised and run, and skill `satellite-verify` for the driver, the scenarios and the feature map.
 - `ARCHITECTURE.md` with the parts, the security boundary, the bridge, the platform module, the terminal, the diff, packaging and fuses, the folder layout and the decisions.
@@ -28,7 +29,7 @@ Nothing can be built or proven until the app starts, the checks run and an agent
 | --- | --- | --- |
 | Stand-in executables for `gh` and `claude`, real `git` | Mocks inside the app | The app keeps no test code, and every scenario exercises the real process and parsing paths. |
 | One harness for agent verification and the release journeys | A separate end to end test suite | One thing to maintain, and scenarios written for a feature become its cross-platform proof. |
-| Full platform matrix only at release, by hand or from a `platforms/` branch | The matrix on every pull request | Pull requests stay fast and cheap, and a manual run or a `platforms/` branch catches drift before release day. |
+| The platform matrix on every pull request that changes more than docs, packaging only the unpacked app | The full matrix only at release, by hand or from a side branch | A pull request is proven on all three systems before it merges, with no extra step, and installers wait for the release. Docs-only changes skip it, since they cannot change the app. |
 | Builds with checksums and no paid signature, macOS ad-hoc signed | Signing with certificates | No remote content is loaded and no credentials are held, so nothing depends on it. An arm64 Mac refuses a modified binary with no signature at all, so macOS gets an ad-hoc one. |
 
 ## Not in scope
@@ -43,5 +44,5 @@ Projects, workspaces, sessions and every view. Each has its own spec.
 - [x] A bridge message with a wrong shape is refused before any handler runs. Proof, a unit test.
 - [x] The interface cannot navigate, open a window or reach Node. Proof, a journey that tries each.
 - [x] `./scripts/check` is green locally and in CI.
-- [x] The release workflow, started by hand or from a `platforms/` branch, packages all three platforms and passes every journey on each. Proof, [the run](https://github.com/launchsatellite/satellite/actions/runs/44702636638).
+- [x] The release workflow packages all three platforms and passes every journey on each. Proof, [the run](https://github.com/launchsatellite/satellite/actions/runs/44702636638).
 - [x] The driver launches a scenario, returns the window as structured data and saves a screenshot. Proof, its output.

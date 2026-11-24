@@ -14,6 +14,7 @@ import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
 import { codeType } from "../ui/code-type.ts";
+import { onThemeChange } from "../ui/shown-theme.ts";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
 import { gpuRenderer } from "./gpu-renderer.ts";
@@ -267,11 +268,9 @@ export function TerminalView({
       },
     };
 
-    const darkScheme = matchMedia("(prefers-color-scheme: dark)");
-    const retheme = () => {
+    const stopTheme = onThemeChange(() => {
       terminal.options.theme = terminalTheme();
-    };
-    darkScheme.addEventListener("change", retheme);
+    });
 
     return () => {
       current = false;
@@ -282,7 +281,7 @@ export function TerminalView({
       element.removeEventListener("dragover", dragOver);
       element.removeEventListener("drop", drop);
       element.removeEventListener("focusin", tookFocus);
-      darkScheme.removeEventListener("change", retheme);
+      stopTheme();
       observer.disconnect();
       sight.disconnect();
       scale.removeEventListener("change", rescaled);

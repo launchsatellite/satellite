@@ -20,7 +20,7 @@ A test earns its place when it catches a failure that is real and likely and tha
 
 No tests for glue code, layout, thin wrappers or anything one run of the app proves. No snapshot tests, no tests of mocks, nothing written to raise coverage. A test checks behaviour at its boundary, lives next to its code, and its name says the failure it catches. Example home folders in tests are written as `/Users/<name>/` or `/home/<name>/`, because the guards refuse anything that looks like a real one.
 
-The unit tests run on macOS, Windows and Linux in the release workflow. A path the code checks as absolute is built per system, from `tmpdir()` or `C:\Users\<name>\` on Windows, and a path compared with git's output is compared in the form git prints, with forward slashes. A link to a folder is made as a `"junction"`, which Windows allows without rights and other systems ignore. A test that needs POSIX permissions, an executable hook, a link to a file, a FIFO or a newline in a name skips on Windows with `it.skipIf`. Every run points `TMPDIR`, `TMP` and `TEMP` at one fresh folder in the system temp folder, set up in `scripts/test-temp.ts`, and removes it when the run ends, so a test makes its scratch folders under `tmpdir()` and never needs to delete them.
+The unit tests run on macOS, Windows and Linux in the platforms workflow, on every pull request that changes more than docs. A path the code checks as absolute is built per system, from `tmpdir()` or `C:\Users\<name>\` on Windows, and a path compared with git's output is compared in the form git prints, with forward slashes. A link to a folder is made as a `"junction"`, which Windows allows without rights and other systems ignore. A test that needs POSIX permissions, an executable hook, a link to a file, a FIFO or a newline in a name skips on Windows with `it.skipIf`. Every run points `TMPDIR`, `TMP` and `TEMP` at one fresh folder in the system temp folder, set up in `scripts/test-temp.ts`, and removes it when the run ends, so a test makes its scratch folders under `tmpdir()` and never needs to delete them.
 
 ## The security boundary
 
@@ -38,6 +38,7 @@ The background process has full access to the machine. The interface has none an
 - **Failures are visible.** Every action has an outcome the user sees, and errors say what to do next.
 - **Everything that can grow is bounded**, from lists and retries to scrollback and file watchers.
 - **No comments.** Names, types and small functions carry the meaning. The only comment allowed is a tool directive that carries its reason. Lint refuses the rest.
+- **Inspirations stay unnamed.** Never name the products or works that inspired Satellite's design or that it is compared with. Tools Satellite runs or integrates, like Claude Code, Git and GitHub, are named as they are. An outside work Satellite ships, such as a curated theme or a bundled package, is named where it ships, with its credit and its licence in the notices.
 - **Names describe** the domain thing. Files and folders are kebab-case. No `utils` dumping grounds, no `index` files, no barrels.
 - **Named exports only.** A default export appears only where a tool requires one.
 - **File order.** Imports, types, constants, private helpers, then exported functions last.

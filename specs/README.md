@@ -50,3 +50,4 @@ Numbers are identifiers. They are never reused or renumbered, so "spec 004" alwa
 | 010 | [First-run guide](010-first-run-guide/spec.md) | Done |
 | 011 | [Title bar](011-title-bar/spec.md) | In progress |
 | 012 | [Settings](012-settings/spec.md) | In progress |
+| 013 | [Themes](013-themes/spec.md) | In progress |

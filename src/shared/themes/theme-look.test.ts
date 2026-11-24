@@ -1,0 +1,259 @@
+import { describe, expect, it } from "vitest";
+import { curatedLook, curatedThemes, themeSource } from "./curated-themes.ts";
+import {
+  appTokens,
+  contrastFloors,
+  pairedGrounds,
+  pixelTokens,
+  textTokens,
+  parseColour,
+  terminalColourNames,
+  themeLook,
+  type ThemeLook,
+} from "./theme-look.ts";
+
+const states = {
+  working: "terminal.ansiBlue",
+  needsYou: "list.warningForeground",
+  ready: "terminal.ansiGreen",
+  done: "terminal.ansiCyan",
+  idle: "terminal.ansiBrightBlack",
+  danger: "errorForeground",
+};
+const minimal = {
+  name: "minimal",
+  type: "dark",
+  colors: {
+    "editor.background": "#101010",
+    "editor.foreground": "#f0f0f0",
+    "terminal.ansiBlue": "#5050ff",
+    "list.warningForeground": "#ffa000",
+    "terminal.ansiGreen": "#00ff00",
+    "terminal.ansiCyan": "#00ffff",
+    "terminal.ansiBrightBlack": "#808080",
+    errorForeground: "#ff0000",
+  },
+  tokenColors: [],
+};
+function contrastRatio(first: string, second: string): number {
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string) => {
+    const colour = parseColour(hex);
+    if (colour === undefined) throw new Error(hex);
+    return 0.2126 * linear(colour.r) + 0.7152 * linear(colour.g) + 0.0722 * linear(colour.b);
+  };
+  const [light = 0, dark = 0] = [luminance(first), luminance(second)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+function pairsBelow(look: ThemeLook): string[] {
+  const { tokens, paired } = look;
+  const below: string[] = [];
+  const measure = (
+    front: string,
+    frontName: string,
+    ground: string,
+    groundName: string,
+    bar: number,
+  ) => {
+    const ratio = contrastRatio(front, ground);
+    if (ratio < bar) below.push(`${frontName} on ${groundName} ${ratio.toFixed(2)}`);
+  };
+  for (const ground of ["bg", "side"] as const) {
+    for (const token of textTokens)
+      measure(tokens[token], token, tokens[ground], ground, contrastFloors.text);
+    for (const token of pixelTokens)
+      measure(tokens[token], token, tokens[ground], ground, contrastFloors.edge);
+  }
+  for (const ground of pairedGrounds) {
+    for (const token of textTokens)
+      measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.text);
+    for (const token of pixelTokens)
+      measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
+  }
+  for (const ground of ["side", "raised", "bg"] as const)
+    measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
+  if (tokens.raised === tokens.side) below.push("raised equals side");
+  for (const ground of pairedGrounds) {
+    const order = (["fg", "fg2", "dim"] as const).map((token) =>
+      contrastRatio(paired[ground][token], tokens[ground]),
+    );
+    if (order.some((ratio, at) => at > 0 && ratio > (order[at - 1] ?? 0)))
+      below.push(`text order on ${ground}`);
+  }
+  return below;
+}
+
+const themeOwnPairs: Record<string, string[]> = {
+  dracula: ["dim on bg 3.03", "dim on side 3.36"],
+};
+const opaqueHex = /^#[0-9a-f]{6}$/;
+const anyHex = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/;
+
+describe("parseColour", () => {
+  it("accepts only the four hex forms and refuses anything a stylesheet could run", () => {
+    expect(parseColour("#abc")).toEqual({ r: 170, g: 187, b: 204, a: 1 });
+    expect(parseColour("#AABBCC80")).toEqual({ r: 170, g: 187, b: 204, a: 128 / 255 });
+    for (const hostile of [
+      "red",
+      "#12345",
+      "#abcg",
+      " #aabbcc",
+      "#aabbcc;background:url(x)",
+      "url(https://example.com/x)",
+      "var(--bg)",
+      "rgb(1 2 3)",
+      "#aabbcc\n",
+      42,
+      null,
+      ["#aabbcc"],
+    ]) {
+      expect(parseColour(hostile)).toBeUndefined();
+    }
+  });
+});
+
+describe("themeLook", () => {
+  it("maps every curated theme fully into opaque tokens, a terminal and an editor theme", () => {
+    for (const { id } of curatedThemes) {
+      const look = curatedLook(id);
+      expect(look, id).toBeDefined();
+      if (look === undefined) continue;
+      for (const token of appTokens)
+        expect(look.tokens[token], `${id} ${token}`).toMatch(opaqueHex);
+      for (const name of terminalColourNames) expect(look.terminal[name], name).toMatch(anyHex);
+      expect(look.editor.tokenColors.length).toBeGreaterThan(0);
+      expect(themeSource(id)).toBe(look.type);
+    }
+  });
+
+  it("takes the published values of the first curated theme for its ground, text, terminal and states", () => {
+    const look = curatedLook("dracula");
+    expect(look?.tokens).toMatchObject({
+      bg: "#282a36",
+      side: "#21222c",
+      fg: "#f8f8f2",
+      dim: "#6272a4",
+      sel: "#44475a",
+      working: "#a4ffff",
+      signal: "#ffb86c",
+      volt: "#50fa7b",
+      lilac: "#bd93f9",
+      idle: "#6272a4",
+      danger: "#ff5555",
+    });
+    expect(look?.terminal).toMatchObject({
+      background: "#282a36",
+      foreground: "#f8f8f2",
+      red: "#ff5555",
+      brightWhite: "#ffffff",
+    });
+    expect(look?.editor.colors["editor.background"]).toBe("#282a36");
+  });
+
+  it("keeps every pair the mapping makes at the bar and lists the theme's own below it", () => {
+    for (const { id } of curatedThemes) {
+      const look = curatedLook(id);
+      if (look === undefined) throw new Error(id);
+      expect(pairsBelow(look), id).toEqual(themeOwnPairs[id] ?? []);
+    }
+  });
+
+  it("reaches the bar on paired grounds the theme's text cannot, light or dark", () => {
+    const lightGrounds = {
+      "list.activeSelectionBackground": "#ffffff",
+      "list.hoverBackground": "#e8e8e8",
+      "quickInput.background": "#f4f4f4",
+    };
+    const darkGrounds = {
+      "list.activeSelectionBackground": "#000000",
+      "list.hoverBackground": "#202020",
+      "quickInput.background": "#303030",
+    };
+    const lightTheme = {
+      ...minimal,
+      type: "light",
+      colors: { ...minimal.colors, "editor.background": "#fafafa", "editor.foreground": "#101010" },
+    };
+    for (const [name, theme] of [
+      ["dark theme, light grounds", { ...minimal, colors: { ...minimal.colors, ...lightGrounds } }],
+      [
+        "light theme, dark grounds",
+        { ...lightTheme, colors: { ...lightTheme.colors, ...darkGrounds } },
+      ],
+    ] as const) {
+      const look = themeLook(theme, states);
+      if (look === undefined) throw new Error(name);
+      expect(
+        pairsBelow(look).filter((pair) => !/ on (bg|side) /.test(pair)),
+        name,
+      ).toEqual([]);
+    }
+  });
+
+  it("composes a colour with alpha over the ground it sits on", () => {
+    const look = themeLook(
+      { ...minimal, colors: { ...minimal.colors, "list.hoverBackground": "#ffffff80" } },
+      states,
+    );
+    expect(look?.tokens.hover).toBe("#888888");
+  });
+
+  it("refuses a theme without its ground, its text or a state colour", () => {
+    expect(themeLook(minimal, states)).toBeDefined();
+    for (const key of ["editor.background", "editor.foreground", "errorForeground"]) {
+      const colors = Object.fromEntries(Object.entries(minimal.colors).filter(([k]) => k !== key));
+      expect(themeLook({ ...minimal, colors }, states), key).toBeUndefined();
+    }
+    for (const broken of [
+      null,
+      "theme",
+      { ...minimal, type: "neon" },
+      { ...minimal, name: "../x" },
+    ]) {
+      expect(themeLook(broken, states)).toBeUndefined();
+    }
+  });
+
+  it("drops every colour, key, scope and font style outside the strict forms", () => {
+    const look = themeLook(
+      {
+        ...minimal,
+        colors: {
+          ...minimal.colors,
+          "sideBar.background": "url(https://example.com/x)",
+          "list.hoverBackground": "#aabbcc;color:red",
+          "bad key{": "#ffffff",
+        },
+        tokenColors: [
+          { scope: "comment", settings: { foreground: "#6272a4", fontStyle: "italic" } },
+          { scope: "string, </style><script>", settings: { foreground: "#f1fa8c" } },
+          { scope: ["keyword"], settings: { foreground: "pink", fontStyle: "bold" } },
+          { scope: "entity", settings: { fontStyle: "expression(alert(1))" } },
+          { settings: { foreground: "#ffffff" } },
+          "not an entry",
+        ],
+      },
+      states,
+    );
+    expect(look?.tokens.side).toBe("#101010");
+    expect(look?.editor.colors).not.toHaveProperty("sideBar.background");
+    expect(look?.editor.colors).not.toHaveProperty("list.hoverBackground");
+    expect(look?.editor.colors).not.toHaveProperty("bad key{");
+    expect(look?.editor.tokenColors).toEqual([
+      { scope: ["comment"], settings: { foreground: "#6272a4", fontStyle: "italic" } },
+      { scope: ["string"], settings: { foreground: "#f1fa8c" } },
+      { scope: ["keyword"], settings: { fontStyle: "bold" } },
+    ]);
+  });
+});
+
+describe("contrastRatio", () => {
+  it("measures with the WCAG formula", () => {
+    expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 5);
+    expect(contrastRatio("#777777", "#ffffff")).toBeCloseTo(4.48, 2);
+  });
+});
