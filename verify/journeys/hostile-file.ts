@@ -12,6 +12,24 @@ interface Kept {
   selected: number;
 }
 
+interface WorkerLog {
+  posts: number[];
+  ended: number | null;
+  stalled: boolean;
+}
+
+interface WorkerWatch {
+  logs: WorkerLog[];
+  workers: Worker[];
+  stallNext: boolean;
+}
+
+declare global {
+  interface Window {
+    syntaxWorkers?: WorkerWatch;
+  }
+}
+
 interface Responsive {
   longestGapMs: number;
   terminalData: number;
@@ -20,6 +38,7 @@ interface Responsive {
 
 const waitMs = 15_000;
 const watchMs = 3_000;
+const silentWorkerMs = 5000;
 const answerMs = 250;
 const throughDriverMs = 1000;
 const liveData = 15;
@@ -101,6 +120,130 @@ async function groundIs(session: AppSession, ground: string): Promise<void> {
     waitMs,
     `the diff did not take the ground ${ground}`,
   );
+}
+
+async function watchSyntaxWorkers(session: AppSession): Promise<void> {
+  await session.page.evaluate(() => {
+    const watch: WorkerWatch = { logs: [], workers: [], stallNext: true };
+    window.syntaxWorkers = watch;
+    const Original = Worker;
+    window.Worker = class extends Original {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (!String(url).includes("syntax-worker")) return;
+        const log: WorkerLog = { posts: [], ended: null, stalled: watch.stallNext };
+        watch.stallNext = false;
+        watch.logs.push(log);
+        watch.workers.push(this);
+        const send = this.postMessage.bind(this);
+        this.postMessage = (message: unknown) => {
+          if (
+            typeof message === "object" &&
+            message !== null &&
+            "kind" in message &&
+            message.kind === "tokenize"
+          )
+            log.posts.push(performance.now());
+          if (!log.stalled) send(message);
+        };
+        const end = this.terminate.bind(this);
+        this.terminate = () => {
+          log.ended = performance.now();
+          end();
+        };
+      }
+    };
+  });
+}
+
+async function syntaxWorkers(session: AppSession): Promise<{ logs: WorkerLog[]; now: number }> {
+  return session.page.evaluate(() => ({
+    logs: window.syntaxWorkers?.logs ?? [],
+    now: performance.now(),
+  }));
+}
+
+async function onSyntaxWorker(
+  session: AppSession,
+  index: number,
+  act: "stall" | "fail",
+): Promise<void> {
+  await session.page.evaluate(
+    ({ at, action }) => {
+      const log = window.syntaxWorkers?.logs[at];
+      if (log !== undefined && action === "stall") log.stalled = true;
+      if (action === "fail")
+        window.syntaxWorkers?.workers[at]?.dispatchEvent(new ErrorEvent("error"));
+    },
+    { at: index, action: act },
+  );
+}
+
+async function keywordPlain(session: AppSession, when: string): Promise<void> {
+  const coloured = await session.page.evaluate(
+    (colour) =>
+      [...document.querySelectorAll(".editor.modified .view-line span span")].some(
+        (span) => span.textContent.trim() === "export" && getComputedStyle(span).color === colour,
+      ),
+    keyword,
+  );
+  assert.equal(coloured, false, `the diff took syntax colours ${when}`);
+}
+
+async function untilPageTime(session: AppSession, at: number): Promise<void> {
+  const { now } = await syntaxWorkers(session);
+  await delay(Math.max(0, at - now));
+}
+
+async function workerRecovers(session: AppSession): Promise<void> {
+  await pick(session, "long.ts");
+  await keywordShown(session);
+  await waitUntil(
+    async () => (await syntaxWorkers(session)).logs[0]?.posts.length !== undefined,
+    waitMs,
+    "no syntax worker started for the first files",
+  );
+  const silentFrom = (await syntaxWorkers(session)).logs[0]?.posts[0] ?? 0;
+  await untilPageTime(session, silentFrom + 4000);
+  assert.equal((await syntaxWorkers(session)).logs[0]?.ended, null, "a silent worker ended early");
+  await keywordPlain(session, "while the worker was silent");
+  await waitUntil(
+    async () => (await syntaxWorkers(session)).logs[0]?.ended != null,
+    silentWorkerMs + waitMs,
+    "a silent worker was never ended",
+  );
+  const silentEnd = (await syntaxWorkers(session)).logs[0]?.ended ?? 0;
+  assert.ok(
+    silentEnd - silentFrom >= silentWorkerMs - 50,
+    `a silent worker ended after ${String(Math.round(silentEnd - silentFrom))} ms`,
+  );
+  await delay(500);
+  await keywordPlain(session, "after its silent worker ended");
+  await runCommand(session, "theme-light");
+  await runCommand(session, "theme-dracula");
+  await keywordColoured(session, "in a new worker after the silent one");
+  assert.equal((await syntaxWorkers(session)).logs.length, 2);
+
+  await onSyntaxWorker(session, 1, "stall");
+  await runCommand(session, "theme-light");
+  await runCommand(session, "theme-dracula");
+  const stalled = (await syntaxWorkers(session)).logs[1];
+  const stalledFrom = stalled?.posts.at(-1) ?? 0;
+  await untilPageTime(session, stalledFrom + 1000);
+  await onSyntaxWorker(session, 1, "fail");
+  assert.notEqual((await syntaxWorkers(session)).logs[1]?.ended, null, "a failed worker ran on");
+  await runCommand(session, "theme-light");
+  await runCommand(session, "theme-dracula");
+  await keywordColoured(session, "in a new worker after the failed one");
+  const replaced = (await syntaxWorkers(session)).logs[2];
+  assert.ok(
+    replaced !== undefined && (replaced.posts[0] ?? Infinity) < stalledFrom + silentWorkerMs,
+    "the new worker did not start before the failed one's deadline",
+  );
+  await untilPageTime(session, stalledFrom + silentWorkerMs + 1500);
+  const after = await syntaxWorkers(session);
+  assert.equal(after.logs.length, 3, "another worker started");
+  assert.equal(after.logs[2]?.ended, null, "the failed worker's deadline ended its replacement");
 }
 
 async function keepsItsPlace(session: AppSession): Promise<void> {
@@ -215,8 +358,10 @@ async function journey(session: AppSession): Promise<void> {
     join(session.home, "worktrees", "repo", "feature", "src", "hostile.ts"),
     hostileText(),
   );
+  await watchSyntaxWorkers(session);
   await session.page.getByTestId("workspace-repo-feature").click();
   await startClaude(session, 1);
+  await workerRecovers(session);
   await keepsItsPlace(session);
   answers(await responsiveWhileOpening(session, "hostile.ts"), "the curated theme");
   await session.screenshot("hostile-file-dracula");
