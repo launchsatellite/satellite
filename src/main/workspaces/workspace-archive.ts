@@ -214,7 +214,14 @@ async function readInspection(
     commits,
     locked: listed.locked,
   };
-  const core = hashOf([String(identity.dev), String(identity.ino), listed.head, status.raw, view]);
+  const core = hashOf([
+    String(identity.dev),
+    String(identity.ino),
+    String(identity.born),
+    listed.head,
+    status.raw,
+    view,
+  ]);
   return { identity, core, view };
 }
 
