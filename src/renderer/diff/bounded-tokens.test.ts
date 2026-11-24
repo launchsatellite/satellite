@@ -2,17 +2,23 @@ import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { EncodedTokenMetadata, INITIAL, type StateStack } from "shiki/textmate";
 import dracula from "shiki/themes/dracula.mjs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fileTokenizer, tokenBounds, type LineTokenizer } from "./bounded-tokens.ts";
 import { grammars } from "./syntax-grammars.ts";
 
+let clock = 0;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function fakeGrammar(scanMs: number, stopsEarly: (line: string) => boolean) {
   const seen: { line: string; stack: StateStack | null }[] = [];
+  vi.spyOn(performance, "now").mockImplementation(() => clock);
   const grammar: LineTokenizer = {
     tokenizeLine2(line, stack) {
       seen.push({ line, stack });
-      const started = performance.now();
-      while (performance.now() - started < scanMs) continue;
+      clock += scanMs;
       return {
         tokens: new Uint32Array([0, 0]),
         ruleStack: INITIAL,
@@ -45,7 +51,7 @@ describe("fileTokenizer", () => {
     expect(firstPlain).toBeGreaterThan(0);
     expect(lines.slice(firstPlain).every((tokens) => tokens === null)).toBe(true);
     expect(seen).toHaveLength(firstPlain);
-    expect(firstPlain * 10).toBeGreaterThanOrEqual(tokenBounds.fileMs);
+    expect(firstPlain).toBe(tokenBounds.fileMs / 10);
   });
 
   it("keeps the last full line's state after a line that stops between scans", () => {
