@@ -888,6 +888,19 @@ describe("createTerminalSessions", () => {
     ).rejects.toMatchObject({ code: "limit" });
   });
 
+  it("lets a start at the limit wait for a terminal Satellite is ending", async () => {
+    const { handlers } = create();
+    const { mine } = owners();
+    for (let index = 1; index <= 16; index += 1) {
+      await handlers["terminal.start"]({ id: terminalId(index), ...size }, mine);
+    }
+    await handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    await expect(
+      handlers["terminal.start"]({ id: terminalId(17), ...size }, mine),
+    ).resolves.toBeDefined();
+    expect(ptys).toHaveLength(17);
+  });
+
   it("counts a terminal that is still being killed against the limit", async () => {
     const { handlers } = create();
     const { mine } = owners();

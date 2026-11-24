@@ -445,6 +445,7 @@ export function createTerminalSessions({
 
   const start = async (request: StartRequest, owner: BridgeOwner) => {
     const { id, workspace, resume, cols, rows } = request;
+    if (unsettled.size >= bridgeLimits.terminals) await settled([...unsettled].filter(isEnded));
     if (closed) throw new BridgeFailure("failed", "Satellite is quitting.");
     if (sessions.has(id)) {
       throw new BridgeFailure("invalid-request", "That terminal is already running.");
