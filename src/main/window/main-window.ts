@@ -1,8 +1,9 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, nativeTheme } from "electron";
 import { overlayStyle, titleBarSetup } from "../platform/title-bar.ts";
-import { quitButton, quitQuestion } from "./quit-question.ts";
-import { runsQuietly } from "./verification.ts";
+import { asksToQuit, quitButton, quitQuestion, type QuitFacts } from "./quit-question.ts";
+import { recordQuestion } from "../platform/system-notices.ts";
+import { runsQuietly, startedByDriver } from "./verification.ts";
 import { secureWebPreferences } from "./web-preferences.ts";
 import { setWindowFrame } from "./window-frame.ts";
 
@@ -25,10 +26,15 @@ export function windowInFront(): boolean {
   return window !== undefined && window.isVisible() && !window.isMinimized() && window.isFocused();
 }
 
-export async function askToQuit(sessions: number): Promise<boolean> {
+export async function askToQuit(facts: QuitFacts): Promise<boolean> {
   const window = mainWindow();
-  if (sessions === 0 || window === undefined) return true;
-  const { response } = await dialog.showMessageBox(window, quitQuestion(sessions));
+  if (!asksToQuit(facts) || window === undefined) return true;
+  const question = quitQuestion(facts);
+  if (startedByDriver()) {
+    await recordQuestion(question.message);
+    return true;
+  }
+  const { response } = await dialog.showMessageBox(window, question);
   return response === quitButton;
 }
 

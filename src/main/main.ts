@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { join } from "node:path";
 import { app, dialog, nativeTheme, session } from "electron";
 import type { InterfaceState } from "../shared/bridge-contract.ts";
@@ -53,8 +54,9 @@ import {
 import { windowFrameHandlers } from "./window/window-frame.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
+import type { QuitFacts } from "./window/quit-question.ts";
 import { settleForQuit } from "./window/quit-settle.ts";
-import { prepareVerification, startedByDriver, underVerification } from "./window/verification.ts";
+import { prepareVerification, underVerification } from "./window/verification.ts";
 
 function allowedOrigin(entryUrl: string): string {
   return entryUrl.startsWith(`${appOrigin}/`) ? appOrigin : new URL(entryUrl).origin;
@@ -76,8 +78,19 @@ interface Parts {
 }
 
 const ptyKillAgent = "conpty_console_list_agent";
+const quitReadMs = 2000;
 
 let leaving = false;
+
+async function quitFacts({ terminals, processes }: Parts): Promise<QuitFacts> {
+  const states = terminals.quitStates();
+  if (states.sessions === 0) return { ...states, processes: 0 };
+  const counted = await Promise.race([
+    processes.count().catch(() => null),
+    delay(quitReadMs, null, { ref: false }),
+  ]);
+  return { ...terminals.quitStates(), processes: counted };
+}
 
 async function start({
   changes,
@@ -269,10 +282,7 @@ if (parts !== undefined) {
 app.on(
   "before-quit",
   createQuitGate(
-    () =>
-      startedByDriver() || parts === undefined
-        ? Promise.resolve(true)
-        : askToQuit(parts.terminals.roots().length),
+    async () => parts === undefined || askToQuit(await quitFacts(parts)),
     () => settleForQuit(parts, quitBoundMs),
     () => {
       leaving = true;

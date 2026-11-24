@@ -1356,6 +1356,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               sessions={sessions}
               selected={sessionHere ?? null}
               hasProjects={projects === undefined || projects.length > 0}
+              resumeAllowed={guide.step === null && !checking}
               onAskLink={askTerminalLink}
               notify={notify}
             />
