@@ -39,6 +39,8 @@ interface Responsive {
 const waitMs = 15_000;
 const watchMs = 3_000;
 const silentWorkerMs = 5000;
+const timerEarlyMs = 50;
+const timerLateMs = 1000;
 const answerMs = 250;
 const throughDriverMs = 1000;
 const liveData = 15;
@@ -203,19 +205,17 @@ async function workerRecovers(session: AppSession): Promise<void> {
     waitMs,
     "no syntax worker started for the first files",
   );
-  const silentFrom = (await syntaxWorkers(session)).logs[0]?.posts[0] ?? 0;
-  await untilPageTime(session, silentFrom + 4000);
-  assert.equal((await syntaxWorkers(session)).logs[0]?.ended, null, "a silent worker ended early");
   await keywordPlain(session, "while the worker was silent");
   await waitUntil(
     async () => (await syntaxWorkers(session)).logs[0]?.ended != null,
     silentWorkerMs + waitMs,
     "a silent worker was never ended",
   );
-  const silentEnd = (await syntaxWorkers(session)).logs[0]?.ended ?? 0;
+  const silent = (await syntaxWorkers(session)).logs[0];
+  const silentFor = (silent?.ended ?? 0) - (silent?.posts[0] ?? 0);
   assert.ok(
-    silentEnd - silentFrom >= silentWorkerMs - 50,
-    `a silent worker ended after ${String(Math.round(silentEnd - silentFrom))} ms`,
+    silentFor >= silentWorkerMs - timerEarlyMs && silentFor <= silentWorkerMs + timerLateMs,
+    `a silent worker ended ${String(Math.round(silentFor))} ms after its first request`,
   );
   await delay(500);
   await keywordPlain(session, "after its silent worker ended");
