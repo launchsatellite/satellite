@@ -168,6 +168,8 @@ export function createPullRequests({
   const pace = createPace({ now, after });
   const memory = new Map<string, Remembered>();
   const running = new Map<string, Running>();
+  const newestAsk = new Map<string, number>();
+  let asks = 0;
   const active = new Set<ActiveRead>();
   const logging = new Map<string, Promise<BridgeResponse<"pullRequest.log">>>();
   const lastLogs = new Map<string, { at: number; answer: BridgeResponse<"pullRequest.log"> }>();
@@ -521,20 +523,24 @@ export function createPullRequests({
     sweepStale,
     handlers: {
       "pullRequest.read": async ({ workspace, detail, fresh = false }, owner) => {
-        const folder = await sessionFolder(home, store, workspace, sentences);
         const key = keyOf(workspace);
+        asks += 1;
+        const asked = asks;
+        newestAsk.set(key, asked);
+        const folder = await sessionFolder(home, store, workspace, sentences);
+        const newest = newestAsk.get(key) === asked;
         let joined = running.get(key);
         if (joined !== undefined && !joined.detail && detail) {
           await joined.answer.catch(() => undefined);
           joined = running.get(key);
         }
         if (joined !== undefined && (joined.detail || !detail)) {
-          joined.asker.owner = owner;
+          if (newest) joined.asker.owner = owner;
           return joined.answer;
         }
         const held = memory.get(key);
         if (held !== undefined) {
-          if (held.owner !== owner) {
+          if (newest && held.owner !== owner) {
             held.owner = owner;
             tellNeeding();
           }
