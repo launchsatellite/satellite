@@ -253,7 +253,11 @@ export function TerminalView({
     show.current = () => {
       if (!noticedNow.current) terminal.focus();
     };
-    hide.current = gpu.release;
+    hide.current = () => {
+      gpu.release();
+      sight.unobserve(element);
+      sight.observe(element);
+    };
     prompt.current = {
       paste,
       focus: () => {
