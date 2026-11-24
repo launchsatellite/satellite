@@ -282,6 +282,11 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
   await runCommand(session, "theme-light");
   await settled(session, satellite, "after Use the light theme");
   await terminalReads(session, "#ffffff", terminalRed.satellite, "after Use the light theme");
+  await waitUntil(
+    async () => (await savedTheme(session)) === "light",
+    waitMs,
+    "Use the light theme was not saved",
+  );
   await runCommand(session, "theme-dracula");
   await shows(session, published.bg, "after Use the Dracula theme");
   await waitUntil(
