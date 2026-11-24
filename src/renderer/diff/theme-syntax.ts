@@ -3,6 +3,7 @@ import { changesLimits } from "../../shared/bridge-contract.ts";
 import type { EditorTheme } from "../../shared/themes/theme-look.ts";
 import { shownLook } from "../ui/shown-theme.ts";
 import { monarchModule } from "./diff-language.ts";
+import { silenceWatch } from "./silence-watch.ts";
 import type { SyntaxBatch, SyntaxRequest } from "./syntax-worker.ts";
 import SyntaxWorker from "./syntax-worker.ts?worker";
 import { monacoTheme } from "./theme-rules.ts";
@@ -31,7 +32,7 @@ const tracked = new WeakSet<editor.ITextModel>();
 let shownTheme: EditorTheme | undefined;
 let watching = false;
 let worker: Worker | undefined;
-let deadline: ReturnType<typeof setTimeout> | undefined;
+const watch = silenceWatch(silentWorkerMs, replaceWorker);
 let nextRequest = 0;
 
 class KeyState implements languages.IState {
@@ -144,15 +145,10 @@ function waiting(): boolean {
   return [...sent.values()].some((record) => !record.done);
 }
 
-function watchWorker(): void {
-  if (deadline !== undefined) clearTimeout(deadline);
-  deadline = waiting() ? setTimeout(replaceWorker, silentWorkerMs) : undefined;
-}
-
 function replaceWorker(): void {
   worker?.terminate();
   worker = undefined;
-  deadline = undefined;
+  watch.stop();
   for (const record of sent.values()) record.done = true;
 }
 
@@ -172,7 +168,7 @@ function received({ data }: MessageEvent<SyntaxBatch>): void {
     if (data.done) record.done = true;
     if (data.tokens.some((tokens) => tokens !== null)) refresh(model.getLanguageId());
   }
-  watchWorker();
+  watch.heard(waiting());
 }
 
 function post(message: SyntaxRequest): void {
@@ -182,7 +178,7 @@ function post(message: SyntaxRequest): void {
     worker.addEventListener("error", replaceWorker);
   }
   worker.postMessage(message);
-  watchWorker();
+  watch.sent();
 }
 
 function send(theme: EditorTheme, model: editor.ITextModel): void {
