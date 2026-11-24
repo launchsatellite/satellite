@@ -93,7 +93,9 @@ async function beating<T>(work: Promise<T>): Promise<{ value: T; longestGap: num
     last = now;
   }, 10);
   try {
-    return { value: await work, longestGap };
+    const value = await work;
+    longestGap = Math.max(longestGap, performance.now() - last);
+    return { value, longestGap };
   } finally {
     clearInterval(timer);
   }
