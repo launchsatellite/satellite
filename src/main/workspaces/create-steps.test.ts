@@ -23,6 +23,26 @@ import { creationSteps, prepareWorkspace } from "./create-steps.ts";
 import { runGit } from "./git-command.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
 
+const movingBirth = vi.hoisted(() => {
+  const state: { under?: string; next: bigint } = { next: 1n };
+  return state;
+});
+vi.mock("node:fs/promises", async (original) => {
+  const actual = await original<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    lstat: async (...args: Parameters<typeof actual.lstat>) => {
+      const stats = await actual.lstat(...args);
+      const under = movingBirth.under;
+      if (under !== undefined && String(args[0]).startsWith(under) && stats.isDirectory()) {
+        movingBirth.next += 1n;
+        Object.defineProperty(stats, "birthtimeNs", { value: movingBirth.next });
+      }
+      return stats;
+    },
+  };
+});
+
 vi.mock("../files/ignore-check.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof ignoreCheck>();
   return { checkIgnored: vi.fn(actual.checkIgnored) };
@@ -155,6 +175,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  delete movingBirth.under;
 });
 
 describe("creationSteps", { timeout: 30_000 }, () => {
@@ -593,6 +614,21 @@ describe("creationSteps", { timeout: 30_000 }, () => {
       left: null,
     });
     await leftNothing(root, "unsaved", path);
+  });
+
+  it("makes and undoes its own folder when the reported birth time moves between reads", async () => {
+    const root = await repository();
+    await writeFile(join(root, ".gitignore"), "local.conf\n");
+    await writeFile(join(root, ".worktreeinclude"), "local.conf\n");
+    await commit(root, "a", "first commit\n");
+    await writeFile(join(root, "local.conf"), "level=1\n");
+    movingBirth.under = join(base, "home", "worktrees");
+    const made = await create(root, "moving");
+    expect(made.result).toEqual({ ok: true });
+    expect(made.detail("files")).toBe("Copied 1 file.");
+    const undone = await create(root, "moving-undone", { kind: "default" }, undefined, true);
+    expect(undone.result).toMatchObject({ ok: false, step: "save", undone: true, left: null });
+    await leftNothing(root, "moving-undone", undone.path);
   });
 
   it.skipIf(!onUnix)("keeps the branch when the worktree could not be removed", async () => {
