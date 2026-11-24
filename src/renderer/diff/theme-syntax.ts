@@ -1,4 +1,5 @@
 import { editor, languages, type IDisposable } from "monaco-editor/editor/editor.api";
+import { changesLimits } from "../../shared/bridge-contract.ts";
 import type { EditorTheme } from "../../shared/themes/theme-look.ts";
 import { shownLook } from "../ui/shown-theme.ts";
 import { monarchModule } from "./diff-language.ts";
@@ -13,20 +14,24 @@ interface Sent {
 }
 
 const curatedThemeName = "satellite-curated";
-const redrawAfterMs = [50, 300, 1000, 2500];
 const refreshEveryMs = 150;
-const largestCache = 400_000;
+const redrawAfterMs = 300;
+const silentWorkerMs = 5000;
+const colouredLines = changesLimits.sideLines;
+const largestCache = 2 * colouredLines;
 const plainLine: languages.IToken[] = [{ startIndex: 0, scopes: "" }];
 const lent = new Map<string, IDisposable>();
 const sent = new Map<editor.ITextModel, Sent>();
 const byRequest = new Map<number, editor.ITextModel>();
 const cache = new Map<number, languages.IToken[]>();
-const refreshing = new Set<editor.ITextModel>();
+const refreshing = new Set<string>();
+const redrawing = new Set<editor.ITextModel>();
 const tracked = new WeakSet<editor.ITextModel>();
 
 let shownTheme: EditorTheme | undefined;
 let watching = false;
 let worker: Worker | undefined;
+let deadline: ReturnType<typeof setTimeout> | undefined;
 let nextRequest = 0;
 
 class KeyState implements languages.IState {
@@ -75,54 +80,55 @@ function keyedTokens(language: string): languages.TokensProvider {
   };
 }
 
-function resetTokens(model: editor.ITextModel): boolean {
-  const tokenization: unknown = Reflect.get(model, "tokenization");
-  if (typeof tokenization !== "object" || tokenization === null) return false;
-  const reset: unknown = Reflect.get(tokenization, "resetTokenization");
-  if (typeof reset !== "function") return false;
-  Reflect.apply(reset, tokenization, []);
-  return true;
-}
-
 function redrawRemovedLines(model: editor.ITextModel): void {
-  for (const diff of editor.getDiffEditors()) {
-    if (diff.getModel()?.original !== model) continue;
-    diff.getOriginalEditor().changeViewZones((zones) => {
-      zones.removeZone(
-        zones.addZone({
-          afterLineNumber: 0,
-          heightInPx: 0,
-          domNode: document.createElement("div"),
-        }),
-      );
-    });
+  if (redrawing.has(model)) return;
+  redrawing.add(model);
+  setTimeout(() => {
+    redrawing.delete(model);
+    if (model.isDisposed()) return;
+    for (const diff of editor.getDiffEditors()) {
+      if (diff.getModel()?.original !== model) continue;
+      diff.getOriginalEditor().changeViewZones((zones) => {
+        zones.removeZone(
+          zones.addZone({
+            afterLineNumber: 0,
+            heightInPx: 0,
+            domNode: document.createElement("div"),
+          }),
+        );
+      });
+    }
+  }, redrawAfterMs);
+}
+
+function redrawLanguage(language: string): void {
+  for (const model of editor.getModels()) {
+    if (model.getLanguageId() === language) redrawRemovedLines(model);
   }
 }
 
-function redrawWhileTokenizing(model: editor.ITextModel): void {
-  for (const delay of redrawAfterMs) {
-    setTimeout(() => {
-      if (!model.isDisposed()) redrawRemovedLines(model);
-    }, delay);
-  }
-}
-
-function lend(language: string, provider: languages.TokensProvider): void {
+function lend(language: string): void {
   const before = lent.get(language);
   languages.registerTokensProviderFactory(language, { create: () => null });
-  lent.set(language, languages.setTokensProvider(language, provider));
+  lent.set(language, languages.setTokensProvider(language, keyedTokens(language)));
   before?.dispose();
 }
 
-function refresh(model: editor.ITextModel): void {
-  if (refreshing.has(model)) return;
-  refreshing.add(model);
+function refresh(language: string): void {
+  if (refreshing.has(language)) return;
+  refreshing.add(language);
   setTimeout(() => {
-    refreshing.delete(model);
-    if (model.isDisposed()) return;
-    if (!resetTokens(model)) lend(model.getLanguageId(), keyedTokens(model.getLanguageId()));
-    redrawWhileTokenizing(model);
+    refreshing.delete(language);
+    if (!lent.has(language)) return;
+    lend(language);
+    redrawLanguage(language);
   }, refreshEveryMs);
+}
+
+function release(keys: number[]): void {
+  const kept = new Set<number>();
+  for (const other of sent.values()) for (const key of other.keys) kept.add(key);
+  for (const key of keys) if (!kept.has(key)) cache.delete(key);
 }
 
 function forget(model: editor.ITextModel): void {
@@ -130,38 +136,58 @@ function forget(model: editor.ITextModel): void {
   if (before === undefined) return;
   sent.delete(model);
   byRequest.delete(before.request);
-  if (!before.done) post({ kind: "cancel", request: before.request });
+  release(before.keys);
+  if (!before.done) worker?.postMessage({ kind: "cancel", request: before.request });
+}
+
+function waiting(): boolean {
+  return [...sent.values()].some((record) => !record.done);
+}
+
+function watchWorker(): void {
+  if (deadline !== undefined) clearTimeout(deadline);
+  deadline = waiting() ? setTimeout(replaceWorker, silentWorkerMs) : undefined;
+}
+
+function replaceWorker(): void {
+  worker?.terminate();
+  worker = undefined;
+  deadline = undefined;
+  for (const record of sent.values()) record.done = true;
 }
 
 function received({ data }: MessageEvent<SyntaxBatch>): void {
   const model = byRequest.get(data.request);
   const record = model === undefined ? undefined : sent.get(model);
-  if (model === undefined || record === undefined) return;
-  if (cache.size > largestCache) cache.clear();
-  data.tokens.forEach((tokens, offset) => {
-    const key = record.keys[data.from + offset];
-    if (tokens === null || key === undefined) return;
-    cache.set(
-      key,
-      tokens.map(([startIndex, scopes]) => ({ startIndex, scopes })),
-    );
-  });
-  if (data.done) record.done = true;
-  if (data.tokens.some((tokens) => tokens !== null)) refresh(model);
+  if (model !== undefined && record !== undefined) {
+    if (cache.size > largestCache) cache.clear();
+    data.tokens.forEach((tokens, offset) => {
+      const key = record.keys[data.from + offset];
+      if (tokens === null || key === undefined) return;
+      cache.set(
+        key,
+        tokens.map(([startIndex, scopes]) => ({ startIndex, scopes })),
+      );
+    });
+    if (data.done) record.done = true;
+    if (data.tokens.some((tokens) => tokens !== null)) refresh(model.getLanguageId());
+  }
+  watchWorker();
 }
 
 function post(message: SyntaxRequest): void {
   if (worker === undefined) {
     worker = new SyntaxWorker();
     worker.addEventListener("message", received);
+    worker.addEventListener("error", replaceWorker);
   }
   worker.postMessage(message);
+  watchWorker();
 }
 
 function send(theme: EditorTheme, model: editor.ITextModel): void {
+  if (model.isDisposed() || model.getLineCount() > colouredLines) return;
   const language = model.getLanguageId();
-  if (model.isDisposed()) return;
-  forget(model);
   const lines = model.getLinesContent();
   const keys: number[] = [];
   let key = startKey(language);
@@ -169,16 +195,21 @@ function send(theme: EditorTheme, model: editor.ITextModel): void {
     key = lineKey(line, key);
     keys.push(key);
   }
+  const before = sent.get(model);
+  if (before !== undefined && !before.done)
+    worker?.postMessage({ kind: "cancel", request: before.request });
+  if (before !== undefined) byRequest.delete(before.request);
   const request = ++nextRequest;
   sent.set(model, { request, keys, done: false });
   byRequest.set(request, model);
+  if (before !== undefined) release(before.keys);
   post({ kind: "tokenize", request, theme, language, lines });
 }
 
 function colour(theme: EditorTheme, model: editor.ITextModel): void {
   const language = model.getLanguageId();
   if (language === "plaintext") return;
-  if (!lent.has(language)) lend(language, keyedTokens(language));
+  if (!lent.has(language)) lend(language);
   send(theme, model);
 }
 
@@ -189,9 +220,7 @@ async function giveBack(language: string): Promise<void> {
   const loaded = await monarchModule(language);
   if (lent.has(language) || loaded === undefined) return;
   languages.setMonarchTokensProvider(language, loaded.language);
-  for (const model of editor.getModels()) {
-    if (model.getLanguageId() === language) redrawWhileTokenizing(model);
-  }
+  redrawLanguage(language);
 }
 
 function track(model: editor.ITextModel): void {
@@ -211,7 +240,7 @@ function watchModels(): void {
   for (const model of editor.getModels()) track(model);
   editor.onDidCreateModel((model) => {
     track(model);
-    if (shownTheme === undefined) redrawWhileTokenizing(model);
+    if (shownTheme === undefined) redrawRemovedLines(model);
     else colour(shownTheme, model);
   });
 }
