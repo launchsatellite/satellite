@@ -146,6 +146,7 @@ export function createTerminalSessions({
   const running = new Set<Session>();
   const launches = new Map<string, Session>();
   const watchedOwners = new WeakSet<BridgeOwner>();
+  const goneOwners = new WeakSet<BridgeOwner>();
   let sweeping: Promise<void> | undefined;
   let closed = false;
   let stopping: Promise<void> | undefined;
@@ -326,6 +327,7 @@ export function createTerminalSessions({
     if (watchedOwners.has(owner)) return;
     watchedOwners.add(owner);
     owner.onGone(() => {
+      goneOwners.add(owner);
       for (const [id, session] of sessions) if (session.owner === owner) end(id, session);
     });
   };
@@ -447,6 +449,7 @@ export function createTerminalSessions({
     const { id, workspace, resume, cols, rows } = request;
     if (unsettled.size >= bridgeLimits.terminals) await settled([...unsettled].filter(isEnded));
     if (closed) throw new BridgeFailure("failed", "Satellite is quitting.");
+    if (goneOwners.has(owner)) throw new BridgeFailure("failed", "That window is gone.");
     if (sessions.has(id)) {
       throw new BridgeFailure("invalid-request", "That terminal is already running.");
     }

@@ -901,6 +901,19 @@ describe("createTerminalSessions", () => {
     expect(ptys).toHaveLength(17);
   });
 
+  it("starts nothing for a page that is gone while its start waits at the limit", async () => {
+    const { handlers } = create();
+    const { pages, first, mine } = owners();
+    for (let index = 1; index <= 16; index += 1) {
+      await handlers["terminal.start"]({ id: terminalId(index), ...size }, mine);
+    }
+    await handlers["terminal.close"]({ id: terminalId(1) }, mine);
+    const starting = handlers["terminal.start"]({ id: terminalId(17), ...size }, mine);
+    pages.end(first);
+    await expect(starting).rejects.toMatchObject({ code: "failed" });
+    expect(ptys).toHaveLength(16);
+  });
+
   it("counts a terminal that is still being killed against the limit", async () => {
     const { handlers } = create();
     const { mine } = owners();
