@@ -9,6 +9,7 @@ import {
   parseColour,
   terminalColourNames,
   themeLook,
+  type ThemeLook,
 } from "./theme-look.ts";
 
 const states = {
@@ -46,6 +47,44 @@ function contrastRatio(first: string, second: string): number {
   };
   const [light = 0, dark = 0] = [luminance(first), luminance(second)].sort((x, y) => y - x);
   return (light + 0.05) / (dark + 0.05);
+}
+
+function pairsBelow(look: ThemeLook): string[] {
+  const { tokens, paired } = look;
+  const below: string[] = [];
+  const measure = (
+    front: string,
+    frontName: string,
+    ground: string,
+    groundName: string,
+    bar: number,
+  ) => {
+    const ratio = contrastRatio(front, ground);
+    if (ratio < bar) below.push(`${frontName} on ${groundName} ${ratio.toFixed(2)}`);
+  };
+  for (const ground of ["bg", "side"] as const) {
+    for (const token of textTokens)
+      measure(tokens[token], token, tokens[ground], ground, contrastFloors.text);
+    for (const token of pixelTokens)
+      measure(tokens[token], token, tokens[ground], ground, contrastFloors.edge);
+  }
+  for (const ground of pairedGrounds) {
+    for (const token of textTokens)
+      measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.text);
+    for (const token of pixelTokens)
+      measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
+  }
+  for (const ground of ["side", "raised", "bg"] as const)
+    measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
+  if (tokens.raised === tokens.side) below.push("raised equals side");
+  for (const ground of pairedGrounds) {
+    const order = (["fg", "fg2", "dim"] as const).map((token) =>
+      contrastRatio(paired[ground][token], tokens[ground]),
+    );
+    if (order.some((ratio, at) => at > 0 && ratio > (order[at - 1] ?? 0)))
+      below.push(`text order on ${ground}`);
+  }
+  return below;
 }
 
 const themeOwnPairs: Record<string, string[]> = {
@@ -119,40 +158,39 @@ describe("themeLook", () => {
     for (const { id } of curatedThemes) {
       const look = curatedLook(id);
       if (look === undefined) throw new Error(id);
-      const { tokens, paired } = look;
-      const below: string[] = [];
-      const measure = (
-        front: string,
-        frontName: string,
-        ground: string,
-        groundName: string,
-        bar: number,
-      ) => {
-        const ratio = contrastRatio(front, ground);
-        if (ratio < bar) below.push(`${frontName} on ${groundName} ${ratio.toFixed(2)}`);
-      };
-      for (const ground of ["bg", "side"] as const) {
-        for (const token of textTokens)
-          measure(tokens[token], token, tokens[ground], ground, contrastFloors.text);
-        for (const token of pixelTokens)
-          measure(tokens[token], token, tokens[ground], ground, contrastFloors.edge);
-      }
-      for (const ground of pairedGrounds) {
-        for (const token of textTokens)
-          measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.text);
-        for (const token of pixelTokens)
-          measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
-      }
-      for (const ground of ["side", "raised", "bg"] as const)
-        measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
-      expect(tokens.raised).not.toBe(tokens.side);
-      for (const ground of pairedGrounds) {
-        const order = (["fg", "fg2", "dim"] as const).map((token) =>
-          contrastRatio(paired[ground][token], tokens[ground]),
-        );
-        expect(order, `${id} text order on ${ground}`).toEqual([...order].sort((x, y) => y - x));
-      }
-      expect(below, id).toEqual(themeOwnPairs[id]);
+      expect(pairsBelow(look), id).toEqual(themeOwnPairs[id] ?? []);
+    }
+  });
+
+  it("reaches the bar on paired grounds the theme's text cannot, light or dark", () => {
+    const lightGrounds = {
+      "list.activeSelectionBackground": "#ffffff",
+      "list.hoverBackground": "#e8e8e8",
+      "quickInput.background": "#f4f4f4",
+    };
+    const darkGrounds = {
+      "list.activeSelectionBackground": "#000000",
+      "list.hoverBackground": "#202020",
+      "quickInput.background": "#303030",
+    };
+    const lightTheme = {
+      ...minimal,
+      type: "light",
+      colors: { ...minimal.colors, "editor.background": "#fafafa", "editor.foreground": "#101010" },
+    };
+    for (const [name, theme] of [
+      ["dark theme, light grounds", { ...minimal, colors: { ...minimal.colors, ...lightGrounds } }],
+      [
+        "light theme, dark grounds",
+        { ...lightTheme, colors: { ...lightTheme.colors, ...darkGrounds } },
+      ],
+    ] as const) {
+      const look = themeLook(theme, states);
+      if (look === undefined) throw new Error(name);
+      expect(
+        pairsBelow(look).filter((pair) => !/ on (bg|side) /.test(pair)),
+        name,
+      ).toEqual([]);
     }
   });
 

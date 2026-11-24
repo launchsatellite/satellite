@@ -187,12 +187,16 @@ function mixed(from: Rgba, to: Rgba, amount: number): Rgba {
 }
 
 function reach(start: Rgba, toward: Rgba, grounds: Rgba[], ratio: number): Rgba {
-  for (let step = 0; step <= 40; step++) {
-    const { r, g, b } = mixed(start, toward, step / 40);
-    const tone = { r: Math.round(r), g: Math.round(g), b: Math.round(b), a: 1 };
-    if (grounds.every((ground) => ratioOf(tone, ground) >= ratio)) return tone;
+  const least = (colour: Rgba) => Math.min(...grounds.map((ground) => ratioOf(colour, ground)));
+  const extreme = least(black) >= least(white) ? black : white;
+  for (const target of [toward, extreme]) {
+    for (let step = 0; step <= 40; step++) {
+      const { r, g, b } = mixed(start, target, step / 40);
+      const tone = { r: Math.round(r), g: Math.round(g), b: Math.round(b), a: 1 };
+      if (least(tone) >= ratio) return tone;
+    }
   }
-  return toward;
+  return extreme;
 }
 
 function cleanColours(colors: Record<string, unknown>): Map<string, Rgba> {
@@ -320,8 +324,12 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
       .find((colour) => colour !== undefined);
     const floored = (token: PairedToken, ratio: number, above?: string): string => {
       const colour = parseColour(tokens[token]) ?? fg;
-      if (ratioOf(colour, ground) >= ratio) return tokens[token];
       const ceiling = parseColour(above ?? "");
+      if (ratioOf(colour, ground) >= ratio) {
+        return ceiling !== undefined && ratioOf(colour, ground) > ratioOf(ceiling, ground)
+          ? hexOf(ceiling)
+          : tokens[token];
+      }
       const own = ownText === undefined ? undefined : over(ownText, ground);
       const ownFits =
         own !== undefined &&
