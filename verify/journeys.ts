@@ -13,6 +13,7 @@ import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
 import { filesJourney } from "./journeys/files.ts";
 import { guideJourney } from "./journeys/guide.ts";
+import { hostileFileJourney } from "./journeys/hostile-file.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
@@ -45,6 +46,7 @@ const journeys: Journey[] = [
   guideJourney,
   workspacesJourney,
   changesJourney,
+  hostileFileJourney,
   filesJourney,
   conflictsJourney,
   sessionsJourney,
