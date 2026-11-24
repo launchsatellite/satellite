@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppSession } from "../driver.ts";
+import { readTerminal, type TerminalScreen } from "../terminal-screen.ts";
 import { gone, startClaude, visible, waitUntil } from "./conditions.ts";
 
 interface Look {
@@ -67,8 +68,7 @@ const publishedRemoved = {
   Hello: "rgb(241, 250, 140)",
   "+": "rgb(255, 121, 198)",
 };
-const terminalRed = { satellite: "#cc0000", theme: "#ff5555" };
-const shotTolerance = 3;
+const terminalRed = { satellite: "", theme: "#ff5555" };
 
 async function look(session: AppSession): Promise<Look> {
   return session.page.evaluate((names) => {
@@ -125,55 +125,6 @@ async function look(session: AppSession): Promise<Look> {
   }, tokenNames);
 }
 
-async function shotColours(session: AppSession, shot: Buffer): Promise<string[]> {
-  return session.page.evaluate(async (base64) => {
-    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const paint = canvas.getContext("2d");
-    if (paint === null) return [];
-    paint.drawImage(bitmap, 0, 0);
-    const { data } = paint.getImageData(0, 0, bitmap.width, bitmap.height);
-    const counts = new Map<string, number>();
-    for (let at = 0; at < data.length; at += 4) {
-      const hex = `#${[data[at], data[at + 1], data[at + 2]]
-        .map((channel) => (channel ?? 0).toString(16).padStart(2, "0"))
-        .join("")}`;
-      counts.set(hex, (counts.get(hex) ?? 0) + 1);
-    }
-    return [...counts]
-      .sort((a, b) => b[1] - a[1])
-      .filter(([, count]) => count >= 40)
-      .map(([hex]) => hex);
-  }, shot.toString("base64"));
-}
-
-async function asShot(session: AppSession, colour: string): Promise<string> {
-  await session.page.evaluate((fill) => {
-    const swatch = document.createElement("div");
-    swatch.dataset["testid"] = "verify-swatch";
-    swatch.style.cssText = `position:fixed;left:0;top:0;width:24px;height:24px;z-index:2147483647;background:${fill}`;
-    document.body.append(swatch);
-  }, colour);
-  const swatch = session.page.getByTestId("verify-swatch");
-  const shot = await swatch.screenshot();
-  await swatch.evaluate((element) => {
-    element.remove();
-  });
-  return (await shotColours(session, shot))[0] ?? "";
-}
-
-function near(first: string, second: string): boolean {
-  const channels = (hex: string) =>
-    [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
-  const [a, b] = [channels(first), channels(second)];
-  return a.every((channel, at) => Math.abs(channel - (b[at] ?? -255)) <= shotTolerance);
-}
-
-async function terminalColours(session: AppSession): Promise<string[]> {
-  return shotColours(session, await session.page.getByTestId("terminal").screenshot());
-}
-
 async function shows(session: AppSession, bg: string, when: string): Promise<Look> {
   let last: Look | undefined;
   await waitUntil(
@@ -226,28 +177,25 @@ async function themedSyntax(session: AppSession, when: string): Promise<void> {
   );
 }
 
+function fullHex(colour: string): string {
+  return /^#[0-9a-f]{3}$/i.test(colour) ? colour.replace(/[0-9a-f]/gi, "$&$&") : colour;
+}
+
 async function terminalReads(
   session: AppSession,
   ground: string,
   red: string,
   when: string,
 ): Promise<void> {
-  const shotGround = await asShot(session, ground);
-  const shotRed = await asShot(session, red);
-  let last: string[] | undefined;
+  let last: TerminalScreen | null = null;
   await waitUntil(
     async () => {
-      last = await terminalColours(session);
-      const [first] = last;
-      return (
-        first !== undefined &&
-        near(first, shotGround) &&
-        last.some((colour) => near(colour, shotRed))
-      );
+      last = await readTerminal(session.page);
+      return last !== null && fullHex(last.background) === ground && last.red === red;
     },
     waitMs,
     () =>
-      `the terminal did not read ${ground} with ${red}, shot as ${shotGround} and ${shotRed}, ${when}, it read ${JSON.stringify(last)}`,
+      `the terminal was not given ${ground} with red ${red || "its default"} ${when}, it read ${JSON.stringify({ background: last?.background, red: last?.red })}`,
   );
 }
 

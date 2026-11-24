@@ -21,6 +21,7 @@ export interface TerminalScreen {
   paneWidth: number;
   paneHeight: number;
   background: string;
+  red: string;
   backgroundToken: string;
   lines: string[];
   columns: number[][];
@@ -95,6 +96,7 @@ export async function readTerminal(page: Page): Promise<TerminalScreen | null> {
       paneWidth: host.clientWidth,
       paneHeight: host.clientHeight,
       background: terminal.options.theme?.background ?? "",
+      red: terminal.options.theme?.red ?? "",
       backgroundToken: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim(),
       lines,
       columns,
