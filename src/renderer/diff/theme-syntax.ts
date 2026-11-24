@@ -211,7 +211,8 @@ function watchModels(): void {
   for (const model of editor.getModels()) track(model);
   editor.onDidCreateModel((model) => {
     track(model);
-    if (shownTheme !== undefined) colour(shownTheme, model);
+    if (shownTheme === undefined) redrawWhileTokenizing(model);
+    else colour(shownTheme, model);
   });
 }
 
