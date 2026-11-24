@@ -90,7 +90,7 @@ Approval covers the scoped work it was given for. Silence never authorizes a gat
 
 ## Writing
 
-Every word in this repo, from docs and skills to commits, pull requests and UI copy, sounds like Satellite. Smart, friendly, futuristic. Concise and dense with content, so people and agents both read it fast. No colons in prose, write a sentence instead. The repo describes only the current state of the project, so no history, no someday plans and no dates in docs.
+Every word in this repo, from docs and skills to commits, pull requests and UI copy, sounds like Satellite. Smart, friendly, futuristic. Concise and dense with content, so people and agents both read it fast. No colons in prose, write a sentence instead. The repo describes only the current state of the project, so no history, no someday plans and no dates in docs. Never name the products or works that inspired Satellite's design or that it is compared with, while the tools it runs or integrates and the works it ships keep their names (skill `satellite-conventions`).
 
 ## Principles
 
