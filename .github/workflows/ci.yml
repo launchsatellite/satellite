@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,10 +46,14 @@ jobs:
           fetch-depth: 2
       - id: diff
         run: |
-          changed=$(git diff --name-only HEAD^1 HEAD)
-          echo "$changed"
           docs='^([^/]+\.md|specs/.+|\.claude/skills/.+|\.github/pull_request_template\.md|\.github/ISSUE_TEMPLATE/.+)$'
-          if grep -qvE "$docs" <<<"$changed"; then app=true; else app=false; fi
+          app=true
+          if changed=$(git diff --no-renames --name-only HEAD^1 HEAD); then
+            found=0
+            grep -qvE "$docs" <<<"$changed" || found=$?
+            [ "$found" -ne 1 ] || app=false
+          fi
+          echo "app=$app"
           echo "app=$app" >> "$GITHUB_OUTPUT"
 
   prove:
