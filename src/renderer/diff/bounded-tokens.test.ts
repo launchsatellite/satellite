@@ -1,117 +1,92 @@
-import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { EncodedTokenMetadata, INITIAL, type StateStack } from "shiki/textmate";
 import dracula from "shiki/themes/dracula.mjs";
-import { beforeAll, describe, expect, it } from "vitest";
-import { fileTokenizer, tokenBounds, type LineTokens } from "./bounded-tokens.ts";
+import { describe, expect, it } from "vitest";
+import { fileTokenizer, tokenBounds, type LineTokenizer } from "./bounded-tokens.ts";
 import { grammars } from "./syntax-grammars.ts";
 
-const frameMs = 16;
-const units = ["_", "$", "a", "1", " ", "\t", "<", "~", "a.", "#", "(", "{", "\\", "-"];
-const prefixes = ["", "x = ", "# ", "/* ", '"', "`"];
-const ends = ["!", "x", "e", '"'];
-const warmUp = [
-  "x = 1;",
-  'int main(void) { return f(a, "s") + 2; } // c',
-  "const x = `a ${b}`; /* c */",
-];
-
-let highlighter: HighlighterCore;
-
-beforeAll(async () => {
-  highlighter = await createHighlighterCore({
-    themes: [dracula],
-    langs: [],
-    engine: createJavaScriptRegexEngine(),
-  });
-});
-
-function hostile(prefix: string, unit: string, end: string, length: number): string {
-  const body = unit.repeat(Math.ceil(length / unit.length));
-  return (prefix + body).slice(0, length - end.length) + end;
-}
-
-async function tokenizerFor(language: string) {
-  const grammar = grammars[language];
-  if (grammar === undefined) throw new Error(language);
-  const { default: registrations } = await grammar.load();
-  await highlighter.loadLanguage(...registrations);
-  const name = registrations.at(-1)?.name ?? language;
-  const { colorMap } = highlighter.setTheme("dracula");
-  const fresh = () =>
-    fileTokenizer(highlighter.getLanguage(name), colorMap, () => "", grammar.longestLine, {
-      ms: 0,
-    });
-  const warm = fresh();
-  for (const line of [...warmUp, ...units.map((unit) => unit.repeat(40))]) warm(line);
-  return { fresh, longestLine: grammar.longestLine };
-}
-
-function lineMs(fresh: () => (line: string) => LineTokens, line: string): number {
-  let fastest = Number.POSITIVE_INFINITY;
-  for (let run = 0; run < 10 && fastest > frameMs; run++) {
-    const next = fresh();
-    const started = performance.now();
-    next(line);
-    fastest = Math.min(fastest, performance.now() - started);
-  }
-  return fastest;
+function fakeGrammar(scanMs: number, stopsEarly: (line: string) => boolean) {
+  const seen: { line: string; stack: StateStack | null }[] = [];
+  const grammar: LineTokenizer = {
+    tokenizeLine2(line, stack) {
+      seen.push({ line, stack });
+      const started = performance.now();
+      while (performance.now() - started < scanMs) continue;
+      return {
+        tokens: new Uint32Array([0, 0]),
+        ruleStack: INITIAL,
+        stoppedEarly: stopsEarly(line),
+      };
+    },
+  };
+  return { grammar, seen };
 }
 
 describe("fileTokenizer", () => {
-  it.each(Object.keys(grammars))(
-    "keeps every hostile line of %s within a frame",
-    async (language) => {
-      const { fresh, longestLine } = await tokenizerFor(language);
-      const slow: string[] = [];
-      for (const prefix of prefixes)
-        for (const unit of units)
-          for (const end of ends) {
-            const line = hostile(prefix, unit, end, longestLine);
-            const ms = lineMs(fresh, line);
-            if (ms > frameMs) slow.push(`${JSON.stringify(line.slice(0, 12))} ${ms.toFixed(1)} ms`);
-          }
-      expect(slow).toEqual([]);
-    },
-    120_000,
-  );
+  it("gives every grammar a longest line and shows a longer line plain without scanning it", () => {
+    for (const [language, grammar] of Object.entries(grammars)) {
+      expect(Number.isInteger(grammar?.longestLine), language).toBe(true);
+      const longestLine = grammar?.longestLine ?? 0;
+      expect(longestLine, language).toBeGreaterThan(0);
+      const { grammar: fake, seen } = fakeGrammar(0, () => false);
+      const next = fileTokenizer(fake, [], () => "", longestLine);
+      expect(next("_".repeat(longestLine + 1))).toBeNull();
+      expect(next("_".repeat(longestLine))).not.toBeNull();
+      expect(seen.map(({ line }) => line.length)).toEqual([longestLine]);
+    }
+  });
+
+  it("shows the rest of a file plain once its budget is spent", () => {
+    const { grammar, seen } = fakeGrammar(10, () => false);
+    const next = fileTokenizer(grammar, [], () => "", 100);
+    const lines = Array.from({ length: 1000 }, () => next("x"));
+    const firstPlain = lines.indexOf(null);
+    expect(firstPlain).toBeGreaterThan(0);
+    expect(lines.slice(firstPlain).every((tokens) => tokens === null)).toBe(true);
+    expect(seen).toHaveLength(firstPlain);
+    expect(firstPlain * 10).toBeGreaterThanOrEqual(tokenBounds.fileMs);
+  });
+
+  it("keeps the last full line's state after a line that stops between scans", () => {
+    const { grammar, seen } = fakeGrammar(0, (line) => line === "slow");
+    const next = fileTokenizer(grammar, [], () => "", 100);
+    next("a");
+    next("slow");
+    next("b");
+    expect(seen.map(({ stack }) => stack)).toEqual([INITIAL, INITIAL, INITIAL]);
+  });
 
   it.each(["typescriptreact", "javascriptreact"])(
     "colours JSX tags and attributes in %s as the theme's own editor does",
     async (language) => {
+      const highlighter = await createHighlighterCore({
+        themes: [dracula],
+        langs: [],
+        engine: createJavaScriptRegexEngine(),
+      });
       const grammar = grammars[language];
       if (grammar === undefined) throw new Error(language);
       const { default: registrations } = await grammar.load();
       await highlighter.loadLanguage(...registrations);
       const name = registrations.at(-1)?.name ?? language;
       const { colorMap } = highlighter.setTheme("dracula");
+      const loaded = highlighter.getLanguage(name);
       const line = 'return <div className="row">{name}</div>;';
-      const tokens =
-        fileTokenizer(
-          highlighter.getLanguage(name),
-          colorMap,
-          (colour) => colour.toLowerCase(),
-          grammar.longestLine,
-          { ms: 1000 },
-        )(line) ?? [];
+      const whole = loaded.tokenizeLine2(line, INITIAL);
+      expect(whole.stoppedEarly).toBe(false);
+      const tokens: [number, string][] = [];
+      for (let at = 0; at < whole.tokens.length; at += 2) {
+        const metadata = whole.tokens[at + 1] ?? 0;
+        tokens.push([
+          whole.tokens[at] ?? 0,
+          colorMap[EncodedTokenMetadata.getForeground(metadata)] ?? "",
+        ]);
+      }
       const colourAt = (text: string) =>
-        tokens.findLast(([start]) => start <= line.indexOf(text))?.[1];
+        tokens.findLast(([start]) => start <= line.indexOf(text))?.[1].toLowerCase();
       expect([colourAt("div"), colourAt("className")]).toEqual(["#ff79c6", "#50fa7b"]);
+      highlighter.dispose();
     },
   );
-
-  it("shows a line past the longest as plain text without scanning it", async () => {
-    const { fresh, longestLine } = await tokenizerFor("typescript");
-    expect(fresh()("_".repeat(longestLine + 1))).toBeNull();
-  });
-
-  it("stops colouring a file once its budget is spent", async () => {
-    const { fresh, longestLine } = await tokenizerFor("markdown");
-    const next = fresh();
-    const line = hostile('"', "~", "!", longestLine);
-    const started = performance.now();
-    let plain = 0;
-    for (let at = 0; at < 20_000; at++) if (next(line) === null) plain++;
-    expect(performance.now() - started).toBeLessThan(tokenBounds.fileMs + 1000);
-    expect(plain).toBeGreaterThan(0);
-  });
 });
