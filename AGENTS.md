@@ -26,8 +26,8 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | `verify/` | the driver, scenarios, stand-ins and journeys that prove changes in the real app |
 | `lint/` | the `no-comments` lint rule |
 | `packaging/` | the app icon electron-builder packages |
-| `.github/` | the CI and release workflows, the task issue template and the pull request template |
-| `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer, the licence notices step and the tests' temp folder |
+| `.github/` | the CI, platforms and release workflows, the task issue template and the pull request template |
+| `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer, the licence notices step, the grammar line measure and the tests' temp folder |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 
 A new top-level folder gets a row here in the same change.
@@ -90,7 +90,7 @@ Approval covers the scoped work it was given for. Silence never authorizes a gat
 
 ## Writing
 
-Every word in this repo, from docs and skills to commits, pull requests and UI copy, sounds like Satellite. Smart, friendly, futuristic. Concise and dense with content, so people and agents both read it fast. No colons in prose, write a sentence instead. The repo describes only the current state of the project, so no history, no someday plans and no dates in docs.
+Every word in this repo, from docs and skills to commits, pull requests and UI copy, sounds like Satellite. Smart, friendly, futuristic. Concise and dense with content, so people and agents both read it fast. No colons in prose, write a sentence instead. The repo describes only the current state of the project, so no history, no someday plans and no dates in docs. Never name the products or works that inspired Satellite's design or that it is compared with, while the tools it runs or integrates and the works it ships keep their names (skill `satellite-conventions`).
 
 ## Principles
 

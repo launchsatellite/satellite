@@ -30,6 +30,9 @@
   --volt-edge: #6b7800;
   --lilac: #c7b9ff;
   --lilac-edge: #8066d6;
+  --working: #6a4bff;
+  --idle: #68686f;
+  --danger: #be400c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +61,9 @@
     --volt-edge: #dcff3d;
     --lilac: #c7b9ff;
     --lilac-edge: #c7b9ff;
+    --working: #6a4bff;
+    --idle: #82828a;
+    --danger: #ff5a1f;
   }
 }
 
@@ -86,6 +92,9 @@
   --color-volt-edge: var(--volt-edge);
   --color-lilac: var(--lilac);
   --color-lilac-edge: var(--lilac-edge);
+  --color-working: var(--working);
+  --color-idle: var(--idle);
+  --color-danger: var(--danger);
   --shadow-raised: var(--shadow);
   --font-sans: "Funnel Sans Variable", sans-serif;
   --font-display: "Funnel Display Variable", sans-serif;
@@ -105,6 +114,56 @@
   [role="treeitem"] > [role="group"] {
     cursor: auto;
   }
+}
+
+:root[data-theme] ::selection {
+  background-color: var(--selection);
+}
+
+:root[data-theme] .bg-raised {
+  --fg: var(--raised-fg);
+  --fg2: var(--raised-fg2);
+  --dim: var(--raised-dim);
+  --sigfg: var(--raised-sigfg);
+  --addfg: var(--raised-addfg);
+  --delfg: var(--raised-delfg);
+  --danger: var(--raised-danger);
+  --working: var(--raised-working);
+  --idle: var(--raised-idle);
+  --signal: var(--raised-signal);
+  --volt: var(--raised-volt);
+  --lilac: var(--raised-lilac);
+}
+
+:root[data-theme] .bg-sel {
+  --fg: var(--sel-fg);
+  --fg2: var(--sel-fg2);
+  --dim: var(--sel-dim);
+  --sigfg: var(--sel-sigfg);
+  --addfg: var(--sel-addfg);
+  --delfg: var(--sel-delfg);
+  --danger: var(--sel-danger);
+  --working: var(--sel-working);
+  --idle: var(--sel-idle);
+  --signal: var(--sel-signal);
+  --volt: var(--sel-volt);
+  --lilac: var(--sel-lilac);
+}
+
+:root[data-theme] .bg-hover,
+:root[data-theme] .hover\:bg-hover:hover {
+  --fg: var(--hover-fg);
+  --fg2: var(--hover-fg2);
+  --dim: var(--hover-dim);
+  --sigfg: var(--hover-sigfg);
+  --addfg: var(--hover-addfg);
+  --delfg: var(--hover-delfg);
+  --danger: var(--hover-danger);
+  --working: var(--hover-working);
+  --idle: var(--hover-idle);
+  --signal: var(--hover-signal);
+  --volt: var(--hover-volt);
+  --lilac: var(--hover-lilac);
 }
 
 html,

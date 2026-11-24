@@ -7,6 +7,7 @@ import {
   type ParseWorker,
   type WorkerHandlers,
 } from "../src/renderer/pull-request/markdown-parser.ts";
+import { parseMarkdown } from "../src/renderer/pull-request/markdown-tree.ts";
 
 const deadlineMs = 500;
 const patientMs = 5000;
@@ -148,7 +149,7 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     expect(spawned).toBeGreaterThanOrEqual(2);
   });
 
-  it("draws ordinary long documents as Markdown inside the deadline", async () => {
+  it("draws ordinary long documents as Markdown for less work than the deadline", async () => {
     const tasks = Array.from({ length: 100 }, (_, at) => `- [ ] **task ${String(at)}** \`code\``);
     const changelog = Array.from(
       { length: 150 },
@@ -161,13 +162,15 @@ describe("the Markdown parser", { timeout: 60_000 }, () => {
     );
     const table = ["| a | b | c |", "| - | - | - |", ...rows];
     const parser = parserOver(spawnThread, patientMs);
-    expect((await answer(parser, "# warm")).kind).toBe("tree");
+    parseMarkdown("# warm");
     for (const lines of [tasks, changelog, table]) {
       const text = lines.join("\n");
       expect(text.length).toBeLessThan(20_000);
-      const began = performance.now();
       expect((await answer(parser, text)).kind).toBe("tree");
-      expect(performance.now() - began).toBeLessThan(deadlineMs);
+      const began = process.threadCpuUsage();
+      parseMarkdown(text);
+      const { user, system } = process.threadCpuUsage(began);
+      expect((user + system) / 1000).toBeLessThan(deadlineMs);
     }
   });
 

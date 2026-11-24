@@ -13,6 +13,7 @@ import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
 import { filesJourney } from "./journeys/files.ts";
 import { guideJourney } from "./journeys/guide.ts";
+import { hostileFileJourney } from "./journeys/hostile-file.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
 import { launchJourney } from "./journeys/launch.ts";
 import { missingJourney } from "./journeys/missing.ts";
@@ -47,6 +48,7 @@ const journeys: Journey[] = [
   guideJourney,
   workspacesJourney,
   changesJourney,
+  hostileFileJourney,
   filesJourney,
   conflictsJourney,
   sessionsJourney,
@@ -110,7 +112,7 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
   try {
     await withTimeout(journey.run(recorded), journeyTimeoutMs, `journey ${journey.name}`);
   } catch (error) {
-    failure = errorReason(error).split("\n")[0];
+    failure = errorReason(error);
     if (!session.page.isClosed()) {
       await recorded.screenshot(`${journey.name}-failure`).catch(() => undefined);
     }
@@ -142,7 +144,8 @@ async function runWithParts(journey: Journey, target: AppTarget): Promise<Outcom
 }
 
 function report(name: string, { failure, screenshots, skipped = [] }: Outcome): void {
-  const verdict = failure === undefined ? `pass ${name}` : `fail ${name} ${failure}`;
+  const verdict =
+    failure === undefined ? `pass ${name}` : `fail ${name} ${failure.replaceAll("\n", "\n    ")}`;
   const lines = [
     verdict,
     ...skipped.map((reason) => `  skipped ${reason}`),

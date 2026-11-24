@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { gone, visible, waitUntil } from "./conditions.ts";
+import { checkCuratedTheme } from "./settings-theme.ts";
 
 const waitMs = 15_000;
 const mac = process.platform === "darwin";
@@ -59,7 +60,7 @@ async function shows(
   when: string,
 ): Promise<void> {
   await waitUntil(
-    () => checked(session, `settings-theme-${theme}`),
+    async () => (await session.page.getByTestId("settings-theme").inputValue()) === theme,
     waitMs,
     `the theme did not read ${theme} ${when}`,
   );
@@ -179,7 +180,7 @@ async function checkShortcuts(session: AppSession): Promise<void> {
 
 async function checkChoices(session: AppSession): Promise<void> {
   assert.ok(!(await looksDark(session)), "the window was dark before any choice");
-  await session.page.getByTestId("settings-theme-dark").click();
+  await session.page.getByTestId("settings-theme").selectOption("dark");
   await waitUntil(() => looksDark(session), waitMs, "the window stayed light after Dark");
   await session.page.getByTestId("settings-notifications-off").click();
   await shows(session, "dark", "off", "after choosing");
@@ -244,10 +245,10 @@ async function fitsSmall(session: AppSession, theme: string): Promise<void> {
 async function checkSmall(session: AppSession): Promise<void> {
   await session.page.setViewportSize({ width: 960, height: 600 });
   await fitsSmall(session, "dark");
-  await session.page.getByTestId("settings-theme-light").click();
+  await session.page.getByTestId("settings-theme").selectOption("light");
   await waitUntil(async () => !(await looksDark(session)), waitMs, "the window stayed dark");
   await fitsSmall(session, "light");
-  await session.page.getByTestId("settings-theme-dark").click();
+  await session.page.getByTestId("settings-theme").selectOption("dark");
   await waitUntil(() => looksDark(session), waitMs, "the window stayed light");
   await session.page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -291,6 +292,7 @@ async function journey(session: AppSession): Promise<void> {
   await checkLinks(session);
   await checkSmall(session);
   await checkRelaunch(session);
+  await checkCuratedTheme(session);
   await checkGuide(session);
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
