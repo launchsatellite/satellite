@@ -143,4 +143,4 @@ Satellite never checks for updates, since it loads nothing remote. A new version
 | A card beside the real control that follows what the user does | Slides before the app | People learn a control by using it, and nothing stands between them and their first agent. |
 | Worktrees under `~/.satellite` | Worktrees inside the repository | Nested copies confuse search and file watchers, and the repository stays clean. |
 | Electron | A shell drawn by each system's own web engine | Identical rendering on macOS, Windows and Linux, and the terminal and diff components run unchanged. |
-| macOS, Windows and Linux built and tested together at release | One platform first | The app shell makes all three nearly free to build, and an automated journey through the real app proves each one. |
+| macOS, Windows and Linux built and tested together on every pull request that changes the app and at release | One platform first | The app shell makes all three nearly free to build, and an automated journey through the real app proves each one before it merges. |
