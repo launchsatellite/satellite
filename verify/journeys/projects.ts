@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { interfaceLimits } from "../../src/shared/bridge-contract.ts";
+import { curatedThemes } from "../../src/shared/themes/curated-themes.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
 import { gone, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
@@ -21,7 +22,7 @@ const execute = promisify(execFile);
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const narrowPresses = 4;
-const menuCommands = 22;
+const menuCommands = 21 + curatedThemes.length;
 const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);

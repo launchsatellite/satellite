@@ -10,6 +10,7 @@ interface Look {
   editorGround: string;
   syntax: Record<string, string>;
   removedSyntax: Record<string, string>;
+  faces: Record<string, string>;
   inserted: string;
   removed: string;
   insertedWords: string;
@@ -77,20 +78,29 @@ async function look(session: AppSession): Promise<Look> {
       const found = diff?.querySelector(selector);
       return found === null || found === undefined ? "" : getComputedStyle(found).backgroundColor;
     };
-    const colours = (spans: NodeListOf<Element> | undefined) => {
-      const read: Record<string, string> = {};
+    const gather = (
+      spans: NodeListOf<Element> | undefined,
+      value: (style: CSSStyleDeclaration) => string,
+    ) => {
+      const read = new Map<string, Set<string>>();
       for (const span of spans ?? []) {
         const text = span.textContent.trim();
-        const colour = getComputedStyle(span).color;
-        const known = read[text];
         if (text === "") continue;
-        if (known === undefined) read[text] = colour;
-        else if (!known.split(" | ").includes(colour)) read[text] = `${known} | ${colour}`;
+        const seen = read.get(text) ?? new Set<string>();
+        seen.add(value(getComputedStyle(span)));
+        read.set(text, seen);
       }
-      return read;
+      return Object.fromEntries(
+        [...read]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([text, seen]) => [text, [...seen].sort().join(" | ")]),
+      );
     };
-    const syntax = colours(diff?.querySelectorAll(".view-line span span:not(.view-zones *)"));
-    const removedSyntax = colours(diff?.querySelectorAll(".view-zones .view-line span span"));
+    const shownSpans = diff?.querySelectorAll(".view-line span span:not(.view-zones *)");
+    const removedSpans = diff?.querySelectorAll(".view-zones .view-line span span");
+    const syntax = gather(shownSpans, (style) => style.color);
+    const removedSyntax = gather(removedSpans, (style) => style.color);
+    const faces = gather(shownSpans, (style) => `${style.fontWeight} ${style.fontStyle}`);
     const paint = document.createElement("canvas").getContext("2d");
     const hex = (value: string) => {
       if (paint === null) return value;
@@ -106,6 +116,7 @@ async function look(session: AppSession): Promise<Look> {
       editorGround: background(".monaco-editor-background"),
       syntax,
       removedSyntax,
+      faces,
       inserted: background(".line-insert"),
       removed: background(".line-delete"),
       insertedWords: background(".char-insert"),
@@ -168,7 +179,14 @@ async function shows(session: AppSession, bg: string, when: string): Promise<Loo
   await waitUntil(
     async () => {
       last = await look(session);
-      return last.tokens["bg"] === bg && last.editorGround !== "" && last.inserted !== "";
+      const coloured = (read: Record<string, string>) => new Set(Object.values(read)).size >= 2;
+      return (
+        last.tokens["bg"] === bg &&
+        last.editorGround !== "" &&
+        last.inserted !== "" &&
+        coloured(last.syntax) &&
+        coloured(last.removedSyntax)
+      );
     },
     waitMs,
     () => `the window did not show the ground ${bg} ${when}, it read ${JSON.stringify(last)}`,
@@ -182,10 +200,7 @@ async function settled(session: AppSession, expected: Look, when: string): Promi
   await waitUntil(
     async () => {
       last = await look(session);
-      return (
-        JSON.stringify({ ...last, removedSyntax: {} }) ===
-        JSON.stringify({ ...expected, removedSyntax: {} })
-      );
+      return JSON.stringify(last) === JSON.stringify(expected);
     },
     waitMs,
     () =>
