@@ -48,6 +48,8 @@ const answerFirst = "Answer Claude Code first, then send this again.";
 const ended = "Claude Code ended.";
 const betaGone = "Claude Code stopped in beta, since its folder is gone.";
 const unexpected = "Claude Code stopped unexpectedly. The workspace and its changes are safe.";
+const tabLimit = 16;
+const limitSentence = `Satellite keeps ${String(tabLimit)} Claude Code sessions open at most. Close one first.`;
 const resumeFailed =
   "Claude Code couldn't resume that session, so Satellite let it go. Start a new one.";
 const edgePx = 8;
@@ -770,6 +772,62 @@ async function failedResume(session: AppSession): Promise<void> {
   assert.equal(resumed.length, 1, "a failed resume started again before the next start");
 }
 
+async function resumesWithRoom(session: AppSession): Promise<void> {
+  const { page } = session;
+  await select(session, "beta");
+  await startClaude(session, 1);
+  await page.keyboard.press("Enter");
+  await hooksReach(session, "UserPromptSubmit", 1);
+  const betaRecord = await waitForRecord(session.home);
+  await select(session, "main");
+  await session.relaunch();
+  await select(session, "alpha");
+  await session.page.getByTestId("start-claude").click();
+  for (let tab = 2; tab <= tabLimit; tab += 1) {
+    await session.page.getByTestId("new-session").click();
+  }
+  await nextPid(session, tabLimit + 1);
+  await select(session, "beta");
+  await waitUntil(
+    async () => (await session.page.getByTestId("sessions-empty").textContent()) === limitSentence,
+    promptTimeoutMs,
+    "beta never said the limit of open sessions stood in the way",
+  );
+  const movedAt = (await session.standInEvents()).length;
+  await rename(
+    join(session.home, "worktrees", "repo", "alpha"),
+    join(session.home, "alpha-moved-away"),
+  );
+  await session.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const pid = await nextPid(session, tabLimit + 2);
+  const events = await session.standInEvents();
+  const index = events.findIndex(
+    (event) => event.type === "start" && event.tool === "claude" && event.pid === pid,
+  );
+  assert.ok(index >= movedAt, "beta resumed before alpha's sessions made room");
+  assert.equal(
+    (await argsOf(session, pid))[1],
+    betaRecord,
+    "beta started something other than its own conversation once there was room",
+  );
+  assert.deepEqual(await resumes(session, betaRecord), [pid], "beta resumed more than once");
+  await terminalShows(session, "Resumed session", "in beta once there was room");
+}
+
+async function waitForRecord(home: string): Promise<string> {
+  let record: string | undefined;
+  await waitUntil(
+    async () => {
+      record = await recordOf(home, await betaId(home)).catch(() => undefined);
+      return record !== undefined;
+    },
+    promptTimeoutMs,
+    "sessions.json never recorded beta's conversation",
+  );
+  if (record === undefined) throw new Error("beta has no record");
+  return record;
+}
+
 async function betaRef(home: string): Promise<{ projectId: string; workspace: string }> {
   const file = projectsFile.parse(JSON.parse(await readFile(join(home, "projects.json"), "utf8")));
   for (const project of file.projects) {
@@ -930,5 +988,14 @@ export const sessionsJourney: Journey = {
     { name: "sessions", scenario: "interrupts", run: interrupts },
     { name: "sessions", scenario: "hooks-off", run: hooksOff },
     { name: "sessions", scenario: "session-endings", run: failedResume },
+    {
+      name: "sessions",
+      scenario: "needs-permission",
+      run: resumesWithRoom,
+      skip:
+        process.platform === "win32"
+          ? "Windows cannot move a folder a process runs in, which is how this part makes room"
+          : undefined,
+    },
   ],
 };
