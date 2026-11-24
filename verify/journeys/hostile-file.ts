@@ -116,9 +116,13 @@ async function keepsItsPlace(session: AppSession): Promise<void> {
   );
   await modified.hover();
   await session.page.mouse.wheel(0, 120);
-  const lines = modified.locator(".view-line");
-  await lines.nth(2).click();
-  await lines.nth(4).click({ modifiers: ["Shift"] });
+  const box = await modified.boundingBox();
+  assert.ok(box !== null, "the diff is not on screen");
+  const x = box.x + box.width / 2;
+  await session.page.mouse.click(x, box.y + box.height * 0.2);
+  await session.page.keyboard.down("Shift");
+  await session.page.mouse.click(x, box.y + box.height * 0.3);
+  await session.page.keyboard.up("Shift");
   await delay(500);
   const expanded = await kept(session);
   assert.ok(expanded.selected > 0, "the drag left no selection to send");
