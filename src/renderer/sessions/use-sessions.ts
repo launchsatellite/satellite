@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   bridgeLimits,
   type SessionStatus,
@@ -91,7 +91,7 @@ export function useSessions(notify: Notify): Sessions {
   const numbers = useRef(new Map<string, number>());
   const quietTried = useRef(new Set<string>());
   const count = useRef(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     count.current = state.tabs.length;
   }, [state.tabs.length]);
   useEffect(
