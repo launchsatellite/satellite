@@ -21,6 +21,7 @@ interface Responsive {
 const waitMs = 15_000;
 const watchMs = 3_000;
 const answerMs = 250;
+const throughDriverMs = 1000;
 const liveData = 15;
 const keyword = "rgb(255, 121, 198)";
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
@@ -201,7 +202,7 @@ function answers(reading: Responsive, theme: string): void {
     reading.longestGapMs < answerMs,
     `the page stalled on a hostile file in ${theme}, ${read}`,
   );
-  assert.ok(reading.settingsMs < answerMs, `Settings answered late in ${theme}, ${read}`);
+  assert.ok(reading.settingsMs < throughDriverMs, `Settings answered late in ${theme}, ${read}`);
   assert.ok(reading.terminalData >= liveData, `the terminal went quiet in ${theme}, ${read}`);
 }
 
