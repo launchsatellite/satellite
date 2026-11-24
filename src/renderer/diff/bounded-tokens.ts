@@ -11,15 +11,25 @@ export interface LineTokenizer {
 export type LineTokens = [startIndex: number, scope: string][] | null;
 
 export const tokenBounds = {
-  lineLimitMs: 4,
+  stopBetweenScansMs: 4,
   sliceMs: 25,
   fileMs: 1000,
-  compileMs: 1500,
 };
 
-export interface CompileAllowance {
-  ms: number;
-}
+const warmUpLines = [
+  "import x from 'y'; // comment",
+  'export const a = { b: [1, 2.5, "s", `t ${u}`], c: (d) => d * 2 }; /* block */',
+  "def f(self, *args, **kw): return None  # note",
+  "#include <stdio.h>",
+  "int main(void) { if (a < b && c > d) { return 0; } else { x->y = z::w; } }",
+  "<div class=\"row\" id='x'>text &amp; more</div>",
+  "@media (max-width: 10px) { .a > b:hover { color: #fff; } }",
+  "# Title",
+  "- item **bold** _em_ [link](http://x) `code`",
+  "SELECT a, b FROM t WHERE c = 'd' AND e > 1;",
+  "$var = @(1, 2); function F { param($p) }",
+  "let x: Vec<i32> = vec![1]; fn g<'a>(s: &'a str) -> Option<&'a str> { None }",
+];
 
 const fontStyleBits: [number, string][] = [
   [1, "italic"],
@@ -35,24 +45,23 @@ function fontStyleOf(bits: number): string {
     .join(" ");
 }
 
+export function warmUp(grammar: LineTokenizer): void {
+  let stack: StateStack = INITIAL;
+  for (const line of warmUpLines) stack = grammar.tokenizeLine2(line, stack).ruleStack;
+}
+
 export function fileTokenizer(
   grammar: LineTokenizer,
   colourMap: readonly string[],
   scopeOf: (colour: string, fontStyle: string) => string,
   longestLine: number,
-  allowance: CompileAllowance,
 ): (line: string) => LineTokens {
   let stack: StateStack = INITIAL;
   let spentMs = 0;
   return (line) => {
     if (line.length > longestLine || spentMs >= tokenBounds.fileMs) return null;
     const started = performance.now();
-    let result = grammar.tokenizeLine2(line, stack, tokenBounds.lineLimitMs);
-    while (result.stoppedEarly && allowance.ms > 0) {
-      const retried = performance.now();
-      result = grammar.tokenizeLine2(line, stack, tokenBounds.lineLimitMs);
-      allowance.ms -= performance.now() - retried;
-    }
+    const result = grammar.tokenizeLine2(line, stack, tokenBounds.stopBetweenScansMs);
     spentMs += performance.now() - started;
     if (!result.stoppedEarly) stack = result.ruleStack;
     const tokens: [number, string][] = [];

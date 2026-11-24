@@ -1,11 +1,6 @@
 import type { HighlighterCore } from "shiki/core";
 import type { EditorTheme } from "../../shared/themes/theme-look.ts";
-import {
-  fileTokenizer,
-  tokenBounds,
-  type CompileAllowance,
-  type LineTokens,
-} from "./bounded-tokens.ts";
+import { fileTokenizer, tokenBounds, warmUp, type LineTokens } from "./bounded-tokens.ts";
 import { grammars } from "./syntax-grammars.ts";
 import { scopeOfStyle } from "./theme-rules.ts";
 
@@ -28,11 +23,11 @@ interface Job {
 }
 
 const highlighters = new Map<string, Promise<HighlighterCore>>();
-const allowances = new Map<string, CompileAllowance>();
+const warmed = new WeakMap<HighlighterCore, Set<string>>();
 const queue: Job[] = [];
 const cancelled = new Set<number>();
 
-let running = false;
+let running: number | undefined;
 
 function highlighterFor(theme: EditorTheme): Promise<HighlighterCore> {
   const key = JSON.stringify(theme);
@@ -73,18 +68,14 @@ async function tokenize({ request, theme, language, lines }: Job): Promise<void>
   if (name === undefined) return;
   await highlighter.loadLanguage(...registrations);
   const { colorMap } = highlighter.setTheme(theme.name);
-  let allowance = allowances.get(name);
-  if (allowance === undefined) {
-    allowance = { ms: tokenBounds.compileMs };
-    allowances.set(name, allowance);
+  const loaded = highlighter.getLanguage(name);
+  const names = warmed.get(highlighter) ?? new Set<string>();
+  warmed.set(highlighter, names);
+  if (!names.has(name)) {
+    warmUp(loaded);
+    names.add(name);
   }
-  const next = fileTokenizer(
-    highlighter.getLanguage(name),
-    colorMap,
-    scopeOfStyle(theme),
-    grammar.longestLine,
-    allowance,
-  );
+  const next = fileTokenizer(loaded, colorMap, scopeOfStyle(theme), grammar.longestLine);
   let from = 0;
   let batch: LineTokens[] = [];
   let sliceStarted = performance.now();
@@ -102,22 +93,23 @@ async function tokenize({ request, theme, language, lines }: Job): Promise<void>
 }
 
 async function drain(): Promise<void> {
-  if (running) return;
-  running = true;
-  for (let job = queue.shift(); job !== undefined; job = queue.shift()) {
+  if (running !== undefined) return;
+  for (let job = queue.pop(); job !== undefined; job = queue.pop()) {
     if (cancelled.delete(job.request)) continue;
+    running = job.request;
     await tokenize(job).catch((error: unknown) => {
       console.error(`Satellite could not colour ${job.language}`, error);
     });
     cancelled.delete(job.request);
   }
-  running = false;
+  running = undefined;
 }
 
 self.addEventListener("message", (event: MessageEvent<SyntaxRequest>) => {
   const message = event.data;
   if (message.kind === "cancel") {
-    cancelled.add(message.request);
+    const { request } = message;
+    if (running === request || queue.some((job) => job.request === request)) cancelled.add(request);
     return;
   }
   queue.push(message);
