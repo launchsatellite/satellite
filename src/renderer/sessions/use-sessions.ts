@@ -126,6 +126,7 @@ export function useSessions(notify: Notify): Sessions {
     if (count.current >= tabLimit) return undefined;
     count.current += 1;
     const place = placeOf(ref);
+    quietTried.current.add(place);
     const number = (numbers.current.get(place) ?? 0) + 1;
     numbers.current.set(place, number);
     const tab: SessionTab = {
@@ -143,6 +144,7 @@ export function useSessions(notify: Notify): Sessions {
       ...current,
       tabs: [...current.tabs, tab],
       active: new Map(current.active).set(place, tab.key),
+      quiet: new Set(current.quiet).add(place),
     }));
     return tab.key;
   }, []);
@@ -151,13 +153,7 @@ export function useSessions(notify: Notify): Sessions {
     [openTab],
   );
   const resumeQuietly = useCallback(
-    (ref: WorkspaceRef) => {
-      const place = placeOf(ref);
-      if (quietTried.current.has(place) || count.current >= tabLimit) return undefined;
-      quietTried.current.add(place);
-      setState((current) => ({ ...current, quiet: new Set(current.quiet).add(place) }));
-      return openTab(ref, true);
-    },
+    (ref: WorkspaceRef) => (quietTried.current.has(placeOf(ref)) ? undefined : openTab(ref, true)),
     [openTab],
   );
   const restart = useCallback((key: string) => {
