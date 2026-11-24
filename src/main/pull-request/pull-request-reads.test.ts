@@ -130,13 +130,17 @@ async function repository(base: string, name: string, push: boolean) {
   return repo;
 }
 
-function storeOf(projects: { id: string; path: string }[]): ProjectStore {
-  const find = (id: string) => {
+function storeOf(
+  projects: { id: string; path: string }[],
+  lookups: () => Promise<void> = () => Promise.resolve(),
+): ProjectStore {
+  const find = async (id: string) => {
+    await lookups();
     const found = projects.find((project) => project.id === id);
     if (found === undefined) {
       throw new BridgeFailure("not-found", "That project is not in Satellite.");
     }
-    return Promise.resolve({ ...found, workspaces: [] });
+    return { ...found, workspaces: [] };
   };
   return {
     list: () => Promise.all(projects.map(({ id }) => find(id))),
@@ -167,12 +171,16 @@ async function setup(options: { push?: boolean } = {}) {
   const other = await repository(base, "two", true);
   let time = 1_000_000;
   const needing = vi.fn<(list: readonly Needing[]) => void>();
+  let lookups = Promise.resolve();
   const reads = createPullRequests({
     home: base,
-    store: storeOf([
-      { id: firstId, path: repo },
-      { id: secondId, path: other },
-    ]),
+    store: storeOf(
+      [
+        { id: firstId, path: repo },
+        { id: secondId, path: other },
+      ],
+      () => lookups,
+    ),
     onNeeding: needing,
     now: () => time,
     after: () => Promise.resolve(),
@@ -186,6 +194,21 @@ async function setup(options: { push?: boolean } = {}) {
       .filter((line) => line !== "")
       .map((line) => recorded.parse(JSON.parse(line)));
   };
+  const pauseLookups = () => {
+    const paused = Promise.withResolvers<undefined>();
+    lookups = paused.promise;
+    return () => {
+      lookups = Promise.resolve();
+      paused.resolve(undefined);
+    };
+  };
+  const ghStarted = () =>
+    vi.waitFor(
+      async () => {
+        expect((await calls()).length).toBeGreaterThan(0);
+      },
+      { timeout: 20_000 },
+    );
   const hold = (held: boolean) =>
     held ? writeFile(join(dir, "hold"), "") : rm(join(dir, "hold"), { force: true });
   const read = (workspace: WorkspaceRef, detail = false, fresh = false) =>
@@ -198,6 +221,8 @@ async function setup(options: { push?: boolean } = {}) {
     answer,
     calls,
     hold,
+    ghStarted,
+    pauseLookups,
     read,
     advance: (ms: number) => {
       time += ms;
@@ -653,7 +678,7 @@ describe("pull request reads", { timeout: 30_000 }, () => {
   });
 
   it("keeps a newer page that joined a read while an older detail read waited for it", async () => {
-    const { answer, reads, calls, hold } = await setup();
+    const { answer, reads, ghStarted, hold } = await setup();
     await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
     const older = vi.fn<BridgeOwner["emit"]>();
     const newer = vi.fn<BridgeOwner["emit"]>();
@@ -662,13 +687,9 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     const read = reads.handlers["pullRequest.read"];
     await hold(true);
     const summary = read({ workspace: first, detail: false }, owner);
-    await vi.waitFor(async () => {
-      expect((await calls()).length).toBeGreaterThan(0);
-    });
+    await ghStarted();
     const detailed = read({ workspace: first, detail: true }, olderPage);
-    await new Promise((resolve) => setTimeout(resolve, 200));
     const joined = read({ workspace: first, detail: false }, newerPage);
-    await new Promise((resolve) => setTimeout(resolve, 200));
     await hold(false);
     await Promise.all([summary, detailed, joined]);
     expect(newer).toHaveBeenLastCalledWith("pullRequests.needing", {
@@ -677,6 +698,31 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     expect(older).not.toHaveBeenCalledWith("pullRequests.needing", {
       needing: [{ workspace: first, needs: ["checks"] }],
     });
+  });
+
+  it("tells a read's needs to a newer page still waiting for its folder", async () => {
+    const { answer, reads, ghStarted, hold, pauseLookups } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const older = vi.fn<BridgeOwner["emit"]>();
+    const newer = vi.fn<BridgeOwner["emit"]>();
+    const olderPage: BridgeOwner = { id: 3, emit: older, onGone: () => undefined };
+    const newerPage: BridgeOwner = { id: 4, emit: newer, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    await hold(true);
+    const started = read({ workspace: first, detail: false }, olderPage);
+    await ghStarted();
+    const resume = pauseLookups();
+    const waiting = read({ workspace: first, detail: false }, newerPage);
+    await hold(false);
+    await started;
+    expect(newer).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    expect(older).not.toHaveBeenCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
+    resume();
+    await waiting;
   });
 
   it("keeps every workspace's needs through a rate limit a queued read meets", async () => {
