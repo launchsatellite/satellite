@@ -1,6 +1,8 @@
 name: CI
 
-# One job running ./scripts/check, the same green checkpoint agents run locally.
+# The green checkpoint on Linux for every pull request and push to main, plus the platforms
+# workflow on macOS, Windows and Linux for every pull request that changes more than docs, specs
+# and skills. The platforms job is the one check that says whether that proof passed.
 on:
   pull_request:
   push:
@@ -30,3 +32,42 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: ./scripts/check
       - run: npm run build
+
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: diff
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          echo "$changed"
+          docs='^([^/]+\.md|specs/.+|\.claude/skills/.+|\.github/pull_request_template\.md|\.github/ISSUE_TEMPLATE/.+)$'
+          if grep -qvE "$docs" <<<"$changed"; then app=true; else app=false; fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+
+  prove:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    uses: ./.github/workflows/platforms.yml
+
+  platforms:
+    needs: [changes, prove]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "changes $CHANGES, prove $PROVE"
+          case "$CHANGES $PROVE" in
+            *failure* | *cancelled*) exit 1 ;;
+          esac
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          PROVE: ${{ needs.prove.result }}
