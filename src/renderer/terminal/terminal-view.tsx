@@ -245,7 +245,7 @@ export function TerminalView({
     };
     scale.addEventListener("change", rescaled);
     const sight = new IntersectionObserver((entries) => {
-      if (entries.at(-1)?.isIntersecting !== true) return;
+      if (entries.at(-1)?.isIntersecting !== true || !element.checkVisibility()) return;
       gpu.take();
       sendSize();
     });
