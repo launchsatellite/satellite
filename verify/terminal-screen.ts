@@ -8,7 +8,7 @@ export interface TerminalScreen {
   advance: number;
   fontSize: number;
   lineHeight: number;
-  naturalLineHeight: number;
+  fontHeight: number;
   scale: number;
   cols: number;
   rows: number;
@@ -53,16 +53,9 @@ export async function readTerminal(page: Page): Promise<TerminalScreen | null> {
           widthIn(`72px ${family}, sans-serif`) !== widthIn("72px sans-serif"),
       ) ?? "";
     paint.font = `${String(fontSize)}px ${fontFamily}`;
-    const advance = paint.measureText("W").width;
-    const sample = document.createElement("span");
-    sample.textContent = "Mg";
-    sample.style.font = `${String(fontSize)}px ${fontFamily}`;
-    sample.style.lineHeight = "normal";
-    sample.style.position = "absolute";
-    sample.style.whiteSpace = "pre";
-    document.body.append(sample);
-    const naturalLineHeight = sample.getBoundingClientRect().height;
-    sample.remove();
+    const glyph = paint.measureText("W");
+    const advance = glyph.width;
+    const fontHeight = glyph.fontBoundingBoxAscent + glyph.fontBoundingBoxDescent;
     const box = screen.getBoundingClientRect();
     const buffer = terminal.buffer.active;
     const lines: string[] = [];
@@ -89,7 +82,7 @@ export async function readTerminal(page: Page): Promise<TerminalScreen | null> {
       advance,
       fontSize,
       lineHeight: terminal.options.lineHeight ?? 0,
-      naturalLineHeight,
+      fontHeight,
       scale: devicePixelRatio,
       cols: terminal.cols,
       rows: terminal.rows,

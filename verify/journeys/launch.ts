@@ -32,7 +32,7 @@ const box = "\u2502 ok \u2502";
 const maxTerminals = 16;
 const tooManyContexts = "Too many active WebGL contexts";
 const switchWatch = z.object({ rows: z.string().optional(), swapDrawn: z.boolean().optional() });
-const scales = [1.25, 1.5, 1.75, 2.5, 3];
+const scales = [1, 1.25, 1.5, 1.75, 2.5, 3];
 const codeTypes: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
   darwin: { fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 12, lineHeight: 1 },
   win32: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: 14, lineHeight: 1 },
@@ -55,13 +55,46 @@ function expectedCellWidth(screen: TerminalScreen, scale = screen.scale): number
   return screen.renderer === "webgl" ? Math.floor(screen.advance * scale) / scale : screen.advance;
 }
 
-async function drawnTerminalSize(page: Page): Promise<TerminalSize | null> {
-  const screen = await readTerminal(page);
-  if (screen === null) return null;
+function expectedCellHeight(screen: TerminalScreen, scale = screen.scale): number {
+  return Math.floor(Math.ceil(screen.fontHeight * scale) * screen.lineHeight) / scale;
+}
+
+function drawnSize(screen: TerminalScreen): TerminalSize {
   return {
     cols: Math.round(screen.width / expectedCellWidth(screen)),
-    rows: Math.round(screen.height / (screen.naturalLineHeight * screen.lineHeight)),
+    rows: Math.round(screen.height / expectedCellHeight(screen)),
   };
+}
+
+async function lastSent(session: AppSession, pid: number): Promise<TerminalSize | undefined> {
+  const sent = (await session.standInEvents()).flatMap((event) =>
+    event.type === "resize" && event.pid === pid ? [{ cols: event.cols, rows: event.rows }] : [],
+  );
+  return sent.at(-1);
+}
+
+async function checkSizeHeld(session: AppSession, pid: number, where: string): Promise<void> {
+  let screen: TerminalScreen | null = null;
+  let sent: TerminalSize | undefined;
+  await waitUntil(
+    async () => {
+      screen = await readTerminal(session.page);
+      sent = await lastSent(session, pid);
+      if (screen === null || sent === undefined) return false;
+      const drawn = drawnSize(screen);
+      return (
+        drawn.cols === screen.cols &&
+        drawn.rows === screen.rows &&
+        sent.cols === screen.cols &&
+        sent.rows === screen.rows
+      );
+    },
+    promptTimeoutMs,
+    () => {
+      const now: TerminalScreen | null = screen;
+      return `${where} the terminal held ${JSON.stringify(now === null ? null : { cols: now.cols, rows: now.rows })}, drew ${JSON.stringify(now === null ? null : drawnSize(now))} and last sent ${JSON.stringify(sent)} to its process`;
+    },
+  );
 }
 
 async function sizeWindow(
@@ -117,9 +150,8 @@ function typeProblem(screen: TerminalScreen | null, renderer: string): string | 
   if (screen.lineHeight !== expected.lineHeight) {
     return `the line height is ${String(screen.lineHeight)}`;
   }
-  const natural = screen.naturalLineHeight * expected.lineHeight;
-  if (Math.abs(screen.cellHeight - natural) > 1) {
-    return `a cell is ${String(screen.cellHeight)} tall where the font's own line box is ${String(natural)}`;
+  if (Math.abs(screen.cellHeight - expectedCellHeight(screen)) > 0.05) {
+    return `a cell is ${String(screen.cellHeight)} tall where a line of ${screen.resolvedFamily} is ${String(expectedCellHeight(screen))}`;
   }
   if (screen.background !== screen.backgroundToken) {
     return `the background is ${screen.background} where the token is ${screen.backgroundToken}`;
@@ -131,7 +163,7 @@ function typeProblem(screen: TerminalScreen | null, renderer: string): string | 
   return undefined;
 }
 
-async function checkType(session: AppSession, devtools: CDPSession): Promise<void> {
+async function checkType(session: AppSession, devtools: CDPSession, pid: number): Promise<void> {
   const { page } = session;
   const renderer = (await gpuAvailable(page)) ? "webgl" : "dom";
   const inner = await windowSize(page);
@@ -152,80 +184,66 @@ async function checkType(session: AppSession, devtools: CDPSession): Promise<voi
       );
       await session.screenshot(`terminal-${renderer}-${String(size.width)}-${colorScheme}`);
     }
+    await checkSizeHeld(session, pid, `at ${String(size.width)} by ${String(size.height)}`);
   }
   await page.emulateMedia({ colorScheme: "light" });
   await sizeWindow(devtools, inner);
   await waitUntil(
     async () => {
       const screen = await readTerminal(page);
-      const sent = (await resizesSince(session, 0)).at(-1);
-      return (
-        screen?.cols === opened?.cols &&
-        screen?.rows === opened?.rows &&
-        sent?.cols === screen?.cols
-      );
+      return screen?.cols === opened?.cols && screen?.rows === opened?.rows;
     },
     promptTimeoutMs,
     "the terminal never returned to its opened size",
   );
+  await checkSizeHeld(session, pid, "back at the opened size");
 }
 
-async function resizesSince(session: AppSession, before: number): Promise<TerminalSize[]> {
-  return (await session.standInEvents())
-    .slice(before)
-    .flatMap((event) => (event.type === "resize" ? [{ cols: event.cols, rows: event.rows }] : []));
+function fitsAt(screen: TerminalScreen, scale: number): TerminalSize {
+  return {
+    cols: Math.floor(screen.paneWidth / expectedCellWidth(screen, scale)),
+    rows: Math.floor(screen.paneHeight / expectedCellHeight(screen, scale)),
+  };
 }
 
-async function checkScale(session: AppSession, devtools: CDPSession): Promise<void> {
+async function checkScale(session: AppSession, devtools: CDPSession, pid: number): Promise<void> {
   const { page } = session;
   await devtools.send("Emulation.clearDeviceMetricsOverride");
+  await checkSizeHeld(session, pid, "before the display scale changes");
   const size = await windowSize(page);
-  const sent = (await resizesSince(session, 0)).at(-1);
-  let settled: TerminalScreen | null = null;
-  await waitUntil(
-    async () => {
-      settled = await readTerminal(page);
-      return settled !== null && settled.cols === sent?.cols && settled.rows === sent.rows;
-    },
-    promptTimeoutMs,
-    () => `the terminal never settled at the size the stand-in last got, ${JSON.stringify(sent)}`,
-  );
   const initial = await readTerminal(page);
   assert.ok(initial !== null, "the terminal shows no screen before the scale changes");
-  if (initial.renderer !== "webgl") return;
   const slack = initial.paneWidth - initial.width;
-  const scale = scales.find(
-    (candidate) =>
-      Math.abs(expectedCellWidth(initial, candidate) - initial.cellWidth) / initial.cellWidth >
-      0.02,
-  );
-  assert.ok(scale !== undefined, `no display scale changes a ${String(initial.advance)} cell`);
-  for (const [factor, cols] of [
-    [scale, undefined],
-    [0, initial.cols],
+  const now = fitsAt(initial, initial.scale);
+  const scale = scales.find((candidate) => {
+    const then = fitsAt(initial, candidate);
+    return then.cols !== now.cols || then.rows !== now.rows;
+  });
+  assert.ok(scale !== undefined, "no display scale changes the terminal's size");
+  for (const [factor, back] of [
+    [scale, false],
+    [0, true],
   ] as const) {
-    const before = (await session.standInEvents()).length;
     if (factor === 0) await devtools.send("Emulation.clearDeviceMetricsOverride");
     else await sizeWindow(devtools, size, factor);
     let screen: TerminalScreen | null = null;
-    let resizes: TerminalSize[] = [];
     await waitUntil(
       async () => {
         screen = await readTerminal(page);
-        resizes = await resizesSince(session, before);
-        const now = screen;
+        const current = screen;
+        if (current === null) return false;
+        const same = current.cols === initial.cols && current.rows === initial.rows;
         return (
-          now !== null &&
-          (cols === undefined ? now.cols !== initial.cols : now.cols === cols) &&
-          now.width <= now.paneWidth &&
-          now.paneWidth - now.width <= slack + now.cellWidth &&
-          resizes.some((resize) => resize.cols === now.cols && resize.rows === now.rows)
+          same === back &&
+          current.width <= current.paneWidth &&
+          current.paneWidth - current.width <= slack + current.cellWidth
         );
       },
       promptTimeoutMs,
       () =>
-        `at display scale ${String(factor)} the terminal read ${JSON.stringify(screen === null ? null : { cols: screen.cols, width: screen.width, pane: screen.paneWidth })} from ${String(initial.cols)} columns and the stand-in got ${JSON.stringify(resizes)}`,
+        `at display scale ${String(factor)} the terminal read ${JSON.stringify(screen === null ? null : { cols: screen.cols, rows: screen.rows, width: screen.width, pane: screen.paneWidth })} from ${JSON.stringify({ cols: initial.cols, rows: initial.rows })}`,
     );
+    await checkSizeHeld(session, pid, `at display scale ${String(factor)}`);
   }
 }
 
@@ -293,7 +311,7 @@ async function switchWatched(page: Page): Promise<{ rows?: string; swapDrawn?: b
   return switchWatch.parse(JSON.parse(kept));
 }
 
-async function checkGpuShared(session: AppSession): Promise<void> {
+async function checkGpuShared(session: AppSession, firstPid: number): Promise<void> {
   const { page } = session;
   const gpu = await gpuAvailable(page);
   const warnings: string[] = [];
@@ -302,15 +320,23 @@ async function checkGpuShared(session: AppSession): Promise<void> {
   };
   page.on("console", listen);
   try {
+    const pids = [firstPid];
     for (let tab = 2; tab <= maxTerminals; tab += 1) {
       await page.getByTestId("new-session").click();
       await page.getByTestId(`session-tab-${String(tab)}`).waitFor();
+      let started: number[] = [];
+      await waitUntil(
+        async () => {
+          started = await claudePids(session);
+          return started.length === tab;
+        },
+        promptTimeoutMs,
+        () => `session ${String(tab)} started ${String(started.length)} stand-ins`,
+      );
+      const pid = started.at(-1);
+      assert.ok(pid !== undefined, `session ${String(tab)} has no stand-in`);
+      pids.push(pid);
     }
-    await waitUntil(
-      async () => (await claudePids(session)).length >= maxTerminals,
-      promptTimeoutMs,
-      "the sessions never all started",
-    );
     for (const round of [1, 2]) {
       for (let tab = 1; tab <= maxTerminals; tab += 1) {
         const where = `on round ${String(round)} tab ${String(tab)}`;
@@ -344,6 +370,9 @@ async function checkGpuShared(session: AppSession): Promise<void> {
           !gpu || watched.swapDrawn === true,
           `${where} WebGL took over and a frame was painted before it drew`,
         );
+        const pid = pids[tab - 1];
+        assert.ok(pid !== undefined, `${where} the tab has no stand-in`);
+        await checkSizeHeld(session, pid, where);
       }
     }
   } finally {
@@ -411,32 +440,30 @@ async function checkInput(session: AppSession): Promise<void> {
   );
 }
 
-async function checkResize(session: AppSession, devtools: CDPSession): Promise<void> {
-  const initial = await drawnTerminalSize(session.page);
-  assert.ok(initial !== null, "the terminal draws no rows to measure");
-  const before = (await session.standInEvents()).length;
+async function checkResize(session: AppSession, devtools: CDPSession, pid: number): Promise<void> {
+  const initial = await readTerminal(session.page);
+  assert.ok(initial !== null, "the terminal shows no screen before the window shrinks");
   const inner = await windowSize(session.page);
-  await sizeWindow(devtools, {
-    width: inner.width,
-    height: Math.max(smallestHeight, inner.height - shrinkPx),
-  });
-  let drawn: TerminalSize | null = null;
-  let resizes: TerminalSize[] = [];
-  await waitUntil(
-    async () => {
-      drawn = await drawnTerminalSize(session.page);
-      resizes = await resizesSince(session, before);
-      const size = drawn;
-      return (
-        size !== null &&
-        size.rows !== initial.rows &&
-        resizes.some((resize) => resize.cols === size.cols && resize.rows === size.rows)
-      );
-    },
-    promptTimeoutMs,
-    () =>
-      `the terminal went from ${JSON.stringify(initial)} to ${JSON.stringify(drawn)} and the stand-in got the resizes ${JSON.stringify(resizes)}`,
-  );
+  for (const height of [Math.max(smallestHeight, inner.height - shrinkPx), inner.height]) {
+    await sizeWindow(devtools, { width: inner.width, height });
+    let rows: number | undefined;
+    await waitUntil(
+      async () => {
+        rows = (await readTerminal(session.page))?.rows;
+        return height === inner.height ? rows === initial.rows : rows !== initial.rows;
+      },
+      promptTimeoutMs,
+      () =>
+        `at ${String(height)} tall the terminal kept ${String(rows)} rows from ${String(initial.rows)}`,
+    );
+    await checkSizeHeld(session, pid, `at ${String(height)} tall`);
+  }
+  for (let height = inner.height - 1; height > inner.height - 40; height -= 13) {
+    await sizeWindow(devtools, { width: inner.width, height });
+    await checkSizeHeld(session, pid, `at ${String(height)} tall`);
+  }
+  await sizeWindow(devtools, inner);
+  await checkSizeHeld(session, pid, "back at the opened size");
 }
 
 async function run(session: AppSession): Promise<void> {
@@ -447,13 +474,14 @@ async function run(session: AppSession): Promise<void> {
   await page.getByTestId("changes").waitFor({ timeout: promptTimeoutMs });
   await checkColumnsFill(page);
   const firstPid = await startClaude(session, 1);
+  await checkSizeHeld(session, firstPid, "once started");
   const devtools = await page.context().newCDPSession(page);
-  await checkType(session, devtools);
-  await checkScale(session, devtools);
+  await checkType(session, devtools, firstPid);
+  await checkScale(session, devtools, firstPid);
   await checkInput(session);
-  await checkResize(session, devtools);
+  await checkResize(session, devtools, firstPid);
   await session.screenshot("launch");
-  await checkGpuShared(session);
+  await checkGpuShared(session, firstPid);
   await devtools.detach();
 
   assert.ok(!processGone(firstPid), "the first stand-in was gone before the reload");
