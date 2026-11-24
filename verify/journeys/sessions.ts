@@ -761,6 +761,37 @@ async function failedResume(session: AppSession): Promise<void> {
   assert.equal(resumed.length, 1, "a failed resume started again before the next start");
 }
 
+async function closedStaysClosed(session: AppSession): Promise<void> {
+  await select(session, "alpha");
+  const pid = await startClaude(session, 1);
+  await session.page.keyboard.press("Enter");
+  await hooksReach(session, "UserPromptSubmit", 1);
+  await waitUntil(
+    async () => (await recordedWorkspaces(session.home).catch(() => [])).length === 1,
+    promptTimeoutMs,
+    "sessions.json never recorded alpha's conversation",
+  );
+  await session.page.getByTestId("close-session-1").click();
+  await waitUntil(
+    () => processGone(pid),
+    goneTimeoutMs,
+    `alpha's stand-in (pid ${String(pid)}) still ran after its tab closed`,
+  );
+  await visible(session, "resume-session", "after closing a fresh session");
+  await visible(session, "start-claude", "after closing a fresh session");
+  await delay(1500);
+  await select(session, "main");
+  await select(session, "alpha");
+  await visible(session, "resume-session", "back in alpha after closing its fresh session");
+  await delay(1500);
+  assert.deepEqual(
+    await claudePids(session),
+    [pid],
+    "closing a fresh session's tab started Claude Code again by itself",
+  );
+  await session.screenshot("sessions-closed-stays-closed");
+}
+
 async function resumesWithRoom(session: AppSession): Promise<void> {
   const { page } = session;
   await select(session, "beta");
@@ -979,6 +1010,7 @@ export const sessionsJourney: Journey = {
     { name: "sessions", scenario: "interrupts", run: interrupts },
     { name: "sessions", scenario: "hooks-off", run: hooksOff },
     { name: "sessions", scenario: "session-endings", run: failedResume },
+    { name: "sessions", scenario: "needs-permission", run: closedStaysClosed },
     {
       name: "sessions",
       scenario: "needs-permission",
