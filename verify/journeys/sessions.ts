@@ -934,6 +934,7 @@ async function interrupts(session: AppSession): Promise<void> {
   await startClaude(session, 1);
   await promptWith(session, "one", "in the first prompt");
   await stateIs(session, "session-tab-1", "working", "after the first prompt");
+  await hooksReach(session, "UserPromptSubmit", 1);
   const before = await hookCount(session);
   await page.keyboard.press("Escape");
   await terminalShows(session, "Interrupted.", "after Escape stopped the turn");
@@ -942,6 +943,7 @@ async function interrupts(session: AppSession): Promise<void> {
 
   await promptWith(session, "two", "in the second prompt");
   await stateIs(session, "session-tab-1", "needs-you", "after the permission request");
+  await hooksReach(session, "PermissionRequest", 1);
   const asked = await hookCount(session);
   await page.keyboard.press("Escape");
   await stateIs(session, "session-tab-1", "idle", "after Escape declined");
