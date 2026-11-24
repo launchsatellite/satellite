@@ -197,10 +197,16 @@ async function setup(options: { push?: boolean } = {}) {
   const pauseLookups = () => {
     const paused = Promise.withResolvers<undefined>();
     lookups = paused.promise;
-    return () => {
+    const resume = () => {
       lookups = Promise.resolve();
       paused.resolve(undefined);
     };
+    return Object.assign(resume, {
+      fail: () => {
+        lookups = Promise.resolve();
+        paused.reject(new BridgeFailure("not-found", "That folder is gone."));
+      },
+    });
   };
   const ghStarted = () =>
     vi.waitFor(
@@ -723,6 +729,25 @@ describe("pull request reads", { timeout: 30_000 }, () => {
     });
     resume();
     await waiting;
+  });
+
+  it("keeps a page's ownership when one of its asks fails while another still waits", async () => {
+    const { answer, reads, pauseLookups } = await setup();
+    await answer("view", { stdout: viewJson([{ conclusion: "FAILURE" }]) });
+    const emit = vi.fn<BridgeOwner["emit"]>();
+    const page: BridgeOwner = { id: 5, emit, onGone: () => undefined };
+    const read = reads.handlers["pullRequest.read"];
+    const failing = pauseLookups();
+    const failed = read({ workspace: first, detail: false }, page);
+    const passing = pauseLookups();
+    const passed = read({ workspace: first, detail: false }, page);
+    failing.fail();
+    await expect(failed).rejects.toMatchObject({ code: "not-found" });
+    passing();
+    await passed;
+    expect(emit).toHaveBeenLastCalledWith("pullRequests.needing", {
+      needing: [{ workspace: first, needs: ["checks"] }],
+    });
   });
 
   it("keeps every workspace's needs through a rate limit a queued read meets", async () => {

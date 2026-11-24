@@ -522,14 +522,7 @@ export function createPullRequests({
           owners.set(key, owner);
           if (memory.has(key)) tellNeeding();
         }
-        const folder = await sessionFolder(home, store, workspace, sentences).catch(
-          (error: unknown) => {
-            if (!memory.has(key) && !running.has(key) && owners.get(key) === owner) {
-              owners.delete(key);
-            }
-            throw error;
-          },
-        );
+        const folder = await sessionFolder(home, store, workspace, sentences);
         let joined = running.get(key);
         if (joined !== undefined && !joined.detail && detail) {
           await joined.answer.catch(() => undefined);
