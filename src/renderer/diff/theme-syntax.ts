@@ -1,182 +1,217 @@
 import { editor, languages, type IDisposable } from "monaco-editor/editor/editor.api";
-import type { HighlighterCore } from "shiki/core";
 import type { EditorTheme } from "../../shared/themes/theme-look.ts";
 import { shownLook } from "../ui/shown-theme.ts";
-import { drawnColumns } from "./read-only-options.ts";
-import { grammars } from "./syntax-grammars.ts";
+import { monarchModule } from "./diff-language.ts";
+import type { SyntaxBatch, SyntaxRequest } from "./syntax-worker.ts";
+import SyntaxWorker from "./syntax-worker.ts?worker";
+import { monacoTheme } from "./theme-rules.ts";
 
-interface MonarchModule {
-  language: languages.IMonarchLanguage;
+interface Sent {
+  request: number;
+  keys: number[];
+  done: boolean;
 }
 
 const curatedThemeName = "satellite-curated";
-const lineTimeLimitMs = 50;
-const tokenizedAtOnce = 5000;
-const monacoFontStyles = new Set(["italic", "bold", "underline", "strikethrough"]);
-const plainState: languages.IState = {
-  clone: () => plainState,
-  equals: (other) => other === plainState,
-};
-const plainTokens: languages.TokensProvider = {
-  getInitialState: () => plainState,
-  tokenize: () => ({ tokens: [], endState: plainState }),
-};
-const borrowed = new Map<string, IDisposable>();
-const highlighters = new Map<string, Promise<HighlighterCore>>();
-const tokenProviders = new Map<string, Promise<languages.TokensProvider | undefined>>();
+const redrawAfterMs = [50, 300, 1000, 2500];
+const refreshEveryMs = 150;
+const largestCache = 400_000;
+const plainLine: languages.IToken[] = [{ startIndex: 0, scopes: "" }];
+const lent = new Map<string, IDisposable>();
+const sent = new Map<editor.ITextModel, Sent>();
+const byRequest = new Map<number, editor.ITextModel>();
+const cache = new Map<number, languages.IToken[]>();
+const refreshing = new Set<editor.ITextModel>();
+const tracked = new WeakSet<editor.ITextModel>();
 
 let shownTheme: EditorTheme | undefined;
 let watching = false;
+let worker: Worker | undefined;
+let nextRequest = 0;
 
-function monacoFontStyle(fontStyle: string | undefined): string | undefined {
-  if (fontStyle === undefined) return undefined;
-  return fontStyle
-    .split(" ")
-    .filter((style) => monacoFontStyles.has(style))
-    .join(" ");
+class KeyState implements languages.IState {
+  readonly key: number;
+
+  constructor(key: number) {
+    this.key = key;
+  }
+
+  clone(): this {
+    return this;
+  }
+
+  equals(other: languages.IState): boolean {
+    return other instanceof KeyState && other.key === this.key;
+  }
 }
 
-function monacoTheme(theme: EditorTheme): editor.IStandaloneThemeData {
-  const foreground = theme.colors["editor.foreground"] ?? theme.colors["foreground"];
+function lineKey(line: string, previous: number): number {
+  let first = 0xdeadbeef ^ (previous >>> 0);
+  let second = 0x41c6ce57 ^ Math.floor(previous / 0x100000000);
+  for (let at = 0; at < line.length; at++) {
+    const code = line.charCodeAt(at);
+    first = Math.imul(first ^ code, 2654435761);
+    second = Math.imul(second ^ code, 1597334677);
+  }
+  first =
+    Math.imul(first ^ (first >>> 16), 2246822507) ^ Math.imul(second ^ (second >>> 13), 3266489909);
+  second =
+    Math.imul(second ^ (second >>> 16), 2246822507) ^ Math.imul(first ^ (first >>> 13), 3266489909);
+  return 4294967296 * (2097151 & second) + (first >>> 0);
+}
+
+function startKey(language: string): number {
+  return lineKey(language, 0);
+}
+
+function keyedTokens(language: string): languages.TokensProvider {
   return {
-    base: theme.type === "light" ? "vs" : "vs-dark",
-    inherit: false,
-    colors: theme.colors,
-    rules: [
-      ...(foreground === undefined ? [] : [{ token: "", foreground: foreground.slice(1) }]),
-      ...theme.tokenColors.flatMap(({ scope, settings }) =>
-        scope.map((token) => {
-          const fontStyle = monacoFontStyle(settings.fontStyle);
-          return {
-            token,
-            ...(settings.foreground === undefined
-              ? {}
-              : { foreground: settings.foreground.slice(1, 7) }),
-            ...(fontStyle === undefined ? {} : { fontStyle }),
-          };
-        }),
-      ),
-    ],
+    getInitialState: () => new KeyState(startKey(language)),
+    tokenize(line, state) {
+      const previous = state instanceof KeyState ? state.key : startKey(language);
+      const key = lineKey(line, previous);
+      return { tokens: cache.get(key) ?? plainLine, endState: new KeyState(key) };
+    },
   };
 }
 
-function highlighterFor(theme: EditorTheme): Promise<HighlighterCore> {
-  const key = JSON.stringify(theme);
-  let made = highlighters.get(key);
-  if (made === undefined) {
-    made = Promise.all([import("shiki/core"), import("shiki/engine/javascript")]).then(
-      ([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
-        createHighlighterCore({
-          themes: [structuredClone(theme)],
-          langs: [],
-          engine: createJavaScriptRegexEngine(),
-        }),
-    );
-    highlighters.set(key, made);
-  }
-  return made;
+function resetTokens(model: editor.ITextModel): boolean {
+  const tokenization: unknown = Reflect.get(model, "tokenization");
+  if (typeof tokenization !== "object" || tokenization === null) return false;
+  const reset: unknown = Reflect.get(tokenization, "resetTokenization");
+  if (typeof reset !== "function") return false;
+  Reflect.apply(reset, tokenization, []);
+  return true;
 }
 
-async function shikiTokens(
-  theme: EditorTheme,
-  language: string,
-): Promise<languages.TokensProvider | undefined> {
-  const grammar = grammars[language];
-  if (grammar === undefined) return undefined;
-  const [highlighter, { default: registrations }, { shikiToMonaco }] = await Promise.all([
-    highlighterFor(theme),
-    grammar(),
-    import("@shikijs/monaco"),
-  ]);
-  const name = registrations.at(-1)?.name;
-  if (name === undefined) return undefined;
-  await highlighter.loadLanguage(...registrations);
-  let made: languages.TokensProvider | undefined;
-  shikiToMonaco(
-    highlighter,
-    {
-      editor: { defineTheme: () => undefined, setTheme: () => undefined, create: () => undefined },
-      languages: {
-        getLanguages: () => [{ id: name }],
-        setTokensProvider: (_language: string, provider: languages.TokensProvider) => {
-          made = provider;
-        },
-      },
-    },
-    { tokenizeMaxLineLength: drawnColumns, tokenizeTimeLimit: lineTimeLimitMs },
-  );
-  return made;
-}
-
-function redrawDiffs(language: string): void {
+function redrawRemovedLines(model: editor.ITextModel): void {
   for (const diff of editor.getDiffEditors()) {
-    const model = diff.getModel();
-    if (model?.original.getLanguageId() !== language) continue;
-    const lines = Math.min(model.original.getLineCount(), tokenizedAtOnce);
-    editor.colorizeModelLine(model.original, lines);
-    diff.setModel({ original: model.original, modified: model.modified });
+    if (diff.getModel()?.original !== model) continue;
+    diff.getOriginalEditor().changeViewZones((zones) => {
+      zones.removeZone(
+        zones.addZone({
+          afterLineNumber: 0,
+          heightInPx: 0,
+          domNode: document.createElement("div"),
+        }),
+      );
+    });
+  }
+}
+
+function redrawWhileTokenizing(model: editor.ITextModel): void {
+  for (const delay of redrawAfterMs) {
+    setTimeout(() => {
+      if (!model.isDisposed()) redrawRemovedLines(model);
+    }, delay);
   }
 }
 
 function lend(language: string, provider: languages.TokensProvider): void {
-  const before = borrowed.get(language);
+  const before = lent.get(language);
   languages.registerTokensProviderFactory(language, { create: () => null });
-  borrowed.set(language, languages.setTokensProvider(language, provider));
+  lent.set(language, languages.setTokensProvider(language, provider));
   before?.dispose();
 }
 
-function isMonarchModule(value: unknown): value is MonarchModule {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "language" in value &&
-    typeof value.language === "object" &&
-    value.language !== null
-  );
+function refresh(model: editor.ITextModel): void {
+  if (refreshing.has(model)) return;
+  refreshing.add(model);
+  setTimeout(() => {
+    refreshing.delete(model);
+    if (model.isDisposed()) return;
+    if (!resetTokens(model)) lend(model.getLanguageId(), keyedTokens(model.getLanguageId()));
+    redrawWhileTokenizing(model);
+  }, refreshEveryMs);
 }
 
-function hasLoader(value: object): value is { loader: () => Promise<unknown> } {
-  return "loader" in value && typeof value.loader === "function";
+function forget(model: editor.ITextModel): void {
+  const before = sent.get(model);
+  if (before === undefined) return;
+  sent.delete(model);
+  byRequest.delete(before.request);
+  if (!before.done) post({ kind: "cancel", request: before.request });
 }
 
-function monarchLoader(language: string): (() => Promise<unknown>) | undefined {
-  const known = languages.getLanguages().find(({ id }) => id === language);
-  return known !== undefined && hasLoader(known) ? known.loader : undefined;
+function received({ data }: MessageEvent<SyntaxBatch>): void {
+  const model = byRequest.get(data.request);
+  const record = model === undefined ? undefined : sent.get(model);
+  if (model === undefined || record === undefined) return;
+  if (cache.size > largestCache) cache.clear();
+  data.tokens.forEach((tokens, offset) => {
+    const key = record.keys[data.from + offset];
+    if (tokens === null || key === undefined) return;
+    cache.set(
+      key,
+      tokens.map(([startIndex, scopes]) => ({ startIndex, scopes })),
+    );
+  });
+  if (data.done) record.done = true;
+  if (data.tokens.some((tokens) => tokens !== null)) refresh(model);
+}
+
+function post(message: SyntaxRequest): void {
+  if (worker === undefined) {
+    worker = new SyntaxWorker();
+    worker.addEventListener("message", received);
+  }
+  worker.postMessage(message);
+}
+
+function send(theme: EditorTheme, model: editor.ITextModel): void {
+  const language = model.getLanguageId();
+  if (model.isDisposed()) return;
+  forget(model);
+  const lines = model.getLinesContent();
+  const keys: number[] = [];
+  let key = startKey(language);
+  for (const line of lines) {
+    key = lineKey(line, key);
+    keys.push(key);
+  }
+  const request = ++nextRequest;
+  sent.set(model, { request, keys, done: false });
+  byRequest.set(request, model);
+  post({ kind: "tokenize", request, theme, language, lines });
+}
+
+function colour(theme: EditorTheme, model: editor.ITextModel): void {
+  const language = model.getLanguageId();
+  if (language === "plaintext") return;
+  if (!lent.has(language)) lend(language, keyedTokens(language));
+  send(theme, model);
 }
 
 async function giveBack(language: string): Promise<void> {
-  const lent = borrowed.get(language);
-  borrowed.delete(language);
-  lent?.dispose();
-  const loaded = await monarchLoader(language)?.();
-  if (borrowed.has(language) || !isMonarchModule(loaded)) return;
+  const given = lent.get(language);
+  lent.delete(language);
+  given?.dispose();
+  const loaded = await monarchModule(language);
+  if (lent.has(language) || loaded === undefined) return;
   languages.setMonarchTokensProvider(language, loaded.language);
-  redrawDiffs(language);
+  for (const model of editor.getModels()) {
+    if (model.getLanguageId() === language) redrawWhileTokenizing(model);
+  }
 }
 
-async function colour(theme: EditorTheme, language: string): Promise<void> {
-  if (language === "plaintext") return;
-  if (!borrowed.has(language)) lend(language, plainTokens);
-  const key = `${JSON.stringify(theme)}\n${language}`;
-  let provider = tokenProviders.get(key);
-  if (provider === undefined) {
-    provider = shikiTokens(theme, language).catch((error: unknown) => {
-      console.error(`Satellite could not load the ${language} grammar`, error);
-      return undefined;
-    });
-    tokenProviders.set(key, provider);
-  }
-  const made = await provider;
-  if (made === undefined || shownTheme !== theme) return;
-  lend(language, made);
-  redrawDiffs(language);
+function track(model: editor.ITextModel): void {
+  if (tracked.has(model)) return;
+  tracked.add(model);
+  model.onDidChangeContent(() => {
+    if (shownTheme !== undefined && sent.has(model)) send(shownTheme, model);
+  });
+  model.onWillDispose(() => {
+    forget(model);
+  });
 }
 
 function watchModels(): void {
   if (watching) return;
   watching = true;
+  for (const model of editor.getModels()) track(model);
   editor.onDidCreateModel((model) => {
-    if (shownTheme !== undefined) void colour(shownTheme, model.getLanguageId());
+    track(model);
+    if (shownTheme !== undefined) colour(shownTheme, model);
   });
 }
 
@@ -185,13 +220,14 @@ export function showThemeSyntax(): boolean {
   const theme = shownLook()?.editor;
   if (theme === shownTheme) return theme !== undefined;
   shownTheme = theme;
+  for (const model of [...sent.keys()]) forget(model);
+  cache.clear();
   if (theme === undefined) {
-    for (const language of [...borrowed.keys()]) void giveBack(language);
+    for (const language of [...lent.keys()]) void giveBack(language);
     return false;
   }
   editor.defineTheme(curatedThemeName, monacoTheme(theme));
   editor.setTheme(curatedThemeName);
-  const shown = new Set(editor.getModels().map((model) => model.getLanguageId()));
-  for (const language of shown) void colour(theme, language);
+  for (const model of editor.getModels()) colour(theme, model);
   return true;
 }

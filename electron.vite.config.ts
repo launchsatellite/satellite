@@ -30,6 +30,7 @@ export default defineConfig({
       },
     },
     plugins: [react(), tailwindcss(), thirdPartyLicenses()],
+    worker: { format: "es" },
     build: {
       minify: true,
       assetsInlineLimit: assetInlineLimit,
