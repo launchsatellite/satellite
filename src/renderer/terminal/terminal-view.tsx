@@ -137,6 +137,7 @@ export function TerminalView({
     const stopExit = subscribe("terminal.exit", ({ id, ending }) => {
       if (id === terminalId) end(endings[ending]);
     });
+    let current = true;
     let queue: Promise<unknown> = invoke("terminal.start", {
       id: terminalId,
       program: "claude",
@@ -145,6 +146,7 @@ export function TerminalView({
       cols: sent.cols,
       rows: sent.rows,
     }).then((result) => {
+      if (!current) return;
       if (result.ok) {
         if (result.value.windowsPty !== null) terminal.options.windowsPty = result.value.windowsPty;
         if (result.value.driven) Object.assign(element, { terminal });
@@ -272,6 +274,7 @@ export function TerminalView({
     darkScheme.addEventListener("change", retheme);
 
     return () => {
+      current = false;
       show.current = undefined;
       hide.current = undefined;
       prompt.current = undefined;
