@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { curatedLook, curatedThemes, themeSource } from "./curated-themes.ts";
 import {
   appTokens,
+  contrastFloors,
   contrastRatio,
+  pairedGrounds,
+  pixelTokens,
+  textTokens,
   parseColour,
   terminalColourNames,
   themeLook,
@@ -30,6 +34,9 @@ const minimal = {
     errorForeground: "#ff0000",
   },
   tokenColors: [],
+};
+const themeOwnPairs: Record<string, string[]> = {
+  dracula: ["dim on bg 3.03", "dim on side 3.36"],
 };
 const opaqueHex = /^#[0-9a-f]{6}$/;
 const anyHex = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/;
@@ -79,10 +86,10 @@ describe("themeLook", () => {
       fg: "#f8f8f2",
       dim: "#6272a4",
       sel: "#44475a",
-      working: "#bd93f9",
+      working: "#a4ffff",
       signal: "#ffb86c",
       volt: "#50fa7b",
-      lilac: "#8be9fd",
+      lilac: "#bd93f9",
       idle: "#6272a4",
       danger: "#ff5555",
     });
@@ -93,6 +100,41 @@ describe("themeLook", () => {
       brightWhite: "#ffffff",
     });
     expect(look?.editor.colors["editor.background"]).toBe("#282a36");
+  });
+
+  it("keeps every pair the mapping makes at the bar and lists the theme's own below it", () => {
+    for (const { id } of curatedThemes) {
+      const look = curatedLook(id);
+      if (look === undefined) throw new Error(id);
+      const { tokens, paired } = look;
+      const below: string[] = [];
+      const measure = (
+        front: string,
+        frontName: string,
+        ground: string,
+        groundName: string,
+        bar: number,
+      ) => {
+        const ratio = contrastRatio(front, ground);
+        if (ratio < bar) below.push(`${frontName} on ${groundName} ${ratio.toFixed(2)}`);
+      };
+      for (const ground of ["bg", "side"] as const) {
+        for (const token of textTokens)
+          measure(tokens[token], token, tokens[ground], ground, contrastFloors.text);
+        for (const token of pixelTokens)
+          measure(tokens[token], token, tokens[ground], ground, contrastFloors.edge);
+      }
+      for (const ground of pairedGrounds) {
+        for (const token of textTokens)
+          measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.text);
+        for (const token of pixelTokens)
+          measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
+      }
+      for (const ground of ["side", "raised", "bg"] as const)
+        measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
+      expect(tokens.raised).not.toBe(tokens.side);
+      expect(below, id).toEqual(themeOwnPairs[id]);
+    }
   });
 
   it("composes a colour with alpha over the ground it sits on", () => {

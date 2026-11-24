@@ -47,7 +47,14 @@ export const terminalColourNames = [
   "brightWhite",
 ] as const;
 
+export const pairedGrounds = ["raised", "sel", "hover"] as const;
+export const textTokens = ["fg", "fg2", "dim", "sigfg", "addfg", "delfg", "danger"] as const;
+export const pixelTokens = ["working", "idle", "signal", "volt", "lilac"] as const;
+export const contrastFloors = { text: 4.5, edge: 3 };
+
 export type AppToken = (typeof appTokens)[number];
+export type PairedGround = (typeof pairedGrounds)[number];
+export type PairedToken = (typeof textTokens)[number] | (typeof pixelTokens)[number];
 export type ThemeType = "light" | "dark";
 export interface StateKeys {
   working: string;
@@ -80,6 +87,7 @@ export interface ThemeLook {
   terminal: TerminalColours;
   editor: EditorTheme;
   overlay: { color: string; symbolColor: string };
+  paired: Record<PairedGround, Record<PairedToken, string>>;
 }
 interface Rgba {
   r: number;
@@ -107,6 +115,14 @@ const tokenColourEntry = z.object({
   scope: z.union([z.string().max(20_000), z.array(z.string().max(300)).max(500)]).optional(),
   settings: z.object({ foreground: z.unknown(), fontStyle: z.unknown() }).partial(),
 });
+const groundForeground: Record<PairedGround, string[]> = {
+  raised: ["quickInput.foreground", "editorWidget.foreground"],
+  sel: ["list.activeSelectionForeground"],
+  hover: ["list.hoverForeground"],
+};
+const neutralText = new Set<string>(["fg", "fg2", "dim"]);
+const black: Rgba = { r: 0, g: 0, b: 0, a: 1 };
+const white: Rgba = { r: 255, g: 255, b: 255, a: 1 };
 const formatDefaults = {
   insertedLine: { r: 155, g: 185, b: 85, a: 0.2 },
   removedLine: { r: 255, g: 0, b: 0, a: 0.2 },
@@ -161,12 +177,28 @@ function luminance(colour: Rgba): number {
   return 0.2126 * linear(colour.r) + 0.7152 * linear(colour.g) + 0.0722 * linear(colour.b);
 }
 
+function ratioOf(a: Rgba, b: Rgba): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+
 export function contrastRatio(first: string, second: string): number {
   const a = parseColour(first);
   const b = parseColour(second);
-  if (a === undefined || b === undefined) return 0;
-  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+  return a === undefined || b === undefined ? 0 : ratioOf(a, b);
+}
+
+function mixed(from: Rgba, to: Rgba, amount: number): Rgba {
+  return over({ ...to, a: amount }, from);
+}
+
+function reach(start: Rgba, toward: Rgba, grounds: Rgba[], ratio: number): Rgba {
+  for (let step = 0; step <= 40; step++) {
+    const { r, g, b } = mixed(start, toward, step / 40);
+    const tone = { r: Math.round(r), g: Math.round(g), b: Math.round(b), a: 1 };
+    if (grounds.every((ground) => ratioOf(tone, ground) >= ratio)) return tone;
+  }
+  return toward;
 }
 
 function cleanColours(colors: Record<string, unknown>): Map<string, Rgba> {
@@ -231,30 +263,43 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
   ) {
     return undefined;
   }
-  const bg = over(editorBackground, editorBackground);
+  const bg = over(editorBackground, type === "dark" ? black : white);
   const side = over(pick("sideBar.background") ?? bg, bg);
   const flat = (colour: Rgba | undefined, ground: Rgba, fallback: Rgba) =>
     hexOf(over(colour ?? fallback, ground));
   const fg = over(editorForeground, bg);
   const faded = (alpha: number) => ({ ...editorForeground, a: editorForeground.a * alpha });
   const line = flat(pick("sideBar.border", "tab.border", "editorGroup.border"), side, faded(0.12));
+  const raisedFill =
+    ["quickInput.background", "editorWidget.background", "dropdown.background", "editor.background"]
+      .map((key) => colours.get(key))
+      .filter((colour) => colour !== undefined)
+      .map((colour) => over(colour, side))
+      .find((colour) => hexOf(colour) !== hexOf(side)) ?? side;
+  const edgeKeys = ["input.border", "dropdown.border", "settings.textInputBorder"];
+  const edgeGrounds = [side, raisedFill, bg];
+  const ctl =
+    edgeKeys
+      .map((key) => colours.get(key))
+      .filter((colour) => colour !== undefined)
+      .map((colour) => over(colour, side))
+      .find((colour) => edgeGrounds.every((ground) => ratioOf(colour, ground) >= 3)) ??
+    reach(side, fg, edgeGrounds, contrastFloors.edge);
+  const shownEdge = (fill: Rgba) =>
+    type === "dark" ? hexOf(fill) : hexOf(reach(fill, fg, [bg, side], contrastFloors.edge));
   const tokens: Record<AppToken, string> = {
     bg: hexOf(bg),
     side: hexOf(side),
-    raised: flat(pick("quickInput.background", "editorWidget.background"), side, side),
+    raised: hexOf(raisedFill),
     sel: flat(pick("list.activeSelectionBackground"), side, faded(0.16)),
     hover: flat(pick("list.hoverBackground"), side, faded(0.08)),
     line,
-    ctl: flat(pick("input.border", "dropdown.border"), side, faded(0.2)),
+    ctl: hexOf(ctl),
     fg: hexOf(fg),
     fg2: flat(pick("descriptionForeground"), bg, faded(0.7)),
     dim: flat(pick("tab.inactiveForeground", "editorLineNumber.foreground"), bg, faded(0.5)),
     sigfg: flat(needsYou, bg, needsYou),
-    add: flat(
-      pick("diffEditor.insertedLineBackground", "diffEditor.insertedTextBackground"),
-      bg,
-      bg,
-    ),
+    add: flat(pick("diffEditor.insertedLineBackground"), bg, formatDefaults.insertedLine),
     addfg: flat(
       pick("gitDecoration.addedResourceForeground", "gitDecoration.untrackedResourceForeground"),
       bg,
@@ -267,13 +312,46 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
     "pri-bg": flat(pick("button.background"), bg, working),
     "pri-fg": flat(pick("button.foreground"), bg, fg),
     volt: flat(ready, bg, ready),
-    "volt-edge": flat(ready, bg, ready),
+    "volt-edge": shownEdge(over(ready, bg)),
     lilac: flat(done, bg, done),
-    "lilac-edge": flat(done, bg, done),
+    "lilac-edge": shownEdge(over(done, bg)),
     working: flat(working, bg, working),
     idle: flat(idle, bg, idle),
     danger: flat(danger, bg, danger),
   };
+  const pairedOn = (groundName: PairedGround): Record<PairedToken, string> => {
+    const ground = parseColour(tokens[groundName]) ?? bg;
+    const ownText = groundForeground[groundName]
+      .map((key) => colours.get(key))
+      .find((colour) => colour !== undefined);
+    const floored = (token: PairedToken, ratio: number): string => {
+      const colour = parseColour(tokens[token]) ?? fg;
+      if (ratioOf(colour, ground) >= ratio) return tokens[token];
+      if (neutralText.has(token)) {
+        const own = ownText === undefined ? undefined : over(ownText, ground);
+        if (own !== undefined && ratioOf(own, ground) >= ratio) return hexOf(own);
+        return hexOf(reach(ground, fg, [ground], ratio));
+      }
+      return hexOf(reach(colour, fg, [ground], ratio));
+    };
+    const text = (token: PairedToken) => floored(token, contrastFloors.text);
+    const pixel = (token: PairedToken) => floored(token, contrastFloors.edge);
+    return {
+      fg: text("fg"),
+      fg2: text("fg2"),
+      dim: text("dim"),
+      sigfg: text("sigfg"),
+      addfg: text("addfg"),
+      delfg: text("delfg"),
+      danger: text("danger"),
+      working: pixel("working"),
+      idle: pixel("idle"),
+      signal: pixel("signal"),
+      volt: pixel("volt"),
+      lilac: pixel("lilac"),
+    };
+  };
+  const paired = { raised: pairedOn("raised"), sel: pairedOn("sel"), hover: pairedOn("hover") };
   const terminalGround = over(pick("terminal.background") ?? bg, bg);
   const terminalText = pick("terminal.foreground") ?? editorForeground;
   const raw = (colour: Rgba) => hexOf(colour);
@@ -307,5 +385,6 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
       tokenColors: cleanTokenColours(parsed.data.tokenColors),
     },
     overlay: { color: tokens.side, symbolColor: tokens.fg2 },
+    paired,
   };
 }

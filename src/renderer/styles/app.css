@@ -120,6 +120,52 @@
   background-color: var(--selection);
 }
 
+:root[data-theme] .bg-raised {
+  --fg: var(--raised-fg);
+  --fg2: var(--raised-fg2);
+  --dim: var(--raised-dim);
+  --sigfg: var(--raised-sigfg);
+  --addfg: var(--raised-addfg);
+  --delfg: var(--raised-delfg);
+  --danger: var(--raised-danger);
+  --working: var(--raised-working);
+  --idle: var(--raised-idle);
+  --signal: var(--raised-signal);
+  --volt: var(--raised-volt);
+  --lilac: var(--raised-lilac);
+}
+
+:root[data-theme] .bg-sel {
+  --fg: var(--sel-fg);
+  --fg2: var(--sel-fg2);
+  --dim: var(--sel-dim);
+  --sigfg: var(--sel-sigfg);
+  --addfg: var(--sel-addfg);
+  --delfg: var(--sel-delfg);
+  --danger: var(--sel-danger);
+  --working: var(--sel-working);
+  --idle: var(--sel-idle);
+  --signal: var(--sel-signal);
+  --volt: var(--sel-volt);
+  --lilac: var(--sel-lilac);
+}
+
+:root[data-theme] .bg-hover,
+:root[data-theme] .hover\:bg-hover:hover {
+  --fg: var(--hover-fg);
+  --fg2: var(--hover-fg2);
+  --dim: var(--hover-dim);
+  --sigfg: var(--hover-sigfg);
+  --addfg: var(--hover-addfg);
+  --delfg: var(--hover-delfg);
+  --danger: var(--hover-danger);
+  --working: var(--hover-working);
+  --idle: var(--hover-idle);
+  --signal: var(--hover-signal);
+  --volt: var(--hover-volt);
+  --lilac: var(--hover-lilac);
+}
+
 html,
 body,
 #root {

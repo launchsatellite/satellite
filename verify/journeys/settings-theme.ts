@@ -46,10 +46,10 @@ const published = {
   fg: "#f8f8f2",
   dim: "#6272a4",
   accent: "#6272a4",
-  working: "#bd93f9",
+  working: "#a4ffff",
   signal: "#ffb86c",
   volt: "#50fa7b",
-  lilac: "#8be9fd",
+  lilac: "#bd93f9",
   idle: "#6272a4",
   danger: "#ff5555",
 };
@@ -289,6 +289,16 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
     published,
   );
   assert.equal(themed.theme, "dracula");
+  assert.deepEqual(
+    await session.page.evaluate(() => {
+      const selected = document.querySelector(".bg-sel");
+      const read = (name: string) =>
+        selected === null ? "" : getComputedStyle(selected).getPropertyValue(name).trim();
+      return { dim: read("--dim"), idle: read("--idle") };
+    }),
+    { dim: "#f8f8f2", idle: "#8894b8" },
+    "a selected row did not lift its dim text and idle pixel to the bar",
+  );
   assert.equal(themed.editorGround, "rgb(40, 42, 54)");
   assert.equal(themed.inserted, "rgba(155, 185, 85, 0.2)");
   assert.equal(themed.removed, "rgba(255, 0, 0, 0.2)");
