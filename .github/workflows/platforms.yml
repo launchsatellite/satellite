@@ -22,20 +22,20 @@ jobs:
         include:
           - os: macos-26
             label: macos
-            light: --mac --arm64 --dir
-            release: --mac --arm64 --x64
+            unpacked: --mac --arm64 --dir
+            installers: --mac --arm64 --x64
             app: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite
             fused: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite release/mac/Satellite.app/Contents/MacOS/Satellite
           - os: windows-2025
             label: windows
-            light: --win --x64 --dir
-            release: --win --x64
+            unpacked: --win --x64 --dir
+            installers: --win --x64
             app: release/win-unpacked/Satellite.exe
             fused: release/win-unpacked/Satellite.exe
           - os: ubuntu-24.04
             label: linux
-            light: --linux --x64 --dir
-            release: --linux --x64
+            unpacked: --linux --x64 --dir
+            installers: --linux --x64
             app: release/linux-unpacked/satellite
             fused: release/linux-unpacked/satellite
     runs-on: ${{ matrix.os }}
@@ -60,7 +60,7 @@ jobs:
       - run: npm run build
       - run: npx electron-builder $PACKAGE --publish never
         env:
-          PACKAGE: ${{ inputs.release && matrix.release || matrix.light }}
+          PACKAGE: ${{ inputs.release && matrix.installers || matrix.unpacked }}
       - run: |
           for app in $FUSED; do
             fuses=$(npx @electron/fuses read --app "$app")
