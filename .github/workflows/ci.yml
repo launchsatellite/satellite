@@ -68,10 +68,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - run: |
-          echo "changes $CHANGES, prove $PROVE"
-          case "$CHANGES $PROVE" in
-            *failure* | *cancelled*) exit 1 ;;
+          echo "changes $CHANGES, app $APP, prove $PROVE"
+          case "$CHANGES/$APP/$PROVE" in
+            success/true/success | success/false/skipped | skipped//skipped) ;;
+            *) exit 1 ;;
           esac
         env:
+          APP: ${{ needs.changes.outputs.app }}
           CHANGES: ${{ needs.changes.result }}
           PROVE: ${{ needs.prove.result }}
