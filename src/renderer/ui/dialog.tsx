@@ -15,6 +15,10 @@ const focusable =
   ":is(a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]):not([tabindex='-1'])";
 const popup = "[data-popup]";
 
+function popupOpen(): boolean {
+  return document.querySelector(`${popup} [data-open]`) !== null;
+}
+
 function moveFocus(panel: HTMLElement, backwards: boolean): boolean {
   const targets = [...panel.querySelectorAll<HTMLElement>(focusable)];
   const first = targets[0];
@@ -47,6 +51,7 @@ export function Dialog({
   const titleId = useId();
   const descriptionId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  const pressedOverPopup = useRef(false);
   const [focusedAtRender] = useState(() => document.activeElement);
 
   useLayoutEffect(() => {
@@ -55,7 +60,7 @@ export function Dialog({
     const covered = () => element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
       if (event.isComposing || covered()) return;
-      if (event.target instanceof Element && event.target.closest(popup) !== null) return;
+      if (popupOpen()) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -74,11 +79,16 @@ export function Dialog({
       }
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
     };
+    const point = () => {
+      pressedOverPopup.current = popupOpen();
+    };
     document.addEventListener("keydown", press, { capture: true });
     document.addEventListener("focusin", keepFocus);
+    window.addEventListener("pointerdown", point, { capture: true });
     return () => {
       document.removeEventListener("keydown", press, { capture: true });
       document.removeEventListener("focusin", keepFocus);
+      window.removeEventListener("pointerdown", point, { capture: true });
     };
   }, [closable, onClose]);
   useLayoutEffect(() => {
@@ -121,7 +131,7 @@ export function Dialog({
           event.preventDefault();
         }}
         onClick={() => {
-          if (closable) onClose();
+          if (closable && !pressedOverPopup.current) onClose();
         }}
       />
       <div

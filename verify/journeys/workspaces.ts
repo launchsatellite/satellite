@@ -272,7 +272,20 @@ async function run(session: AppSession): Promise<void> {
 
   await openNewWorkspace(session, () => page.keyboard.press(`${commandModifier}+N`));
   await page.getByTestId("workspace-name").fill("second-look");
+  await page.getByTestId("workspace-start").click();
+  await visible(session, "workspace-start-options", "after opening Start from");
+  await page.mouse.click(8, 300);
+  await page.getByTestId("workspace-start-options").waitFor({ state: "hidden" });
+  assert.ok(
+    await page.getByTestId("new-workspace-dialog").isVisible(),
+    "a click outside Start from closed New workspace",
+  );
+  assert.equal(await page.getByTestId("workspace-name").inputValue(), "second-look");
   await chooseOption(page, "workspace-start", "release");
+  assert.ok(
+    await page.getByTestId("new-workspace-dialog").isVisible(),
+    "picking release closed New workspace",
+  );
   await page.getByTestId("create-workspace").click();
   await selectedRow(session, "second-look", "after making it from release");
   await session.screenshot("workspaces-created");
