@@ -1,6 +1,7 @@
 import { editor, languages, type IDisposable } from "monaco-editor/editor/editor.api";
 import { changesLimits } from "../../shared/bridge-contract.ts";
 import type { EditorTheme } from "../../shared/themes/theme-look.ts";
+import { monacoScrollbarColours } from "../ui/scrollbar-look.ts";
 import { shownLook } from "../ui/shown-theme.ts";
 import { monarchModule } from "./diff-language.ts";
 import { silenceWatch } from "./silence-watch.ts";
@@ -243,16 +244,21 @@ function watchModels(): void {
 
 export function showThemeSyntax(): boolean {
   watchModels();
-  const theme = shownLook()?.editor;
+  const look = shownLook();
+  const theme = look?.editor;
   if (theme === shownTheme) return theme !== undefined;
   shownTheme = theme;
   for (const model of [...sent.keys()]) forget(model);
   cache.clear();
-  if (theme === undefined) {
+  if (look === undefined || theme === undefined) {
     for (const language of [...lent.keys()]) void giveBack(language);
     return false;
   }
-  editor.defineTheme(curatedThemeName, monacoTheme(theme));
+  const data = monacoTheme(theme);
+  editor.defineTheme(curatedThemeName, {
+    ...data,
+    colors: { ...data.colors, ...monacoScrollbarColours(look.tokens.fg) },
+  });
   editor.setTheme(curatedThemeName);
   for (const model of editor.getModels()) colour(theme, model);
   return true;

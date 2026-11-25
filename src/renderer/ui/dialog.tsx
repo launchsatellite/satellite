@@ -139,7 +139,7 @@ export function Dialog({
             {description}
           </p>
         )}
-        <div className="flex min-h-0 flex-col gap-[14px] overflow-y-auto px-[18px] py-4">
+        <div className="mr-1 flex min-h-0 flex-col gap-[14px] overflow-y-auto py-4 pr-1 pl-[18px] [scrollbar-gutter:stable]">
           {children}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-line bg-side px-[18px] py-3">

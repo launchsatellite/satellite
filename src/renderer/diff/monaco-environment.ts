@@ -1,5 +1,6 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
+import { monacoScrollbarColours } from "../ui/scrollbar-look.ts";
 import { showThemeSyntax } from "./theme-syntax.ts";
 
 const lowAlpha = "33";
@@ -46,9 +47,7 @@ export function applyMonacoTheme(): void {
       "editorLineNumber.foreground": token("dim"),
       "editorLineNumber.activeForeground": token("dim"),
       "editorGutter.background": token("bg"),
-      "scrollbarSlider.background": token("ctl"),
-      "scrollbarSlider.hoverBackground": token("ctl"),
-      "scrollbarSlider.activeBackground": token("dim"),
+      ...monacoScrollbarColours(token("fg")),
       "diffEditor.insertedLineBackground": token("add"),
       "diffEditor.removedLineBackground": token("del"),
       "diffEditor.insertedTextBackground": token("addfg") + lowAlpha,

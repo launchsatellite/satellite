@@ -14,6 +14,7 @@ import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import type { PromptTarget } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
 import { codeType } from "../ui/code-type.ts";
+import { scrollbarLook } from "../ui/scrollbar-look.ts";
 import { onThemeChange } from "../ui/shown-theme.ts";
 import type { Notify } from "../ui/toast.tsx";
 import { droppedPaths } from "./dropped-paths.ts";
@@ -98,6 +99,7 @@ export function TerminalView({
       minimumContrastRatio: 4.5,
       rescaleOverlappingGlyphs: true,
       scrollback: 5000,
+      overviewRuler: { width: scrollbarLook.gutter },
       allowProposedApi: true,
       theme: terminalTheme(),
       linkHandler: {
