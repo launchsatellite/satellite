@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { chooseOption, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
@@ -272,6 +273,18 @@ async function run(session: AppSession): Promise<void> {
 
   await openNewWorkspace(session, () => page.keyboard.press(`${commandModifier}+N`));
   await page.getByTestId("workspace-name").fill("second-look");
+  await page.getByTestId("workspace-start").click();
+  await page.keyboard.press("Escape");
+  await delay(500);
+  assert.ok(
+    await page.getByTestId("new-workspace-dialog").isVisible(),
+    "Escape right after opening Start from closed New workspace",
+  );
+  assert.ok(
+    !(await page.getByTestId("workspace-start-options").isVisible()),
+    "Start from opened after Escape cancelled it",
+  );
+  assert.equal(await page.getByTestId("workspace-name").inputValue(), "second-look");
   await page.getByTestId("workspace-start").click();
   await visible(session, "workspace-start-options", "after opening Start from");
   await page.mouse.click(8, 300);

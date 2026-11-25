@@ -1,5 +1,6 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { cn } from "cn";
+import { useRef, type KeyboardEvent, type MouseEvent } from "react";
 import { Icon } from "./icon.tsx";
 import { fieldLook } from "./input.tsx";
 
@@ -29,6 +30,33 @@ export function Select<T extends string>({
   disabled = false,
   className,
 }: SelectProps<T>) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const open = useRef(false);
+  const cancelled = useRef(false);
+  const opening = (on: boolean) => {
+    trigger.current?.toggleAttribute("data-menu-opening", on);
+  };
+  const press = (event: MouseEvent) => {
+    if (event.button !== 0 || disabled || open.current) return;
+    opening(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        cancelled.current = false;
+        if (!open.current) opening(false);
+      });
+    });
+  };
+  const key = (event: KeyboardEvent) => {
+    if (
+      event.key !== "Escape" ||
+      open.current ||
+      trigger.current?.hasAttribute("data-menu-opening") !== true
+    ) {
+      return;
+    }
+    cancelled.current = true;
+    opening(false);
+  };
   return (
     <SelectPrimitive.Root
       value={value}
@@ -37,8 +65,20 @@ export function Select<T extends string>({
       onValueChange={(chosen) => {
         if (chosen !== null) onChange(chosen);
       }}
+      onOpenChange={(next, details) => {
+        if (next && cancelled.current) {
+          cancelled.current = false;
+          details.cancel();
+          return;
+        }
+        open.current = next;
+        if (!next) opening(false);
+      }}
     >
       <SelectPrimitive.Trigger
+        ref={trigger}
+        onMouseDown={press}
+        onKeyDown={key}
         id={id}
         aria-label={label}
         data-testid={testId}
