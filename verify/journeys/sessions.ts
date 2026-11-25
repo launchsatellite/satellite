@@ -370,6 +370,14 @@ async function closeByKeys(session: AppSession): Promise<void> {
     "true",
     "ArrowRight opened the session it reached instead of only moving focus",
   );
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(
+    await focusedTestId(page),
+    "session-tab-1",
+    "Shift+Tab back into the strip landed off the open session tab",
+  );
+  await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Enter");
   await waitUntil(
     async () => (await page.getByTestId(third).getAttribute("aria-selected")) === "true",
@@ -384,9 +392,9 @@ async function closeByKeys(session: AppSession): Promise<void> {
     `the stand-in (pid ${String(pid)}) still ran after Delete closed its tab`,
   );
   await waitUntil(
-    async () => ["session-tab-1", "terminal"].includes(await focusedTestId(page)),
+    async () => (await focusedTestId(page)) === "terminal",
     promptTimeoutMs,
-    "focus left both the remaining session tab and its terminal after Delete",
+    "focus did not move to the shown session's terminal after Delete",
   );
   assert.equal(
     await page.getByTestId("session-tab-1").getAttribute("aria-selected"),
