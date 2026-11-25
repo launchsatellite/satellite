@@ -378,12 +378,28 @@ async function closeByKeys(session: AppSession): Promise<void> {
     "Shift+Tab back into the strip landed off the open session tab",
   );
   await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await runCommand(page, "Go to the next session");
   await waitUntil(
     async () => (await page.getByTestId(third).getAttribute("aria-selected")) === "true",
     promptTimeoutMs,
+    "the next session command did not open the next session",
+  );
+  await page.getByTestId("new-session").focus();
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(
+    await focusedTestId(page),
+    third,
+    "Shift+Tab after a selection from outside the strip landed off the open session tab",
+  );
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  await waitUntil(
+    async () => (await page.getByTestId("session-tab-1").getAttribute("aria-selected")) === "true",
+    promptTimeoutMs,
     "Enter did not open the focused session tab",
   );
+  await runCommand(page, "Go to the next session");
   await page.getByTestId(third).focus();
   await page.keyboard.press("Delete");
   await waitUntil(
@@ -401,6 +417,45 @@ async function closeByKeys(session: AppSession): Promise<void> {
     "true",
     "the session left after Delete was not shown",
   );
+  await closeFromOutside(session);
+}
+
+async function closeFromOutside(session: AppSession): Promise<void> {
+  const { page } = session;
+  const tabs = page.locator("[data-testid='session-tabs'] [role='tab']");
+  const before = await tabs.count();
+  const started = (await claudePids(session)).length;
+  await page.getByTestId("new-session").click();
+  await waitUntil(
+    async () => (await tabs.count()) === before + 1,
+    promptTimeoutMs,
+    "no tab came for the session to close from outside the strip",
+  );
+  const pid = await nextPid(session, started + 1);
+  const last = (await tabs.last().getAttribute("data-testid")) ?? "";
+  await page.getByTestId(last).focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Tab");
+  await runCommand(page, "Close this session");
+  await waitUntil(
+    () => processGone(pid),
+    goneTimeoutMs,
+    `the stand-in (pid ${String(pid)}) still ran after the close command`,
+  );
+  await page.getByTestId("new-session").focus();
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(
+    await focusedTestId(page),
+    "session-tab-1",
+    "Shift+Tab after the open session closed from outside landed off the session left open",
+  );
+}
+
+async function runCommand(page: Page, title: string): Promise<void> {
+  await page.keyboard.press(menuShortcut);
+  await page.getByTestId("palette-input").fill(title);
+  await page.keyboard.press("Enter");
+  await page.getByTestId("palette").waitFor({ state: "detached", timeout: promptTimeoutMs });
 }
 
 async function sendClean(session: AppSession): Promise<number> {

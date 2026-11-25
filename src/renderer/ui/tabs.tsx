@@ -1,6 +1,14 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { cn } from "cn";
-import { createContext, useContext, type KeyboardEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Icon } from "./icon.tsx";
 import { Tooltip } from "./tooltip.tsx";
 
@@ -36,7 +44,10 @@ interface TabProps {
   [data: `data-${string}`]: string | number | undefined;
 }
 
-const ShownValue = createContext<string | null>(null);
+const Shown = createContext<{ value: string | null; focusInside: boolean }>({
+  value: null,
+  focusInside: false,
+});
 
 function focusSelectedIfLost(list: Element | null): void {
   requestAnimationFrame(() => {
@@ -56,6 +67,17 @@ export function Tabs({
   children,
   ...data
 }: TabsProps) {
+  const list = useRef<HTMLDivElement>(null);
+  const [focusInside, setFocusInside] = useState(false);
+  useEffect(() => {
+    const follow = (event: FocusEvent) => {
+      setFocusInside(event.target instanceof Node && list.current?.contains(event.target) === true);
+    };
+    document.addEventListener("focusin", follow);
+    return () => {
+      document.removeEventListener("focusin", follow);
+    };
+  }, []);
   return (
     <TabsPrimitive.Root
       value={value}
@@ -69,16 +91,13 @@ export function Tabs({
         aria-label={label}
         data-testid={testId}
         activateOnFocus={activateOnFocus}
+        ref={list}
         onBlur={(event) => {
-          const list = event.currentTarget;
-          if (list.contains(event.relatedTarget)) return;
-          const tabs = [...list.querySelectorAll<HTMLElement>("[role='tab']")];
-          if (!tabs.some((tab) => tab.ariaSelected === "true")) return;
-          for (const tab of tabs) tab.tabIndex = tab.ariaSelected === "true" ? 0 : -1;
+          setFocusInside(event.currentTarget.contains(event.relatedTarget));
         }}
         className={cn("flex items-center gap-0.5", className)}
       >
-        <ShownValue value={value}>{children}</ShownValue>
+        <Shown value={{ value, focusInside }}>{children}</Shown>
       </TabsPrimitive.List>
     </TabsPrimitive.Root>
   );
@@ -98,7 +117,9 @@ export function Tab({
   children,
   ...data
 }: TabProps) {
-  const selected = useContext(ShownValue) === value;
+  const shown = useContext(Shown);
+  const selected = shown.value === value;
+  const stop = shown.focusInside || shown.value === null ? {} : { tabIndex: selected ? 0 : -1 };
   const closeTab = (from: Element) => {
     if (close === undefined) return;
     const list = from.closest("[role='tablist']");
@@ -123,6 +144,7 @@ export function Tab({
       <Tooltip text={tooltip}>
         <TabsPrimitive.Tab
           {...data}
+          {...stop}
           value={value}
           id={id}
           aria-controls={panel}
