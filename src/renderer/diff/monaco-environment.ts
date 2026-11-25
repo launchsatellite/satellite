@@ -1,32 +1,15 @@
 import { editor } from "monaco-editor/editor/editor.api";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
 import { monacoScrollbarColours } from "../ui/scrollbar-look.ts";
+import { tokenHexReader } from "../ui/token-hex.ts";
 import { showThemeSyntax } from "./theme-syntax.ts";
 
 const lowAlpha = "33";
-const sixDigitHex = /^#[0-9a-f]{6}$/;
-
-function readColour(paint: CanvasRenderingContext2D, sentinel: string, value: string): string {
-  paint.fillStyle = sentinel;
-  paint.fillStyle = value;
-  return paint.fillStyle;
-}
-
-function hexToken(styles: CSSStyleDeclaration, paint: CanvasRenderingContext2D, name: string) {
-  const value = styles.getPropertyValue(`--${name}`).trim();
-  const hex = readColour(paint, "#000000", value);
-  const valid = hex === readColour(paint, "#ffffff", value) && sixDigitHex.test(hex);
-  if (!valid) throw new Error(`The theme token --${name} is not an opaque colour`);
-  return hex;
-}
 
 export function applyMonacoTheme(): void {
   self.MonacoEnvironment ??= { getWorker: () => new EditorWorker() };
   if (showThemeSyntax()) return;
-  const styles = getComputedStyle(document.documentElement);
-  const paint = document.createElement("canvas").getContext("2d");
-  if (paint === null) throw new Error("A canvas is needed to read the theme colours");
-  const token = (name: string) => hexToken(styles, paint, name);
+  const token = tokenHexReader();
   const rule = (name: string) => token(name).slice(1);
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   editor.defineTheme("satellite", {

@@ -6,11 +6,11 @@ const alpha = (strength: number) =>
     .padStart(2, "0");
 
 export function thumbColours(fg: string): { rest: string; hover: string; drag: string } {
-  const opaque = fg.slice(0, 7);
+  if (!/^#[0-9a-f]{6}$/i.test(fg)) throw new Error(`The text colour ${fg} is not six digit hex`);
   return {
-    rest: opaque + alpha(scrollbarLook.rest),
-    hover: opaque + alpha(scrollbarLook.hover),
-    drag: opaque + alpha(scrollbarLook.drag),
+    rest: fg + alpha(scrollbarLook.rest),
+    hover: fg + alpha(scrollbarLook.hover),
+    drag: fg + alpha(scrollbarLook.drag),
   };
 }
 
