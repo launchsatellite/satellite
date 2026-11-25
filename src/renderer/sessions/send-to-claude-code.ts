@@ -9,7 +9,7 @@ export const sendToClaudeCodeEvent = "satellite:send-to-claude-code";
 
 const sentDetail = z.object({ text: z.string() });
 const typingPlaces =
-  "input, textarea:not([readonly]), select, [role='combobox'], [contenteditable]:not([contenteditable='false']), [role='dialog'], [role='alertdialog']";
+  "input, textarea:not([readonly]), select, [contenteditable]:not([contenteditable='false']), [role='dialog'], [role='alertdialog']";
 
 export function sentText(event: Event): string | undefined {
   if (!(event instanceof CustomEvent)) return undefined;

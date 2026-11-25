@@ -27,7 +27,7 @@ interface WorkspaceHeaderProps {
   onShowPullRequest: () => void;
 }
 
-const readoutButton = "min-w-0 flex-none font-pixel font-normal text-dim uppercase";
+const readoutButton = "min-w-0 flex-none px-[7px] font-pixel font-normal text-dim uppercase";
 
 export function WorkspaceHeader({
   project,
@@ -96,7 +96,7 @@ export function WorkspaceHeader({
             label={countLabel(processes)}
             tooltip={countLabel(processes)}
             onClick={onShowProcesses}
-            className={readoutButton}
+            className={`${readoutButton} gap-[5px]`}
           >
             <Icon name="running" size={13} />
             <span aria-hidden="true">{processes}</span>
@@ -112,7 +112,7 @@ export function WorkspaceHeader({
             label={readoutLabel(pullRequest)}
             tooltip={readoutLabel(pullRequest)}
             onClick={onShowPullRequest}
-            className={readoutButton}
+            className={`${readoutButton} gap-[7px]`}
           >
             <StatusPixel state={readoutPixel(pullRequest)} size={6} />
             <span aria-hidden="true" className="truncate">

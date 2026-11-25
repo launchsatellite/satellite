@@ -7,7 +7,7 @@ import { KeyHint } from "./key-hint.tsx";
 import { Tooltip } from "./tooltip.tsx";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-type ButtonSize = "default" | "small" | "large";
+type ButtonSize = "default" | "small";
 
 export interface ButtonProps {
   children?: ReactNode;
@@ -40,8 +40,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-7 gap-2 px-3 text-[13px]",
-        small: "h-6 gap-1 px-2 text-[12px]",
-        large: "h-9 gap-2 px-4 text-[13px]",
+        small: "h-6 gap-1.5 px-2 text-[12px]",
       },
       square: { true: "px-0", false: "" },
       disabled: { true: "opacity-[0.38]", false: "active:translate-y-px" },
@@ -49,7 +48,6 @@ const buttonVariants = cva(
     compoundVariants: [
       { square: true, size: "default", className: "w-7" },
       { square: true, size: "small", className: "w-6" },
-      { square: true, size: "large", className: "w-9" },
       {
         disabled: false,
         variant: "primary",
@@ -96,7 +94,7 @@ export function Button({
     >
       {icon !== undefined && <Icon name={icon} />}
       {children}
-      {shortcut !== undefined && label === undefined && <KeyHint keys={shortcut} />}
+      {shortcut !== undefined && !square && tooltip === undefined && <KeyHint keys={shortcut} />}
     </ButtonPrimitive>
   );
   if (tooltip === undefined) return button;
