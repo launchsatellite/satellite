@@ -69,6 +69,13 @@ export function Tabs({
         aria-label={label}
         data-testid={testId}
         activateOnFocus={activateOnFocus}
+        onBlur={(event) => {
+          const list = event.currentTarget;
+          if (list.contains(event.relatedTarget)) return;
+          const tabs = [...list.querySelectorAll<HTMLElement>("[role='tab']")];
+          if (!tabs.some((tab) => tab.ariaSelected === "true")) return;
+          for (const tab of tabs) tab.tabIndex = tab.ariaSelected === "true" ? 0 : -1;
+        }}
         className={cn("flex items-center gap-0.5", className)}
       >
         <ShownValue value={value}>{children}</ShownValue>
