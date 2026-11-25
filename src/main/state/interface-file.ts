@@ -14,7 +14,7 @@ import { createJsonWriter, readJsonFile, type JsonReadOutcome } from "./json-fil
 
 export interface InterfaceFile {
   load(): Promise<{ state: InterfaceState; notice: string | null }>;
-  save(state: InterfaceState): Promise<void>;
+  save(state: InterfaceState | (() => Promise<InterfaceState>)): Promise<void>;
   flush(): Promise<void>;
 }
 interface LoadedInterface {
@@ -100,6 +100,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
   const file = join(home, "interface.json");
   const writer = createJsonWriter(file);
   let cached: Promise<LoadedInterface> | undefined;
+  let saving: Promise<unknown> = Promise.resolve();
   const load = () => {
     cached ??= readInterfaceFile(file).then(async (loaded) => {
       if (loaded.notice !== null && loaded.writable) {
@@ -114,12 +115,24 @@ export function createInterfaceFile(home: string): InterfaceFile {
       const { state, notice } = await load();
       return { state, notice };
     },
-    async save(state) {
-      const loaded = await load();
-      cached = Promise.resolve({ ...loaded, state });
-      if (loaded.writable) await writer.write({ version: 5, ...state });
+    save(next) {
+      const run = saving.then(async () => {
+        const state = typeof next === "function" ? await next() : next;
+        const loaded = await load();
+        cached = Promise.resolve({ ...loaded, state });
+        if (loaded.writable) await writer.write({ version: 5, ...state });
+      });
+      saving = run.catch(() => undefined);
+      return run;
     },
-    flush: () => writer.flush(),
+    async flush() {
+      let settled: Promise<unknown> | undefined;
+      while (settled !== saving) {
+        settled = saving;
+        await settled;
+      }
+      await writer.flush();
+    },
   };
 }
 
@@ -156,7 +169,6 @@ export function interfaceHandlers(
   recorded: () => Promise<ReadonlySet<string>>,
 ): Pick<BridgeHandlers, "interface.load" | "interface.save"> {
   let noticeGiven = false;
-  let saving: Promise<unknown> = Promise.resolve();
   let lastTabs: { asked: string; kept: FileTabs[] } | undefined;
   const filesOf = async (tabs: FileTabs[]): Promise<FileTabs[]> => {
     const asked = JSON.stringify(tabs);
@@ -166,11 +178,14 @@ export function interfaceHandlers(
     if (known !== null) lastTabs = { asked, kept };
     return kept;
   };
+  const kept = async (state: InterfaceState) => {
+    const next = { ...state, files: await filesOf(state.files) };
+    apply(next);
+    return next;
+  };
   const saved = async (state: InterfaceState) => {
-    const kept = { ...state, files: await filesOf(state.files) };
-    apply(kept);
     try {
-      await file.save(kept);
+      await file.save(() => kept(state));
     } catch (error) {
       console.error("Satellite could not write interface.json", error);
       throw new BridgeFailure("failed", saveFailure);
@@ -187,10 +202,6 @@ export function interfaceHandlers(
       noticeGiven = true;
       return answer;
     },
-    "interface.save": ({ state }) => {
-      const run = saving.then(() => saved(state));
-      saving = run.catch(() => undefined);
-      return run;
-    },
+    "interface.save": ({ state }) => saved(state),
   };
 }
