@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { AppSession } from "../driver.ts";
+import { chooseOption, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { workspaceNamePattern } from "../../src/shared/workspace-name.ts";
 import { isInsidePath } from "../../src/main/platform/paths.ts";
@@ -272,7 +272,7 @@ async function run(session: AppSession): Promise<void> {
 
   await openNewWorkspace(session, () => page.keyboard.press(`${commandModifier}+N`));
   await page.getByTestId("workspace-name").fill("second-look");
-  await page.getByTestId("workspace-start").selectOption({ label: "release" });
+  await chooseOption(page, "workspace-start", "release");
   await page.getByTestId("create-workspace").click();
   await selectedRow(session, "second-look", "after making it from release");
   await session.screenshot("workspaces-created");
