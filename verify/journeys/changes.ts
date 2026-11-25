@@ -348,7 +348,8 @@ async function clearsATipWithItsRow(session: AppSession, folder: string): Promis
   await row.hover();
   const tip = page.getByTestId("tooltip");
   await tip.waitFor({ timeout: waitMs });
-  assert.equal(await tip.textContent(), await row.getAttribute("data-tip"));
+  const text = await row.getAttribute("data-tip");
+  assert.equal(await tip.textContent(), text);
   await rm(join(folder, path));
   await nudge(page);
   await waitUntil(
@@ -356,7 +357,15 @@ async function clearsATipWithItsRow(session: AppSession, folder: string): Promis
     waitMs,
     `${path} stayed listed after it was deleted`,
   );
-  await tip.waitFor({ state: "hidden", timeout: waitMs });
+  let shown: string[] = [];
+  await waitUntil(
+    async () => {
+      shown = await tip.filter({ visible: true }).allTextContents();
+      return !shown.includes(text ?? "");
+    },
+    waitMs,
+    () => `the deleted row's tip stayed, the tips shown were ${JSON.stringify(shown)}`,
+  );
   await page.mouse.move(0, 0);
 }
 
