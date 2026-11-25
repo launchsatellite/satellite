@@ -28,9 +28,6 @@ interface ProcessesDialogProps {
 
 const note = "text-[12px] text-dim";
 const separatorEnd = /(?<=[^\s/\\][/\\])(?=[^/\\])/;
-const ringed =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
 function sessionName(number: number | undefined): string {
   return number === undefined ? "A session" : `Session ${String(number)}`;
 }
@@ -98,20 +95,20 @@ function Row({
                 </span>
               </Tooltip>
             ) : (
-              <Tooltip key={port} text={portLabel(port, true)}>
-                <button
-                  type="button"
-                  data-testid={`${testId}-port-${String(port)}`}
-                  data-link="true"
-                  aria-label={portLabel(port, true)}
-                  onClick={() => {
-                    onPort(url);
-                  }}
-                  className={`-mx-1 rounded-[6px] px-1 font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
-                >
-                  :{port}
-                </button>
-              </Tooltip>
+              <Button
+                key={port}
+                variant="link"
+                testId={`${testId}-port-${String(port)}`}
+                data-link="true"
+                label={portLabel(port, true)}
+                tooltip={portLabel(port, true)}
+                onClick={() => {
+                  onPort(url);
+                }}
+                className="font-pixel"
+              >
+                :{port}
+              </Button>
             ),
           )}
         </p>
