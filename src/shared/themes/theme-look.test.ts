@@ -75,7 +75,7 @@ function pairsBelow(look: ThemeLook): string[] {
       measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
   }
   for (const ground of ["side", "raised", "bg"] as const)
-    measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.edge);
+    measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.control);
   if (tokens.raised === tokens.side) below.push("raised equals side");
   for (const ground of pairedGrounds) {
     const order = (["fg", "fg2", "dim"] as const).map((token) =>
@@ -192,6 +192,23 @@ describe("themeLook", () => {
         name,
       ).toEqual([]);
     }
+  });
+
+  it("draws control edges as quietly as Satellite's own, from the theme's border when it shows", () => {
+    const look = curatedLook("dracula");
+    if (look === undefined) throw new Error("dracula");
+    const least = Math.min(
+      ...(["side", "raised", "bg"] as const).map((ground) =>
+        contrastRatio(look.tokens.ctl, look.tokens[ground]),
+      ),
+    );
+    expect(least).toBeGreaterThanOrEqual(contrastFloors.control);
+    expect(least).toBeLessThan(1.5);
+    const bordered = (border: string) =>
+      themeLook({ ...minimal, colors: { ...minimal.colors, "input.border": border } }, states)
+        ?.tokens.ctl;
+    expect(bordered("#3a3a3a")).toBe("#3a3a3a");
+    expect(bordered("#141414")).not.toBe("#141414");
   });
 
   it("composes a colour with alpha over the ground it sits on", () => {
