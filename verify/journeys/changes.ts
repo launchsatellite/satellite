@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, readFile, utimes, writeFile } from "node:fs/promises";
+import { appendFile, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Page } from "playwright-core";
@@ -339,6 +339,27 @@ async function followsTheDisk(session: AppSession, folder: string): Promise<void
   await modifiedShows(session, "Another line.", "after the append");
 }
 
+async function clearsATipWithItsRow(session: AppSession, folder: string): Promise<void> {
+  const { page } = session;
+  const path = "zz-fleeting.txt";
+  await writeFile(join(folder, path), "here for a moment\n");
+  await rowOf(session, path, "before hovering it");
+  const row = page.locator(`[data-testid="changes-list"] [data-path="${path}"]`);
+  await row.hover();
+  const tip = page.getByTestId("tooltip");
+  await tip.waitFor({ timeout: waitMs });
+  assert.equal(await tip.textContent(), await row.getAttribute("data-tip"));
+  await rm(join(folder, path));
+  await nudge(page);
+  await waitUntil(
+    async () => !(await rows(page)).some((listed) => listed.path === path),
+    waitMs,
+    `${path} stayed listed after it was deleted`,
+  );
+  await tip.waitFor({ state: "hidden", timeout: waitMs });
+  await page.mouse.move(0, 0);
+}
+
 async function keepsThePlace(session: AppSession, folder: string): Promise<void> {
   const { page } = session;
   const many = Array.from({ length: 200 }, (_, index) => `line ${String(index + 1)}\n`).join("");
@@ -538,6 +559,7 @@ export const changesJourney: Journey = {
     await listsUncommitted(session);
     await staysStill(session, folder);
     await followsTheDisk(session, folder);
+    await clearsATipWithItsRow(session, folder);
     await keepsThePlace(session, folder);
     await refreshesWhenATurnEnds(session, folder);
     await showsSentences(session, folder);

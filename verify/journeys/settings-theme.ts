@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AppSession } from "../driver.ts";
+import { chooseOption, shownOption, type AppSession } from "../driver.ts";
 import { readTerminal, type TerminalScreen } from "../terminal-screen.ts";
 import { gone, startClaude, visible, waitUntil } from "./conditions.ts";
 
@@ -241,7 +241,7 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
   await terminalReads(session, "#ffffff", terminalRed.satellite, "in Satellite's light theme");
   await session.page.getByTestId("workspace-repo-main").click();
   await openSettings(session);
-  await session.page.getByTestId("settings-theme").selectOption({ label: "Dracula" });
+  await chooseOption(session.page, "settings-theme", "Dracula");
   await checkCredit(session);
   await session.screenshot("settings-theme-dracula");
   await closeSettings(session);
@@ -305,7 +305,7 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
   assert.equal(relaunched.editorGround, "rgb(40, 42, 54)");
   await themedSyntax(session, "after the relaunch");
   await openSettings(session);
-  assert.equal(await session.page.getByTestId("settings-theme").inputValue(), "dracula");
-  await session.page.getByTestId("settings-theme").selectOption({ label: "Light" });
+  assert.equal(await shownOption(session.page, "settings-theme"), "Dracula");
+  await chooseOption(session.page, "settings-theme", "Light");
   await settled(session, satellite, "after choosing Light again");
 }

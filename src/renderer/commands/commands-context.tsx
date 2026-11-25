@@ -83,7 +83,7 @@ export function CommandButton({
       shortcut={shortcut}
       disabled={!found.available}
       label={label}
-      title={tooltip === undefined || shortcut === undefined ? tooltip : `${tooltip} ${shortcut}`}
+      tooltip={tooltip}
       expanded={expanded}
       controls={controls}
     >

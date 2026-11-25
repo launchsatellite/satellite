@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { AppSession } from "../driver.ts";
+import { tooltipOf, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
 import { gone, startClaude, terminalFocused, visible, waitUntil } from "./conditions.ts";
@@ -86,7 +86,12 @@ async function checkStrip(session: AppSession): Promise<void> {
   };
   for (const [testId, [label, tooltip]] of Object.entries(named)) {
     assert.equal(await attribute(session, testId, "aria-label"), label, `${testId} name`);
-    assert.equal(await attribute(session, testId, "title"), tooltip, `${testId} tooltip`);
+    assert.equal(await tooltipOf(session.page, testId), tooltip, `${testId} tooltip`);
+    assert.equal(
+      await attribute(session, testId, "aria-description"),
+      tooltip === label ? "" : tooltip,
+      `${testId} description`,
+    );
   }
   assert.ok(await unavailable(session, "title-inbox"), "the inbox ran with nothing listed");
   assert.ok(await unavailable(session, "title-new-workspace"), "New workspace ran with no project");

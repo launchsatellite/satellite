@@ -4,6 +4,7 @@ import type { Page } from "playwright-core";
 import { sendToClaudeCodeEvent } from "../src/renderer/sessions/send-to-claude-code.ts";
 import {
   buildApp,
+  chooseOption,
   errorReason,
   folderTarget,
   generatedText,
@@ -180,6 +181,10 @@ function parseStep(raw: string): Step {
       const testId = needsValue();
       return step(({ session }) => session.page.getByTestId(testId).click());
     }
+    case "hover": {
+      const testId = needsValue();
+      return step(({ session }) => session.page.getByTestId(testId).hover());
+    }
     case "select": {
       const choice = needsValue();
       const separator = choice.indexOf(":");
@@ -189,7 +194,7 @@ function parseStep(raw: string): Step {
         throw new Error("step select needs <testid>:<label>, as in select=workspace-start:main");
       }
       return step(async ({ session }) => {
-        await session.page.getByTestId(testId).selectOption({ label });
+        await chooseOption(session.page, testId, label);
       });
     }
     case "type": {

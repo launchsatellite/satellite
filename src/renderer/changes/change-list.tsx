@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
+import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import {
   leftOutSentence,
@@ -44,6 +45,7 @@ export function ChangeList({
   selected,
   onSelect,
 }: ChangeListProps) {
+  const tips = useListTooltip();
   const move = (event: KeyboardEvent<HTMLUListElement>) => {
     const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
     const at = rows.findIndex((row) => row === document.activeElement);
@@ -56,7 +58,13 @@ export function ChangeList({
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1 [scrollbar-gutter:stable]">
-      <ul data-testid="changes-list" role="listbox" aria-label="Changed files" onKeyDown={move}>
+      <ul
+        data-testid="changes-list"
+        role="listbox"
+        aria-label="Changed files"
+        onKeyDown={move}
+        {...tips.events}
+      >
         {files.map((file, index) => {
           const current = file.path === selected;
           const { folder, name } = splitPath(file.path);
@@ -67,12 +75,12 @@ export function ChangeList({
               <button
                 type="button"
                 data-testid={testId}
+                data-tip={label}
                 data-path={file.path}
                 data-state={file.letter}
                 role="option"
                 aria-selected={current}
                 aria-label={label}
-                title={label}
                 tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}
                 onClick={() => {
                   onSelect(file.path);
@@ -117,6 +125,7 @@ export function ChangeList({
           );
         })}
       </ul>
+      {tips.tip}
       {more > 0 && (
         <p data-testid="changes-more" className="px-3 pt-2 text-[12px] text-dim">
           {moreSentence(more)}

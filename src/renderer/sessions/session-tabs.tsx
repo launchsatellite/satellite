@@ -2,6 +2,7 @@ import { useEffect, type KeyboardEvent } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { hooksOffNote } from "./send-to-claude-code.ts";
 import { pixelLabel, pixelOf } from "./session-pixel.ts";
 import type { SessionTab } from "./use-sessions.ts";
@@ -87,27 +88,28 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
               role="presentation"
               className={`group flex h-7 flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
             >
-              <button
-                type="button"
-                role="tab"
-                id={sessionTabId(tab.key)}
-                aria-selected={selected}
-                aria-controls={sessionPanelId(tab.key)}
-                aria-keyshortcuts="Delete"
-                tabIndex={selected ? 0 : -1}
-                data-testid={`session-tab-${String(tab.number)}`}
-                data-state={tab.status}
-                data-hooks-off={tab.hooksOff ? "" : undefined}
-                title={tab.hooksOff ? hooksOffNote : undefined}
-                aria-description={tab.hooksOff ? hooksOffNote : undefined}
-                onClick={() => {
-                  onActivate(tab.key);
-                }}
-                className={`flex h-full items-center gap-[6px] rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
-              >
-                <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
-                {name}
-              </button>
+              <Tooltip text={tab.hooksOff ? hooksOffNote : undefined}>
+                <button
+                  type="button"
+                  role="tab"
+                  id={sessionTabId(tab.key)}
+                  aria-selected={selected}
+                  aria-controls={sessionPanelId(tab.key)}
+                  aria-keyshortcuts="Delete"
+                  tabIndex={selected ? 0 : -1}
+                  data-testid={`session-tab-${String(tab.number)}`}
+                  data-state={tab.status}
+                  data-hooks-off={tab.hooksOff ? "" : undefined}
+                  aria-description={tab.hooksOff ? hooksOffNote : undefined}
+                  onClick={() => {
+                    onActivate(tab.key);
+                  }}
+                  className={`flex h-full items-center gap-[6px] rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
+                >
+                  <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
+                  {name}
+                </button>
+              </Tooltip>
               <button
                 type="button"
                 tabIndex={-1}

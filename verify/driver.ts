@@ -774,3 +774,26 @@ export async function pasteIntoFocus(page: Page, text: string): Promise<string |
   }, text);
   return target ?? undefined;
 }
+
+export async function chooseOption(page: Page, testId: string, label: string): Promise<void> {
+  await page.getByTestId(testId).click();
+  const options = page.getByTestId(`${testId}-options`);
+  await options.getByRole("option", { name: label, exact: true }).click();
+  await options.waitFor({ state: "hidden" });
+}
+
+export async function shownOption(page: Page, testId: string): Promise<string> {
+  return (await page.getByTestId(testId).innerText()).trim();
+}
+
+export async function tooltipOf(page: Page, testId: string): Promise<string> {
+  await page.getByTestId(testId).hover();
+  const tooltip = page.getByTestId("tooltip");
+  await tooltip.waitFor({ state: "visible" });
+  const text = await tooltip.evaluate((element) =>
+    [...element.children].map((part) => part.textContent.trim()).join(" "),
+  );
+  await page.mouse.move(0, 0);
+  await tooltip.waitFor({ state: "hidden" });
+  return text;
+}

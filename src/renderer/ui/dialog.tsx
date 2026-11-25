@@ -12,7 +12,15 @@ interface DialogProps {
 }
 
 const focusable =
-  "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  ":is(a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]):not([tabindex='-1'])";
+const popup = "[data-popup]";
+
+function popupOpen(panel: HTMLElement): boolean {
+  return (
+    panel.querySelector("[data-menu-opening]") !== null ||
+    document.querySelector(`${popup} [data-open]`) !== null
+  );
+}
 
 function moveFocus(panel: HTMLElement, backwards: boolean): boolean {
   const targets = [...panel.querySelectorAll<HTMLElement>(focusable)];
@@ -46,6 +54,7 @@ export function Dialog({
   const titleId = useId();
   const descriptionId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  const pressedOverPopup = useRef(false);
   const [focusedAtRender] = useState(() => document.activeElement);
 
   useLayoutEffect(() => {
@@ -54,6 +63,7 @@ export function Dialog({
     const covered = () => element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
       if (event.isComposing || covered()) return;
+      if (popupOpen(element)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -64,16 +74,24 @@ export function Dialog({
     };
     const keepFocus = (event: FocusEvent) => {
       if (covered()) return;
-      if (event.target instanceof Element && event.target.closest("[role='dialog']") !== null) {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(`[role='dialog'], ${popup}`) !== null
+      ) {
         return;
       }
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
     };
+    const point = () => {
+      pressedOverPopup.current = popupOpen(element);
+    };
     document.addEventListener("keydown", press, { capture: true });
     document.addEventListener("focusin", keepFocus);
+    window.addEventListener("pointerdown", point, { capture: true });
     return () => {
       document.removeEventListener("keydown", press, { capture: true });
       document.removeEventListener("focusin", keepFocus);
+      window.removeEventListener("pointerdown", point, { capture: true });
     };
   }, [closable, onClose]);
   useLayoutEffect(() => {
@@ -116,7 +134,7 @@ export function Dialog({
           event.preventDefault();
         }}
         onClick={() => {
-          if (closable) onClose();
+          if (closable && !pressedOverPopup.current) onClose();
         }}
       />
       <div

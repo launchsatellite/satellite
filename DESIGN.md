@@ -56,6 +56,7 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `add` / `addfg` | `#15122B` / `#A493FF` | `#EEEBFF` / `#4A2EE0` | Added lines |
 | `del` / `delfg` | `#2A130B` / `#FF8A5C` | `#FFEDE6` / `#BE400C` | Removed lines |
 | `accent` | `#6A4BFF` | `#6A4BFF` | Working, the main action, focus |
+| `on-accent` | `#FFFFFF` | `#FFFFFF` | Text on an `accent` fill, white or black, whichever reads better on the accent of the theme shown |
 | `signal` | `#FF5A1F` | `#FF5A1F` | Needs you |
 | `pri-bg` / `pri-fg` | `#F4F4F1` / `#08080A` | `#0A0A0B` / `#F4F4F1` | Primary button |
 | `volt` / `volt-edge` | `#DCFF3D` / `#DCFF3D` | `#DCFF3D` / `#6B7800` | Ready and passing, with the inner edge that keeps a volt pixel visible on light |
@@ -100,16 +101,20 @@ The signature texture. A field of square blocks in a fixed mix of ultraviolet, p
 
 - A 4px grid. Gaps inside a control 4 to 8, between controls 8 to 12, between groups 16 to 24, between sections 32 and up.
 - Broadcast pages sit on one 12 column hairline grid. Header, section labels, content and footer share the same lines. On phones the cells stack and the lines still meet.
-- Buttons are 28, small 24, large 36. Inputs and palette rows are 32, list rows 28 to 30, bars 40.
+- Buttons are 28, small 24. Inputs and palette rows are 32, list rows 28 to 30, bars 40.
 - Only menus, the palette, dialogs, toasts and the guide card cast a shadow.
 
 ## Components
 
 BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons, inputs, checkbox, radio, toggle, tags, counters, key hints, avatars, the pixel spinner for network work, block progress and readouts. Molecules are sidebar rows, tabs (session tabs and open file tabs), segmented control, menu, needs you card, toast, agent log, diff and checks. Organisms are the palette, dialogs and the pull request card.
 
-- Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs.
+- Buttons are `primary`, `secondary`, `ghost` and `danger`, 28px with 12px of padding and 8px between icon and text, small 24px with 8px of padding and 6px between, a 6px corner and 13px semibold text, 12px on small. An icon-only button is square. Its shortcut shows as a key hint inside it, or in its tooltip when it has one. A disabled button stays in the tab order at 38% and ignores presses.
+- Inputs and selects are 32px with 12px of padding, an 8px corner, a `ctl` border on `side` and 13px text. A select shows its value and a chevron in `dim`, and opens its menu under it, at least as wide as it and never taller than the window, scrolling when long. The arrow keys, Home, End and typing a name move through it, Enter picks. Escape or a click outside closes only the menu, so a dialog under it stays open with what was typed in it.
+- A menu is on `raised` with a `line` border, a 10px corner, 4px of padding and the one shadow. Its rows are 28px with 8px of padding and a 6px corner, the chosen one carrying a check.
+- A tooltip waits half a second under the pointer, and on a button, tab, list row or tree row it also shows at once when Tab, an arrow key, Home or End moves focus there, never when the app moves focus on its own. It sits under its control on `raised` with a `line` border, a 6px corner, 4px by 8px of padding and 12px text in `fg`, with the command's shortcut as a framed key hint, casts no shadow, lets the pointer through to whatever is under it and closes on Escape or a press. The control's own name and description say the same, since a tooltip never reaches a screen reader.
+- Focus is an ultraviolet ring, 2px on buttons and a soft 3px glow on inputs and selects.
 - Every enabled control shows the pointer, the selected row and tab included, so a selection never reads as switched off. That covers buttons, tabs, list and tree rows, palette options, selects and the thread marks in a diff's gutter. A disabled control keeps the arrow, never a not allowed sign, which the system keeps for a drop that cannot land. Text fields, the terminal and read-only code keep the text cursor, a link in the terminal shows the pointer, the column dividers show the resize cursor and the title bar's drag area the arrow.
-- Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row.
+- Selection is a grey fill. The active row of the palette adds a 1px ultraviolet inset outline, so it reads at 3 to 1. The menu hover is the one place ultraviolet fills a row, its text in `on-accent`.
 - Every scrollbar has one look in every theme, the page's own, the diff's, the file viewer's and the terminal's alike. A 10px gutter with no track, no corner and no arrows holds a 6px thumb with 2px clear on each side, a 2px corner and at least 24px of length, while the diff, the file viewer and the terminal keep their own shortest thumb. The terminal keeps its own 14px gutter with the same 6px thumb centred in it. The changes list, the files tree and the command menu's results keep the gutter before they overflow, so nothing shifts as they fill. Under forced colours the system draws its own bars. The thumb is `fg` at 20% at rest, 35% under the pointer and 50% while dragged, so it reads on any ground without shouting. The session and file tab strips scroll with no bar at all. A dialog body keeps its bar 4px in from the dialog's edge and its content 18px from it.
 - The segmented control is a radio group, a 28px track on `side` with a `ctl` border and a 6px corner, each option 24px with the chosen one on `sel` in `fg` and the others in `fg2`, taking `hover` under the pointer. The arrow keys move the choice and its focus, and only the chosen option is in the tab order.
 - A close button on a tab is a 24px target flush with the tab's right edge. Inside it a 20px square, 4px in from that edge, holds the 12px close glyph and the focus ring, so the target meets the small button's size and the tab never grows to hold it. Under the pointer the square fills with `fg` at 20% over the tab's own ground and the glyph turns `fg`, so it stands out on the selected tab's `sel` and a hovered tab's `hover` in every theme, at 1.56 to 1.83 to 1 in light, dark and Dracula.
@@ -169,6 +174,7 @@ A curated theme is a published colour theme Satellite ships whole, in the standa
 | `add` / `del` | `diffEditor.insertedLineBackground` / `diffEditor.removedLineBackground` over `bg` | the format's own line defaults, as the diff draws them |
 | `addfg` / `delfg` | `gitDecoration.addedResourceForeground`, `gitDecoration.untrackedResourceForeground` / `gitDecoration.deletedResourceForeground` | ready / destructive |
 | `accent` | `focusBorder`, mixed toward `fg` until it reaches 3 to 1 against `bg`, `side` and `raised` | working, the same way |
+| `on-accent` | white or black, whichever passes on `accent`, worked out in `app.css` from the relative luminance so it reads at 4.58 to 1 or better | |
 | `pri-bg` / `pri-fg` | `button.background` / `button.foreground` | working / `fg` |
 | `signal`, `sigfg` | needs you | required |
 | `volt`, `volt-edge` | ready, with a light theme's edge mixed toward `fg` to 3 to 1 on `bg` and `side` | required |

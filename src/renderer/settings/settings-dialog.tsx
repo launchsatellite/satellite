@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { themeChoice, type ThemeChoice } from "../../shared/bridge-contract.ts";
+import type { ThemeChoice } from "../../shared/bridge-contract.ts";
 import { curatedTheme, curatedThemes } from "../../shared/themes/curated-themes.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
 import { ToolChecks } from "../setup/tool-check.tsx";
@@ -7,6 +7,7 @@ import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { Segmented } from "../ui/segmented.tsx";
+import { Select } from "../ui/select.tsx";
 
 interface SettingsDialogProps {
   theme: ThemeChoice;
@@ -43,22 +44,14 @@ function ThemeSelect({
   onTheme: (theme: ThemeChoice) => void;
 }) {
   return (
-    <select
-      aria-label="Theme"
-      data-testid="settings-theme"
+    <Select
+      label="Theme"
+      testId="settings-theme"
       value={theme}
-      onChange={(event) => {
-        const chosen = themeChoice.safeParse(event.target.value);
-        if (chosen.success) onTheme(chosen.data);
-      }}
-      className="h-7 min-w-[140px] rounded-[6px] border border-ctl bg-side px-2 text-[13px] text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-    >
-      {themes.map(({ value, label }) => (
-        <option key={value} value={value}>
-          {label}
-        </option>
-      ))}
-    </select>
+      options={themes}
+      onChange={onTheme}
+      className="min-w-[160px]"
+    />
   );
 }
 

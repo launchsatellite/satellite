@@ -8,7 +8,7 @@ import {
   hooksOffNote,
   sendToClaudeCodeEvent,
 } from "../../src/renderer/sessions/send-to-claude-code.ts";
-import { type AppSession, pasteIntoFocus } from "../driver.ts";
+import { type AppSession, pasteIntoFocus, tooltipOf } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { readTerminal, terminalText } from "../terminal-screen.ts";
 import {
@@ -987,7 +987,8 @@ async function hooksOff(session: AppSession): Promise<void> {
     promptTimeoutMs,
     "the tab never said hooks are off while Claude Code worked without one",
   );
-  assert.equal(await tab.getAttribute("title"), hooksOffNote, "the tab's tooltip");
+  assert.equal(await tooltipOf(page, "session-tab-1"), hooksOffNote, "the tab's tooltip");
+  assert.equal(await tab.getAttribute("aria-description"), hooksOffNote, "the tab's description");
   await stateIs(session, "session-tab-1", "idle", "with hooks off");
   await terminalShows(session, "Done.", "after the work without hooks");
   await send(page, "later");

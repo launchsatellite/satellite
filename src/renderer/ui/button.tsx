@@ -1,6 +1,10 @@
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva } from "class-variance-authority";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";
 import { KeyHint } from "./key-hint.tsx";
+import { Tooltip } from "./tooltip.tsx";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "default" | "small";
@@ -15,27 +19,44 @@ export interface ButtonProps {
   shortcut?: string;
   disabled?: boolean;
   label?: string;
-  title?: string;
+  tooltip?: string;
   autoFocus?: boolean;
   expanded?: boolean;
   controls?: string;
+  className?: string;
+  [data: `data-${string}`]: string | number | undefined;
 }
 
-const base =
-  "inline-flex items-center justify-center gap-[7px] rounded-[6px] border font-sans font-semibold whitespace-nowrap transition-[background-color,filter] duration-[120ms] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>kbd]:ml-1";
-const variants: Record<ButtonVariant, { look: string; hover: string }> = {
-  primary: {
-    look: "border-transparent bg-pri-bg text-pri-fg [&>kbd]:border-current [&>kbd]:text-current [&>kbd]:opacity-55",
-    hover: "hover:brightness-110 active:brightness-90",
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-[6px] border font-sans font-semibold whitespace-nowrap transition-[background-color,filter] duration-[120ms] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>kbd]:ml-1",
+  {
+    variants: {
+      variant: {
+        primary:
+          "border-transparent bg-pri-bg text-pri-fg [&>kbd]:border-current [&>kbd]:text-current [&>kbd]:opacity-55",
+        secondary: "border-ctl bg-bg text-fg",
+        ghost: "border-transparent text-fg2",
+        danger: "border-ctl bg-bg text-danger",
+      },
+      size: {
+        default: "h-7 gap-2 px-3 text-[13px]",
+        small: "h-6 gap-1.5 px-2 text-[12px]",
+      },
+      square: { true: "px-0", false: "" },
+      disabled: { true: "opacity-[0.38]", false: "active:translate-y-px" },
+    },
+    compoundVariants: [
+      { square: true, size: "default", className: "w-7" },
+      { square: true, size: "small", className: "w-6" },
+      {
+        disabled: false,
+        variant: "primary",
+        className: "hover:brightness-110 active:brightness-90",
+      },
+      { disabled: false, variant: ["secondary", "ghost", "danger"], className: "hover:bg-hover" },
+    ],
   },
-  secondary: { look: "border-ctl bg-bg text-fg", hover: "hover:bg-hover" },
-  ghost: { look: "border-transparent text-fg2", hover: "hover:bg-hover" },
-  danger: { look: "border-ctl bg-bg text-danger", hover: "hover:bg-hover" },
-};
-const sizes: Record<ButtonSize, { text: string; square: string }> = {
-  default: { text: "h-7 px-3 text-[13px]", square: "h-7 w-7" },
-  small: { text: "h-6 px-[9px] text-[12px]", square: "h-6 w-6" },
-};
+);
 
 export function Button({
   children,
@@ -47,30 +68,39 @@ export function Button({
   shortcut,
   disabled = false,
   label,
-  title,
+  tooltip,
   autoFocus,
   expanded,
   controls,
+  className,
+  ...data
 }: ButtonProps) {
-  const iconOnly = label !== undefined && children === undefined;
-  const { look, hover } = variants[variant];
-  const state = disabled ? "opacity-[0.38]" : `${hover} active:translate-y-px`;
-  return (
-    <button
+  const square = label !== undefined && children === undefined;
+  const tip = tooltip !== undefined && shortcut !== undefined ? `${tooltip} ${shortcut}` : tooltip;
+  const button = (
+    <ButtonPrimitive
+      {...data}
       type="button"
       data-testid={testId}
       autoFocus={autoFocus}
       aria-expanded={expanded}
       aria-controls={controls}
-      aria-disabled={disabled || undefined}
       aria-label={label}
-      title={title}
-      onClick={disabled ? undefined : onClick}
-      className={`${base} ${look} ${state} ${iconOnly ? sizes[size].square : sizes[size].text}`}
+      aria-description={tip === label ? undefined : tip}
+      disabled={disabled}
+      focusableWhenDisabled
+      onClick={onClick}
+      className={cn(buttonVariants({ variant, size, square, disabled }), className)}
     >
       {icon !== undefined && <Icon name={icon} />}
       {children}
-      {shortcut !== undefined && !iconOnly && <KeyHint keys={shortcut} />}
-    </button>
+      {shortcut !== undefined && !square && tooltip === undefined && <KeyHint keys={shortcut} />}
+    </ButtonPrimitive>
+  );
+  if (tooltip === undefined) return button;
+  return (
+    <Tooltip text={tooltip} shortcut={shortcut}>
+      {button}
+    </Tooltip>
   );
 }

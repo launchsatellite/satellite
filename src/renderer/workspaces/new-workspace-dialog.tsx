@@ -12,6 +12,9 @@ import { workspaceNameLimit, workspaceNameProblem } from "../../shared/workspace
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { Button } from "../ui/button.tsx";
 import { Dialog } from "../ui/dialog.tsx";
+import { Input } from "../ui/input.tsx";
+import { Label } from "../ui/label.tsx";
+import { Select } from "../ui/select.tsx";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { visibleLabel } from "../ui/visible-name.tsx";
 
@@ -34,9 +37,6 @@ interface NewWorkspaceDialogProps {
 const stepOrder: readonly CreationStep[] = ["start", "branch", "worktree", "files", "save"];
 const defaultStart = "default";
 const undoneSteps: readonly CreationStep[] = ["branch", "worktree", "files"];
-const field =
-  "h-8 rounded-[8px] border border-ctl bg-side px-[10px] text-[13px] text-fg outline-none focus:border-accent focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_22%,transparent)] disabled:opacity-[0.38]";
-const fieldLabel = "text-[12px] font-semibold text-fg2";
 const readout = "ml-auto font-pixel text-[12px] text-dim uppercase";
 const pixels: Record<StepState, PixelState> = {
   pending: "idle",
@@ -295,14 +295,12 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
     return (
       <>
         <div className="flex flex-col gap-[6px]">
-          <label htmlFor={nameId} className={fieldLabel}>
-            Name
-          </label>
-          <input
+          <Label htmlFor={nameId}>Name</Label>
+          <Input
             ref={input}
             id={nameId}
-            data-testid="workspace-name"
-            className={`${field} font-mono`}
+            testId="workspace-name"
+            className="font-mono"
             value={name}
             maxLength={workspaceNameLimit}
             spellCheck={false}
@@ -333,28 +331,24 @@ export function NewWorkspaceDialog({ project, onClose, onCreated }: NewWorkspace
           </p>
         ) : (
           <div className="flex flex-col gap-[6px]">
-            <label htmlFor={startId} className={fieldLabel}>
-              Start from
-            </label>
-            <select
+            <Label htmlFor={startId}>Start from</Label>
+            <Select
               id={startId}
-              data-testid="workspace-start"
-              className={`${field} font-sans`}
+              testId="workspace-start"
               value={start}
               disabled={locked}
-              onChange={(event) => {
-                setStart(event.target.value);
-              }}
-            >
-              <option value={defaultStart}>
-                {visibleLabel(defaultLabel(startView, project.name))}
-              </option>
-              {otherStarts(phase.prepared.branches, startView).map((branch) => (
-                <option key={branch.ref} value={branch.ref}>
-                  {visibleLabel(branch.label)}
-                </option>
-              ))}
-            </select>
+              onChange={setStart}
+              options={[
+                {
+                  value: defaultStart,
+                  label: visibleLabel(defaultLabel(startView, project.name)),
+                },
+                ...otherStarts(phase.prepared.branches, startView).map((branch) => ({
+                  value: branch.ref,
+                  label: visibleLabel(branch.label),
+                })),
+              ]}
+            />
           </div>
         )}
         {phase.kind === "form" ? (

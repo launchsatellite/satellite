@@ -1,6 +1,7 @@
 import { useEffect, type KeyboardEvent } from "react";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Icon } from "../ui/icon.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { tabLabels } from "./tab-labels.ts";
 
@@ -83,32 +84,33 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
             role="presentation"
             className={`group flex h-6 max-w-[180px] min-w-0 flex-none items-center rounded-[6px] text-[12px] ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
           >
-            <button
-              type="button"
-              role="tab"
-              id={fileTabId(index)}
-              aria-selected={selected}
-              aria-controls={selected ? fileTabPanelId : undefined}
-              aria-keyshortcuts="Delete"
-              aria-label={shown}
-              title={shown}
-              tabIndex={selected ? 0 : -1}
-              data-testid={`file-tab-${String(index)}`}
-              data-path={path}
-              onClick={() => {
-                onActivate(index);
-              }}
-              className={`h-full min-w-0 truncate rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
-            >
-              <span aria-hidden dir="ltr" className="[unicode-bidi:isolate]">
-                <VisibleName text={name} />
-                {parent !== undefined && (
-                  <span className="ml-1.5 text-dim">
-                    <VisibleName text={parent} />
-                  </span>
-                )}
-              </span>
-            </button>
+            <Tooltip text={shown}>
+              <button
+                type="button"
+                role="tab"
+                id={fileTabId(index)}
+                aria-selected={selected}
+                aria-controls={selected ? fileTabPanelId : undefined}
+                aria-keyshortcuts="Delete"
+                aria-label={shown}
+                tabIndex={selected ? 0 : -1}
+                data-testid={`file-tab-${String(index)}`}
+                data-path={path}
+                onClick={() => {
+                  onActivate(index);
+                }}
+                className={`h-full min-w-0 truncate rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
+              >
+                <span aria-hidden dir="ltr" className="[unicode-bidi:isolate]">
+                  <VisibleName text={name} />
+                  {parent !== undefined && (
+                    <span className="ml-1.5 text-dim">
+                      <VisibleName text={parent} />
+                    </span>
+                  )}
+                </span>
+              </button>
+            </Tooltip>
             <button
               type="button"
               tabIndex={-1}

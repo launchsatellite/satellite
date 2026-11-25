@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { join } from "node:path";
-import type { AppSession } from "../driver.ts";
+import { chooseOption, shownOption, tooltipOf, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import { gone, visible, waitUntil } from "./conditions.ts";
 import { checkCuratedTheme } from "./settings-theme.ts";
@@ -60,7 +61,7 @@ async function shows(
   when: string,
 ): Promise<void> {
   await waitUntil(
-    async () => (await session.page.getByTestId("settings-theme").inputValue()) === theme,
+    async () => (await shownOption(session.page, "settings-theme")) === theme,
     waitMs,
     `the theme did not read ${theme} ${when}`,
   );
@@ -111,7 +112,8 @@ async function runCommand(session: AppSession, id: string): Promise<void> {
 async function checkEntryPoints(session: AppSession): Promise<void> {
   const button = session.page.getByTestId("title-settings");
   assert.equal(await button.getAttribute("aria-label"), "Open settings");
-  assert.equal(await button.getAttribute("title"), `Open settings ${keys(",", true)}`);
+  assert.equal(await tooltipOf(session.page, "title-settings"), `Open settings ${keys(",", true)}`);
+  assert.equal(await button.getAttribute("aria-description"), `Open settings ${keys(",", true)}`);
   await session.page.getByTestId("workspace-repo-main").click();
   await session.page.getByTestId("workspace-repo-main").focus();
   await openSettings(session, "keys");
@@ -120,12 +122,13 @@ async function checkEntryPoints(session: AppSession): Promise<void> {
   );
   assert.ok(inside, "focus did not move into settings");
   assert.equal(await session.page.getByTestId("title-bar").getAttribute("data-drag"), "false");
-  await shows(session, "light", "on", "at launch");
+  await shows(session, "Light", "on", "at launch");
   await closeSettings(session, "workspace-repo-main", "from the shortcut");
   await openSettings(session, "button");
   await session.page.getByTestId("settings-done").click();
   await gone(session, "settings-dialog", "after Done");
   await focusReturns(session, "title-settings", "after Done");
+  await checkHandedBackFocus(session);
   await session.page.getByTestId("workspace-repo-main").focus();
   await openSettings(session, "command");
   await closeSettings(session, "workspace-repo-main", "from the command menu");
@@ -178,12 +181,54 @@ async function checkShortcuts(session: AppSession): Promise<void> {
   assert.deepEqual(listed, shortcuts, "the shortcut list did not match the commands");
 }
 
+async function stillOpen(session: AppSession, when: string): Promise<void> {
+  assert.ok(
+    await session.page.getByTestId("settings-dialog").isVisible(),
+    `Settings closed ${when}`,
+  );
+}
+
+async function checkMenuAlone(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.getByTestId("settings-theme").click();
+  await visible(session, "settings-theme-options", "after opening the theme menu");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("settings-theme-options").waitFor({ state: "hidden" });
+  await stillOpen(session, "with Escape in the theme menu");
+  await page.getByTestId("settings-theme").click();
+  await visible(session, "settings-theme-options", "after opening the theme menu again");
+  await page.mouse.click(8, 300);
+  await page.getByTestId("settings-theme-options").waitFor({ state: "hidden" });
+  await stillOpen(session, "with a click outside the theme menu");
+}
+
+async function checkHandedBackFocus(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.mouse.move(0, 0);
+  await page.getByTestId("title-settings").focus();
+  await page.keyboard.press("Enter");
+  await visible(session, "settings-dialog", "after Enter on the settings button");
+  await closeSettings(session, "title-settings", "opened by Enter on its button");
+  await delay(1_000);
+  assert.equal(
+    await page.getByTestId("tooltip").count(),
+    0,
+    "a tooltip opened on the focus Settings handed back",
+  );
+  await page.keyboard.press("Shift+Tab");
+  await focusReturns(session, "title-new-workspace", "after Shift+Tab");
+  await visible(session, "tooltip", "after Shift+Tab onto New workspace");
+  assert.equal(await page.getByTestId("tooltip").textContent(), `New workspace${keys("N")}`);
+}
+
 async function checkChoices(session: AppSession): Promise<void> {
   assert.ok(!(await looksDark(session)), "the window was dark before any choice");
-  await session.page.getByTestId("settings-theme").selectOption("dark");
+  await checkMenuAlone(session);
+  await chooseOption(session.page, "settings-theme", "Dark");
+  await stillOpen(session, "after picking Dark");
   await waitUntil(() => looksDark(session), waitMs, "the window stayed light after Dark");
   await session.page.getByTestId("settings-notifications-off").click();
-  await shows(session, "dark", "off", "after choosing");
+  await shows(session, "Dark", "off", "after choosing");
   await waitUntil(
     async () => {
       const { theme, notifications } = await saved(session);
@@ -245,10 +290,10 @@ async function fitsSmall(session: AppSession, theme: string): Promise<void> {
 async function checkSmall(session: AppSession): Promise<void> {
   await session.page.setViewportSize({ width: 960, height: 600 });
   await fitsSmall(session, "dark");
-  await session.page.getByTestId("settings-theme").selectOption("light");
+  await chooseOption(session.page, "settings-theme", "Light");
   await waitUntil(async () => !(await looksDark(session)), waitMs, "the window stayed dark");
   await fitsSmall(session, "light");
-  await session.page.getByTestId("settings-theme").selectOption("dark");
+  await chooseOption(session.page, "settings-theme", "Dark");
   await waitUntil(() => looksDark(session), waitMs, "the window stayed light");
   await session.page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -265,14 +310,14 @@ async function checkRelaunch(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Escape");
   await gone(session, "palette", "after Escape");
   await openSettings(session, "button");
-  await shows(session, "dark", "off", "after the relaunch");
+  await shows(session, "Dark", "off", "after the relaunch");
   await session.page.keyboard.press("Escape");
   await gone(session, "settings-dialog", "after the relaunch");
   await runCommand(session, "theme-light");
   await runCommand(session, "notifications-on");
   await waitUntil(async () => !(await looksDark(session)), waitMs, "Use the light theme failed");
   await openSettings(session, "button");
-  await shows(session, "light", "on", "after the commands");
+  await shows(session, "Light", "on", "after the commands");
 }
 
 async function checkGuide(session: AppSession): Promise<void> {
