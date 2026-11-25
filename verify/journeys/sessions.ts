@@ -345,6 +345,54 @@ async function tabs(session: AppSession): Promise<void> {
   );
   assert.equal(await page.getByTestId("session-tab-2").count(), 0, "the closed tab stayed");
   await visible(session, "session-tab-1", "after closing the second tab");
+  await closeByKeys(session);
+}
+
+async function closeByKeys(session: AppSession): Promise<void> {
+  const { page } = session;
+  const tabs = page.locator("[data-testid='session-tabs'] [role='tab']");
+  const before = await tabs.count();
+  const started = (await claudePids(session)).length;
+  await page.getByTestId("new-session").click();
+  await waitUntil(
+    async () => (await tabs.count()) === before + 1,
+    promptTimeoutMs,
+    "no tab came for the session to close by its keys",
+  );
+  const pid = await nextPid(session, started + 1);
+  const third = (await tabs.last().getAttribute("data-testid")) ?? "";
+  await page.getByTestId("session-tab-1").click();
+  await page.getByTestId("session-tab-1").focus();
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await focusedTestId(page), third, "ArrowRight left focus off the next session tab");
+  assert.equal(
+    await page.getByTestId("session-tab-1").getAttribute("aria-selected"),
+    "true",
+    "ArrowRight opened the session it reached instead of only moving focus",
+  );
+  await page.keyboard.press("Enter");
+  await waitUntil(
+    async () => (await page.getByTestId(third).getAttribute("aria-selected")) === "true",
+    promptTimeoutMs,
+    "Enter did not open the focused session tab",
+  );
+  await page.getByTestId(third).focus();
+  await page.keyboard.press("Delete");
+  await waitUntil(
+    () => processGone(pid),
+    goneTimeoutMs,
+    `the stand-in (pid ${String(pid)}) still ran after Delete closed its tab`,
+  );
+  await waitUntil(
+    async () => ["session-tab-1", "terminal"].includes(await focusedTestId(page)),
+    promptTimeoutMs,
+    "focus left both the remaining session tab and its terminal after Delete",
+  );
+  assert.equal(
+    await page.getByTestId("session-tab-1").getAttribute("aria-selected"),
+    "true",
+    "the session left after Delete was not shown",
+  );
 }
 
 async function sendClean(session: AppSession): Promise<number> {

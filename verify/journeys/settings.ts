@@ -298,6 +298,38 @@ async function checkSmall(session: AppSession): Promise<void> {
   await session.page.setViewportSize({ width: 1440, height: 900 });
 }
 
+async function paletteKeys(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.keyboard.type("theme");
+  const options = page.locator("[data-testid='palette'] [role='option']");
+  const chosen = async () =>
+    options.evaluateAll((rows) => rows.findIndex((row) => row.ariaSelected === "true"));
+  const count = await options.count();
+  assert.ok(count >= 2, `the command menu listed ${String(count)} theme commands`);
+  assert.equal(await chosen(), 0, "the first match was not the active option");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await chosen(), 1, "ArrowDown did not move to the second option");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  assert.equal(await chosen(), count - 1, "ArrowUp from the first option did not wrap to the last");
+  await page.keyboard.press("Tab");
+  assert.equal(await focusedTestId(session), "palette-input", "Tab left the command menu's field");
+}
+
+async function toastLeaves(session: AppSession): Promise<void> {
+  const { page } = session;
+  await visible(session, "toast", "after Turn notifications on");
+  assert.equal(
+    await page.getByTestId("toast").evaluate((toast) => toast.closest("[role='status']") !== null),
+    true,
+    "the toast was outside the status region",
+  );
+  const focused = await focusedTestId(session);
+  await page.getByTestId("toast-dismiss").click();
+  await gone(session, "toast", "after its dismiss button");
+  assert.equal(await focusedTestId(session), focused, "a press on the toast moved focus");
+}
+
 async function checkRelaunch(session: AppSession): Promise<void> {
   await session.page.keyboard.press("Escape");
   await gone(session, "settings-dialog", "before the relaunch");
@@ -307,6 +339,7 @@ async function checkRelaunch(session: AppSession): Promise<void> {
   await session.page.keyboard.press(`${commandModifier}+K`);
   await visible(session, "command-notifications-on", "in the command menu with notifications off");
   assert.equal(await session.page.getByTestId("command-notifications-off").count(), 0);
+  await paletteKeys(session);
   await session.page.keyboard.press("Escape");
   await gone(session, "palette", "after Escape");
   await openSettings(session, "button");
@@ -315,6 +348,7 @@ async function checkRelaunch(session: AppSession): Promise<void> {
   await gone(session, "settings-dialog", "after the relaunch");
   await runCommand(session, "theme-light");
   await runCommand(session, "notifications-on");
+  await toastLeaves(session);
   await waitUntil(async () => !(await looksDark(session)), waitMs, "Use the light theme failed");
   await openSettings(session, "button");
   await shows(session, "Light", "on", "after the commands");
