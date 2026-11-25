@@ -331,6 +331,25 @@ describe("saved tabs hold only what could be loaded again", () => {
     expect(written).toMatchObject({ columns: { left: 310, right: 510 } });
   });
 
+  it("lets a flush wait for every save that arrived, even one queued behind a write", async () => {
+    const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+    const file = createInterfaceFile(home);
+    const handlers = interfaceHandlers(
+      file,
+      () => undefined,
+      () => Promise.resolve(known),
+    );
+    for (const left of [300, 310, 320]) {
+      void handlers["interface.save"](
+        { state: { ...saved, columns: { left, right: 500 } } },
+        owner,
+      );
+    }
+    await file.flush();
+    const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
+    expect(written).toMatchObject({ columns: { left: 320, right: 500 } });
+  });
+
   it("keeps the saved tabs, path checked, when the project list fails, and writes nothing on load", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const text = JSON.stringify({ version: 5, ...hostile });

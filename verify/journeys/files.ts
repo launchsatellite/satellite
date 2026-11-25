@@ -436,13 +436,15 @@ async function remembersTabs(session: AppSession): Promise<void> {
   await session.relaunch();
   await session.page.getByTestId("workspace-repo-alpha").click();
   await session.page.getByTestId("centre-tab-files").click();
+  let found = before;
   await waitUntil(
     async () => {
-      const now = await tabPaths(session.page);
-      return now.titles.join("\n") === before.titles.join("\n") && now.active === before.active;
+      found = await tabPaths(session.page);
+      return found.titles.join("\n") === before.titles.join("\n") && found.active === before.active;
     },
     waitMs,
-    "the tabs did not come back as they were",
+    () =>
+      `the tabs did not come back as they were, expected ${JSON.stringify(before)} and found ${JSON.stringify(found)}`,
   );
   assert.equal(
     (await rowOf(session, "src", "after the relaunch")).open,
