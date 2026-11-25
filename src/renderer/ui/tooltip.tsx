@@ -79,11 +79,14 @@ export function Tooltip({
   shortcut?: string;
   children: ReactElement;
 }) {
-  if (text === undefined) return children;
   return (
-    <TooltipPrimitive.Root disableHoverablePopup onOpenChange={keepAppFocusQuiet}>
+    <TooltipPrimitive.Root
+      disabled={text === undefined}
+      disableHoverablePopup
+      onOpenChange={keepAppFocusQuiet}
+    >
       <TooltipPrimitive.Trigger render={children} />
-      <TipPopup tip={{ text, shortcut }} />
+      {text !== undefined && <TipPopup tip={{ text, shortcut }} />}
     </TooltipPrimitive.Root>
   );
 }
@@ -109,7 +112,7 @@ export function useListTooltip() {
   const show = (target: EventTarget, wait: number) => {
     const anchor = anchorOf(target);
     const text = anchor?.getAttribute("data-tip");
-    if (anchor === pending.current) return;
+    if (anchor === pending.current && (wait > 0 || shown?.anchor === anchor)) return;
     window.clearTimeout(timer.current);
     pending.current = anchor;
     if (anchor === null || text === null || text === undefined) {
@@ -119,8 +122,9 @@ export function useListTooltip() {
     if (wait === 0) setShown({ anchor, text });
     else
       timer.current = window.setTimeout(() => {
-        if (anchor.isConnected) setShown({ anchor, text });
-        else pending.current = null;
+        const now = anchor.isConnected ? anchor.getAttribute("data-tip") : null;
+        if (now === null) pending.current = null;
+        else setShown({ anchor, text: now });
       }, wait);
   };
   useEffect(
@@ -136,6 +140,7 @@ export function useListTooltip() {
       if (text === null) hide();
       else if (text !== shown.text) setShown({ anchor: shown.anchor, text });
     };
+    follow();
     const watch = new MutationObserver(follow);
     watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ["data-tip"] });
     return () => {
