@@ -50,7 +50,7 @@ export const terminalColourNames = [
 export const pairedGrounds = ["raised", "sel", "hover"] as const;
 export const textTokens = ["fg", "fg2", "dim", "sigfg", "addfg", "delfg", "danger"] as const;
 export const pixelTokens = ["working", "idle", "signal", "volt", "lilac"] as const;
-export const contrastFloors = { text: 4.5, edge: 3 };
+export const contrastFloors = { text: 4.5, edge: 3, control: 1.3 };
 
 export type AppToken = (typeof appTokens)[number];
 export type PairedGround = (typeof pairedGrounds)[number];
@@ -189,7 +189,7 @@ function mixed(from: Rgba, to: Rgba, amount: number): Rgba {
 function reach(start: Rgba, toward: Rgba, grounds: Rgba[], ratio: number): Rgba {
   const least = (colour: Rgba) => Math.min(...grounds.map((ground) => ratioOf(colour, ground)));
   const extreme = least(black) >= least(white) ? black : white;
-  for (const target of [toward, extreme]) {
+  for (const target of [toward, extreme, extreme === black ? white : black]) {
     for (let step = 0; step <= 40; step++) {
       const { r, g, b } = mixed(start, target, step / 40);
       const tone = { r: Math.round(r), g: Math.round(g), b: Math.round(b), a: 1 };
@@ -281,8 +281,9 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
       .map((key) => colours.get(key))
       .filter((colour) => colour !== undefined)
       .map((colour) => over(colour, side))
-      .find((colour) => edgeGrounds.every((ground) => ratioOf(colour, ground) >= 3)) ??
-    reach(side, fg, edgeGrounds, contrastFloors.edge);
+      .find((colour) =>
+        edgeGrounds.every((ground) => ratioOf(colour, ground) >= contrastFloors.control),
+      ) ?? reach(side, fg, edgeGrounds, contrastFloors.control);
   const shownEdge = (fill: Rgba) =>
     type === "dark" ? hexOf(fill) : hexOf(reach(fill, fg, [bg, side], contrastFloors.edge));
   const tokens: Record<AppToken, string> = {
@@ -305,7 +306,9 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
     ),
     del: flat(pick("diffEditor.removedLineBackground"), bg, formatDefaults.removedLine),
     delfg: flat(pick("gitDecoration.deletedResourceForeground"), bg, danger),
-    accent: flat(pick("focusBorder"), bg, working),
+    accent: hexOf(
+      reach(over(pick("focusBorder") ?? working, bg), fg, edgeGrounds, contrastFloors.edge),
+    ),
     signal: flat(needsYou, bg, needsYou),
     "pri-bg": flat(pick("button.background"), bg, working),
     "pri-fg": flat(pick("button.foreground"), bg, fg),

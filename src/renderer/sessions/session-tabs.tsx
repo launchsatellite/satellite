@@ -15,7 +15,7 @@ interface SessionTabsProps {
 }
 
 const closeMark =
-  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-ctl group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
+  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-fg/20 group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 

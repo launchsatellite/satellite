@@ -308,7 +308,7 @@ export function Palette({
           />
           <KeyHint keys="Esc" />
         </div>
-        <div className="max-h-[360px] overflow-y-auto p-[6px]">
+        <div className="max-h-[360px] overflow-y-auto py-[6px] pl-[6px] [scrollbar-gutter:stable]">
           <div id={listId} role="listbox" aria-label={text.group}>
             <div role="group" aria-labelledby={groupLabelId}>
               <div
