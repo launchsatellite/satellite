@@ -8,6 +8,7 @@ import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Segmented } from "../ui/segmented.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
@@ -15,7 +16,6 @@ import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
 import { FileDiff, sideOnly, type ShownText } from "./file-diff.tsx";
 import { changesPlace } from "./use-changes.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface ChangesViewProps {
   workspace: WorkspaceRef;

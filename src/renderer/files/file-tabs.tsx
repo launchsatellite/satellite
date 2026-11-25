@@ -1,9 +1,9 @@
 import { useEffect, type KeyboardEvent } from "react";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Icon } from "../ui/icon.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { tabLabels } from "./tab-labels.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface FileTabsProps {
   paths: readonly string[];

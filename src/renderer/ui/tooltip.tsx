@@ -18,14 +18,14 @@ export function Tooltip({
   children: ReactElement;
 }) {
   return (
-    <TooltipPrimitive.Root disabled={text === undefined}>
+    <TooltipPrimitive.Root disabled={text === undefined} disableHoverablePopup>
       <TooltipPrimitive.Trigger render={children} />
       <TooltipPrimitive.Portal data-popup="">
         <TooltipPrimitive.Positioner
           side="bottom"
           sideOffset={6}
           collisionPadding={8}
-          className="z-[60]"
+          className="pointer-events-none z-[60]"
         >
           <TooltipPrimitive.Popup
             data-testid="tooltip"

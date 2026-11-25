@@ -4,10 +4,10 @@ import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { reasonSentence, rowName, type InboxRow, type InboxTarget } from "./inbox.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface InboxListProps {
   rows: readonly InboxRow[];

@@ -2,10 +2,10 @@ import { useEffect, type KeyboardEvent } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { hooksOffNote } from "./send-to-claude-code.ts";
 import { pixelLabel, pixelOf } from "./session-pixel.ts";
 import type { SessionTab } from "./use-sessions.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface SessionTabsProps {
   tabs: readonly SessionTab[];

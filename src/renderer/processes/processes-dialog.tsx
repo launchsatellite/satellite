@@ -2,8 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ProcessRow } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
-import { Tooltip } from "../ui/tooltip.tsx";
 import { Dialog } from "../ui/dialog.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { stopKey } from "./use-processes.ts";
 import {
   ageReadout,

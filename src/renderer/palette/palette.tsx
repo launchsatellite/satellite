@@ -14,6 +14,7 @@ import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { visibleLabel } from "../ui/visible-name.tsx";
 import { rankMatches } from "../../shared/fuzzy-match.ts";
@@ -21,7 +22,6 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
 import { findSentence, typeAFileNameSentence } from "../files/file-words.ts";
 import type { FileSearch } from "../files/use-file-search.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 type PaletteMode = "commands" | "switcher" | "files";
 

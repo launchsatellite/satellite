@@ -10,6 +10,7 @@ import {
 import type { ChangedFile, FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { letterColours } from "../changes/change-words.ts";
 import { Icon } from "../ui/icon.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { FileIcon, useIcons, type LoadedIcons } from "./file-icon.tsx";
 import { emptyWorkspaceSentence, rowLabel } from "./file-words.ts";
@@ -22,7 +23,6 @@ import {
   treeRows,
   type ItemRow,
 } from "./tree-rows.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface FileTreeProps {
   workspace: WorkspaceRef;

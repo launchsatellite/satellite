@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import {
   leftOutSentence,
@@ -8,7 +9,6 @@ import {
   moreSentence,
   rowName,
 } from "./change-words.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface ChangeListProps {
   files: readonly ChangedFile[];

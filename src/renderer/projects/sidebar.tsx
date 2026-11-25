@@ -12,6 +12,7 @@ import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
@@ -21,7 +22,6 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
 import { countLabel } from "../processes/process-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
 
 interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
