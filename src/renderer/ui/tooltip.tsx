@@ -25,16 +25,15 @@ let focusMovedByKeys = false;
 export function TooltipProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const press = (event: KeyboardEvent) => {
-      focusMovedByKeys = movingKeys.has(event.key);
-    };
-    const point = () => {
-      focusMovedByKeys = false;
+      if (!movingKeys.has(event.key)) return;
+      focusMovedByKeys = true;
+      window.setTimeout(() => {
+        focusMovedByKeys = false;
+      }, 0);
     };
     window.addEventListener("keydown", press, { capture: true });
-    window.addEventListener("pointerdown", point, { capture: true });
     return () => {
       window.removeEventListener("keydown", press, { capture: true });
-      window.removeEventListener("pointerdown", point, { capture: true });
     };
   }, []);
   return <TooltipPrimitive.Provider delay={openDelayMs}>{children}</TooltipPrimitive.Provider>;
@@ -120,7 +119,8 @@ export function useListTooltip() {
     if (wait === 0) setShown({ anchor, text });
     else
       timer.current = window.setTimeout(() => {
-        setShown({ anchor, text });
+        if (anchor.isConnected) setShown({ anchor, text });
+        else pending.current = null;
       }, wait);
   };
   useEffect(
@@ -129,6 +129,19 @@ export function useListTooltip() {
     },
     [],
   );
+  useEffect(() => {
+    if (shown === undefined) return;
+    const follow = () => {
+      const text = shown.anchor.isConnected ? shown.anchor.getAttribute("data-tip") : null;
+      if (text === null) hide();
+      else if (text !== shown.text) setShown({ anchor: shown.anchor, text });
+    };
+    const watch = new MutationObserver(follow);
+    watch.observe(document.body, { subtree: true, childList: true, attributeFilter: ["data-tip"] });
+    return () => {
+      watch.disconnect();
+    };
+  }, [shown]);
   useEffect(() => {
     if (shown === undefined) return;
     const press = (event: globalThis.KeyboardEvent) => {
