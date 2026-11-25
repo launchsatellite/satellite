@@ -10,7 +10,7 @@ import {
 import type { ChangedFile, FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { letterColours } from "../changes/change-words.ts";
 import { Icon } from "../ui/icon.tsx";
-import { rowLook } from "../ui/row-look.ts";
+import { rowLook, rowReach } from "../ui/row-look.ts";
 import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { FileIcon, useIcons, type LoadedIcons } from "./file-icon.tsx";
@@ -71,7 +71,7 @@ function Row({
       data-ignored={row.ignored ? "true" : undefined}
       onClick={onActivate}
       style={{ paddingLeft: 4 + (row.level - 1) * indentPx }}
-      className={`mx-1 flex h-7 items-center gap-1.5 pr-2 ${rowLook(selected)} ${rowFocusRing}`}
+      className={`mx-1 flex h-7 items-center gap-1.5 pr-2 ${rowLook(selected)} ${rowFocusRing} ${rowReach}`}
     >
       <span aria-hidden className="flex size-4 flex-none text-dim">
         {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}

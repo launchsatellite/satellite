@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
-import { rowLook, rowRing } from "../ui/row-look.ts";
+import { rowLook, rowReach, rowRing } from "../ui/row-look.ts";
 import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import {
@@ -83,7 +83,7 @@ export function ChangeList({
                 onClick={() => {
                   onSelect(file.path);
                 }}
-                className={`flex h-7 w-full items-center gap-2 px-2 text-left ${rowLook(current)} ${rowRing}`}
+                className={`flex h-7 w-full items-center gap-2 px-2 text-left ${rowLook(current)} ${rowRing} ${rowReach}`}
               >
                 <span
                   aria-hidden
