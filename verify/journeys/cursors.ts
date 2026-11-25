@@ -11,7 +11,7 @@ interface Expected {
 const shownMs = 15_000;
 const arrows = new Set(["auto", "default"]);
 const smallTarget = 24;
-const closeContrast = 1.2;
+const closeContrast = 1.45;
 
 function byTestId(testId: string): string {
   return `[data-testid="${testId}"]`;
@@ -77,19 +77,23 @@ async function closeStandsOut(session: AppSession, testId: string, name: string)
         if (paint === null) return { square, tab, ratio: 0 };
         const shown = (layers: string[]) => {
           paint.clearRect(0, 0, 1, 1);
-          for (const layer of ["#ffffff", ...layers]) {
+          for (const layer of layers) {
             paint.fillStyle = layer;
             paint.fillRect(0, 0, 1, 1);
           }
-          const [r = 0, g = 0, b = 0] = paint.getImageData(0, 0, 1, 1).data;
+          const [r = 0, g = 0, b = 0, alpha = 0] = paint.getImageData(0, 0, 1, 1).data;
+          if (alpha < 255) return Number.NaN;
           const linear = (channel: number) => {
             const value = channel / 255;
             return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
           };
           return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
         };
-        const [light, dark] = [shown([tab, square]), shown([tab])].sort((x, y) => y - x);
-        return { square, tab, ratio: ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05) };
+        const [light = Number.NaN, dark = Number.NaN] = [shown([tab, square]), shown([tab])].sort(
+          (x, y) => y - x,
+        );
+        const ratio = (light + 0.05) / (dark + 0.05);
+        return { square, tab, ratio: Number.isNaN(ratio) ? 0 : ratio };
       });
       return read.ratio >= closeContrast;
     },
