@@ -11,6 +11,7 @@ interface Expected {
 const shownMs = 15_000;
 const arrows = new Set(["auto", "default"]);
 const smallTarget = 24;
+const closeContrast = 1.2;
 
 function byTestId(testId: string): string {
   return `[data-testid="${testId}"]`;
@@ -64,17 +65,37 @@ async function hoverFills(session: AppSession, selector: string, name: string): 
 async function closeStandsOut(session: AppSession, testId: string, name: string): Promise<void> {
   const close = session.page.getByTestId(testId);
   await close.hover();
-  let read = { square: "", tab: "" };
+  let read = { square: "", tab: "", ratio: 0 };
   await waitUntil(
     async () => {
-      read = await close.evaluate((button) => ({
-        square: getComputedStyle(button.firstElementChild ?? button).backgroundColor,
-        tab: getComputedStyle(button.parentElement ?? button).backgroundColor,
-      }));
-      return read.square !== read.tab && read.square !== "rgba(0, 0, 0, 0)";
+      read = await close.evaluate((button) => {
+        const square = getComputedStyle(button.firstElementChild ?? button).backgroundColor;
+        const tab = getComputedStyle(button.parentElement ?? button).backgroundColor;
+        const paint = document.createElement("canvas").getContext("2d", {
+          willReadFrequently: true,
+        });
+        if (paint === null) return { square, tab, ratio: 0 };
+        const shown = (layers: string[]) => {
+          paint.clearRect(0, 0, 1, 1);
+          for (const layer of ["#ffffff", ...layers]) {
+            paint.fillStyle = layer;
+            paint.fillRect(0, 0, 1, 1);
+          }
+          const [r = 0, g = 0, b = 0] = paint.getImageData(0, 0, 1, 1).data;
+          const linear = (channel: number) => {
+            const value = channel / 255;
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+        };
+        const [light, dark] = [shown([tab, square]), shown([tab])].sort((x, y) => y - x);
+        return { square, tab, ratio: ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05) };
+      });
+      return read.ratio >= closeContrast;
     },
     shownMs,
-    () => `${name} drew ${read.square} on its tab's ${read.tab} under the pointer`,
+    () =>
+      `${name} drew ${read.square} on its tab's ${read.tab} under the pointer, ${read.ratio.toFixed(2)} to 1`,
   );
 }
 
