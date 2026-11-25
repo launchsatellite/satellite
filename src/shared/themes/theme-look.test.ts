@@ -74,8 +74,10 @@ function pairsBelow(look: ThemeLook): string[] {
     for (const token of pixelTokens)
       measure(paired[ground][token], token, tokens[ground], ground, contrastFloors.edge);
   }
-  for (const ground of ["side", "raised", "bg"] as const)
+  for (const ground of ["side", "raised", "bg"] as const) {
     measure(tokens.ctl, "ctl", tokens[ground], ground, contrastFloors.control);
+    measure(tokens.accent, "accent", tokens[ground], ground, contrastFloors.edge);
+  }
   if (tokens.raised === tokens.side) below.push("raised equals side");
   for (const ground of pairedGrounds) {
     const order = (["fg", "fg2", "dim"] as const).map((token) =>
