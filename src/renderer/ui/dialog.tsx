@@ -4,6 +4,7 @@ import {
   useId,
   useImperativeHandle,
   useLayoutEffect,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -81,10 +82,12 @@ export function DialogShell({
   const uncover = useRef<(() => void) | null>(null);
   const coveredOnce = useRef(false);
   const [focusedAtRender] = useState(() => document.activeElement);
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
   const releaseNow = useCallback(() => {
     const undo = uncover.current;
     uncover.current = null;
     undo?.();
+    rerender();
   }, []);
   useImperativeHandle(release, () => releaseNow, [releaseNow]);
 
