@@ -291,7 +291,7 @@ export function Palette({
                     data-testid={option.testId}
                     data-path={option.path}
                     aria-label={option.path === undefined ? undefined : visibleText(option.path)}
-                    className={`flex h-8 items-center gap-[9px] px-[9px] text-[13px] font-medium text-fg2 ${rowLook(index === active)} ${index === active ? activeRow : ""}`}
+                    className={`flex h-8 items-center gap-[9px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? `${rowLook(true)} ${activeRow}` : "rounded-[6px]"}`}
                     onMouseMove={() => {
                       if (index !== active) setActive(index);
                     }}
