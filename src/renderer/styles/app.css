@@ -33,6 +33,11 @@
   --working: #6a4bff;
   --idle: #68686f;
   --danger: #be400c;
+  --on-accent-level: clamp(0, (0.179 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 100000, 1);
+  --on-accent: color(
+    from var(--accent) srgb-linear var(--on-accent-level) var(--on-accent-level)
+      var(--on-accent-level)
+  );
 }
 
 @media (prefers-color-scheme: dark) {
@@ -85,6 +90,7 @@
   --color-del: var(--del);
   --color-delfg: var(--delfg);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
   --color-signal: var(--signal);
   --color-pri-bg: var(--pri-bg);
   --color-pri-fg: var(--pri-fg);

@@ -12,7 +12,8 @@ interface DialogProps {
 }
 
 const focusable =
-  "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  ":is(a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]):not([tabindex='-1'])";
+const popup = "[data-popup]";
 
 function moveFocus(panel: HTMLElement, backwards: boolean): boolean {
   const targets = [...panel.querySelectorAll<HTMLElement>(focusable)];
@@ -54,6 +55,7 @@ export function Dialog({
     const covered = () => element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
       if (event.isComposing || covered()) return;
+      if (event.target instanceof Element && event.target.closest(popup) !== null) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -64,7 +66,10 @@ export function Dialog({
     };
     const keepFocus = (event: FocusEvent) => {
       if (covered()) return;
-      if (event.target instanceof Element && event.target.closest("[role='dialog']") !== null) {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(`[role='dialog'], ${popup}`) !== null
+      ) {
         return;
       }
       if (event.target instanceof Node && !element.contains(event.target)) element.focus();
