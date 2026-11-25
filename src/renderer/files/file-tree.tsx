@@ -302,7 +302,7 @@ export function FileTree({
   const top = branch("", 1);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={tree} className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div ref={tree} className="min-h-0 flex-1 overflow-y-auto py-1 [scrollbar-gutter:stable]">
         <div
           role="tree"
           aria-label="Files"
