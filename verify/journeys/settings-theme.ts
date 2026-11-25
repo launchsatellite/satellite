@@ -47,7 +47,6 @@ const published = {
   sel: "#44475a",
   fg: "#f8f8f2",
   dim: "#6272a4",
-  accent: "#6272a4",
   working: "#a4ffff",
   signal: "#ffb86c",
   volt: "#50fa7b",
@@ -68,6 +67,7 @@ const publishedRemoved = {
   Hello: "rgb(241, 250, 140)",
   "+": "rgb(255, 121, 198)",
 };
+const flooredRing = "#7583ae";
 const terminalRed = { satellite: "", theme: "#ff5555" };
 
 async function look(session: AppSession): Promise<Look> {
@@ -250,6 +250,11 @@ export async function checkCuratedTheme(session: AppSession): Promise<void> {
   assert.deepEqual(
     Object.fromEntries(Object.keys(published).map((name) => [name, themed.tokens[name]])),
     published,
+  );
+  assert.equal(
+    themed.tokens["accent"],
+    flooredRing,
+    "the focus ring was not Dracula's focusBorder lifted to 3 to 1 on its grounds",
   );
   assert.equal(themed.theme, "dracula");
   assert.deepEqual(

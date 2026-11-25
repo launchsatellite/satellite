@@ -55,7 +55,7 @@ export function ChangeList({
     rows[target]?.focus();
   };
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1 [scrollbar-gutter:stable]">
       <ul data-testid="changes-list" role="listbox" aria-label="Changed files" onKeyDown={move}>
         {files.map((file, index) => {
           const current = file.path === selected;

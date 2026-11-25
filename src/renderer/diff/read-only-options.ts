@@ -1,5 +1,6 @@
 import type { editor } from "monaco-editor/editor/editor.api";
 import { codeType } from "../ui/code-type.ts";
+import { scrollbarLook } from "../ui/scrollbar-look.ts";
 
 export const drawnColumns = 10_000;
 
@@ -12,7 +13,13 @@ export const readOnlyOptions = {
   scrollBeyondLastLine: false,
   overviewRulerLanes: 0,
   overviewRulerBorder: false,
-  scrollbar: { useShadows: false },
+  scrollbar: {
+    useShadows: false,
+    verticalScrollbarSize: scrollbarLook.gutter,
+    horizontalScrollbarSize: scrollbarLook.gutter,
+    verticalSliderSize: scrollbarLook.thumb,
+    horizontalSliderSize: scrollbarLook.thumb,
+  },
   fontFamily: codeType.fontFamily,
   fontSize: codeType.fontSize,
   stopRenderingLineAfter: drawnColumns,
