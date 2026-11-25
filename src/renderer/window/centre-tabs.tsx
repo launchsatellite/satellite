@@ -1,5 +1,5 @@
-import type { KeyboardEvent } from "react";
 import { tabLabel } from "../pull-request/pull-request-words.ts";
+import { Tab, Tabs } from "../ui/tabs.tsx";
 
 export type CentreView = "changes" | "files" | "pull-request";
 
@@ -27,55 +27,39 @@ export function CentreTabs({
   pullRequest: number | null;
   onChange: (view: CentreView) => void;
 }) {
-  const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const at = views.indexOf(value);
-    const targets: Record<string, number | undefined> = {
-      ArrowRight: (at + 1) % views.length,
-      ArrowLeft: (at - 1 + views.length) % views.length,
-      Home: 0,
-      End: views.length - 1,
-    };
-    const target = views[targets[event.key] ?? -1];
-    if (target === undefined) return;
-    event.preventDefault();
-    onChange(target);
-    requestAnimationFrame(() => {
-      document.getElementById(centreTabId(target))?.focus();
-    });
-  };
   return (
     <div className="flex h-10 min-w-0 items-center">
-      <div
-        role="tablist"
-        aria-label="Workspace views"
-        data-testid="centre-tabs"
+      <Tabs
+        label="Workspace views"
+        value={value}
+        onChange={(next) => {
+          const view = views.find((candidate) => candidate === next);
+          if (view === undefined) return;
+          const fromKeys = document.activeElement?.matches(":focus-visible") === true;
+          onChange(view);
+          if (fromKeys) {
+            requestAnimationFrame(() => {
+              document.getElementById(centreTabId(view))?.focus();
+            });
+          }
+        }}
+        testId="centre-tabs"
+        activateOnFocus
         data-guide="views"
-        onKeyDown={move}
-        className="flex items-center gap-0.5"
       >
-        {views.map((view) => {
-          const selected = view === value;
-          return (
-            <button
-              key={view}
-              type="button"
-              role="tab"
-              id={centreTabId(view)}
-              aria-selected={selected}
-              aria-controls={centrePanelId(view)}
-              tabIndex={selected ? 0 : -1}
-              data-testid={centreTabId(view)}
-              data-number={view === "pull-request" ? (pullRequest ?? undefined) : undefined}
-              onClick={() => {
-                onChange(view);
-              }}
-              className={`flex h-7 flex-none items-center rounded-[6px] px-[9px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
-            >
-              {labelOf(view, pullRequest)}
-            </button>
-          );
-        })}
-      </div>
+        {views.map((view) => (
+          <Tab
+            key={view}
+            value={view}
+            id={centreTabId(view)}
+            panel={centrePanelId(view)}
+            testId={centreTabId(view)}
+            data-number={view === "pull-request" ? (pullRequest ?? undefined) : undefined}
+          >
+            {labelOf(view, pullRequest)}
+          </Tab>
+        ))}
+      </Tabs>
     </div>
   );
 }

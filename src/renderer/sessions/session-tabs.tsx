@@ -1,8 +1,7 @@
-import { useEffect, type KeyboardEvent } from "react";
+import { useEffect } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
-import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
-import { Tooltip } from "../ui/tooltip.tsx";
+import { Tab, Tabs } from "../ui/tabs.tsx";
 import { hooksOffNote } from "./send-to-claude-code.ts";
 import { pixelLabel, pixelOf } from "./session-pixel.ts";
 import type { SessionTab } from "./use-sessions.ts";
@@ -12,21 +11,6 @@ interface SessionTabsProps {
   active: string | undefined;
   onActivate: (key: string) => void;
   onClose: (key: string) => void;
-}
-
-const closeMark =
-  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-fg/20 group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
-function focusActiveTabIfLost(): void {
-  requestAnimationFrame(() => {
-    const focused = document.activeElement;
-    if (focused !== null && focused !== document.body && focused.isConnected) return;
-    document
-      .querySelector<HTMLElement>("[data-testid='session-tabs'] [aria-selected='true']")
-      ?.focus();
-  });
 }
 
 export function sessionTabId(key: string): string {
@@ -44,91 +28,43 @@ export function SessionTabs({ tabs, active, onActivate, onClose }: SessionTabsPr
       .getElementById(sessionTabId(active))
       ?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active]);
-  const close = (key: string) => {
-    onClose(key);
-    focusActiveTabIfLost();
-  };
-  const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = [...event.currentTarget.querySelectorAll<HTMLElement>("[role='tab']")];
-    const at = buttons.findIndex((button) => button === document.activeElement);
-    const focused = tabs[at];
-    if (at === -1 || focused === undefined) return;
-    if (event.key === "Delete") {
-      event.preventDefault();
-      close(focused.key);
-      return;
-    }
-    const targets: Record<string, number | undefined> = {
-      ArrowRight: (at + 1) % buttons.length,
-      ArrowLeft: (at - 1 + buttons.length) % buttons.length,
-      Home: 0,
-      End: buttons.length - 1,
-    };
-    const target = targets[event.key];
-    if (target === undefined) return;
-    event.preventDefault();
-    buttons[target]?.focus();
-  };
   return (
     <div className="flex h-10 flex-none items-center gap-1 border-b border-line bg-side px-2">
-      <div
-        role="tablist"
-        aria-label="Claude Code sessions"
-        data-testid="session-tabs"
-        onKeyDown={move}
-        className="-mx-1 flex min-w-0 scroll-px-1 items-center gap-0.5 self-stretch overflow-x-auto px-1 [scrollbar-width:none]"
+      <Tabs
+        label="Claude Code sessions"
+        value={active ?? null}
+        onChange={onActivate}
+        testId="session-tabs"
+        className="min-w-0 self-stretch overflow-x-auto [scrollbar-width:none]"
       >
         {tabs.map((tab) => {
-          const selected = tab.key === active;
           const pixel = pixelOf(tab.status);
           const name = `Session ${String(tab.number)}`;
           return (
-            <div
+            <Tab
               key={tab.key}
-              role="presentation"
-              className={`group flex h-7 flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+              value={tab.key}
+              id={sessionTabId(tab.key)}
+              panel={sessionPanelId(tab.key)}
+              testId={`session-tab-${String(tab.number)}`}
+              tooltip={tab.hooksOff ? hooksOffNote : undefined}
+              description={tab.hooksOff ? hooksOffNote : undefined}
+              close={{
+                label: `Close ${name}`,
+                testId: `close-session-${String(tab.number)}`,
+                onClose: () => {
+                  onClose(tab.key);
+                },
+              }}
+              data-state={tab.status}
+              data-hooks-off={tab.hooksOff ? "" : undefined}
             >
-              <Tooltip text={tab.hooksOff ? hooksOffNote : undefined}>
-                <button
-                  type="button"
-                  role="tab"
-                  id={sessionTabId(tab.key)}
-                  aria-selected={selected}
-                  aria-controls={sessionPanelId(tab.key)}
-                  aria-keyshortcuts="Delete"
-                  tabIndex={selected ? 0 : -1}
-                  data-testid={`session-tab-${String(tab.number)}`}
-                  data-state={tab.status}
-                  data-hooks-off={tab.hooksOff ? "" : undefined}
-                  aria-description={tab.hooksOff ? hooksOffNote : undefined}
-                  onClick={() => {
-                    onActivate(tab.key);
-                  }}
-                  className={`flex h-full items-center gap-[6px] rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
-                >
-                  <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
-                  {name}
-                </button>
-              </Tooltip>
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-hidden
-                aria-label={`Close ${name}`}
-                data-testid={`close-session-${String(tab.number)}`}
-                onClick={() => {
-                  close(tab.key);
-                }}
-                className={`group/close flex size-6 flex-none items-center rounded-[4px] text-dim outline-none ${selected ? "" : "opacity-0 group-hover:opacity-100"}`}
-              >
-                <span className={closeMark}>
-                  <Icon name="close" size={12} />
-                </span>
-              </button>
-            </div>
+              <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
+              {name}
+            </Tab>
           );
         })}
-      </div>
+      </Tabs>
       <CommandButton
         command="session.new"
         variant="ghost"

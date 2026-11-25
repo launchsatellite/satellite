@@ -1,7 +1,6 @@
-import { useEffect, type KeyboardEvent } from "react";
+import { useEffect } from "react";
 import { visibleText } from "../../shared/visible-text.ts";
-import { Icon } from "../ui/icon.tsx";
-import { Tooltip } from "../ui/tooltip.tsx";
+import { Tab, Tabs } from "../ui/tabs.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { tabLabels } from "./tab-labels.ts";
 
@@ -10,21 +9,6 @@ interface FileTabsProps {
   active: number | null;
   onActivate: (index: number) => void;
   onClose: (index: number) => void;
-}
-
-const closeMark =
-  "flex size-5 items-center justify-center rounded-[4px] group-hover/close:bg-fg/20 group-hover/close:text-fg group-focus-visible/close:outline-2 group-focus-visible/close:outline-offset-2 group-focus-visible/close:outline-accent";
-const focusRing =
-  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
-
-function focusActiveTabIfLost(): void {
-  requestAnimationFrame(() => {
-    const focused = document.activeElement;
-    if (focused !== null && focused !== document.body && focused.isConnected) return;
-    document
-      .querySelector<HTMLElement>("[data-testid='file-tabs'] [aria-selected='true']")
-      ?.focus();
-  });
 }
 
 export const fileTabPanelId = "file-tab-panel";
@@ -41,94 +25,52 @@ export function FileTabs({ paths, active, onActivate, onClose }: FileTabsProps) 
       ?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [active]);
   const labels = tabLabels(paths);
-  const close = (index: number) => {
-    onClose(index);
-    focusActiveTabIfLost();
-  };
-  const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = [...event.currentTarget.querySelectorAll<HTMLElement>("[role='tab']")];
-    const at = buttons.findIndex((button) => button === document.activeElement);
-    if (at === -1) return;
-    if (event.key === "Delete") {
-      event.preventDefault();
-      close(at);
-      return;
-    }
-    const targets: Record<string, number | undefined> = {
-      ArrowRight: (at + 1) % buttons.length,
-      ArrowLeft: (at - 1 + buttons.length) % buttons.length,
-      Home: 0,
-      End: buttons.length - 1,
-    };
-    const target = targets[event.key];
-    if (target === undefined) return;
-    event.preventDefault();
-    onActivate(target);
-    buttons[target]?.focus();
-  };
   return (
-    <div
-      role="tablist"
-      aria-label="Open files"
-      data-testid="file-tabs"
-      onKeyDown={move}
-      className="flex h-8 flex-none items-center gap-0.5 overflow-x-auto border-b border-line bg-side px-2 [scrollbar-width:none]"
+    <Tabs
+      label="Open files"
+      value={active === null ? null : (paths[active] ?? null)}
+      onChange={(path) => {
+        const index = paths.indexOf(path);
+        if (index !== -1) onActivate(index);
+      }}
+      testId="file-tabs"
+      activateOnFocus
+      className="h-8 flex-none overflow-x-auto border-b border-line bg-side px-2 [scrollbar-width:none]"
     >
       {paths.map((path, index) => {
-        const selected = index === active;
         const { name, parent } = labels[index] ?? { name: path, parent: undefined };
         const shown = visibleText(path);
         return (
-          <div
+          <Tab
             key={path}
-            role="presentation"
-            className={`group flex h-6 max-w-[180px] min-w-0 flex-none items-center rounded-[6px] text-[12px] ${selected ? "bg-sel text-fg" : "text-dim hover:bg-hover"}`}
+            value={path}
+            id={fileTabId(index)}
+            panel={index === active ? fileTabPanelId : undefined}
+            testId={`file-tab-${String(index)}`}
+            size="small"
+            label={shown}
+            tooltip={shown}
+            close={{
+              label: `Close ${visibleText(name)}`,
+              testId: `file-tab-${String(index)}-close`,
+              onClose: () => {
+                onClose(index);
+              },
+            }}
+            data-path={path}
+            className="max-w-[180px] min-w-0"
           >
-            <Tooltip text={shown}>
-              <button
-                type="button"
-                role="tab"
-                id={fileTabId(index)}
-                aria-selected={selected}
-                aria-controls={selected ? fileTabPanelId : undefined}
-                aria-keyshortcuts="Delete"
-                aria-label={shown}
-                tabIndex={selected ? 0 : -1}
-                data-testid={`file-tab-${String(index)}`}
-                data-path={path}
-                onClick={() => {
-                  onActivate(index);
-                }}
-                className={`h-full min-w-0 truncate rounded-[6px] pr-1 pl-[9px] ${focusRing}`}
-              >
-                <span aria-hidden dir="ltr" className="[unicode-bidi:isolate]">
-                  <VisibleName text={name} />
-                  {parent !== undefined && (
-                    <span className="ml-1.5 text-dim">
-                      <VisibleName text={parent} />
-                    </span>
-                  )}
+            <span aria-hidden dir="ltr" className="min-w-0 truncate [unicode-bidi:isolate]">
+              <VisibleName text={name} />
+              {parent !== undefined && (
+                <span className="ml-1.5 text-dim">
+                  <VisibleName text={parent} />
                 </span>
-              </button>
-            </Tooltip>
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-hidden
-              aria-label={`Close ${visibleText(name)}`}
-              data-testid={`file-tab-${String(index)}-close`}
-              onClick={() => {
-                close(index);
-              }}
-              className={`group/close flex size-6 flex-none items-center rounded-[4px] text-dim outline-none ${selected ? "" : "opacity-0 group-hover:opacity-100"}`}
-            >
-              <span className={closeMark}>
-                <Icon name="close" size={12} />
-              </span>
-            </button>
-          </div>
+              )}
+            </span>
+          </Tab>
         );
       })}
-    </div>
+    </Tabs>
   );
 }
