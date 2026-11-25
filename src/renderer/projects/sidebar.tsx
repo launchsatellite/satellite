@@ -12,6 +12,7 @@ import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { PixelAvatar } from "../ui/pixel-avatar.tsx";
+import { rowLook, rowRing } from "../ui/row-look.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
@@ -43,8 +44,6 @@ interface ProjectRow {
 }
 
 const countCap = 1_000_000;
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function CommandRow({
   command,
@@ -64,7 +63,7 @@ function CommandRow({
       type="button"
       data-testid={testId}
       onClick={found?.run}
-      className={`flex h-7 w-full flex-none items-center gap-[9px] rounded-[6px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 hover:bg-hover ${focusRing}`}
+      className={`flex h-7 w-full flex-none items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 ${rowLook(false)} ${rowRing}`}
     >
       <span className="flex-none text-dim">
         <Icon name={icon} size={15} />
@@ -248,7 +247,7 @@ function ProjectRows({
                 onClick={() => {
                   onSelect({ projectId: project.id, workspace: workspace.key });
                 }}
-                className={`flex h-7 w-full items-center gap-[9px] rounded-[6px] pr-2 pl-[33px] text-[13px] font-medium whitespace-nowrap ${current ? "bg-sel text-fg" : "text-fg2 hover:bg-hover"} ${focusRing}`}
+                className={`flex h-7 w-full items-center gap-[9px] pr-2 pl-[33px] text-[13px] font-medium whitespace-nowrap ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
               >
                 <StatusPixel
                   state={pixel}

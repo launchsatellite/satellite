@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
+import { rowLook, rowRing } from "../ui/row-look.ts";
 import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import {
@@ -18,9 +19,6 @@ interface ChangeListProps {
   selected: string | undefined;
   onSelect: (path: string) => void;
 }
-
-const focusRing =
-  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent";
 
 function splitPath(path: string): { folder: string; name: string } {
   const slash = path.lastIndexOf("/");
@@ -71,7 +69,7 @@ export function ChangeList({
           const testId = `changes-file-${String(index)}`;
           const label = rowName(file);
           return (
-            <li key={file.path} role="none">
+            <li key={file.path} role="none" className="px-1">
               <button
                 type="button"
                 data-testid={testId}
@@ -85,7 +83,7 @@ export function ChangeList({
                 onClick={() => {
                   onSelect(file.path);
                 }}
-                className={`flex h-7 w-full items-center gap-2 px-3 text-left ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
+                className={`flex h-7 w-full items-center gap-2 px-2 text-left ${rowLook(current)} ${rowRing}`}
               >
                 <span
                   aria-hidden
