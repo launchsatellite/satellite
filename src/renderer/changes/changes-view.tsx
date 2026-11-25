@@ -15,6 +15,7 @@ import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
 import { FileDiff, sideOnly, type ShownText } from "./file-diff.tsx";
 import { changesPlace } from "./use-changes.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 interface ChangesViewProps {
   workspace: WorkspaceRef;
@@ -203,14 +204,15 @@ export function ChangesView({
       <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
         <CentreTabs value="changes" pullRequest={pullRequest} onChange={onCentre} />
         {list?.base != null && (
-          <span
-            data-testid="changes-base"
-            dir="ltr"
-            title={`from ${visibleText(list.base)}`}
-            className={`min-w-[14ch] flex-1 truncate font-mono text-[12px] text-dim [unicode-bidi:isolate] ${view === "branch" ? "" : "invisible"}`}
-          >
-            from <VisibleName text={list.base} />
-          </span>
+          <Tooltip text={`from ${visibleText(list.base)}`}>
+            <span
+              data-testid="changes-base"
+              dir="ltr"
+              className={`min-w-[14ch] flex-1 truncate font-mono text-[12px] text-dim [unicode-bidi:isolate] ${view === "branch" ? "" : "invisible"}`}
+            >
+              from <VisibleName text={list.base} />
+            </span>
+          </Tooltip>
         )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           <CommandButton

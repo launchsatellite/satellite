@@ -21,6 +21,7 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
 import { countLabel } from "../processes/process-words.ts";
 import { workspaceLabel } from "./use-projects.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 interface SidebarProps {
   projects: readonly ProjectView[] | undefined;
@@ -120,31 +121,35 @@ function Readouts({
         {ahead !== undefined && <span>↑{ahead}</span>}
         {behind !== undefined && <span>↓{behind}</span>}
         {changed !== undefined && (
-          <span title={uncommittedLabel(changed)} className="flex items-center gap-[3px]">
-            <Icon name="folder" size={12} />
-            {changed}
-          </span>
+          <Tooltip text={uncommittedLabel(changed)}>
+            <span className="flex items-center gap-[3px]">
+              <Icon name="folder" size={12} />
+              {changed}
+            </span>
+          </Tooltip>
         )}
         {pullRequest !== null && (
-          <span
-            data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
-            data-number={pullRequest.number}
-            data-checks={checksState(pullRequest.counts)}
-            title={readoutLabel(pullRequest)}
-            className="flex items-center gap-[5px]"
-          >
-            <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
-          </span>
+          <Tooltip text={readoutLabel(pullRequest)}>
+            <span
+              data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
+              data-number={pullRequest.number}
+              data-checks={checksState(pullRequest.counts)}
+              className="flex items-center gap-[5px]"
+            >
+              <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
+            </span>
+          </Tooltip>
         )}
         {processes > 0 && (
-          <span
-            data-testid={testId === undefined ? undefined : `${testId}-processes`}
-            title={countLabel(processes)}
-            className="flex items-center gap-[3px]"
-          >
-            <Icon name="running" size={12} />
-            {processes}
-          </span>
+          <Tooltip text={countLabel(processes)}>
+            <span
+              data-testid={testId === undefined ? undefined : `${testId}-processes`}
+              className="flex items-center gap-[3px]"
+            >
+              <Icon name="running" size={12} />
+              {processes}
+            </span>
+          </Tooltip>
         )}
       </span>
     </>

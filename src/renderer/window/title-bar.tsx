@@ -4,6 +4,7 @@ import { titleBar } from "../../shared/title-bar.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { invoke, subscribe } from "../bridge/bridge-client.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { Button } from "../ui/button.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 
 interface TitleBarProps {
@@ -16,8 +17,6 @@ interface TitleBarProps {
 }
 
 const noDrag = "flex flex-none [app-region:no-drag]";
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function waitingLabel(count: number): string {
   if (count === 0) return "0 workspaces need you";
@@ -46,13 +45,15 @@ function PlaceTitle({ place }: { place: TitleBarProps["place"] }) {
   const label = `${name}, ${switcher.title.toLowerCase()}`;
   return (
     <span className="flex min-w-0 [app-region:no-drag]">
-      <button
-        type="button"
-        data-testid="title-place"
-        aria-label={label}
-        title={shortcut === undefined ? label : `${label} ${shortcut}`}
+      <Button
+        variant="ghost"
+        size="small"
+        testId="title-place"
+        label={label}
+        tooltip={label}
+        shortcut={shortcut}
         onClick={switcher.run}
-        className={`flex h-6 max-w-full min-w-0 items-center gap-[6px] rounded-[6px] px-2 text-[13px] whitespace-nowrap hover:bg-hover ${focusRing}`}
+        className="max-w-full min-w-0 gap-1.5 text-[13px] font-normal"
       >
         <span className="min-w-[3ch] truncate font-semibold text-fg">
           <VisibleName text={place.project} />
@@ -67,7 +68,7 @@ function PlaceTitle({ place }: { place: TitleBarProps["place"] }) {
             </span>
           </>
         )}
-      </button>
+      </Button>
     </span>
   );
 }

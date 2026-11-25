@@ -22,6 +22,7 @@ import {
   treeRows,
   type ItemRow,
 } from "./tree-rows.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 interface FileTreeProps {
   workspace: WorkspaceRef;
@@ -60,40 +61,41 @@ function Row({
   const tint = letter === undefined ? undefined : letterColours[letter.letter];
   const nameColour = row.ignored ? "text-dim" : (tint ?? "text-fg");
   return (
-    <div
-      data-testid={testId}
-      data-path={row.path}
-      data-kind={row.kind}
-      data-state={letter?.letter ?? ""}
-      data-ignored={row.ignored ? "true" : undefined}
-      title={label}
-      onClick={onActivate}
-      style={{ paddingLeft: 8 + (row.level - 1) * indentPx }}
-      className={`flex h-7 items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
-    >
-      <span aria-hidden className="flex size-4 flex-none text-dim">
-        {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}
-      </span>
-      <span className={`flex-none ${row.ignored ? "opacity-50" : ""}`}>
-        <FileIcon icons={icons} name={row.name} folder={folder} open={row.open} />
-      </span>
-      <span
-        aria-hidden
-        dir="ltr"
-        className={`min-w-0 flex-1 truncate font-mono text-[12px] [unicode-bidi:isolate] ${nameColour}`}
+    <Tooltip text={label}>
+      <div
+        data-testid={testId}
+        data-path={row.path}
+        data-kind={row.kind}
+        data-state={letter?.letter ?? ""}
+        data-ignored={row.ignored ? "true" : undefined}
+        onClick={onActivate}
+        style={{ paddingLeft: 8 + (row.level - 1) * indentPx }}
+        className={`flex h-7 items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
       >
-        <VisibleName text={row.name} />
-      </span>
-      {letter !== undefined && !row.ignored && (
+        <span aria-hidden className="flex size-4 flex-none text-dim">
+          {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}
+        </span>
+        <span className={`flex-none ${row.ignored ? "opacity-50" : ""}`}>
+          <FileIcon icons={icons} name={row.name} folder={folder} open={row.open} />
+        </span>
         <span
           aria-hidden
-          data-testid={`${testId}-letter`}
-          className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[letter.letter] ?? "text-dim"}`}
+          dir="ltr"
+          className={`min-w-0 flex-1 truncate font-mono text-[12px] [unicode-bidi:isolate] ${nameColour}`}
         >
-          {letter.letter}
+          <VisibleName text={row.name} />
         </span>
-      )}
-    </div>
+        {letter !== undefined && !row.ignored && (
+          <span
+            aria-hidden
+            data-testid={`${testId}-letter`}
+            className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[letter.letter] ?? "text-dim"}`}
+          >
+            {letter.letter}
+          </span>
+        )}
+      </div>
+    </Tooltip>
   );
 }
 

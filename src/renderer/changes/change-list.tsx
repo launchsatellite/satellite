@@ -8,6 +8,7 @@ import {
   moreSentence,
   rowName,
 } from "./change-words.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 interface ChangeListProps {
   files: readonly ChangedFile[];
@@ -64,55 +65,56 @@ export function ChangeList({
           const label = rowName(file);
           return (
             <li key={file.path} role="none">
-              <button
-                type="button"
-                data-testid={testId}
-                data-path={file.path}
-                data-state={file.letter}
-                role="option"
-                aria-selected={current}
-                aria-label={label}
-                title={label}
-                tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}
-                onClick={() => {
-                  onSelect(file.path);
-                }}
-                className={`flex h-7 w-full items-center gap-2 px-3 text-left ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
-              >
-                <span
-                  aria-hidden
-                  data-testid={`${testId}-letter`}
-                  className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[file.letter] ?? "text-dim"}`}
+              <Tooltip text={label}>
+                <button
+                  type="button"
+                  data-testid={testId}
+                  data-path={file.path}
+                  data-state={file.letter}
+                  role="option"
+                  aria-selected={current}
+                  aria-label={label}
+                  tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}
+                  onClick={() => {
+                    onSelect(file.path);
+                  }}
+                  className={`flex h-7 w-full items-center gap-2 px-3 text-left ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
                 >
-                  {file.letter}
-                </span>
-                <span
-                  aria-hidden
-                  dir="ltr"
-                  className="flex min-w-0 flex-1 font-mono text-[12px] whitespace-nowrap [unicode-bidi:isolate]"
-                >
-                  <span className="min-w-0 shrink-[1000] truncate text-left text-dim [direction:rtl]">
-                    <span dir="ltr" className="[unicode-bidi:isolate]">
-                      <VisibleName text={folder} />
+                  <span
+                    aria-hidden
+                    data-testid={`${testId}-letter`}
+                    className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[file.letter] ?? "text-dim"}`}
+                  >
+                    {file.letter}
+                  </span>
+                  <span
+                    aria-hidden
+                    dir="ltr"
+                    className="flex min-w-0 flex-1 font-mono text-[12px] whitespace-nowrap [unicode-bidi:isolate]"
+                  >
+                    <span className="min-w-0 shrink-[1000] truncate text-left text-dim [direction:rtl]">
+                      <span dir="ltr" className="[unicode-bidi:isolate]">
+                        <VisibleName text={folder} />
+                      </span>
+                    </span>
+                    <span className="max-w-full min-w-[4ch] flex-none truncate text-fg">
+                      <VisibleName text={name} />
                     </span>
                   </span>
-                  <span className="max-w-full min-w-[4ch] flex-none truncate text-fg">
-                    <VisibleName text={name} />
+                  <span
+                    aria-hidden
+                    data-testid={`${testId}-counts`}
+                    className="flex flex-none gap-[6px] font-mono text-[12px]"
+                  >
+                    {file.added !== null && file.added > 0 && (
+                      <span className="text-addfg">+{file.added}</span>
+                    )}
+                    {file.removed !== null && file.removed > 0 && (
+                      <span className="text-delfg">−{file.removed}</span>
+                    )}
                   </span>
-                </span>
-                <span
-                  aria-hidden
-                  data-testid={`${testId}-counts`}
-                  className="flex flex-none gap-[6px] font-mono text-[12px]"
-                >
-                  {file.added !== null && file.added > 0 && (
-                    <span className="text-addfg">+{file.added}</span>
-                  )}
-                  {file.removed !== null && file.removed > 0 && (
-                    <span className="text-delfg">−{file.removed}</span>
-                  )}
-                </span>
-              </button>
+                </button>
+              </Tooltip>
             </li>
           );
         })}

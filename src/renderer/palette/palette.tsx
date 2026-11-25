@@ -21,6 +21,7 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
 import { findSentence, typeAFileNameSentence } from "../files/file-words.ts";
 import type { FileSearch } from "../files/use-file-search.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 type PaletteMode = "commands" | "switcher" | "files";
 
@@ -318,51 +319,54 @@ export function Palette({
                 {text.group}
               </div>
               {options.map((option, index) => (
-                <div
+                <Tooltip
                   key={option.key}
-                  id={optionId(index)}
-                  role="option"
-                  aria-selected={index === active}
-                  data-testid={option.testId}
-                  data-path={option.path}
-                  title={option.path === undefined ? undefined : visibleText(option.path)}
-                  aria-label={option.path === undefined ? undefined : visibleText(option.path)}
-                  className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
-                  onMouseMove={() => {
-                    if (index !== active) setActive(index);
-                  }}
-                  onClick={() => {
-                    runOption(option);
-                  }}
+                  text={option.path === undefined ? undefined : visibleText(option.path)}
                 >
-                  {option.pixel !== undefined && (
-                    <StatusPixel state={option.pixel} size={6} label={pixelLabel(option.pixel)} />
-                  )}
-                  {option.path !== undefined && <OptionIcon icons={icons} path={option.path} />}
-                  <span
-                    className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
+                  <div
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === active}
+                    data-testid={option.testId}
+                    data-path={option.path}
+                    aria-label={option.path === undefined ? undefined : visibleText(option.path)}
+                    className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
+                    onMouseMove={() => {
+                      if (index !== active) setActive(index);
+                    }}
+                    onClick={() => {
+                      runOption(option);
+                    }}
                   >
-                    {option.title}
-                  </span>
-                  {option.detail !== undefined && (
+                    {option.pixel !== undefined && (
+                      <StatusPixel state={option.pixel} size={6} label={pixelLabel(option.pixel)} />
+                    )}
+                    {option.path !== undefined && <OptionIcon icons={icons} path={option.path} />}
                     <span
-                      className={`ml-auto max-w-[45%] truncate text-[12px] text-dim ${option.path === undefined ? "flex-none" : "min-w-0 text-left [direction:rtl]"}`}
+                      className={`min-w-0 truncate text-fg ${index === active ? "font-semibold" : ""}`}
                     >
-                      {option.path === undefined ? (
-                        option.detail
-                      ) : (
-                        <span dir="ltr" className="[unicode-bidi:isolate]">
-                          {option.detail}
-                        </span>
-                      )}
+                      {option.title}
                     </span>
-                  )}
-                  {option.hint !== undefined && (
-                    <span className="ml-auto flex-none">
-                      <KeyHint keys={option.hint} plain />
-                    </span>
-                  )}
-                </div>
+                    {option.detail !== undefined && (
+                      <span
+                        className={`ml-auto max-w-[45%] truncate text-[12px] text-dim ${option.path === undefined ? "flex-none" : "min-w-0 text-left [direction:rtl]"}`}
+                      >
+                        {option.path === undefined ? (
+                          option.detail
+                        ) : (
+                          <span dir="ltr" className="[unicode-bidi:isolate]">
+                            {option.detail}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {option.hint !== undefined && (
+                      <span className="ml-auto flex-none">
+                        <KeyHint keys={option.hint} plain />
+                      </span>
+                    )}
+                  </div>
+                </Tooltip>
               ))}
             </div>
           </div>

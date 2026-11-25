@@ -3,6 +3,7 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
+import { Button } from "../ui/button.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import {
@@ -25,6 +26,8 @@ interface WorkspaceHeaderProps {
   onShowProcesses: () => void;
   onShowPullRequest: () => void;
 }
+
+const readoutButton = "min-w-0 flex-none font-pixel font-normal text-dim uppercase";
 
 export function WorkspaceHeader({
   project,
@@ -85,36 +88,38 @@ export function WorkspaceHeader({
       )}
       <span className="ml-auto flex min-w-0 flex-none items-center gap-1">
         {project.missing === null && processes > 0 && (
-          <button
-            type="button"
-            data-testid="header-processes"
+          <Button
+            variant="ghost"
+            size="small"
+            testId="header-processes"
             data-count={processes}
-            aria-label={countLabel(processes)}
-            title={countLabel(processes)}
+            label={countLabel(processes)}
+            tooltip={countLabel(processes)}
             onClick={onShowProcesses}
-            className="flex h-6 min-w-0 flex-none items-center gap-[5px] rounded-[6px] px-[7px] font-pixel text-[12px] text-dim uppercase hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className={readoutButton}
           >
             <Icon name="running" size={13} />
             <span aria-hidden="true">{processes}</span>
-          </button>
+          </Button>
         )}
         {project.missing === null && pullRequest !== null && (
-          <button
-            type="button"
-            data-testid="header-pull-request"
+          <Button
+            variant="ghost"
+            size="small"
+            testId="header-pull-request"
             data-number={pullRequest.number}
             data-checks={checksState(pullRequest.counts)}
-            aria-label={readoutLabel(pullRequest)}
-            title={readoutLabel(pullRequest)}
+            label={readoutLabel(pullRequest)}
+            tooltip={readoutLabel(pullRequest)}
             onClick={onShowPullRequest}
-            className="flex h-6 min-w-0 flex-none items-center gap-[7px] rounded-[6px] px-[7px] font-pixel text-[12px] text-dim uppercase hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className={readoutButton}
           >
             <StatusPixel state={readoutPixel(pullRequest)} size={6} />
             <span aria-hidden="true" className="truncate">
               #{pullRequest.number}
               <span className="hidden @2xl:inline">{readoutRest(pullRequest)}</span>
             </span>
-          </button>
+          </Button>
         )}
         {workspace.key !== "main" && (
           <CommandButton

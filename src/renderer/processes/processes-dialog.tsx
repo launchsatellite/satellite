@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ProcessRow } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { Dialog } from "../ui/dialog.tsx";
 import { stopKey } from "./use-processes.ts";
 import {
@@ -64,19 +65,20 @@ function Row({
       className="flex items-start gap-3 border-b border-line py-2 first:pt-0 last:border-b-0 last:pb-0"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p
-          data-testid={`${testId}-command`}
-          title={shown}
-          className="font-mono text-[12px] [overflow-wrap:anywhere] text-fg"
-        >
-          {command.split(separatorEnd).map((part, position) => (
-            <Fragment key={position}>
-              {position > 0 && <wbr />}
-              {part}
-            </Fragment>
-          ))}
-          {row.cut ? "…" : ""}
-        </p>
+        <Tooltip text={shown}>
+          <p
+            data-testid={`${testId}-command`}
+            className="font-mono text-[12px] [overflow-wrap:anywhere] text-fg"
+          >
+            {command.split(separatorEnd).map((part, position) => (
+              <Fragment key={position}>
+                {position > 0 && <wbr />}
+                {part}
+              </Fragment>
+            ))}
+            {row.cut ? "…" : ""}
+          </p>
+        </Tooltip>
         <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${note}`}>
           <span data-testid={`${testId}-session`}>{sessionName(number)}</span>
           <span data-testid={`${testId}-age`}>
@@ -87,32 +89,29 @@ function Row({
           </span>
           {row.ports.map(({ port, url }) =>
             url === null ? (
-              <span
-                key={port}
-                data-testid={`${testId}-port-${String(port)}`}
-                data-link="false"
-                title={portLabel(port, false)}
-              >
-                <span className="sr-only">{portLabel(port, false)}</span>
-                <span aria-hidden="true" className="font-pixel text-dim">
-                  :{port}
+              <Tooltip key={port} text={portLabel(port, false)}>
+                <span data-testid={`${testId}-port-${String(port)}`} data-link="false">
+                  <span className="sr-only">{portLabel(port, false)}</span>
+                  <span aria-hidden="true" className="font-pixel text-dim">
+                    :{port}
+                  </span>
                 </span>
-              </span>
+              </Tooltip>
             ) : (
-              <button
-                key={port}
-                type="button"
-                data-testid={`${testId}-port-${String(port)}`}
-                data-link="true"
-                title={portLabel(port, true)}
-                aria-label={portLabel(port, true)}
-                onClick={() => {
-                  onPort(url);
-                }}
-                className={`-mx-1 rounded-[6px] px-1 font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
-              >
-                :{port}
-              </button>
+              <Tooltip key={port} text={portLabel(port, true)}>
+                <button
+                  type="button"
+                  data-testid={`${testId}-port-${String(port)}`}
+                  data-link="true"
+                  aria-label={portLabel(port, true)}
+                  onClick={() => {
+                    onPort(url);
+                  }}
+                  className={`-mx-1 rounded-[6px] px-1 font-pixel text-fg underline underline-offset-[3px] hover:bg-hover ${ringed}`}
+                >
+                  :{port}
+                </button>
+              </Tooltip>
             ),
           )}
         </p>

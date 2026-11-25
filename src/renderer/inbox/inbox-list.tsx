@@ -7,6 +7,7 @@ import { StatusPixel } from "../ui/status-pixel.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { reasonSentence, rowName, type InboxRow, type InboxTarget } from "./inbox.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 interface InboxListProps {
   rows: readonly InboxRow[];
@@ -116,45 +117,46 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
             const full = rowName(label, project, sentence);
             return (
               <li key={key}>
-                <button
-                  type="button"
-                  data-testid={testId}
-                  data-reason={row.reasons[0]?.kind}
-                  aria-label={full}
-                  title={full}
-                  onFocus={() => {
-                    focused.current = key;
-                  }}
-                  onBlur={(event) => {
-                    if (event.currentTarget.isConnected) focused.current = null;
-                  }}
-                  onClick={() => {
-                    const [oldest] = row.reasons;
-                    if (oldest !== undefined) onOpen(oldest);
-                  }}
-                  className={`flex w-full items-start gap-[9px] rounded-[6px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
-                >
-                  <span className="mt-[6px] flex flex-none">
-                    <StatusPixel state="needs-you" size={6} />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
-                    <span
-                      data-testid={`${testId}-name`}
-                      className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
-                    >
-                      <VisibleName text={label} />
+                <Tooltip text={full}>
+                  <button
+                    type="button"
+                    data-testid={testId}
+                    data-reason={row.reasons[0]?.kind}
+                    aria-label={full}
+                    onFocus={() => {
+                      focused.current = key;
+                    }}
+                    onBlur={(event) => {
+                      if (event.currentTarget.isConnected) focused.current = null;
+                    }}
+                    onClick={() => {
+                      const [oldest] = row.reasons;
+                      if (oldest !== undefined) onOpen(oldest);
+                    }}
+                    className={`flex w-full items-start gap-[9px] rounded-[6px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
+                  >
+                    <span className="mt-[6px] flex flex-none">
+                      <StatusPixel state="needs-you" size={6} />
                     </span>
-                    <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
-                      <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
                       <span
-                        data-testid={`${testId}-reason`}
-                        className="max-w-full min-w-0 whitespace-normal text-fg2"
+                        data-testid={`${testId}-name`}
+                        className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
                       >
-                        {sentence}
+                        <VisibleName text={label} />
+                      </span>
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
+                        <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
+                        <span
+                          data-testid={`${testId}-reason`}
+                          className="max-w-full min-w-0 whitespace-normal text-fg2"
+                        >
+                          {sentence}
+                        </span>
                       </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                </Tooltip>
               </li>
             );
           })}
