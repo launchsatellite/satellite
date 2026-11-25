@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ChangedFile } from "../../shared/bridge-contract.ts";
-import { Tooltip } from "../ui/tooltip.tsx";
+import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import {
   leftOutSentence,
@@ -45,6 +45,7 @@ export function ChangeList({
   selected,
   onSelect,
 }: ChangeListProps) {
+  const tips = useListTooltip();
   const move = (event: KeyboardEvent<HTMLUListElement>) => {
     const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
     const at = rows.findIndex((row) => row === document.activeElement);
@@ -57,7 +58,13 @@ export function ChangeList({
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1">
-      <ul data-testid="changes-list" role="listbox" aria-label="Changed files" onKeyDown={move}>
+      <ul
+        data-testid="changes-list"
+        role="listbox"
+        aria-label="Changed files"
+        onKeyDown={move}
+        {...tips.events}
+      >
         {files.map((file, index) => {
           const current = file.path === selected;
           const { folder, name } = splitPath(file.path);
@@ -65,60 +72,60 @@ export function ChangeList({
           const label = rowName(file);
           return (
             <li key={file.path} role="none">
-              <Tooltip text={label}>
-                <button
-                  type="button"
-                  data-testid={testId}
-                  data-path={file.path}
-                  data-state={file.letter}
-                  role="option"
-                  aria-selected={current}
-                  aria-label={label}
-                  tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}
-                  onClick={() => {
-                    onSelect(file.path);
-                  }}
-                  className={`flex h-7 w-full items-center gap-2 px-3 text-left ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
+              <button
+                type="button"
+                data-testid={testId}
+                data-tip={label}
+                data-path={file.path}
+                data-state={file.letter}
+                role="option"
+                aria-selected={current}
+                aria-label={label}
+                tabIndex={current || (selected === undefined && index === 0) ? 0 : -1}
+                onClick={() => {
+                  onSelect(file.path);
+                }}
+                className={`flex h-7 w-full items-center gap-2 px-3 text-left ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
+              >
+                <span
+                  aria-hidden
+                  data-testid={`${testId}-letter`}
+                  className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[file.letter] ?? "text-dim"}`}
                 >
-                  <span
-                    aria-hidden
-                    data-testid={`${testId}-letter`}
-                    className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[file.letter] ?? "text-dim"}`}
-                  >
-                    {file.letter}
-                  </span>
-                  <span
-                    aria-hidden
-                    dir="ltr"
-                    className="flex min-w-0 flex-1 font-mono text-[12px] whitespace-nowrap [unicode-bidi:isolate]"
-                  >
-                    <span className="min-w-0 shrink-[1000] truncate text-left text-dim [direction:rtl]">
-                      <span dir="ltr" className="[unicode-bidi:isolate]">
-                        <VisibleName text={folder} />
-                      </span>
-                    </span>
-                    <span className="max-w-full min-w-[4ch] flex-none truncate text-fg">
-                      <VisibleName text={name} />
+                  {file.letter}
+                </span>
+                <span
+                  aria-hidden
+                  dir="ltr"
+                  className="flex min-w-0 flex-1 font-mono text-[12px] whitespace-nowrap [unicode-bidi:isolate]"
+                >
+                  <span className="min-w-0 shrink-[1000] truncate text-left text-dim [direction:rtl]">
+                    <span dir="ltr" className="[unicode-bidi:isolate]">
+                      <VisibleName text={folder} />
                     </span>
                   </span>
-                  <span
-                    aria-hidden
-                    data-testid={`${testId}-counts`}
-                    className="flex flex-none gap-[6px] font-mono text-[12px]"
-                  >
-                    {file.added !== null && file.added > 0 && (
-                      <span className="text-addfg">+{file.added}</span>
-                    )}
-                    {file.removed !== null && file.removed > 0 && (
-                      <span className="text-delfg">−{file.removed}</span>
-                    )}
+                  <span className="max-w-full min-w-[4ch] flex-none truncate text-fg">
+                    <VisibleName text={name} />
                   </span>
-                </button>
-              </Tooltip>
+                </span>
+                <span
+                  aria-hidden
+                  data-testid={`${testId}-counts`}
+                  className="flex flex-none gap-[6px] font-mono text-[12px]"
+                >
+                  {file.added !== null && file.added > 0 && (
+                    <span className="text-addfg">+{file.added}</span>
+                  )}
+                  {file.removed !== null && file.removed > 0 && (
+                    <span className="text-delfg">−{file.removed}</span>
+                  )}
+                </span>
+              </button>
             </li>
           );
         })}
       </ul>
+      {tips.tip}
       {more > 0 && (
         <p data-testid="changes-more" className="px-3 pt-2 text-[12px] text-dim">
           {moreSentence(more)}

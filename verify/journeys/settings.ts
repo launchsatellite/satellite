@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { join } from "node:path";
 import { chooseOption, shownOption, tooltipOf, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
@@ -127,6 +128,7 @@ async function checkEntryPoints(session: AppSession): Promise<void> {
   await session.page.getByTestId("settings-done").click();
   await gone(session, "settings-dialog", "after Done");
   await focusReturns(session, "title-settings", "after Done");
+  await checkHandedBackFocus(session);
   await session.page.getByTestId("workspace-repo-main").focus();
   await openSettings(session, "command");
   await closeSettings(session, "workspace-repo-main", "from the command menu");
@@ -179,9 +181,51 @@ async function checkShortcuts(session: AppSession): Promise<void> {
   assert.deepEqual(listed, shortcuts, "the shortcut list did not match the commands");
 }
 
+async function stillOpen(session: AppSession, when: string): Promise<void> {
+  assert.ok(
+    await session.page.getByTestId("settings-dialog").isVisible(),
+    `Settings closed ${when}`,
+  );
+}
+
+async function checkMenuAlone(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.getByTestId("settings-theme").click();
+  await visible(session, "settings-theme-options", "after opening the theme menu");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("settings-theme-options").waitFor({ state: "hidden" });
+  await stillOpen(session, "with Escape in the theme menu");
+  await page.getByTestId("settings-theme").click();
+  await visible(session, "settings-theme-options", "after opening the theme menu again");
+  await page.mouse.click(8, 300);
+  await page.getByTestId("settings-theme-options").waitFor({ state: "hidden" });
+  await stillOpen(session, "with a click outside the theme menu");
+}
+
+async function checkHandedBackFocus(session: AppSession): Promise<void> {
+  const { page } = session;
+  await page.mouse.move(0, 0);
+  await page.getByTestId("title-settings").focus();
+  await page.keyboard.press("Enter");
+  await visible(session, "settings-dialog", "after Enter on the settings button");
+  await closeSettings(session, "title-settings", "opened by Enter on its button");
+  await delay(1_000);
+  assert.equal(
+    await page.getByTestId("tooltip").count(),
+    0,
+    "a tooltip opened on the focus Settings handed back",
+  );
+  await page.keyboard.press("Shift+Tab");
+  await focusReturns(session, "title-new-workspace", "after Shift+Tab");
+  await visible(session, "tooltip", "after Shift+Tab onto New workspace");
+  assert.equal(await page.getByTestId("tooltip").textContent(), `New workspace${keys("N")}`);
+}
+
 async function checkChoices(session: AppSession): Promise<void> {
   assert.ok(!(await looksDark(session)), "the window was dark before any choice");
+  await checkMenuAlone(session);
   await chooseOption(session.page, "settings-theme", "Dark");
+  await stillOpen(session, "after picking Dark");
   await waitUntil(() => looksDark(session), waitMs, "the window stayed light after Dark");
   await session.page.getByTestId("settings-notifications-off").click();
   await shows(session, "Dark", "off", "after choosing");

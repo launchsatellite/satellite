@@ -10,7 +10,7 @@ import {
 import type { ChangedFile, FolderListing, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { letterColours } from "../changes/change-words.ts";
 import { Icon } from "../ui/icon.tsx";
-import { Tooltip } from "../ui/tooltip.tsx";
+import { useListTooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { FileIcon, useIcons, type LoadedIcons } from "./file-icon.tsx";
 import { emptyWorkspaceSentence, rowLabel } from "./file-words.ts";
@@ -61,41 +61,40 @@ function Row({
   const tint = letter === undefined ? undefined : letterColours[letter.letter];
   const nameColour = row.ignored ? "text-dim" : (tint ?? "text-fg");
   return (
-    <Tooltip text={label}>
-      <div
-        data-testid={testId}
-        data-path={row.path}
-        data-kind={row.kind}
-        data-state={letter?.letter ?? ""}
-        data-ignored={row.ignored ? "true" : undefined}
-        onClick={onActivate}
-        style={{ paddingLeft: 8 + (row.level - 1) * indentPx }}
-        className={`flex h-7 items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
+    <div
+      data-testid={testId}
+      data-tip={label}
+      data-path={row.path}
+      data-kind={row.kind}
+      data-state={letter?.letter ?? ""}
+      data-ignored={row.ignored ? "true" : undefined}
+      onClick={onActivate}
+      style={{ paddingLeft: 8 + (row.level - 1) * indentPx }}
+      className={`flex h-7 items-center gap-1.5 pr-3 ${selected ? "bg-sel" : "hover:bg-hover"} ${rowFocusRing}`}
+    >
+      <span aria-hidden className="flex size-4 flex-none text-dim">
+        {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}
+      </span>
+      <span className={`flex-none ${row.ignored ? "opacity-50" : ""}`}>
+        <FileIcon icons={icons} name={row.name} folder={folder} open={row.open} />
+      </span>
+      <span
+        aria-hidden
+        dir="ltr"
+        className={`min-w-0 flex-1 truncate font-mono text-[12px] [unicode-bidi:isolate] ${nameColour}`}
       >
-        <span aria-hidden className="flex size-4 flex-none text-dim">
-          {folder && <Icon name={row.open ? "chevron-down" : "chevron-right"} size={16} />}
-        </span>
-        <span className={`flex-none ${row.ignored ? "opacity-50" : ""}`}>
-          <FileIcon icons={icons} name={row.name} folder={folder} open={row.open} />
-        </span>
+        <VisibleName text={row.name} />
+      </span>
+      {letter !== undefined && !row.ignored && (
         <span
           aria-hidden
-          dir="ltr"
-          className={`min-w-0 flex-1 truncate font-mono text-[12px] [unicode-bidi:isolate] ${nameColour}`}
+          data-testid={`${testId}-letter`}
+          className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[letter.letter] ?? "text-dim"}`}
         >
-          <VisibleName text={row.name} />
+          {letter.letter}
         </span>
-        {letter !== undefined && !row.ignored && (
-          <span
-            aria-hidden
-            data-testid={`${testId}-letter`}
-            className={`w-[1ch] flex-none font-mono text-[12px] ${letterColours[letter.letter] ?? "text-dim"}`}
-          >
-            {letter.letter}
-          </span>
-        )}
-      </div>
-    </Tooltip>
+      )}
+    </div>
   );
 }
 
@@ -122,6 +121,7 @@ export function FileTree({
   onOpenFile,
 }: FileTreeProps) {
   const icons = useIcons();
+  const tips = useListTooltip();
   const rows = useMemo(() => treeRows(open, listings), [open, listings]);
   const items = useMemo(() => rows.filter((row) => row.type === "item"), [rows]);
   const paths = useMemo(() => items.map((item) => item.path), [items]);
@@ -309,13 +309,18 @@ export function FileTree({
           role="tree"
           aria-label="Files"
           data-testid="files-tree"
+          {...tips.events}
           onKeyDown={press}
-          onBlur={leave}
+          onBlur={(event) => {
+            tips.events.onBlur();
+            leave(event);
+          }}
         >
           {top}
         </div>
         {rootNotes}
       </div>
+      {tips.tip}
     </div>
   );
 }
