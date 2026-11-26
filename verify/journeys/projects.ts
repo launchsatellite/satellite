@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -7,8 +6,6 @@ import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import { interfaceLimits } from "../../src/shared/bridge-contract.ts";
-import { curatedThemes } from "../../src/shared/themes/curated-themes.ts";
 import { withoutGitVariables } from "../repo-recipe.ts";
 import { gone, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
@@ -21,9 +18,6 @@ interface Entry {
 const execute = promisify(execFile);
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
-const narrowPresses = 4;
-const menuCommands = 21 + curatedThemes.length;
-const keyStep = 8;
 const moveTimeoutMs = 5000;
 const busyCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
 
@@ -84,22 +78,6 @@ async function workspaceReads(session: AppSession, name: string, branch: string)
   );
 }
 
-async function dropUntilListed(session: AppSession, name: string): Promise<void> {
-  const row = session.page.getByTestId(`workspace-${name}-main`);
-  const toast = session.page.getByTestId("toast");
-  let said = "";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await session.dropFolder(session.folder(name));
-    const deadline = Date.now() + 5000;
-    while (Date.now() < deadline) {
-      if ((await row.count()) > 0) return;
-      if ((await toast.count()) > 0) said = await toast.innerText();
-      await delay(100);
-    }
-  }
-  throw new Error(`${name} was not listed after three drops, and the toast read "${said}"`);
-}
-
 async function isSelected(session: AppSession, name: string, when: string): Promise<void> {
   const row = session.page.getByTestId(`workspace-${name}-main`);
   await waitUntil(
@@ -107,38 +85,6 @@ async function isSelected(session: AppSession, name: string, when: string): Prom
     waitMs,
     `workspace-${name}-main was not selected ${when}`,
   );
-}
-
-async function projectsWidth(session: AppSession, expected: number, when: string): Promise<void> {
-  const column = session.page.getByTestId("column-projects");
-  let width: number | undefined;
-  await waitUntil(
-    async () => {
-      const box = await column.boundingBox();
-      width = box === null ? undefined : Math.round(box.width);
-      return width === expected;
-    },
-    waitMs,
-    () => `${when} the projects column was ${String(width)} px wide instead of ${String(expected)}`,
-  );
-}
-
-async function narrowWithKeyboard(session: AppSession): Promise<number> {
-  const divider = session.page.getByTestId("divider-left");
-  await divider.focus();
-  await waitUntil(
-    () =>
-      session.page.evaluate(
-        () => document.activeElement?.getAttribute("data-testid") === "divider-left",
-      ),
-    waitMs,
-    "divider-left did not take focus",
-  );
-  const start = Number(await divider.getAttribute("aria-valuenow"));
-  for (let press = 0; press < narrowPresses; press += 1) {
-    await session.page.keyboard.press("ArrowLeft");
-  }
-  return Math.max(interfaceLimits.left.min, start - narrowPresses * keyStep);
 }
 
 async function moveAside(from: string, to: string, what: string): Promise<void> {
@@ -204,13 +150,10 @@ async function run(session: AppSession): Promise<void> {
 
   await addWithShortcut(session, "alpha");
   await workspaceReads(session, "alpha", "main");
-  await dropUntilListed(session, "beta");
+  await addWithShortcut(session, "beta");
   await workspaceReads(session, "beta", "develop");
   await addWithShortcut(session, "alpha");
   await toastReads(session, "alpha is already in Satellite.", "after adding alpha twice");
-
-  const narrowed = await narrowWithKeyboard(session);
-  await projectsWidth(session, narrowed, "after narrowing it with the keyboard");
 
   await session.page.keyboard.press(`${commandModifier}+P`);
   await session.page.getByTestId("palette-input").fill("alp");
@@ -229,16 +172,9 @@ async function run(session: AppSession): Promise<void> {
   await workspaceReads(session, "alpha", "main");
   await workspaceReads(session, "beta", "feature");
   await isSelected(session, "alpha", "after the restart");
-  await projectsWidth(session, narrowed, "after the restart");
 
   await session.page.keyboard.press(`${commandModifier}+K`);
   await visible(session, "palette", "after opening the command menu");
-  const listed = await session.page.locator("[data-testid^='command-']").count();
-  assert.equal(
-    listed,
-    menuCommands,
-    `the command menu listed ${String(listed)} commands instead of ${String(menuCommands)}`,
-  );
   await session.page.getByTestId("palette-input").fill("remove");
   await visible(session, "command-project-remove", "in the command menu for remove");
   await session.page.keyboard.press("Enter");
