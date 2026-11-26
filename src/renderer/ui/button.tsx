@@ -6,7 +6,7 @@ import { Icon, type IconName } from "./icon.tsx";
 import { KeyHint } from "./key-hint.tsx";
 import { Tooltip } from "./tooltip.tsx";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "link";
 type ButtonSize = "default" | "small";
 
 export interface ButtonProps {
@@ -27,6 +27,8 @@ export interface ButtonProps {
   [data: `data-${string}`]: string | number | undefined;
 }
 
+const linkLook =
+  "inline rounded-[2px] text-left font-[inherit] text-fg underline decoration-dim underline-offset-2 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const buttonVariants = cva(
   "inline-flex items-center justify-center rounded-[6px] border font-sans font-semibold whitespace-nowrap transition-[background-color,filter] duration-[120ms] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>kbd]:ml-1",
   {
@@ -90,7 +92,10 @@ export function Button({
       disabled={disabled}
       focusableWhenDisabled
       onClick={onClick}
-      className={cn(buttonVariants({ variant, size, square, disabled }), className)}
+      className={cn(
+        variant === "link" ? linkLook : buttonVariants({ variant, size, square, disabled }),
+        className,
+      )}
     >
       {icon !== undefined && <Icon name={icon} />}
       {children}

@@ -4,6 +4,7 @@ import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
 import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { rowLook, rowRing } from "../ui/row-look.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
@@ -133,7 +134,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                       const [oldest] = row.reasons;
                       if (oldest !== undefined) onOpen(oldest);
                     }}
-                    className={`flex w-full items-start gap-[9px] rounded-[6px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${current ? "bg-sel" : "hover:bg-hover"} ${focusRing}`}
+                    className={`flex w-full items-start gap-[9px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${rowLook(current)} ${rowRing}`}
                   >
                     <span className="mt-[6px] flex flex-none">
                       <StatusPixel state="needs-you" size={6} />

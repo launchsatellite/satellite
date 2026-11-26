@@ -1,4 +1,28 @@
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { cn } from "cn";
+import {
+  useCallback,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
+
+interface DialogShellProps {
+  testId: string;
+  onClose: () => void;
+  closable: boolean;
+  returnFocusTo?: string;
+  label?: string;
+  labelledBy?: string;
+  describedBy?: string;
+  release?: Ref<() => void>;
+  className: string;
+  children: ReactNode;
+}
 
 interface DialogProps {
   title: string;
@@ -41,26 +65,36 @@ function moveFocus(panel: HTMLElement, backwards: boolean): boolean {
   return true;
 }
 
-export function Dialog({
-  title,
-  description,
+export function DialogShell({
   testId,
   onClose,
   closable,
-  children,
-  footer,
   returnFocusTo,
-}: DialogProps) {
-  const titleId = useId();
-  const descriptionId = useId();
+  label,
+  labelledBy,
+  describedBy,
+  release,
+  className,
+  children,
+}: DialogShellProps) {
   const panel = useRef<HTMLDivElement>(null);
   const pressedOverPopup = useRef(false);
+  const uncover = useRef<(() => void) | null>(null);
+  const coveredOnce = useRef(false);
   const [focusedAtRender] = useState(() => document.activeElement);
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const releaseNow = useCallback(() => {
+    const undo = uncover.current;
+    uncover.current = null;
+    undo?.();
+    rerender();
+  }, []);
+  useImperativeHandle(release, () => releaseNow, [releaseNow]);
 
   useLayoutEffect(() => {
     const element = panel.current;
     if (element === null) return;
-    const covered = () => element.closest("[inert]") !== null;
+    const covered = () => uncover.current === null || element.closest("[inert]") !== null;
     const press = (event: KeyboardEvent) => {
       if (event.isComposing || covered()) return;
       if (popupOpen(element)) return;
@@ -97,14 +131,18 @@ export function Dialog({
   useLayoutEffect(() => {
     const element = panel.current;
     const overlay = element?.parentElement;
-    if (element === null || overlay === null || overlay === undefined) return;
+    if (uncover.current !== null || element === null || overlay === null || overlay === undefined) {
+      return;
+    }
     const focused = document.activeElement;
     const priorFocus =
+      !coveredOnce.current &&
       focusedAtRender instanceof HTMLElement &&
       focusedAtRender !== document.body &&
       focusedAtRender.isConnected
         ? focusedAtRender
         : focused;
+    coveredOnce.current = true;
     const opener = priorFocus === document.body || element.contains(priorFocus) ? null : priorFocus;
     const behind = [...(overlay.parentElement?.children ?? [])].filter(
       (sibling) =>
@@ -114,7 +152,7 @@ export function Dialog({
     );
     for (const sibling of behind) sibling.setAttribute("inert", "");
     if (!element.contains(focused)) element.focus();
-    return () => {
+    uncover.current = () => {
       for (const sibling of behind) sibling.removeAttribute("inert");
       if (opener instanceof HTMLElement && opener.isConnected) {
         opener.focus();
@@ -124,7 +162,8 @@ export function Dialog({
         document.querySelector<HTMLElement>(`[data-testid="${returnFocusTo}"]`)?.focus();
       }
     };
-  }, [focusedAtRender, returnFocusTo]);
+  });
+  useLayoutEffect(() => releaseNow, [releaseNow]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -141,29 +180,60 @@ export function Dialog({
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description === undefined ? undefined : descriptionId}
+        aria-label={label}
+        aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
         data-testid={testId}
         tabIndex={-1}
-        className="absolute top-[12vh] left-1/2 flex max-h-[calc(100%-24vh)] w-[min(480px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-[12px] border border-line bg-raised shadow-raised outline-none"
-      >
-        <div className="px-[18px] pt-4 pb-[6px]">
-          <h2 id={titleId} className="text-[17px] font-semibold break-words">
-            {title}
-          </h2>
-        </div>
-        {description !== undefined && (
-          <p id={descriptionId} className="px-[18px] text-[13px] break-words text-dim">
-            {description}
-          </p>
+        className={cn(
+          "absolute top-[12vh] left-1/2 -translate-x-1/2 overflow-hidden rounded-[12px] border border-line bg-raised shadow-raised outline-none",
+          className,
         )}
-        <div className="mr-1 flex min-h-0 flex-col gap-[14px] overflow-y-auto py-4 pr-1 pl-[18px] [scrollbar-gutter:stable]">
-          {children}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-line bg-side px-[18px] py-3">
-          {footer}
-        </div>
+      >
+        {children}
       </div>
     </div>
+  );
+}
+
+export function Dialog({
+  title,
+  description,
+  testId,
+  onClose,
+  closable,
+  children,
+  footer,
+  returnFocusTo,
+}: DialogProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  return (
+    <DialogShell
+      testId={testId}
+      onClose={onClose}
+      closable={closable}
+      returnFocusTo={returnFocusTo}
+      labelledBy={titleId}
+      describedBy={description === undefined ? undefined : descriptionId}
+      className="flex max-h-[calc(100%-24vh)] w-[min(480px,calc(100%-32px))] flex-col"
+    >
+      <div className="px-[18px] pt-4 pb-[6px]">
+        <h2 id={titleId} className="text-[17px] font-semibold break-words">
+          {title}
+        </h2>
+      </div>
+      {description !== undefined && (
+        <p id={descriptionId} className="px-[18px] text-[13px] break-words text-dim">
+          {description}
+        </p>
+      )}
+      <div className="mr-1 flex min-h-0 flex-col gap-[14px] overflow-y-auto py-4 pr-1 pl-[18px] [scrollbar-gutter:stable]">
+        {children}
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t border-line bg-side px-[18px] py-3">
+        {footer}
+      </div>
+    </DialogShell>
   );
 }

@@ -3,6 +3,7 @@ import { toJsxRuntime, type Components } from "hast-util-to-jsx-runtime";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { revealLines } from "../../shared/visible-text.ts";
+import { Button } from "../ui/button.tsx";
 import type { PlainWhy } from "./markdown-parser.ts";
 
 export const plainSentences: Record<PlainWhy, string> = {
@@ -13,8 +14,6 @@ export const plainSentences: Record<PlainWhy, string> = {
 
 const InsideLink = createContext(false);
 
-const linkLook =
-  "inline border-0 bg-transparent p-0 text-left font-[inherit] text-fg underline decoration-dim underline-offset-2 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const headingLook: Record<string, string> = {
   h1: "mt-4 mb-2 text-[15px] font-semibold text-fg",
   h2: "mt-4 mb-2 text-[14px] font-semibold text-fg",
@@ -44,17 +43,16 @@ function components(onLink: (address: string) => void): Partial<Components> {
       const address = opened(href);
       if (address === null) return <>{children}</>;
       return (
-        <button
-          type="button"
-          data-testid="markdown-link"
+        <Button
+          variant="link"
+          testId="markdown-link"
           data-address={address}
-          className={linkLook}
           onClick={() => {
             onLink(address);
           }}
         >
           <InsideLink.Provider value>{children}</InsideLink.Provider>
-        </button>
+        </Button>
       );
     },
     img({ src, alt }) {
@@ -123,17 +121,16 @@ function ImageLink({
     );
   }
   return (
-    <button
-      type="button"
-      data-testid="markdown-image"
+    <Button
+      variant="link"
+      testId="markdown-image"
       data-address={address}
-      className={linkLook}
       onClick={() => {
         onLink(address);
       }}
     >
       {label}
-    </button>
+    </Button>
   );
 }
 

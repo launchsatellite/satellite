@@ -1,18 +1,12 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { WorkspaceRef } from "../../shared/bridge-contract.ts";
 import type { Command } from "../commands/command-registry.ts";
 import { commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { DialogShell } from "../ui/dialog.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
 import { pixelLabel } from "../sessions/session-pixel.ts";
+import { rowLook } from "../ui/row-look.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
@@ -55,7 +49,7 @@ interface PaletteOption {
 }
 
 const queryLimit = 200;
-const activeRow = "bg-sel outline-1 -outline-offset-1 outline-accent";
+const activeRow = "outline-1 -outline-offset-1 outline-accent";
 const copy = {
   commands: {
     label: "Command menu",
@@ -183,10 +177,7 @@ export function Palette({
   const listId = useId();
   const groupLabelId = useId();
   const input = useRef<HTMLInputElement>(null);
-  const opener = useRef<Element | null>(null);
-  const restored = useRef(false);
-  const shell = useRef<HTMLDivElement>(null);
-  const behind = useRef<Element[]>([]);
+  const release = useRef<() => void>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [shownMode, setShownMode] = useState(mode);
@@ -201,34 +192,7 @@ export function Palette({
     setActive(0);
   }
 
-  const restoreFocus = () => {
-    if (restored.current) return;
-    restored.current = true;
-    for (const sibling of behind.current) sibling.removeAttribute("inert");
-    behind.current = [];
-    const element = opener.current;
-    if (element instanceof HTMLElement && element.isConnected) element.focus();
-  };
-  const close = () => {
-    restoreFocus();
-    onClose();
-  };
-
-  useLayoutEffect(() => {
-    opener.current = document.activeElement;
-    restored.current = false;
-    const overlay = shell.current;
-    behind.current = [...(overlay?.parentElement?.children ?? [])].filter(
-      (sibling) =>
-        sibling !== overlay &&
-        !sibling.hasAttribute("inert") &&
-        !sibling.hasAttribute("data-stays-live"),
-    );
-    for (const sibling of behind.current) sibling.setAttribute("inert", "");
-    return restoreFocus;
-  }, []);
   useEffect(() => {
-    restored.current = false;
     input.current?.focus();
   }, [mode]);
 
@@ -246,7 +210,8 @@ export function Palette({
   });
 
   const runOption = (option: PaletteOption) => {
-    close();
+    release.current?.();
+    onClose();
     option.run();
   };
   const press = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -259,25 +224,21 @@ export function Palette({
     } else if (event.key === "Enter") {
       event.preventDefault();
       if (activeOption !== undefined && !stale) runOption(activeOption);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-    } else if (event.key === "Tab") {
-      event.preventDefault();
     }
   };
   const text = copy[mode];
   const note = emptyNote(mode, query, files);
 
   return (
-    <div ref={shell} className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-bg/60" onClick={close} />
+    <DialogShell
+      testId="palette"
+      label={text.label}
+      onClose={onClose}
+      closable
+      release={release}
+      className="w-[min(560px,calc(100%-32px))]"
+    >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={text.label}
-        data-testid="palette"
-        className="absolute top-[12vh] left-1/2 w-[min(560px,calc(100%-32px))] -translate-x-1/2 overflow-hidden rounded-[12px] border border-line bg-raised shadow-raised"
         onMouseDown={(event) => {
           if (event.target !== input.current) event.preventDefault();
         }}
@@ -330,7 +291,7 @@ export function Palette({
                     data-testid={option.testId}
                     data-path={option.path}
                     aria-label={option.path === undefined ? undefined : visibleText(option.path)}
-                    className={`flex h-8 items-center gap-[9px] rounded-[6px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? activeRow : ""}`}
+                    className={`flex h-8 items-center gap-[9px] px-[9px] text-[13px] font-medium text-fg2 ${index === active ? `${rowLook(true)} ${activeRow}` : "rounded-[6px]"}`}
                     onMouseMove={() => {
                       if (index !== active) setActive(index);
                     }}
@@ -384,6 +345,6 @@ export function Palette({
           <FooterHint keys="Esc" action="Close" />
         </div>
       </div>
-    </div>
+    </DialogShell>
   );
 }
