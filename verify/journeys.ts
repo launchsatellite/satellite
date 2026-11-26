@@ -62,8 +62,7 @@ const journeys: Journey[] = [
 const journeyTimeoutMs = 180_000;
 const stepTimeoutMs = 15_000;
 
-const usage =
-  "run npm run journeys -- [--app <executable>] [--shard <index>/<count>] [journey ...]";
+const usage = "run npm run journeys -- [--app <executable>] [journey ...]";
 
 interface Plan {
   target: AppTarget;
@@ -72,23 +71,12 @@ interface Plan {
 
 function parsePlan(argv: string[]): Plan {
   let target: AppTarget = { kind: "built" };
-  let chosen = journeys;
   const names: string[] = [];
-  const seen = new Set<string>();
   for (let index = 0; index < argv.length; index += 1) {
     const word = argv[index] ?? "";
     const value = argv[index + 1];
-    if (word.startsWith("-")) {
-      if (seen.has(word)) throw new Error(usage);
-      seen.add(word);
-    }
-    if (word === "--app" && value !== undefined) {
+    if (word === "--app" && value !== undefined && target.kind === "built") {
       target = { kind: "packaged", executable: resolve(value) };
-      index += 1;
-    } else if (word === "--shard" && value !== undefined) {
-      const [part, count] = (/^([1-9]\d*)\/([1-9]\d*)$/.exec(value) ?? []).slice(1).map(Number);
-      if (part === undefined || count === undefined || part > count) throw new Error(usage);
-      chosen = chosen.filter((_, position) => position % count === part - 1);
       index += 1;
     } else if (word.startsWith("-")) {
       throw new Error(usage);
@@ -102,8 +90,8 @@ function parsePlan(argv: string[]): Plan {
       `no journey named ${unknown.join(", ")}. The journeys are ${journeys.map(({ name }) => name).join(", ")}`,
     );
   }
-  if (names.length > 0) chosen = chosen.filter(({ name }) => names.includes(name));
-  if (chosen.length === 0) throw new Error("no journey is left to run with these arguments");
+  const chosen =
+    names.length === 0 ? journeys : journeys.filter(({ name }) => names.includes(name));
   return { target, chosen };
 }
 
