@@ -35,7 +35,7 @@ Worktree workspaces belong to spec 003. The agent pane belongs to spec 004.
 - [x] Adding a repository folder shows it in the sidebar, and it is still there after a restart. Proof, scenario `two-projects` and the `projects` journey, which adds alpha and beta and reads both back after a restart.
 - [x] Adding a folder that is not a repository is refused with a sentence that says why. Proof, the same scenario and journey, refusing the plain folder `notes`, and `repository-check.test.ts` with real git, under a German locale too.
 - [x] Removing a project leaves its folder byte for byte unchanged. Proof, the `projects` journey, which compares every file of alpha before adding it and after removing it.
-- [x] Every command in the registry appears in the command menu and runs from it. Proof, the `projects` journey for Remove this project, run from the menu.
+- [x] Every command in the registry appears in the command menu and runs from it. Proof for one command only, the `projects` journey runs Remove this project from the menu.
 - [x] The quick switcher reaches a workspace in another project. Proof, the driver, and the `projects` journey selecting alpha from the switcher after beta was added.
 - [x] With `claude` missing or `gh` signed out, the first run check names the problem and the next step that fixes it. Proof, scenarios `claude-missing` and `not-signed-in`, and `gh-auth.test.ts`.
 - [x] A corrupt state file never stops the app from starting. Proof, `json-file.test.ts` and `interface-file.test.ts` on the reader, and scenario `corrupt-state`, which starts with both files cut off and sets each aside.

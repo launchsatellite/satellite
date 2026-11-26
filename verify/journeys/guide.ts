@@ -89,9 +89,19 @@ async function run(session: AppSession): Promise<void> {
 
   await showGuide(session);
   await stepShows(session, 2, "after Show the guide");
+
+  assert.deepEqual(session.consoleErrors, [], "the window logged errors");
+}
+
+async function closedEarly(session: AppSession): Promise<void> {
+  await session.answerFolderDialog(session.repo);
+  await session.page.getByTestId("add-first-project").click({ timeout: promptTimeoutMs });
+  await stepShows(session, 1, "after the first project");
   await session.page.getByTestId("guide-close").click();
   await gone(session, "guide-card", "after the close control");
   await toastReads(session, closedSentence, "after closing the guide early");
+  await savedAsSeen(session);
+  await noGuideAfterRestart(session, "after closing the guide early");
 
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
@@ -100,4 +110,5 @@ export const guideJourney: Journey = {
   name: "guide",
   scenario: "first-run",
   run,
+  then: [{ name: "guide", scenario: "first-run", run: closedEarly }],
 };
