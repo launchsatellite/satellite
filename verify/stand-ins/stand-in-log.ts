@@ -34,8 +34,12 @@ export async function readStandInEvents(file: string): Promise<StandInEvent[]> {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
     throw error;
   }
+  return writtenLines(text).map((line) => standInEventSchema.parse(JSON.parse(line)));
+}
+
+export function writtenLines(text: string): string[] {
   return text
     .split("\n")
-    .filter((line) => line !== "")
-    .map((line) => standInEventSchema.parse(JSON.parse(line)));
+    .slice(0, -1)
+    .filter((line) => line !== "");
 }
