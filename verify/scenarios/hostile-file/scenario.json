@@ -1,5 +1,5 @@
 {
-  "description": "A repo with one commit on main holding src/app.ts, one workspace feature, a stand-in gh signed in, a stand-in Claude Code at its prompt, the guide already seen and Satellite set to the light theme. The journey writes the hostile file into the workspace itself.",
+  "description": "A repo with one commit on main holding src/app.ts, one workspace feature, a stand-in gh signed in, a stand-in Claude Code at its prompt, the guide already seen and Satellite set to the curated theme Dracula. The journey writes the hostile file into the workspace itself.",
   "repo": [
     {
       "write": {
@@ -26,7 +26,7 @@
   "home": [
     {
       "path": "interface.json",
-      "content": "{\"version\":5,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"sidebar\":\"shown\",\"theme\":\"light\",\"notifications\":false,\"guideSeen\":true,\"files\":[]}"
+      "content": "{\"version\":5,\"selected\":null,\"columns\":{\"left\":248,\"right\":440},\"sidebar\":\"shown\",\"theme\":\"dracula\",\"notifications\":false,\"guideSeen\":true,\"files\":[]}"
     }
   ],
   "workspaces": [
