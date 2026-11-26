@@ -571,7 +571,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await writeFile(join(repo, "short.txt"), "short\n");
     await git("add", ".");
     const blob = await git("rev-parse", ":short.txt");
-    const long = `${"d/".repeat(changesLimits.pathChars / 2)}x.txt`;
+    const long = `${"d".repeat(changesLimits.pathChars)}/x.txt`;
     index([`100644 ${blob}\t${long}`]);
     await git("commit", "-q", "-m", "one");
     const list = await listed(repo, await git("rev-parse", "HEAD"));
@@ -621,7 +621,7 @@ describe("readChangeList", { timeout: 60_000 }, () => {
     await writeFile(join(repo, "short.txt"), "short\n");
     await git("add", ".");
     const blob = await git("rev-parse", ":short.txt");
-    const folder = "f/".repeat(1990);
+    const folder = `${"f".repeat(3980)}/`;
     index(
       Array.from(
         { length: 2100 },
