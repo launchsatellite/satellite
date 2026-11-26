@@ -11,7 +11,7 @@ import { gone, startClaude, terminalFocused, visible, waitUntil } from "./condit
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const execute = promisify(execFile);
-const hostileProject = "beta‮lonrev";
+const hostileProject = "beta\u202elonrev";
 const shownHostileProject = "beta[U+202E]lonrev";
 
 async function unavailable(session: AppSession, testId: string): Promise<boolean> {
