@@ -285,6 +285,29 @@ async function run(session: AppSession): Promise<void> {
     "Start from opened after Escape cancelled it",
   );
   assert.equal(await page.getByTestId("workspace-name").inputValue(), "second-look");
+  await page.evaluate(() => {
+    window.addEventListener(
+      "mousedown",
+      () => {
+        requestAnimationFrame(() => {
+          document.activeElement?.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+          );
+        });
+      },
+      { once: true },
+    );
+  });
+  await page.getByTestId("workspace-start").click();
+  await delay(500);
+  assert.ok(
+    await page.getByTestId("new-workspace-dialog").isVisible(),
+    "Escape in the frame Start from opened closed New workspace",
+  );
+  assert.ok(
+    !(await page.getByTestId("workspace-start-options").isVisible()),
+    "Start from stayed open after Escape in the frame it opened",
+  );
   await page.getByTestId("workspace-start").click();
   await visible(session, "workspace-start-options", "after opening Start from");
   await page.mouse.click(8, 300);

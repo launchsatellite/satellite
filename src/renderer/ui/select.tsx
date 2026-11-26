@@ -1,6 +1,6 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { cn } from "cn";
-import { useRef, type KeyboardEvent, type MouseEvent } from "react";
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Icon } from "./icon.tsx";
 import { fieldLook } from "./input.tsx";
 
@@ -33,27 +33,32 @@ export function Select<T extends string>({
   const trigger = useRef<HTMLButtonElement>(null);
   const open = useRef(false);
   const cancelled = useRef(false);
+  const [shown, setShown] = useState(false);
   const opening = (on: boolean) => {
     trigger.current?.toggleAttribute("data-menu-opening", on);
   };
+  const show = (next: boolean) => {
+    open.current = next;
+    opening(next);
+    setShown(next);
+  };
   const press = (event: MouseEvent) => {
     if (event.button !== 0 || disabled || open.current) return;
+    cancelled.current = false;
     opening(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        cancelled.current = false;
         if (!open.current) opening(false);
       });
     });
   };
   const key = (event: KeyboardEvent) => {
-    if (
-      event.key !== "Escape" ||
-      open.current ||
-      trigger.current?.hasAttribute("data-menu-opening") !== true
-    ) {
+    if (event.key !== "Escape") return;
+    if (open.current) {
+      show(false);
       return;
     }
+    if (trigger.current?.hasAttribute("data-menu-opening") !== true) return;
     cancelled.current = true;
     opening(false);
   };
@@ -62,6 +67,7 @@ export function Select<T extends string>({
       value={value}
       items={options}
       disabled={disabled}
+      open={shown}
       onValueChange={(chosen) => {
         if (chosen !== null) onChange(chosen);
       }}
@@ -71,8 +77,7 @@ export function Select<T extends string>({
           details.cancel();
           return;
         }
-        open.current = next;
-        if (!next) opening(false);
+        show(next);
       }}
     >
       <SelectPrimitive.Trigger
