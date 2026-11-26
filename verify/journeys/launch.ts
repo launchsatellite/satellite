@@ -97,16 +97,19 @@ async function run(session: AppSession): Promise<void> {
   await checkDrawn(session);
   await checkInput(session);
 
+  assert.ok(!processGone(firstPid), "the first stand-in was gone before the reload");
   const beforeReload = await claudePids(session);
   await page.reload();
   await waitUntil(
     () => beforeReload.every(processGone),
     goneTimeoutMs,
-    `the stand-in (pid ${String(firstPid)}) still ran after the reload`,
+    () =>
+      `the stand-ins ${JSON.stringify(beforeReload.filter((pid) => !processGone(pid)))} still ran after the reload`,
   );
   await page.getByTestId("app-window").waitFor();
 
   const secondPid = await startClaude(session, beforeReload.length + 1);
+  assert.ok(!processGone(secondPid), "the stand-in started after the reload is not running");
   const { exitedOnItsOwn } = await session.close();
   assert.ok(exitedOnItsOwn, "the app was still running 10 seconds after its window closed");
   await waitUntil(
