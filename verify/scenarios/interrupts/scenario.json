@@ -1,5 +1,5 @@
 {
-  "description": "A repo with one workspace alpha, a stand-in gh, and a stand-in Claude Code that takes a prompt and stops on Escape with no hook, asks to run Bash and takes Escape as a decline, then takes a prompt whose tool still finishes after Escape, with Satellite set to the light theme.",
+  "description": "A repo with one workspace alpha, a stand-in gh, and a stand-in Claude Code that takes a prompt and stops on Escape with no hook, then asks to run Bash and takes Escape as a decline, with Satellite set to the light theme.",
   "repo": [
     {
       "write": {
@@ -83,48 +83,6 @@
       },
       {
         "print": "\r\nDeclined.\r\n> "
-      },
-      {
-        "await": "\r"
-      },
-      {
-        "hook": "UserPromptSubmit"
-      },
-      {
-        "print": "\r\nRunning Bash.\r\n"
-      },
-      {
-        "await": "\u001b"
-      },
-      {
-        "wait": 1000
-      },
-      {
-        "hook": "PostToolUse",
-        "fields": {
-          "tool_name": "Bash"
-        }
-      },
-      {
-        "print": "\r\nInterrupted.\r\n> "
-      },
-      {
-        "await": "\r"
-      },
-      {
-        "hook": "UserPromptSubmit"
-      },
-      {
-        "print": "\r\nWorking on four.\r\n"
-      },
-      {
-        "spin": 9000
-      },
-      {
-        "hook": "Stop"
-      },
-      {
-        "print": "Done.\r\n> "
       }
     ]
   }

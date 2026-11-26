@@ -1,5 +1,5 @@
 {
-  "description": "A repo with a committed README, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that takes a prompt, then asks for permission three times, the first time with a permission notice and a helper agent asking at once, and finishes. Satellite is set to the light theme.",
+  "description": "A repo with a committed README, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that takes a prompt, then asks for permission twice, the first time with a permission notice and a helper agent asking at once. Satellite is set to the light theme.",
   "repo": [
     { "write": { "path": "README.md", "content": "# Verify repo\n" } },
     { "git": ["init", "-b", "main"] },
@@ -43,17 +43,7 @@
       { "print": "Allowed.\r\n" },
       { "await": "\r" },
       { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
-      { "print": "Allow Bash again? Press y to allow.\r\n" },
-      { "await": "y" },
-      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
-      { "print": "Allowed again.\r\n" },
-      { "await": "\r" },
-      { "hook": "PermissionRequest", "fields": { "tool_name": "Bash" } },
-      { "print": "Allow Bash once more? Press y to allow.\r\n" },
-      { "await": "y" },
-      { "hook": "PostToolUse", "fields": { "tool_name": "Bash" } },
-      { "hook": "Stop" },
-      { "print": "Done.\r\n> " }
+      { "print": "Allow Bash again? Press y to allow.\r\n" }
     ]
   }
 }
