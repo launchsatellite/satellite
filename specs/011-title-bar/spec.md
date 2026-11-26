@@ -38,8 +38,8 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 
 - [x] The strip shows the toggle, the centre title and the three buttons, each with its accessible name and tooltip, at the opened size and at 960 by 600, in light and dark.
 - [x] The centre title names the project and workspace, reads Satellite with nothing selected, writes out a hostile name, keeps a 73 character project name between its neighbours with an ellipsis and drag room on both sides at 560 by 600, and opens the switcher. Proof, journey `title-bar`, for all but the long name.
-- [x] Each right button runs its command and is unavailable exactly when the command is. Proof, journey `title-bar` for New workspace, the command menu and the inbox.
-- [x] Hide the sidebar from the button and the shortcut gives the centre its width, moves focus off the hidden column, comes back after a restart and shows again with Focus the sidebar. Proof, journey `title-bar` for the button and the restart.
+- [x] Each right button runs its command and is unavailable exactly when the command is. Proof, journey `title-bar`, which runs New workspace, the command menu and the inbox from their buttons and reads the inbox button unavailable exactly while nothing needs you.
+- [x] Hide the sidebar from the button and the shortcut gives the centre its width, moves focus off the hidden column, comes back after a restart and shows again with Focus the sidebar. Proof, journey `title-bar`, which hides the sidebar from the button, finds it hidden after a restart and shows it again from the button.
 - [x] The strip is a drag area with its controls outside it, and drops its drag area under a dialog and the command menu.
 - [x] The workspace header no longer names the project, and keeps its heading for screen readers.
 - [x] The title bar options per system, and overlay colours equal to the tokens in `app.css`. Proof, `src/main/platform/title-bar.test.ts`.

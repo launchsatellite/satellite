@@ -39,8 +39,8 @@ The column widths and the hidden sidebar, which the window and the title bar alr
 A Satellite feature is accepted on macOS, Windows and Linux.
 
 - [x] The title bar button, the command and the shortcut open Settings, Escape closes it and focus returns to where it was. Proof, journey `settings` for the shortcut and Escape.
-- [x] Each section shows its current value, the theme and notifications change at once, survive a relaunch and stay in step with their commands. Proof, journey `settings`, for all but the commands.
-- [x] The tools section shows each tool's version, and Check again checks again. Proof, journey `settings`.
+- [x] Each section shows its current value, the theme and notifications change at once, survive a relaunch and stay in step with their commands. Proof, journey `settings`, which reads the theme and notifications shown, Dracula taking the window at once, both saved and both kept after a relaunch.
+- [x] The tools section shows each tool's version, and Check again checks again. Proof, journey `settings`, which reads git's and Claude Code's versions and the gh account, and sees Check again run gh again.
 - [x] The shortcut list holds exactly the commands with a shortcut, with the keys for this system.
 - [x] About opens the repository and the security policy only through the link dialog. Proof, journey `settings` for the security policy.
 - [x] Settings holds inside the window at 960 by 600 in light and dark, and its button stays inside the title bar area.
