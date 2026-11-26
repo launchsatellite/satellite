@@ -351,6 +351,9 @@ async function links(session: AppSession): Promise<void> {
   );
   await dialogClosed(session, "after opening the plain address");
   await openedAre(session, [plainLink], "after opening the plain address");
+  await clickLink(session, plainLink, false, false);
+  assert.equal(await page.getByTestId("link-dialog").count(), 0, "a plain click asked to open");
+  await openedAre(session, [plainLink], "after a plain click");
   await clickLink(session, "docs", true, true);
   await visible(session, "link-dialog", "after a modifier click on a hyperlink");
   const address = await page.getByTestId("link-address").innerText();
