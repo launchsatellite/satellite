@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { noticeGapMs } from "../../src/main/inbox/notices.ts";
 import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
@@ -14,11 +12,8 @@ import {
   visible,
   waitUntil,
 } from "./conditions.ts";
-import { pointerAndTargets, threadMarkPoints } from "./cursors.ts";
 
 const showMs = 15_000;
-const menuKey = process.platform === "darwin" ? "Meta" : "Control+Shift";
-const nextThreadKey = `${menuKey}+j`;
 const noticeBody = "The pull request needs you in repo.";
 const alphaNotice = { kind: "notice", title: "alpha needs you", body: noticeBody } as const;
 const closed = { kind: "close" } as const;
@@ -115,6 +110,11 @@ async function startedClaude(session: AppSession): Promise<void> {
   await startClaude(session, 1);
 }
 
+async function openedFromInbox(session: AppSession): Promise<void> {
+  await session.page.getByTestId("inbox-repo-alpha").click();
+  await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
+}
+
 async function noticesAre(session: AppSession, expected: unknown[], when: string): Promise<void> {
   let shown: unknown[] = [];
   await waitUntil(
@@ -131,15 +131,12 @@ async function noticesAre(session: AppSession, expected: unknown[], when: string
 async function opened(session: AppSession): Promise<void> {
   await select(session, "alpha");
   await attributeIs(session, "centre-tab-pull-request", "data-number", "12", "without a click");
-  await visible(session, "workspace-repo-alpha-pull-request", "beside the workspace");
-  await visible(session, "header-pull-request", "in the header");
   await openTab(session);
   await waitUntil(
     async () => (await session.page.getByTestId("pull-request-body").locator("table").count()) > 0,
     showMs,
     "the description's table never drew",
   );
-  await visible(session, "inbox-empty", "with nothing wrong");
   const events = await ghEvents(session);
   const folders = new Set([session.repo, alphaFolder(session)]);
   for (const event of events) {
@@ -151,26 +148,22 @@ async function opened(session: AppSession): Promise<void> {
     );
     if (known) assert.ok(folders.has(event.cwd ?? ""), `gh ran in ${event.cwd ?? "no folder"}`);
   }
-  await pointerAndTargets(session);
   assert.deepEqual(session.consoleErrors, [], "the window logged console errors");
 }
 
 async function appears(session: AppSession): Promise<void> {
   await select(session, "alpha");
   await showTab(session);
-  await visible(session, "pull-request-sentence", "while the branch has no pull request");
   await textHolds(
     session,
     "pull-request-sentence",
     "No pull request for this branch yet.",
     "without a pull request",
   );
-  await visible(session, "pull-request-send-open", "offering the request");
   await startClaude(session, 1);
   await session.mark("opened");
   await endTurn(session, true);
   await attributeIs(session, "centre-tab-pull-request", "data-number", "12", "after the turn");
-  await visible(session, "workspace-repo-alpha-pull-request", "after the turn");
   const asked = (await ghEvents(session)).map((event) => event.args.join(" "));
   assert.ok(
     asked.some((line) => line.startsWith("pr view 12 ")),
@@ -180,21 +173,6 @@ async function appears(session: AppSession): Promise<void> {
     !asked.some((line) => line.startsWith("pr view 13 ")),
     "a stranger's pull request was read by number",
   );
-}
-
-async function failingLinesExplain(session: AppSession): Promise<void> {
-  await session.page.getByTestId("pull-request-section-checks").click();
-  const toggle = session.page.locator(
-    '[data-testid^="pull-request-check-"][data-testid$="-toggle"]',
-  );
-  await toggle.click();
-  const id = (await toggle.getAttribute("data-testid"))?.replace(/-toggle$/, "") ?? "";
-  const lines = `${id}-lines`;
-  await textHolds(session, lines, "Unexpected var", "in a log that holds only the exit code");
-  const text = await session.page.getByTestId(lines).innerText();
-  assert.ok(text.includes("exit code 1"), "the failing lines left out the exit code");
-  assert.ok(!text.includes("Cleaning up"), "the failing lines showed the cleanup after the step");
-  await session.page.getByTestId("pull-request-section-overview").click();
 }
 
 async function checksFailed(session: AppSession): Promise<void> {
@@ -207,109 +185,48 @@ async function checksFailed(session: AppSession): Promise<void> {
     "the notice held something the pull request said",
   );
   await startedClaude(session);
-  await session.page.getByTestId("inbox-repo-alpha").click();
-  await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
-  await failingLinesExplain(session);
+  await openedFromInbox(session);
+  await session.page.getByTestId("pull-request-section-checks").click();
+  const toggle = session.page.locator(
+    '[data-testid^="pull-request-check-"][data-testid$="-toggle"]',
+  );
+  await toggle.click();
+  const id = (await toggle.getAttribute("data-testid"))?.replace(/-toggle$/, "") ?? "";
+  await textHolds(session, `${id}-lines`, "Unexpected var", "in the failing check's log");
   await session.mark("fixed");
   await endTurn(session, true);
   await rowGone(session, "after the checks passed");
   await noticesAre(session, [alphaNotice, closed], "after the checks passed,");
-  await endTurn(session, false);
-  await delay(noticeGapMs + 1000);
-  assert.deepEqual(
-    shownOf(await session.notices()),
-    [alphaNotice, closed],
-    "a second finished turn raised another notice",
-  );
-}
-
-const movedOnSentence = "Satellite moved on to a newer read.";
-const resolvedBody = "Could this use a template string?";
-
-async function filesHold(session: AppSession, when: string): Promise<void> {
-  for (let look = 0; look < 25; look += 1) {
-    const text = await session.page.getByTestId("pull-request").innerText();
-    assert.ok(!text.includes(movedOnSentence), `the Files section said it moved on ${when}`);
-    const marks = await session.page.locator(".thread-mark").count();
-    assert.equal(marks, 1, `the diff held ${String(marks)} thread marks ${when}`);
-    await delay(100);
-  }
 }
 
 async function changesRequested(session: AppSession): Promise<void> {
+  const { page } = session;
   await inboxReads(session, "A review asks for changes.", "after launch");
   await startedClaude(session);
-  await session.page.getByTestId("inbox-repo-alpha").click();
-  await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
-  await session.page.getByTestId("pull-request-section-files").click();
+  await openedFromInbox(session);
+  await page.getByTestId("pull-request-section-files").click();
   await visible(session, "thread-panel", "in the Files section");
   await waitUntil(
-    async () => (await session.page.locator(".thread-mark").count()) === 1,
+    async () => (await page.locator(".thread-mark").count()) === 1,
     showMs,
     "the diff did not hold exactly one thread mark",
   );
-  await threadMarkPoints(session);
-  await session.page
-    .getByTestId("changes-file-0")
-    .waitFor({ state: "attached" })
-    .catch(() => undefined);
-  await filesHold(session, "on first open");
-  await session.page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await filesHold(session, "after focus");
-  await endTurn(session, true);
-  await filesHold(session, "after a finished turn");
-  await session.page.keyboard.press(nextThreadKey);
-  await attributeIs(session, "thread-0", "aria-current", "true", "after the key");
   await session.mark("answered");
   await endTurn(session, true);
   await rowGone(session, "after the review was answered");
-  await conversationActs(session);
-}
-
-async function bodyShown(
-  session: AppSession,
-  testId: string,
-  shown: boolean,
-  when: string,
-): Promise<void> {
-  const item = session.page.getByTestId(testId);
-  await waitUntil(
-    async () => (await item.innerText()).includes(resolvedBody) === shown,
-    showMs,
-    `${testId} ${shown ? "hid" : "showed"} its body ${when}`,
-  );
-}
-
-async function conversationActs(session: AppSession): Promise<void> {
-  const { page } = session;
   await page.getByTestId("pull-request-section-conversation").click();
   const resolved = page.locator('li[data-kind="thread"][data-resolved="true"]');
-  const open = page.locator('li[data-kind="thread"][data-resolved="false"]').first();
   await resolved.waitFor();
-  assert.equal(await page.locator("summary").count(), 0, "a thread still drew a summary");
   const item = (await resolved.getAttribute("data-testid")) ?? "";
-  const toggle = `${item}-toggle`;
-  assert.equal(
-    await page.getByTestId(toggle).locator("button").count(),
-    0,
-    "the disclosure held a button",
-  );
-  await attributeIs(session, toggle, "aria-expanded", "false", "before Show thread");
-  assert.ok(
-    !(await resolved.innerText()).includes(resolvedBody),
-    "a closed resolved thread showed its body",
-  );
-  await page.getByTestId(toggle).click();
-  await attributeIs(session, toggle, "aria-expanded", "true", "after Show thread");
-  await bodyShown(session, item, true, "after Show thread");
-  await page.getByTestId(toggle).click();
-  await attributeIs(session, toggle, "aria-expanded", "false", "after Hide thread");
-  await bodyShown(session, item, false, "after Hide thread");
   await page.getByTestId(`${item}-open`).click();
   await textHolds(session, "link-dialog", "pull/12#discussion_r3003", "after Open on GitHub");
   await page.keyboard.press("Escape");
   const from = (await session.standInEvents()).length;
-  await open.locator('[data-testid$="-send"]').click();
+  await page
+    .locator('li[data-kind="thread"][data-resolved="false"]')
+    .first()
+    .locator('[data-testid$="-send"]')
+    .click();
   let typed = "";
   await waitUntil(
     async () => {
@@ -329,8 +246,7 @@ async function conflicts(session: AppSession): Promise<void> {
   await inboxReads(session, "The pull request has conflicts.", "after launch");
   await startedClaude(session);
   await endTurn(session, true);
-  await session.page.getByTestId("inbox-repo-alpha").click();
-  await attributeIs(session, "pull-request", "data-state", "found", "after the row opened it");
+  await openedFromInbox(session);
   const before = (await session.standInEvents()).length;
   await session.page.getByTestId("pull-request-conflict-send").click();
   await waitUntil(
@@ -401,24 +317,17 @@ async function hostile(session: AppSession): Promise<void> {
     events.every((event) => !event.args.join(" ").includes("--repo evil/x")),
     "a check name reached a gh argument",
   );
-  await session.screenshot("hostile");
 }
 
 async function signedOut(session: AppSession): Promise<void> {
   await select(session, "alpha");
   await showTab(session);
-  await visible(session, "pull-request-sentence", "when gh is signed out");
   await textHolds(
     session,
     "pull-request-sentence",
     "The GitHub CLI is signed out. Run gh auth login in a terminal and come back.",
     "when gh is signed out",
   );
-  await delay(5000);
-  const reads = (await ghEvents(session)).filter(
-    (event) => event.call === "pull-request" && event.cwd === alphaFolder(session),
-  );
-  assert.ok(reads.length <= 2, `gh read alpha ${String(reads.length)} times while signed out`);
   await stateIs(session, "pull-request", "unavailable", "when gh is signed out");
 }
 

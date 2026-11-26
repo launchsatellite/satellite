@@ -41,4 +41,4 @@ Creating pull requests, replying, reviewing and merging. Agents and GitHub own t
 - [x] A description with a script, raw HTML and a remote image renders none of them as elements, and the raw HTML reads as text. Proof, scenario `hostile-description` and unit tests on the renderer.
 - [x] Every shape of `gh` answer the view depends on parses, and a missing field degrades to a sentence. Proof, unit tests on the parsers.
 - [x] With `gh` signed out the tab says so and names the fix. Proof, scenario `not-signed-in`.
-- [x] A new pull request opened by the agent appears without any action. Proof, a journey.
+- [x] A new pull request opened by the agent appears without any action. Proof, journey `pull-request`.

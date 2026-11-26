@@ -33,7 +33,7 @@ Reasons that come from pull requests arrive with spec 008 and use this inbox.
 
 ## Acceptance
 
-- [x] A session asking for permission in a workspace that is not selected appears in the inbox with its reason. Proof, scenario `needs-permission` and the `inbox` journey.
-- [x] Answering the session removes the row. Proof, the same scenario and journey.
+- [x] A session asking for permission in a workspace that is not selected appears in the inbox with its reason. Proof, the `inbox` journey, which lists alpha asking while beta is selected, and `src/renderer/inbox/inbox.test.ts` on the reason's sentence.
+- [x] Answering the session removes the row. Proof, the same journey.
 - [x] With the window unfocused, needing the user raises one notification, and not a second one for the same reason. Proof, the `inbox` journey with the recording notifier, and the controller's unit tests.
-- [x] With notifications off, none is raised and the inbox still fills. Proof, the driver with the recording notifier, and the `inbox` journey.
+- [x] With notifications off, none is raised and the inbox still fills. Proof, the driver with the recording notifier, and `src/main/inbox/notices.test.ts`.

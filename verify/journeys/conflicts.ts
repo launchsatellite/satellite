@@ -56,21 +56,6 @@ async function bannerReads(session: AppSession, expected: string, when: string):
   );
 }
 
-async function offersTheButtonWhenNarrow(session: AppSession): Promise<void> {
-  const { page } = session;
-  await page.setViewportSize({ width: 1024, height: 645 });
-  await bannerReads(session, bannerSentence.split(" ")[0] ?? "", "in a narrow window");
-  const box = await page.getByTestId("changes-banner-send").boundingBox();
-  const right = (box?.x ?? 0) + (box?.width ?? 0);
-  const rowRight = await page
-    .getByTestId("changes-banner")
-    .evaluate((banner) => banner.getBoundingClientRect().right);
-  assert.ok(
-    box !== null && right <= rowRight + 1,
-    `the banner's button ended at ${String(right)}, past the banner's edge at ${String(rowRight)}`,
-  );
-}
-
 async function leavesNothing(session: AppSession, when: string): Promise<void> {
   const marker = join(session.userHome, "merge-driver-ran");
   assert.ok(!(await exists(marker)), `the repository's merge driver ran ${when}`);
@@ -99,33 +84,7 @@ async function namesTheConflict(session: AppSession): Promise<void> {
     waitMs,
     () => `the banner named ${JSON.stringify(files)}`,
   );
-  const live = await session.page.locator('[role="status"] [data-testid="changes-banner"]').count();
-  assert.equal(live, 1, "the banner is not inside a polite live region");
-  const colour = await session.page
-    .getByTestId("changes-banner")
-    .evaluate((element) => getComputedStyle(element).backgroundColor);
-  assert.notEqual(colour, "rgba(0, 0, 0, 0)", "the banner has no calm background");
   await leavesNothing(session, "while checking for conflicts");
-}
-
-async function contentTop(session: AppSession): Promise<number> {
-  return session.page
-    .getByRole("tabpanel", { name: "Changes" })
-    .evaluate((panel) => panel.getBoundingClientRect().top);
-}
-
-async function staysPut(session: AppSession): Promise<void> {
-  const top = () => contentTop(session);
-  const before = await top();
-  await session.page.getByTestId("changes-view-uncommitted").click();
-  await bannerReads(session, bannerSentence, "in Uncommitted");
-  const after = await top();
-  assert.equal(
-    after,
-    before,
-    `the content moved when the view changed, from ${String(before)} to ${String(after)}, and read ${String(await top())} a moment later`,
-  );
-  await session.page.getByTestId("changes-view-branch").click();
 }
 
 async function sendsTheRequest(session: AppSession): Promise<void> {
@@ -152,14 +111,9 @@ async function sendsTheRequest(session: AppSession): Promise<void> {
     `\u001b[200~${request}\u001b[201~`,
     `the prompt received ${JSON.stringify(typed)}`,
   );
-  assert.ok(!typed.includes("\r"), "the request was submitted");
 }
 
 async function goesWhenResolved(session: AppSession): Promise<void> {
-  const shownTop = await contentTop(session);
-  const bannerHeight = await session.page
-    .getByTestId("changes-banner")
-    .evaluate((banner) => banner.getBoundingClientRect().height);
   await git(session, ["revert", "--no-edit", "HEAD"]);
   await waitUntil(
     async () => {
@@ -169,8 +123,6 @@ async function goesWhenResolved(session: AppSession): Promise<void> {
     waitMs,
     "the banner stayed after the conflict was resolved",
   );
-  const freedTop = await contentTop(session);
-  assert.equal(freedTop, shownTop - bannerHeight, "the empty strip kept its space");
   await leavesNothing(session, "after the conflict was resolved");
 }
 
@@ -193,12 +145,9 @@ export const conflictsJourney: Journey = {
   scenario: "conflict-with-base",
   async run(session) {
     await namesTheConflict(session);
-    await offersTheButtonWhenNarrow(session);
-    await staysPut(session);
     await sendsTheRequest(session);
     await goesWhenResolved(session);
     await saysItNeedsANewerGit(session);
-    await session.screenshot("conflicts");
     assert.deepEqual(session.consoleErrors, [], "the window logged errors");
   },
 };

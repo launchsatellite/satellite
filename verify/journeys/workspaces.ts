@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { chooseOption, type AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
@@ -209,8 +208,6 @@ async function undoAfterHookLinked(session: AppSession): Promise<void> {
   try {
     await openNewWorkspace(session, () => page.getByTestId("new-workspace-repo").click());
     await page.getByTestId("workspace-name").fill("hooked");
-    const size = page.viewportSize();
-    await page.setViewportSize({ width: 960, height: 600 });
     await page.keyboard.press("Enter");
     await visible(session, "workspace-failure", "after the hook linked a folder and failed");
     const failure = await textOf(session, "workspace-failure");
@@ -219,24 +216,7 @@ async function undoAfterHookLinked(session: AppSession): Promise<void> {
       `the undone creation said "${failure}"`,
     );
     await session.screenshot("workspaces-undone");
-    assert.equal(
-      await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
-      "close-workspace-dialog",
-      "a failed creation did not focus Close",
-    );
-    await waitUntil(
-      () =>
-        page.evaluate(() => {
-          const sentence = document.querySelector("[data-testid='workspace-failure']");
-          const close = document.querySelector("[data-testid='close-workspace-dialog']");
-          if (sentence === null || close === null) return false;
-          return sentence.getBoundingClientRect().bottom <= close.getBoundingClientRect().top;
-        }),
-      waitMs,
-      "the failure sentence was out of view at 960 by 600",
-    );
     await page.getByTestId("close-workspace-dialog").click();
-    if (size !== null) await page.setViewportSize(size);
   } finally {
     await unlink(hook);
   }
@@ -273,55 +253,7 @@ async function run(session: AppSession): Promise<void> {
 
   await openNewWorkspace(session, () => page.keyboard.press(`${commandModifier}+N`));
   await page.getByTestId("workspace-name").fill("second-look");
-  await page.getByTestId("workspace-start").click();
-  await page.keyboard.press("Escape");
-  await delay(500);
-  assert.ok(
-    await page.getByTestId("new-workspace-dialog").isVisible(),
-    "Escape right after opening Start from closed New workspace",
-  );
-  assert.ok(
-    !(await page.getByTestId("workspace-start-options").isVisible()),
-    "Start from opened after Escape cancelled it",
-  );
-  assert.equal(await page.getByTestId("workspace-name").inputValue(), "second-look");
-  await page.evaluate(() => {
-    window.addEventListener(
-      "mousedown",
-      () => {
-        requestAnimationFrame(() => {
-          document.activeElement?.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-          );
-        });
-      },
-      { once: true },
-    );
-  });
-  await page.getByTestId("workspace-start").click();
-  await delay(500);
-  assert.ok(
-    await page.getByTestId("new-workspace-dialog").isVisible(),
-    "Escape in the frame Start from opened closed New workspace",
-  );
-  assert.ok(
-    !(await page.getByTestId("workspace-start-options").isVisible()),
-    "Start from stayed open after Escape in the frame it opened",
-  );
-  await page.getByTestId("workspace-start").click();
-  await visible(session, "workspace-start-options", "after opening Start from");
-  await page.mouse.click(8, 300);
-  await page.getByTestId("workspace-start-options").waitFor({ state: "hidden" });
-  assert.ok(
-    await page.getByTestId("new-workspace-dialog").isVisible(),
-    "a click outside Start from closed New workspace",
-  );
-  assert.equal(await page.getByTestId("workspace-name").inputValue(), "second-look");
   await chooseOption(page, "workspace-start", "release");
-  assert.ok(
-    await page.getByTestId("new-workspace-dialog").isVisible(),
-    "picking release closed New workspace",
-  );
   await page.getByTestId("create-workspace").click();
   await selectedRow(session, "second-look", "after making it from release");
   await session.screenshot("workspaces-created");

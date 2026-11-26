@@ -48,7 +48,6 @@ async function startWithChild(session: AppSession): Promise<Started> {
 async function run(session: AppSession): Promise<void> {
   const { claudePid, childPid } = await startWithChild(session);
   assert.ok(!processGone(childPid), "the child that ignores hangup was gone before quit");
-  await session.screenshot("quit");
   const { exitedOnItsOwn } = await session.close();
   assert.ok(exitedOnItsOwn, "the app was still running 10 seconds after its window closed");
   await waitUntil(

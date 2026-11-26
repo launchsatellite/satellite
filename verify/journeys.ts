@@ -114,7 +114,6 @@ async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome>
     folder: (name) => session.folder(name),
     answerFolderDialog: (path) => session.answerFolderDialog(path),
     dropFolder: (path) => session.dropFolder(path),
-    dropFiles: (testId, paths) => session.dropFiles(testId, paths),
     selectDiffLines: (side, start, end) => session.selectDiffLines(side, start, end),
     selectFileLines: (start, end) => session.selectFileLines(start, end),
     openedLinks: () => session.openedLinks(),

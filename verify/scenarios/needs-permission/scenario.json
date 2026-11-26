@@ -1,8 +1,7 @@
 {
-  "description": "A repo with a committed file whose name holds a space, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that posts its hooks as it takes a prompt, asks to run Bash, runs it once allowed and finishes. Its output holds two links and an address whose tail is concealed, and Satellite is set to the light theme.",
+  "description": "A repo with a committed README, two workspaces alpha and beta, a stand-in gh, and a stand-in Claude Code that posts its hooks as it takes a prompt, asks to run Bash, runs it once allowed and finishes. Its output holds two links and an address whose tail is concealed, and Satellite is set to the light theme.",
   "repo": [
     { "write": { "path": "README.md", "content": "# Verify repo\n" } },
-    { "write": { "path": "with space.txt", "content": "a file whose name holds a space\n" } },
     { "git": ["init", "-b", "main"] },
     { "git": ["add", "."] },
     { "git": ["commit", "-m", "first commit"] }

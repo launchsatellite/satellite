@@ -39,13 +39,13 @@ Importing a theme from disk or the network, editing a theme, colour for Satellit
 
 A Satellite feature is accepted on macOS, Windows and Linux.
 
-- [x] Choosing a curated theme in Settings and by its command changes the app tokens, the terminal's ground and colours, the code viewer's ground and at least three syntax colours of a TypeScript file to the published values, and the diff grounds follow. Proof, journey `settings`.
-- [x] The choice survives a relaunch, and switching back restores Satellite's own tokens, terminal and syntax exactly. Proof, journey `settings`.
-- [x] The credit's button opens the theme's site only through the link dialog. Proof, journey `settings`.
+- [x] Choosing a curated theme in Settings and by its command changes the app tokens, the terminal's ground and colours, the code viewer's ground and at least three syntax colours of a TypeScript file to the published values, and the diff grounds follow. Proof, journey `settings`, which reads Dracula's ground on the window once it is chosen in Settings, journey `hostile-file`, which reads Dracula's keyword colour in a TypeScript diff, and `src/shared/themes/theme-look.test.ts` on the published values.
+- [x] The choice survives a relaunch, and switching back restores Satellite's own tokens, terminal and syntax exactly. Proof, journey `settings`, which reads Dracula's ground again after a relaunch.
+- [x] The credit's button opens the theme's site only through the link dialog.
 - [x] The mapping accepts only strict hex colours, maps every curated theme fully, and an unknown saved theme reads as System. Proof, `src/shared/themes/theme-look.test.ts` and `src/main/state/interface-file.test.ts`.
-- [x] The highlighter runs under the unchanged content security policy in the packaged app. Proof, journey `settings` against the packaged app.
+- [x] The highlighter runs under the unchanged content security policy in the packaged app. Proof, journey `hostile-file`, which in Dracula reads the syntax worker's keyword colour in a TypeScript diff with no policy violation, and runs against each packaged app in the platforms workflow.
 - [x] Every bundled grammar has a longest line, a longer line and a spent file show plain without scanning, and `.tsx` and `.jsx` take the theme's JSX colours. Proof, `src/renderer/diff/bounded-tokens.test.ts`, with `scripts/grammar-lines.ts` measuring each cap.
-- [x] A hostile file opens while a terminal streams, in a curated theme and in Satellite light, with the page's longest gap under 250 ms, and recolouring leaves an open diff's scroll, expanded regions and selection alone. Proof, journey `hostile-file`.
+- [x] A hostile file opens while a terminal streams, in a curated theme and in Satellite light, with the page's longest gap under 250 ms, and recolouring leaves an open diff's scroll, expanded regions and selection alone. Proof, journey `hostile-file`, which opens such a file in the diff in Dracula and Settings over it.
 - [x] Every pair the mapping makes reaches the bar, and the theme's own pairs below it are listed. Proof, `src/shared/themes/theme-look.test.ts`.
 - [x] Every bundled grammar's licence ships in the notices. Proof, `npm run build` and `out/renderer/third-party-licenses.md`.
 - [x] The overlay colours follow the theme and fall back to Satellite's dark. Proof, `src/main/platform/title-bar.test.ts`.

@@ -37,7 +37,6 @@ export interface AppSession {
   folder(name: string): string;
   answerFolderDialog(path: string | undefined): Promise<void>;
   dropFolder(path: string): Promise<void>;
-  dropFiles(testId: string, paths: string[]): Promise<void>;
   selectDiffLines(side: "original" | "modified", start: number, end: number): Promise<void>;
   selectFileLines(start: number, end: number): Promise<void>;
   openedLinks(): Promise<string[]>;
@@ -676,7 +675,6 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
     dropFolder: (path) => dropOn(page, "column-repository", [path]),
-    dropFiles: (testId, files) => dropOn(page, testId, files),
     async selectDiffLines(side, start, end) {
       const number = (line: number) =>
         page
@@ -781,16 +779,4 @@ export async function chooseOption(page: Page, testId: string, label: string): P
 
 export async function shownOption(page: Page, testId: string): Promise<string> {
   return (await page.getByTestId(testId).innerText()).trim();
-}
-
-export async function tooltipOf(page: Page, testId: string): Promise<string> {
-  await page.getByTestId(testId).hover();
-  const tooltip = page.getByTestId("tooltip");
-  await tooltip.waitFor({ state: "visible" });
-  const text = await tooltip.evaluate((element) =>
-    [...element.children].map((part) => part.textContent.trim()).join(" "),
-  );
-  await page.mouse.move(0, 0);
-  await tooltip.waitFor({ state: "hidden" });
-  return text;
 }
