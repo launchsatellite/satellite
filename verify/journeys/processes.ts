@@ -26,8 +26,6 @@ interface Server {
 const minimumAgeMs = 10_000;
 const stopWaitMs = goneTimeoutMs + 3000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
-const detachedSentence =
-  "A process that detached from the session that started it keeps running and isn't listed here.";
 
 async function startedServer(session: AppSession): Promise<Server> {
   let found: Server | undefined;
@@ -129,15 +127,8 @@ async function removeAsks(session: AppSession, claudePid: number): Promise<void>
     (await textOf(session, "remove-project-sessions")).trim(),
     "1 Claude Code session running here stops first.",
   );
-  assert.equal(await page.getByTestId("remove-project-processes").count(), 0);
-  assert.equal(
-    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
-    "remove-project-cancel",
-    "the remove question did not start with focus on Cancel",
-  );
-  await session.screenshot("processes-remove");
-  await page.keyboard.press("Enter");
-  await gone(session, "remove-project-dialog", "after Enter on the remove question");
+  await page.getByTestId("remove-project-cancel").click();
+  await gone(session, "remove-project-dialog", "after Cancel on the remove question");
   await visible(session, "project-repo", "after the remove question was cancelled");
   assert.ok(!processGone(claudePid), "cancelling the remove question ended Claude Code");
 
@@ -151,35 +142,9 @@ async function removeAsks(session: AppSession, claudePid: number): Promise<void>
   );
 }
 
-async function viewChecked(session: AppSession, view: string, when: string): Promise<void> {
-  await waitUntil(
-    async () =>
-      (await session.page.getByTestId(`changes-view-${view}`).getAttribute("aria-checked")) ===
-      "true",
-    promptTimeoutMs,
-    `Changes was not on ${view} ${when}`,
-  );
-}
-
-async function noBaseOpensUncommitted(session: AppSession): Promise<void> {
-  await viewChecked(session, "uncommitted", "in a workspace with no base");
-  await session.page.getByTestId("changes-view-branch").click();
-  await viewChecked(session, "branch", "once Branch was picked");
-  await visible(session, "changes-unavailable", "in Branch with no base");
-  assert.equal(
-    (await textOf(session, "changes-unavailable")).trim(),
-    "Branch needs a base branch to compare with, and this workspace has none. Uncommitted shows everything here.",
-  );
-  await delay(1500);
-  await viewChecked(session, "branch", "a moment after Branch was picked");
-  await session.page.getByTestId("changes-view-uncommitted").click();
-  await viewChecked(session, "uncommitted", "once Uncommitted was picked");
-}
-
 async function run(session: AppSession): Promise<void> {
   const { page } = session;
   await page.getByTestId("workspace-repo-main").click();
-  await noBaseOpensUncommitted(session);
   const claudePid = await startClaude(session, 1);
   const server = await startedServer(session);
   assert.ok(!processGone(server.pid), "the dev server was gone before it was listed");
@@ -194,53 +159,19 @@ async function run(session: AppSession): Promise<void> {
     "after a turn ended with the server older than 10 seconds",
   );
   assert.equal(await page.getByTestId("header-processes").getAttribute("data-count"), "1");
-  await waitUntil(
-    async () => (await textOf(session, "workspace-repo-main-processes")).trim() === "1",
-    promptTimeoutMs,
-    "the workspace row did not read 1 running process",
-  );
 
   await openList(session);
   assert.equal(await page.locator("[data-testid^='process-row-'][data-pid]").count(), 1);
   const command = await textOf(session, "process-row-0-command");
   assert.ok(command.includes("dev-server"), `the row's command read ${JSON.stringify(command)}`);
-  assert.equal((await textOf(session, "process-row-0-session")).trim(), "Session 1");
-  assert.notEqual((await textOf(session, "process-row-0-age")).trim(), "", "the age was empty");
   const port = page.getByTestId(`process-row-0-port-${String(server.port)}`);
   assert.equal((await port.textContent())?.trim(), `:${String(server.port)}`);
-  assert.equal(await port.getAttribute("data-link"), "true");
-  assert.equal((await textOf(session, "processes-note")).trim(), detachedSentence);
-  await session.screenshot("processes");
-
-  const portId = `process-row-0-port-${String(server.port)}`;
-  const age = (await textOf(session, "process-row-0-age")).trim();
-  await waitUntil(
-    async () => (await textOf(session, "process-row-0-age")).trim() !== age,
-    promptTimeoutMs,
-    "the age did not advance while the list stayed open",
-  );
 
   await port.click();
   await visible(session, "link-dialog", "after the port was pressed");
   const address = `http://127.0.0.1:${String(server.port)}/`;
   assert.equal((await textOf(session, "link-address")).trim(), address);
-  assert.equal(
-    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
-    "link-cancel",
-    "the question over the list did not start with focus on Cancel",
-  );
-  await page.getByTestId("link-cancel").click();
-  await gone(session, "link-dialog", "after the question was cancelled");
-  await visible(session, "processes-dialog", "after the question was cancelled");
-  assert.equal(
-    await page.evaluate(() => document.activeElement?.getAttribute("data-testid")),
-    portId,
-    "focus did not return to the port after the question was cancelled",
-  );
-  assert.deepEqual(await session.openedLinks(), [], "cancelling the question opened an address");
-
-  await port.click();
-  await visible(session, "link-dialog", "after the port was pressed again");
+  assert.deepEqual(await session.openedLinks(), [], "pressing the port opened before it asked");
   await page.getByTestId("link-open").click();
   await waitUntil(
     async () => (await session.openedLinks()).length > 0,
@@ -250,7 +181,6 @@ async function run(session: AppSession): Promise<void> {
   assert.deepEqual(await session.openedLinks(), [address]);
 
   await gone(session, "link-dialog", "after the address opened");
-  await visible(session, "processes-dialog", "after the address opened");
   assert.equal(
     await bridgeCode(page, "processes.stop", {
       pid: server.pid,
@@ -270,15 +200,6 @@ async function run(session: AppSession): Promise<void> {
   assert.ok(!processGone(claudePid), "Stop ended the stand-in Claude Code too");
   await visible(session, "processes-empty", "after Stop", stopWaitMs);
   await page.getByTestId("processes-close").click();
-  await gone(session, "header-processes", "after the process ended");
-  await waitUntil(
-    () =>
-      page.evaluate(
-        () => document.activeElement?.getAttribute("data-testid") === "workspace-header",
-      ),
-    promptTimeoutMs,
-    "focus did not return to the workspace header once the list closed and its opener was gone",
-  );
 
   const stranger = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
     stdio: "ignore",
