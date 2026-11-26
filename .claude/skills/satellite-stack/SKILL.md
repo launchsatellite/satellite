@@ -161,7 +161,7 @@ The controls in `src/renderer/ui/` are shadcn/ui components on Base UI, copied i
 | `npm run build` | `electron-vite build` into `out/`, the renderer minified |
 | `npm run package` | `electron-builder --publish never`, packages for this machine from `out/` into `release/`. Build first |
 | `npm run verify -- <scenario> [step ...]` | Launches the real app in a scenario and prints JSON, skill `satellite-verify` |
-| `npm run journeys` | Builds once and runs every journey `verify/journeys.ts` lists |
+| `npm run journeys` | Builds once and runs every journey `verify/journeys.ts` lists, or only the ones named after `--` |
 | `npm run format`, `npm run format:check` | Prettier at 100 columns. Markdown and HTML are left alone |
 | `npm run lint` | ESLint, zero warnings |
 | `npm run typecheck` | `tsc` over the three projects |
@@ -182,4 +182,4 @@ The app reads `SATELLITE_HOME`, an absolute path that replaces `~/.satellite`, a
 - **Electron's binary** is fetched by `postinstall`, since the electron package installs nothing by itself. CI's check job skips it with `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, because it never launches the app.
 - **Windows kills.** node-pty's own kill forks a helper, and with the run-as-Node fuse off a fork starts a second Satellite. `PtyProcess.kill()` ends the tree with the start-checked stop in `process-tree.ts` first and calls node-pty's kill only when the exit never comes. Nothing uses `taskkill`, whose tree flag follows parent ids with no start check. Never call node-pty's kill directly.
 - **Packaging.** `electron-builder.yml` ships `out/` and `package.json` as `app.asar`, unpacks only node-pty's native files with smart unpacking off, keeps only this platform's node-pty build, drops tests, source maps and `node-addon-api`, puts `third-party-licenses.md` in the resources folder and flips the fuses. A runtime dependency with native code needs the same `asarUnpack` and `files` treatment, and its licence reaches the notices by itself because `scripts/third-party-licenses.ts` adds every runtime dependency. macOS packages are ad-hoc signed. To package one Mac architecture, `npm run build`, then `npx electron-builder --mac --arm64 --publish never`.
-- **Platforms and release.** `.github/workflows/platforms.yml` proves and packages macOS, Windows and Linux. CI runs it on every pull request that changes more than docs, packaging only the unpacked app, and `.github/workflows/release.yml` runs it with every installer for a tag. `ARCHITECTURE.md` Packaging and fuses says how.
+- **Platforms and release.** `.github/workflows/platforms.yml` proves and packages macOS, Windows and Linux. CI runs it on every pull request that changes more than docs, packaging only the unpacked app and running each system's journeys in three jobs at once, and `.github/workflows/release.yml` runs it with every installer for a tag. `ARCHITECTURE.md` Packaging and fuses says how.

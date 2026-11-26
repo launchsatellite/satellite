@@ -59,7 +59,7 @@ Fill every section of `.github/pull_request_template.md`, report the link and wh
 
 ## 9. Follow up until merged
 
-- **CI fails.** `gh pr checks <n>`, then `gh run view <run> --log-failed`. CI proves every pull request that changes more than docs on macOS, Windows and Linux, and a failing journey there leaves its screenshots in the run, `gh run download <run> -n verify-output-<macos|windows|linux>`. Reproduce locally, fix on the same branch, push once.
+- **CI fails.** `gh pr checks <n>`, then `gh run view <run> --log-failed`. CI proves every pull request that changes more than docs on macOS, Windows and Linux, and a failing journey there leaves its screenshots in the run, `gh run download <run> -n verify-output-<macos|windows|linux>-<1|2|3>`, the job's own name and number. Reproduce locally with `npm run journeys -- <journey>`, fix on the same branch, push once.
 - **Review comments.** Read all of them, CodeRabbit's included, verify each against the code, fix on the branch, push once, reply in each thread. CodeRabbit resolves its own threads once they are fixed. To reject a CodeRabbit finding, reply with your reason and mention `@coderabbitai`, since it answers only when mentioned. It resolves the thread once it accepts. If it still disagrees and you have no new argument, the pull request waits for the maintainer. Never resolve a CodeRabbit thread yourself, so its approval stays an honest signal. Never resolve a human's thread or dismiss a review.
 - **New commit.** Below ten stars, request a review of each pushed commit with `gh pr comment <n> --body "@coderabbitai review"`, so the latest commit can earn the approval a merge needs.
 - **Behind main.** Merge `origin/main` into your branch. Never rebase pushed work.

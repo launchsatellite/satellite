@@ -49,7 +49,7 @@ Our own skills are named `satellite-<area>`, so they are easy to find. Write or 
 npm ci                                           # install, also restores the pty helper and fetches Electron
 npm run dev                                      # the app with hot reload
 npm run --silent verify -- <scenario> [step ...] # launch the real app in a scenario and print JSON
-npm run journeys                                 # the journeys against the built app
+npm run journeys -- [journey ...]                # the journeys against the built app, all of them or the ones named
 npm run build && npm run package                 # installers for this machine in release/
 ./scripts/check                                  # the green checkpoint, guards, format, lint, typecheck and tests
 ./guards/test.sh                                 # proves every guard still fires
