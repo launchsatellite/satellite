@@ -17,7 +17,7 @@ Nothing can be built or proven until the app starts, the checks run and an agent
 - Design tokens from `DESIGN.md` as variables, light and dark, with the four typefaces bundled so the app never loads anything remote.
 - `./scripts/check` runs format, lint, typecheck and unit tests. Lint refuses comments, default exports and files that are not kebab-case.
 - CI runs `./scripts/check` on one Linux runner for every pull request and every push to `main`.
-- A platforms workflow that packages for macOS, Windows and Linux, reads the fuses and runs the journeys against each packaged app. CI runs it on every pull request that changes more than docs, with the unpacked app only.
+- A platforms workflow that packages for macOS, Windows and Linux, reads the fuses and runs the journeys against each packaged app. CI runs it on every pull request and every push to `main` that changes more than docs, with the unpacked app only, the smoke journeys for a pull request and every journey for `main`.
 - A release workflow, started by a version tag or by hand, that runs the platforms workflow with every installer and writes checksums. Only a pushed tag drafts a release, and only when all three pass.
 - The verify harness. A scenario is a folder holding a recipe for a throwaway repo, canned `gh` answers and a script for a stand-in `claude`. One driver command launches the app in a scenario with a temporary home folder and lets an agent click, type, read the window as structured data and take screenshots. Three journeys, `launch`, `boundary` and `quit`, prove the first run, the security boundary and process cleanup.
 - Skill `satellite-stack` for how the code is organised and run, and skill `satellite-verify` for the driver, the scenarios and the feature map.
@@ -29,7 +29,7 @@ Nothing can be built or proven until the app starts, the checks run and an agent
 | --- | --- | --- |
 | Stand-in executables for `gh` and `claude`, real `git` | Mocks inside the app | The app keeps no test code, and every scenario exercises the real process and parsing paths. |
 | One harness for agent verification and the release journeys | A separate end to end test suite | One thing to maintain, and scenarios written for a feature become its cross-platform proof. |
-| The platform matrix on every pull request that changes more than docs, packaging only the unpacked app | The full matrix only at release, by hand or from a side branch | A pull request is proven on all three systems before it merges, with no extra step, and installers wait for the release. Docs-only changes skip it, since they cannot change the app. |
+| The platform matrix on every pull request that changes more than docs, packaging only the unpacked app and running the smoke journeys, with every journey on `main` | Every journey on every pull request, or the full matrix only at release | A pull request waits minutes and still proves that each system's packaged app starts, keeps its boundary and quits clean. The longer flows run right after the merge, where a failure is looked at without holding anyone. Docs-only changes skip it, since they cannot change the app. |
 | Builds with checksums and no paid signature, macOS ad-hoc signed | Signing with certificates | No remote content is loaded and no credentials are held, so nothing depends on it. An arm64 Mac refuses a modified binary with no signature at all, so macOS gets an ad-hoc one. |
 
 ## Not in scope

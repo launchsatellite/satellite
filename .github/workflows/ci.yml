@@ -1,8 +1,9 @@
 name: CI
 
 # The green checkpoint on Linux for every pull request and push to main, plus the platforms
-# workflow on macOS, Windows and Linux for every pull request that changes more than docs, specs
-# and skills. The platforms job is the one check that says whether that proof passed.
+# workflow on macOS, Windows and Linux for each of them that changes more than docs, specs and
+# skills. A pull request runs the smoke journeys there and a push to main runs every journey. The
+# platforms job is the one check that says whether that proof passed.
 on:
   pull_request:
   push:
@@ -34,7 +35,6 @@ jobs:
       - run: npm run build
 
   changes:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -60,6 +60,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true'
     uses: ./.github/workflows/platforms.yml
+    with:
+      smoke: ${{ github.event_name == 'pull_request' }}
 
   platforms:
     needs: [changes, prove]
@@ -70,7 +72,7 @@ jobs:
       - run: |
           echo "changes $CHANGES, app $APP, prove $PROVE"
           case "$CHANGES/$APP/$PROVE" in
-            success/true/success | success/false/skipped | skipped//skipped) ;;
+            success/true/success | success/false/skipped) ;;
             *) exit 1 ;;
           esac
         env:

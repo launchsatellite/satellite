@@ -108,15 +108,15 @@ On macOS a run is quiet by default, which needs the driver's own process alive, 
 
 ## Journeys
 
-Journeys are fixed scripts over the driver, one per row of the table below. They run against the built app here and against each packaged app in the platforms workflow, on every pull request that changes more than docs and on every release. `npm run journeys` runs them all, `npm run journeys -- files sessions` only the ones named, and `--shard 2/3` every third one from the second, which is how a pull request spreads them over three jobs a system. The list in `verify/journeys.ts` is ordered so the long journeys land in different thirds, so a new journey goes where it keeps them even.
+Journeys are fixed scripts over the driver, one per row of the table below. They run against the built app here and against each packaged app in the platforms workflow. A pull request runs the smoke journeys there, `launch`, `boundary` and `quit`, and a push to `main` and a release run them all. `npm run journeys` runs them all and `npm run journeys -- files sessions` only the ones named, which is how to prove the area a change touches.
 
 ```sh
-npm run --silent journeys -- [--app <executable>] [--shard <index>/<count>] [journey ...]
+npm run --silent journeys -- [--app <executable>] [journey ...]
 ```
 
 To prove a packaged app on macOS, run `npm run build`, then `npx electron-builder --mac --arm64 --dir --publish never`, then the journeys with `--app release/mac-arm64/Satellite.app/Contents/MacOS/Satellite`. Windows and Linux are proven by the pull request itself, whose CI runs the same steps there with `release/win-unpacked/Satellite.exe` and `release/linux-unpacked/satellite`.
 
-It builds once for the built target, runs the chosen journeys in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, the whole reason with Playwright's call log, so a timed out click names the readiness check it waited on, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind, and when the arguments leave no journey to run.
+It builds once for the built target, runs the chosen journeys in order, each in a fresh launch of its scenario, and prints `pass <name>` or `fail <name> <reason>`, the whole reason with Playwright's call log, so a timed out click names the readiness check it waited on, each followed by its screenshot paths. A failing journey saves `<name>-failure` when the window is still open. The exit code is 1 when any journey failed or left its temp folder behind.
 
 | Journey | Scenario | Proves |
 | --- | --- | --- |

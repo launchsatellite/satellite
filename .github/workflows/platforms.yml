@@ -1,13 +1,16 @@
 name: Platforms
 
 # Proves Satellite on macOS, Windows and Linux. On each, one job runs the green checkpoint while
-# others package the app, check the fuses and run the journeys against what they packaged. A pull
-# request packages the unpacked app for one processor and splits the journeys over three jobs. A
-# release runs them in one job that builds every installer with checksums and notices.
+# another packages the app, checks the fuses and runs journeys against what it packaged. A pull
+# request packages the unpacked app for one processor and runs the smoke journeys. A push to main
+# runs every journey, and a release also builds every installer with checksums and notices.
 on:
   workflow_call:
     inputs:
       release:
+        type: boolean
+        default: false
+      smoke:
         type: boolean
         default: false
 
@@ -47,12 +50,10 @@ jobs:
       - run: ./scripts/check
 
   build:
-    name: ${{ matrix.label }} journeys ${{ matrix.shard }}
+    name: ${{ matrix.label }} journeys
     strategy:
       fail-fast: false
       matrix:
-        label: [macos, windows, linux]
-        shard: ${{ fromJSON(inputs.release && '[1]' || '[1, 2, 3]') }}
         include:
           - label: macos
             os: macos-26
@@ -78,7 +79,7 @@ jobs:
       run:
         shell: bash
     env:
-      SHARD: ${{ matrix.shard }}/${{ inputs.release && 1 || 3 }}
+      JOURNEYS: ${{ inputs.smoke && 'launch boundary quit' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,18 +117,18 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
       - if: runner.os == 'Linux'
-        run: xvfb-run -a npm run journeys -- --app "$APP" --shard "$SHARD"
+        run: xvfb-run -a npm run journeys -- --app "$APP" $JOURNEYS
         env:
           APP: ${{ matrix.app }}
       - if: runner.os != 'Linux'
-        run: npm run journeys -- --app "$APP" --shard "$SHARD"
+        run: npm run journeys -- --app "$APP" $JOURNEYS
         env:
           APP: ${{ matrix.app }}
           SATELLITE_VERIFY_FOREGROUND: "1"
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: verify-output-${{ matrix.label }}-${{ matrix.shard }}
+          name: verify-output-${{ matrix.label }}
           if-no-files-found: ignore
           path: verify-output/
       - if: inputs.release
