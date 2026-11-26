@@ -74,14 +74,6 @@ async function run(session: AppSession): Promise<void> {
 
   await session.relaunch();
   await stepShows(session, 1, "after a restart in the middle");
-  await session.page.getByTestId("guide-close").click();
-  await gone(session, "guide-card", "after the close control");
-  await toastReads(session, closedSentence, "after closing the guide early");
-  await savedAsSeen(session);
-  await noGuideAfterRestart(session, "after an early close");
-
-  await showGuide(session);
-  await stepShows(session, 1, "after Show the guide");
   await session.page.getByTestId("new-workspace-repo").click();
   await visible(session, "create-workspace", "after New workspace was pressed");
   await session.page.getByTestId("create-workspace").click();
@@ -92,7 +84,14 @@ async function run(session: AppSession): Promise<void> {
   await stepShows(session, 4, "after Next from step 3");
   await session.page.getByTestId("guide-done").click();
   await gone(session, "guide-card", "after Done");
+  await savedAsSeen(session);
   await noGuideAfterRestart(session, "after Done");
+
+  await showGuide(session);
+  await stepShows(session, 2, "after Show the guide");
+  await session.page.getByTestId("guide-close").click();
+  await gone(session, "guide-card", "after the close control");
+  await toastReads(session, closedSentence, "after closing the guide early");
 
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
