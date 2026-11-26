@@ -119,7 +119,12 @@ async function staysPut(session: AppSession): Promise<void> {
   const before = await top();
   await session.page.getByTestId("changes-view-uncommitted").click();
   await bannerReads(session, bannerSentence, "in Uncommitted");
-  assert.equal(await top(), before, "the content moved when the view changed");
+  const after = await top();
+  assert.equal(
+    after,
+    before,
+    `the content moved when the view changed, from ${String(before)} to ${String(after)}, and read ${String(await top())} a moment later`,
+  );
   await session.page.getByTestId("changes-view-branch").click();
 }
 

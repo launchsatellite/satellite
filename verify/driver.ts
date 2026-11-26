@@ -13,7 +13,7 @@ import { z } from "zod";
 import { endWindowsTree } from "../src/main/platform/process-tree.ts";
 import { buildRepo, withoutGitVariables, writeInside } from "./repo-recipe.ts";
 import { loadScenario, type Scenario } from "./scenario.ts";
-import { readStandInEvents, type StandInEvent } from "./stand-ins/stand-in-log.ts";
+import { readStandInEvents, writtenLines, type StandInEvent } from "./stand-ins/stand-in-log.ts";
 
 export type AppTarget =
   { kind: "built" } | { kind: "dev" } | { kind: "packaged"; executable: string };
@@ -706,17 +706,14 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
     },
     async openedLinks() {
       const text = await readFile(links, "utf8").catch(() => "");
-      return text.split("\n").filter((line) => line !== "");
+      return writtenLines(text);
     },
     async notices() {
       const text = await readFile(notices, "utf8").catch((error: unknown) => {
         if (error instanceof Error && "code" in error && error.code === "ENOENT") return "";
         throw error;
       });
-      return text
-        .split("\n")
-        .filter((line) => line !== "")
-        .map((line) => recordedNotice.parse(JSON.parse(line)));
+      return writtenLines(text).map((line) => recordedNotice.parse(JSON.parse(line)));
     },
     consoleErrors,
     standInEvents: () => readStandInEvents(log),
