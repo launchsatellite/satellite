@@ -74,9 +74,14 @@ function parsePlan(argv: string[]): Plan {
   let target: AppTarget = { kind: "built" };
   let chosen = journeys;
   const names: string[] = [];
+  const seen = new Set<string>();
   for (let index = 0; index < argv.length; index += 1) {
     const word = argv[index] ?? "";
     const value = argv[index + 1];
+    if (word.startsWith("-")) {
+      if (seen.has(word)) throw new Error(usage);
+      seen.add(word);
+    }
     if (word === "--app" && value !== undefined) {
       target = { kind: "packaged", executable: resolve(value) };
       index += 1;
@@ -98,6 +103,7 @@ function parsePlan(argv: string[]): Plan {
     );
   }
   if (names.length > 0) chosen = chosen.filter(({ name }) => names.includes(name));
+  if (chosen.length === 0) throw new Error("no journey is left to run with these arguments");
   return { target, chosen };
 }
 
