@@ -41,6 +41,7 @@ jobs:
           node-version-file: .nvmrc
           cache: ${{ !startsWith(github.ref, 'refs/tags/') && 'npm' || '' }}
       - run: npm ci
+        timeout-minutes: 5
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: ./scripts/check
@@ -91,6 +92,7 @@ jobs:
           version="v$(node -p "require('./package.json').version")"
           [ "$version" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME and package version $version differ"; exit 1; }
       - run: npm ci
+        timeout-minutes: 5
       - run: npm run build
       - run: npx electron-builder $PACKAGE --publish never
         env:
