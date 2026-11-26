@@ -49,7 +49,7 @@ The inbox and notifications belong to spec 005.
 - [x] Two sessions in two workspaces run at once and each keeps its own screen. Proof, a journey.
 - [x] A workspace that does not resume by itself offers to, and the resumed session shows its history. Proof, a run in the real app and journey `sessions`.
 - [x] After a relaunch the selected workspace resumes with no click, the stand-in gets `--resume` with the recorded id, and the pixel stays idle with no notification. Proof, journey `sessions`.
-- [x] A second workspace starts nothing until it is selected, then resumes once, with focus left on its row, after a switch away and back while its first answer was still on its way. Two resumes of one conversation asked at once start one process. Proof, journey `sessions`.
+- [x] A second workspace starts nothing until it is selected, then resumes once, with focus left on its row, after a switch away and back while its first answer was still on its way. Two resumes of one conversation asked at once start one process. Proof, journey `sessions` for the single resume once selected and the two asked at once.
 - [x] Closing the resumed tab brings nothing back, closing a fresh session's last tab offers to resume and starts nothing, and a resume that fails shows its sentence and never retries. Proof, journey `sessions`.
 - [x] Quitting with only idle sessions asks nothing, with a working session asks and counts it, and with a done session whose dev server runs asks and counts the process. Proof, journey `quit` on macOS and Linux, since it quits through `SIGTERM`, and unit tests on the rule.
 - [ ] The same quit rule reaches the question through the window's close button on Windows. Proof, a run on Windows.

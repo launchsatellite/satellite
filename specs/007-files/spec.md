@@ -30,7 +30,7 @@ Diffs belong to spec 006.
 
 - [x] The tree shows tracked, untracked and ignored files, with ignored ones dimmed and an icon for each kind. Proof, scenario `mixed-changes`.
 - [x] Open by name finds a file deep in the tree. Proof, the driver.
-- [x] A file changed on disk updates in its open tab. Proof, a journey.
+- [x] A file changed on disk updates in its open tab. Proof, journey `files`.
 - [x] No path from the interface can read outside the workspace folder, including through a symlink. Proof, unit tests on the path check.
 - [x] Selected lines arrive in the prompt as a reference. Proof, the driver.
 - [x] Typing in an open file changes nothing. Proof, the driver.
