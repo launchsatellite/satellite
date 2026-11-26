@@ -53,10 +53,7 @@ export function Select<T extends string>({
     });
   };
   const key = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") {
-      cancelled.current = false;
-      return;
-    }
+    if (event.key !== "Escape") return;
     if (open.current) {
       show(false);
       return;
