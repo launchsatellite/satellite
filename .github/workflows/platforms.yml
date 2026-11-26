@@ -1,8 +1,9 @@
 name: Platforms
 
-# Proves Satellite on macOS, Windows and Linux. Each runs the green checkpoint, packages the app,
-# checks the fuses and runs the journeys against what it packaged. A pull request packages the
-# unpacked app for one processor, a release builds every installer with checksums and notices.
+# Proves Satellite on macOS, Windows and Linux. On each, one job runs the green checkpoint while
+# others package the app, check the fuses and run the journeys against what they packaged. A pull
+# request packages the unpacked app for one processor and splits the journeys over three jobs. A
+# release runs them in one job that builds every installer with checksums and notices.
 on:
   workflow_call:
     inputs:
@@ -14,26 +15,58 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: ${{ matrix.label }}
+  check:
+    name: ${{ matrix.label }} check
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-26
             label: macos
+          - os: windows-2025
+            label: windows
+          - os: ubuntu-24.04
+            label: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') && 'npm' || '' }}
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: ./scripts/check
+
+  build:
+    name: ${{ matrix.label }} journeys ${{ matrix.shard }}
+    strategy:
+      fail-fast: false
+      matrix:
+        label: [macos, windows, linux]
+        shard: ${{ fromJSON(inputs.release && '[1]' || '[1, 2, 3]') }}
+        include:
+          - label: macos
+            os: macos-26
             unpacked: --mac --arm64 --dir
             installers: --mac --arm64 --x64
             app: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite
             fused: release/mac-arm64/Satellite.app/Contents/MacOS/Satellite release/mac/Satellite.app/Contents/MacOS/Satellite
-          - os: windows-2025
-            label: windows
+          - label: windows
+            os: windows-2025
             unpacked: --win --x64 --dir
             installers: --win --x64
             app: release/win-unpacked/Satellite.exe
             fused: release/win-unpacked/Satellite.exe
-          - os: ubuntu-24.04
-            label: linux
+          - label: linux
+            os: ubuntu-24.04
             unpacked: --linux --x64 --dir
             installers: --linux --x64
             app: release/linux-unpacked/satellite
@@ -43,6 +76,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      SHARD: ${{ matrix.shard }}/${{ inputs.release && 1 || 3 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,7 +91,6 @@ jobs:
           version="v$(node -p "require('./package.json').version")"
           [ "$version" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME and package version $version differ"; exit 1; }
       - run: npm ci
-      - run: ./scripts/check
       - run: npm run build
       - run: npx electron-builder $PACKAGE --publish never
         env:
@@ -80,18 +114,18 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           command -v xvfb-run || { sudo apt-get update && sudo apt-get install -y xvfb; }
       - if: runner.os == 'Linux'
-        run: xvfb-run -a npm run journeys -- --app "$APP"
+        run: xvfb-run -a npm run journeys -- --app "$APP" --shard "$SHARD"
         env:
           APP: ${{ matrix.app }}
       - if: runner.os != 'Linux'
-        run: npm run journeys -- --app "$APP"
+        run: npm run journeys -- --app "$APP" --shard "$SHARD"
         env:
           APP: ${{ matrix.app }}
           SATELLITE_VERIFY_FOREGROUND: "1"
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: verify-output-${{ matrix.label }}
+          name: verify-output-${{ matrix.label }}-${{ matrix.shard }}
           if-no-files-found: ignore
           path: verify-output/
       - if: inputs.release

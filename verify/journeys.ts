@@ -43,32 +43,62 @@ const journeys: Journey[] = [
   launchJourney,
   boundaryJourney,
   projectsJourney,
-  titleBarJourney,
-  settingsJourney,
-  guideJourney,
-  workspacesJourney,
-  changesJourney,
-  hostileFileJourney,
-  filesJourney,
-  conflictsJourney,
   sessionsJourney,
-  processesJourney,
-  inboxJourney,
   pullRequestJourney,
+  filesJourney,
+  guideJourney,
+  settingsJourney,
+  titleBarJourney,
+  workspacesJourney,
+  hostileFileJourney,
+  changesJourney,
+  quitJourney,
+  inboxJourney,
+  conflictsJourney,
   missingJourney,
   claudeSettingsJourney,
-  quitJourney,
+  processesJourney,
 ];
 const journeyTimeoutMs = 180_000;
 const stepTimeoutMs = 15_000;
 
-function parseTarget(argv: string[]): AppTarget {
-  if (argv.length === 0) return { kind: "built" };
-  const [flag, executable, ...rest] = argv;
-  if (flag !== "--app" || executable === undefined || rest.length > 0) {
-    throw new Error("run npm run journeys, or npm run journeys -- --app <executable>");
+const usage =
+  "run npm run journeys -- [--app <executable>] [--shard <index>/<count>] [journey ...]";
+
+interface Plan {
+  target: AppTarget;
+  chosen: Journey[];
+}
+
+function parsePlan(argv: string[]): Plan {
+  let target: AppTarget = { kind: "built" };
+  let chosen = journeys;
+  const names: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const word = argv[index] ?? "";
+    const value = argv[index + 1];
+    if (word === "--app" && value !== undefined) {
+      target = { kind: "packaged", executable: resolve(value) };
+      index += 1;
+    } else if (word === "--shard" && value !== undefined) {
+      const [part, count] = (/^([1-9]\d*)\/([1-9]\d*)$/.exec(value) ?? []).slice(1).map(Number);
+      if (part === undefined || count === undefined || part > count) throw new Error(usage);
+      chosen = chosen.filter((_, position) => position % count === part - 1);
+      index += 1;
+    } else if (word.startsWith("-")) {
+      throw new Error(usage);
+    } else {
+      names.push(word);
+    }
   }
-  return { kind: "packaged", executable: resolve(executable) };
+  const unknown = names.filter((name) => !journeys.some((journey) => journey.name === name));
+  if (unknown.length > 0) {
+    throw new Error(
+      `no journey named ${unknown.join(", ")}. The journeys are ${journeys.map(({ name }) => name).join(", ")}`,
+    );
+  }
+  if (names.length > 0) chosen = chosen.filter(({ name }) => names.includes(name));
+  return { target, chosen };
 }
 
 async function runJourney(journey: Journey, target: AppTarget): Promise<Outcome> {
@@ -155,17 +185,17 @@ function report(name: string, { failure, screenshots, skipped = [] }: Outcome): 
 }
 
 async function main(): Promise<boolean> {
-  let target: AppTarget;
+  let plan: Plan;
   try {
-    target = parseTarget(process.argv.slice(2));
-    if (target.kind === "built") await buildApp();
+    plan = parsePlan(process.argv.slice(2));
+    if (plan.target.kind === "built") await buildApp();
   } catch (error) {
     report("setup", { failure: errorReason(error), screenshots: [] });
     return false;
   }
   let passed = true;
-  for (const journey of journeys) {
-    const outcome = await runWithParts(journey, target);
+  for (const journey of plan.chosen) {
+    const outcome = await runWithParts(journey, plan.target);
     report(journey.name, outcome);
     if (outcome.failure !== undefined) passed = false;
   }

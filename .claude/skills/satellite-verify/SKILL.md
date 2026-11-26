@@ -108,7 +108,7 @@ On macOS a run is quiet by default, which needs the driver's own process alive, 
 
 ## Journeys
 
-Journeys are fixed scripts over the driver, one per row of the table below. They run against the built app here and against each packaged app in the platforms workflow, on every pull request that changes more than docs and on every release.
+Journeys are fixed scripts over the driver, one per row of the table below. They run against the built app here and against each packaged app in the platforms workflow, on every pull request that changes more than docs and on every release. `npm run journeys` runs them all, `npm run journeys -- files sessions` only the ones named, and `--shard 2/3` every third one from the second, which is how a pull request spreads them over three jobs a system. The list in `verify/journeys.ts` is ordered so the long journeys land in different thirds, so a new journey goes where it keeps them even.
 
 ```sh
 npm run --silent journeys -- [--app <executable>]
