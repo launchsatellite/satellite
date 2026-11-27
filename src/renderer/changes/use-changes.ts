@@ -128,7 +128,7 @@ export function useChanges(
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
     const unwatch = onWatchedChange((changed) => {
-      if (changed.has(projectId)) schedule.refresh();
+      if (changed.has(projectId)) schedule.nudge();
     });
     return () => {
       stopped = true;

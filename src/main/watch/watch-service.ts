@@ -1,9 +1,15 @@
 import type { BridgeHandlers, BridgeOwner } from "../bridge/registry.ts";
 import type { StoredProject } from "../projects/projects-file.ts";
-import { plannedRoots, retryDelay, type WatcherNews } from "./watch-plan.ts";
+import {
+  plannedRoots,
+  retryDelay,
+  steadyMs,
+  type PlannedRoot,
+  type WatcherNews,
+} from "./watch-plan.ts";
 
 export interface WatcherChild {
-  post(roots: string[]): void;
+  post(plan: { root: string; ignore: string[] }[]): void;
   onNews(listener: (news: WatcherNews) => void): void;
   onExit(listener: () => void): void;
   kill(): void;
@@ -33,7 +39,7 @@ function timer(ms: number, run: () => void): () => void {
 
 export function createWatch({ fork, after = timer, now = Date.now }: WatchOptions): Watch {
   const pages = new Set<BridgeOwner>();
-  let roots = new Map<string, Set<string>>();
+  let roots = new Map<string, PlannedRoot>();
   const watching = new Set<string>();
   const pending = new Set<string>();
   let child: WatcherChild | undefined;
@@ -44,8 +50,8 @@ export function createWatch({ fork, after = timer, now = Date.now }: WatchOption
   let told = "";
 
   const liveProjects = (): string[] => {
-    const all = new Set([...roots.values()].flatMap((ids) => [...ids]));
-    for (const [root, ids] of roots) {
+    const all = new Set([...roots.values()].flatMap(({ ids }) => [...ids]));
+    for (const [root, { ids }] of roots) {
       if (!watching.has(root)) for (const id of ids) all.delete(id);
     }
     return [...all].sort();
@@ -68,14 +74,23 @@ export function createWatch({ fork, after = timer, now = Date.now }: WatchOption
     cancelFlush = after(Math.max(settleMs, lastFlush + gapMs - now()), flush);
   };
 
-  const onNews = (news: WatcherNews) => {
-    const ids = roots.get(news.root);
-    if (ids === undefined) return;
+  const plan = () => [...roots].map(([root, { ignore }]) => ({ root, ignore }));
+
+  const lose = (root: string) => {
+    if (!watching.delete(root)) return;
+    for (const id of roots.get(root)?.ids ?? []) pending.add(id);
+  };
+
+  const onNews = (news: WatcherNews, from: WatcherChild) => {
+    const planned = roots.get(news.root);
+    if (planned === undefined) return;
     if (news.kind === "watching") {
       watching.add(news.root);
-      restarts = 0;
-    } else if (news.kind === "error") watching.delete(news.root);
-    for (const id of ids) pending.add(id);
+      after(steadyMs, () => {
+        if (child === from) restarts = 0;
+      });
+    } else if (news.kind === "error") lose(news.root);
+    for (const id of planned.ids) pending.add(id);
     schedule();
   };
 
@@ -90,16 +105,16 @@ export function createWatch({ fork, after = timer, now = Date.now }: WatchOption
     }
     child = made;
     made.onNews((news) => {
-      if (child === made) onNews(news);
+      if (child === made) onNews(news, made);
     });
     made.onExit(() => {
       if (child !== made) return;
       child = undefined;
-      watching.clear();
+      for (const root of [...watching]) lose(root);
       schedule();
       restart();
     });
-    made.post([...roots.keys()]);
+    made.post(plan());
   };
 
   const restart = () => {
@@ -120,10 +135,18 @@ export function createWatch({ fork, after = timer, now = Date.now }: WatchOption
       },
     },
     watchProjects(projects) {
+      const before = roots;
       roots = plannedRoots(projects);
-      for (const root of [...watching]) if (!roots.has(root)) watching.delete(root);
+      for (const root of [...watching]) {
+        const was = before.get(root);
+        const now = roots.get(root);
+        if (now === undefined) {
+          for (const id of was?.ids ?? []) pending.add(id);
+          watching.delete(root);
+        } else if (JSON.stringify(now.ignore) !== JSON.stringify(was?.ignore)) lose(root);
+      }
       if (child === undefined && restarts === 0) start();
-      else child?.post([...roots.keys()]);
+      else child?.post(plan());
       schedule();
     },
     stop() {

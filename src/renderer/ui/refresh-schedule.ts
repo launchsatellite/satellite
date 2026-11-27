@@ -14,6 +14,7 @@ interface Schedule {
   start: () => void;
   stop: () => void;
   refresh: () => void;
+  nudge: () => void;
   calm: () => void;
   hide: () => void;
 }
@@ -26,8 +27,8 @@ export interface Pace {
 
 const defaultPace: Pace = { firstMs: 2000, maxMs: 30_000, factor: 4 };
 export const unfocusedMaxMs = 120_000;
-export const watchedMaxMs = 300_000;
-export const watchedUnfocusedMaxMs = 600_000;
+export const watchedMaxMs = 120_000;
+export const watchedUnfocusedMaxMs = 300_000;
 
 export function pollDelay(elapsedMs: number, steps: number, pace: Pace = defaultPace): number {
   const backoff = pace.firstMs * 2 ** steps;
@@ -50,6 +51,8 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
   let again = false;
   let steps = 0;
   let last = "";
+  let lastTook = 0;
+  let lastEnded = Number.NEGATIVE_INFINITY;
   let cancel: (() => void) | undefined;
   const clear = () => {
     cancel?.();
@@ -66,6 +69,8 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
     const began = hooks.now();
     void hooks.read().then((answer) => {
       running = false;
+      lastEnded = hooks.now();
+      lastTook = lastEnded - began;
       if (stopped) return;
       steps = nextSteps(steps, answer.files, answer.key !== last);
       last = answer.key;
@@ -87,6 +92,12 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
     refresh: () => {
       steps = -1;
       ask();
+    },
+    nudge: () => {
+      steps = -1;
+      if (stopped || running || !hooks.visible()) return;
+      clear();
+      cancel = hooks.after(Math.max(0, pace.factor * lastTook - (hooks.now() - lastEnded)), ask);
     },
     calm: () => {
       steps = -1;

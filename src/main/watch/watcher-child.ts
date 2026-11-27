@@ -18,16 +18,16 @@ export function forkWatcher(): WatcherChild {
     stdio: "ignore",
   });
   let spawned = false;
-  let waiting: string[] | undefined;
+  let waiting: { root: string; ignore: string[] }[] | undefined;
   child.once("spawn", () => {
     spawned = true;
     if (waiting !== undefined) child.postMessage(waiting);
     waiting = undefined;
   });
   return {
-    post: (roots) => {
-      if (spawned) child.postMessage(roots);
-      else waiting = roots;
+    post: (plan) => {
+      if (spawned) child.postMessage(plan);
+      else waiting = plan;
     },
     onNews: (listener) => {
       child.on("message", (message: unknown) => {

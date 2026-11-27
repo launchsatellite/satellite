@@ -10,8 +10,8 @@ function start(): void {
   if (started) return;
   started = true;
   subscribe("watch.changed", ({ changed, live: watched }) => {
+    const ids = new Set([...changed, ...[...live].filter((id) => !watched.includes(id))]);
     live = new Set(watched);
-    const ids = new Set(changed);
     for (const listener of listeners) listener(ids);
   });
   void invoke("watch.start", {}).then((result) => {

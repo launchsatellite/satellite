@@ -86,7 +86,7 @@ export function useProjects(notify: Notify): {
     window.addEventListener("focus", schedule.refresh);
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
-    const unwatch = onWatchedChange(schedule.refresh);
+    const unwatch = onWatchedChange(schedule.nudge);
     return () => {
       stopped = true;
       unwatch();

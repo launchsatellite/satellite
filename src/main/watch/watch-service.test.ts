@@ -9,7 +9,7 @@ function fakeChild() {
   let exit: () => void = () => undefined;
   const posted: string[][] = [];
   const child: WatcherChild = {
-    post: (roots) => posted.push(roots),
+    post: (plan) => posted.push(plan.map(({ root }) => root)),
     onNews: (listener) => {
       news = listener;
     },
@@ -94,7 +94,7 @@ describe("createWatch", () => {
     expect(emitted.at(-1)).toEqual({ changed: [b], live: [a] });
   });
 
-  it("starts the watcher again after it dies, with nothing live meanwhile", () => {
+  it("starts the watcher again after it dies, telling pages what it lost meanwhile", () => {
     const time = clock();
     const first = fakeChild();
     const second = fakeChild();
@@ -113,12 +113,13 @@ describe("createWatch", () => {
     time.advance(1000);
     first.exit();
     time.advance(1000);
-    expect(emitted.at(-1)).toEqual({ changed: [], live: [] });
+    expect(emitted.at(-1)).toEqual({ changed: [a], live: [] });
     time.advance(5000);
     expect(made).toBe(2);
     expect(second.posted).toEqual([["/code/a"]]);
+    const told = emitted.length;
     first.tell({ kind: "watching", root: "/code/a" });
     time.advance(1000);
-    expect(emitted.at(-1)).toEqual({ changed: [], live: [] });
+    expect(emitted).toHaveLength(told);
   });
 });

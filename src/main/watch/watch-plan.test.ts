@@ -20,10 +20,21 @@ describe("plannedRoots", () => {
       ],
       "linux",
     );
-    expect([...roots].map(([root, ids]) => [root, [...ids].sort()])).toEqual([
+    expect([...roots].map(([root, { ids }]) => [root, [...ids].sort()])).toEqual([
       ["/code/app", ["a", "b"]],
       ["/code/other", ["c"]],
       ["/srv/satellite/worktrees/app/two", ["a"]],
+    ]);
+    expect(roots.get("/code/app")?.ignore).toEqual([
+      ".git/objects",
+      ".git/lfs",
+      "node_modules",
+      "packages/lib/.git/objects",
+      "packages/lib/.git/lfs",
+      "packages/lib/node_modules",
+      ".claude/worktrees/one/.git/objects",
+      ".claude/worktrees/one/.git/lfs",
+      ".claude/worktrees/one/node_modules",
     ]);
   });
 
