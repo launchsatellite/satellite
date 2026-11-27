@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isWatched, onWatchedChange } from "../bridge/watch-news.ts";
 import {
   filesLimits,
   type BridgeResult,
@@ -174,6 +175,8 @@ export function useFiles(
     const here = { projectId, workspace: key };
     const schedule = createSchedule({
       visible: isVisible,
+      focused: () => document.hasFocus(),
+      watched: () => isWatched([projectId]),
       now: () => performance.now(),
       after: (ms, run) => {
         const timer = setTimeout(run, ms);
@@ -223,8 +226,12 @@ export function useFiles(
     window.addEventListener("focus", schedule.refresh);
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
+    const unwatch = onWatchedChange((changed) => {
+      if (changed.has(projectId)) schedule.nudge();
+    });
     return () => {
       stopped = true;
+      unwatch();
       schedule.stop();
       refresh.current = () => undefined;
       window.removeEventListener("focus", schedule.refresh);

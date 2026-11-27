@@ -21,6 +21,7 @@ asar:
 asarUnpack:
   - node_modules/node-pty/prebuilds/**
   - node_modules/node-pty/build/Release/**
+  - node_modules/@parcel/watcher-*/**
 npmRebuild: false
 publish: null
 electronFuses:

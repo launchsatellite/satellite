@@ -15,7 +15,13 @@ const { version } = z
 const licences = thirdPartyLicenses();
 
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      rollupOptions: {
+        input: { main: "src/main/main.ts", "watcher-process": "src/main/watch/watcher-process.ts" },
+      },
+    },
+  },
   preload: {
     build: {
       externalizeDeps: false,

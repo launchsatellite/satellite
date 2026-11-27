@@ -53,6 +53,8 @@ import {
   windowInFront,
 } from "./window/main-window.ts";
 import { windowFrameHandlers } from "./window/window-frame.ts";
+import { createWatch, type Watch } from "./watch/watch-service.ts";
+import { forkWatcher } from "./watch/watcher-child.ts";
 import { workspaceHandlers, type Workspaces } from "./workspaces/workspace-handlers.ts";
 import { createQuitGate } from "./window/quit-gate.ts";
 import type { QuitFacts } from "./window/quit-question.ts";
@@ -75,6 +77,7 @@ interface Parts {
   pullRequests: PullRequests;
   recorder: { flush(): Promise<void> };
   terminals: TerminalSessions;
+  watch: Watch;
   workspaces: Workspaces;
 }
 
@@ -103,6 +106,7 @@ async function start({
   projects,
   pullRequests,
   terminals,
+  watch,
   workspaces,
 }: Parts): Promise<void> {
   await app.whenReady();
@@ -139,6 +143,7 @@ async function start({
       ...processes.handlers,
       ...linkHandlers(),
       ...windowFrameHandlers,
+      ...watch.handlers,
     },
     allowedOrigin(entryUrl),
   );
@@ -186,12 +191,14 @@ function assemble(home: string): Parts {
     );
     return undefined;
   });
+  const watch = createWatch({ fork: forkWatcher });
   const projects = createProjects({
     home,
     chooseFolder,
     window: mainWindow,
     stopSessions: (folder) => sessionsInside.stopInside(folder),
     recorded: (list) => {
+      watch.watchProjects(list);
       void last.keepOnly(
         list.flatMap((project) => [
           { projectId: project.id, workspace: "main" },
@@ -258,6 +265,7 @@ function assemble(home: string): Parts {
     pullRequests,
     recorder: { flush: recordedLines },
     terminals,
+    watch,
     workspaces: workspaceHandlers({
       home,
       store: projects.store,
@@ -291,6 +299,10 @@ app.on(
     },
   ),
 );
+
+app.on("will-quit", () => {
+  parts?.watch.stop();
+});
 
 app.on("window-all-closed", () => {
   app.quit();

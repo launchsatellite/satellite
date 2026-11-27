@@ -27,7 +27,7 @@ Every doc sits at the root. Docs never go in a `docs/` folder.
 | `lint/` | the `no-comments` lint rule |
 | `packaging/` | the app icon electron-builder packages |
 | `.github/` | the CI, platforms and release workflows, the task issue template and the pull request template |
-| `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer, the licence notices step, the grammar line measure and the tests' temp folder |
+| `scripts/` | the green checkpoint `check`, the postinstall step, the checksum writer, the step that adds the other Mac architecture's watcher build, the licence notices step, the grammar line measure and the tests' temp folder |
 | `guards/`, `.githooks/`, `.claude/settings.json` | the guards, owned by the maintainer. Read and run them, never edit them |
 
 A new top-level folder gets a row here in the same change.

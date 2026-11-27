@@ -107,6 +107,32 @@ function harness() {
 }
 
 describe("refresh schedule", () => {
+  it("never lets watch news push a poll later", async () => {
+    const { state, schedule, answer, next } = harness();
+    schedule.start();
+    state.clock = 40_000;
+    await answer(true, "a");
+    expect(next()).toBe(40_000 + 30_000);
+    state.clock = 41_000;
+    schedule.nudge();
+    expect(next()).toBe(70_000);
+  });
+
+  it("reads soon after watch news, but never sooner than four times the last read", async () => {
+    const { state, schedule, answer, next } = harness();
+    schedule.start();
+    state.clock = 500;
+    await answer(true, "a");
+    state.clock = 600;
+    schedule.nudge();
+    expect(next()).toBe(600 + 1900);
+    state.clock = 2500;
+    state.timers.at(-1)?.run();
+    expect(state.reads).toHaveLength(2);
+    schedule.nudge();
+    expect(state.reads).toHaveLength(2);
+  });
+
   it("doubles after lists that come back the same and starts over on a change", async () => {
     const { state, schedule, answer, next } = harness();
     schedule.start();

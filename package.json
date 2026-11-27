@@ -26,6 +26,7 @@
     "postinstall": "node scripts/postinstall.ts"
   },
   "dependencies": {
+    "@parcel/watcher": "2.6.0",
     "node-pty": "1.1.0",
     "zod": "4.6.7"
   },
