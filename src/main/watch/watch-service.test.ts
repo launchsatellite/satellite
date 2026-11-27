@@ -94,6 +94,20 @@ describe("createWatch", () => {
     expect(emitted.at(-1)).toEqual({ changed: [b], live: [a] });
   });
 
+  it("tells only projects still planned, so a removed one never crowds out the rest", () => {
+    const time = clock();
+    const first = fakeChild();
+    const watch = createWatch({ fork: () => first.child, ...time });
+    const { owner, emitted } = page();
+    void watch.handlers["watch.start"]({}, owner);
+    watch.watchProjects(projects);
+    first.tell({ kind: "watching", root: "/code/a" });
+    first.tell({ kind: "watching", root: "/code/b" });
+    watch.watchProjects(projects.slice(1));
+    time.advance(1000);
+    expect(emitted.at(-1)).toEqual({ changed: [b], live: [b] });
+  });
+
   it("starts the watcher again after it dies, telling pages what it lost meanwhile", () => {
     const time = clock();
     const first = fakeChild();

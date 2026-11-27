@@ -60,7 +60,8 @@ export function createWatch({ fork, after = timer, now = Date.now }: WatchOption
   const flush = () => {
     cancelFlush = undefined;
     lastFlush = now();
-    const changed = [...pending].sort();
+    const planned = new Set([...roots.values()].flatMap(({ ids }) => [...ids]));
+    const changed = [...pending].filter((id) => planned.has(id)).sort();
     pending.clear();
     const live = liveProjects();
     const signature = JSON.stringify(live);
