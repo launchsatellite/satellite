@@ -38,6 +38,7 @@ describe("forcedBackend", () => {
     expect(forcedBackend("darwin")).toBe("fs-events");
     expect(forcedBackend("win32")).toBe("windows");
     expect(forcedBackend("linux")).toBe("inotify");
+    expect(forcedBackend("freebsd")).toBeUndefined();
   });
 });
 

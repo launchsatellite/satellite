@@ -16,10 +16,13 @@ export const ignoredInRoot = [".git/objects", ".git/lfs", "node_modules"];
 const firstRetryMs = 5000;
 const lastRetryMs = 300_000;
 
-export function forcedBackend(platform: NodeJS.Platform): "fs-events" | "windows" | "inotify" {
+export function forcedBackend(
+  platform: NodeJS.Platform,
+): "fs-events" | "windows" | "inotify" | undefined {
   if (platform === "darwin") return "fs-events";
   if (platform === "win32") return "windows";
-  return "inotify";
+  if (platform === "linux") return "inotify";
+  return undefined;
 }
 
 export function retryDelay(failures: number): number {

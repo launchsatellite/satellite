@@ -4,7 +4,7 @@ import { forcedBackend, ignoredInRoot, retryDelay, type WatcherNews } from "./wa
 
 const roots = z.array(z.string().min(1).max(4096)).max(1000);
 const parent = process.parentPort;
-const backend: BackendType = forcedBackend(process.platform);
+const backend: BackendType | undefined = forcedBackend(process.platform);
 const live = new Map<string, Promise<AsyncSubscription | undefined>>();
 const failures = new Map<string, number>();
 let wanted = new Set<string>();
@@ -59,6 +59,7 @@ function start(root: string): void {
 }
 
 parent.on("message", ({ data }: { data: unknown }) => {
+  if (backend === undefined) return;
   const parsed = roots.safeParse(data);
   if (!parsed.success) return;
   wanted = new Set(parsed.data);

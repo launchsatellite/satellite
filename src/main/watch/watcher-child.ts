@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { app, utilityProcess } from "electron";
 import { z } from "zod";
+import { forcedBackend } from "./watch-plan.ts";
 import type { WatcherChild } from "./watch-service.ts";
 
 const news = z.discriminatedUnion("kind", [
@@ -11,6 +12,7 @@ const news = z.discriminatedUnion("kind", [
 
 export function forkWatcher(): WatcherChild {
   if (!app.isReady()) throw new Error("Satellite isn't ready to watch folders yet.");
+  if (forcedBackend(process.platform) === undefined) throw new Error("No folder watcher here.");
   const child = utilityProcess.fork(join(import.meta.dirname, "watcher-process.js"), [], {
     serviceName: "Satellite folder watcher",
     stdio: "ignore",
