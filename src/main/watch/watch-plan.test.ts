@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { forcedBackend, plannedRoots, retryDelay } from "./watch-plan.ts";
+import {
+  forcedBackend,
+  isIgnoredLiterally,
+  plannedRoots,
+  retryDelay,
+  splitIgnores,
+} from "./watch-plan.ts";
 
 const project = (id: string, path: string, workspaces: string[] = []) => ({
   id,
@@ -38,9 +44,19 @@ describe("plannedRoots", () => {
     ]);
   });
 
-  it("never folds an ignore that reads as a pattern", () => {
+  it("keeps an ignore that reads as a pattern out of the native side and matches it literally", () => {
     const roots = plannedRoots([project("a", "/code/app", ["/code/app/packages/[ab]"])], "linux");
-    expect(roots.get("/code/app")?.ignore).toEqual([".git/objects", ".git/lfs", "node_modules"]);
+    const { native, literal } = splitIgnores(roots.get("/code/app")?.ignore ?? []);
+    expect(native).toEqual([".git/objects", ".git/lfs", "node_modules"]);
+    expect(literal).toEqual([
+      "packages/[ab]/.git/objects",
+      "packages/[ab]/.git/lfs",
+      "packages/[ab]/node_modules",
+    ]);
+    const ignored = (path: string) => isIgnoredLiterally("/code/app", path, literal, "linux");
+    expect(ignored("/code/app/packages/[ab]/node_modules/x/index.js")).toBe(true);
+    expect(ignored("/code/app/packages/a/node_modules/x/index.js")).toBe(false);
+    expect(ignored("/code/app/packages/[ab]/src/index.ts")).toBe(false);
   });
 
   it("folds paths by the platform's rule", () => {

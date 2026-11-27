@@ -1,7 +1,14 @@
 import { existsSync } from "node:fs";
 import watcher, { type AsyncSubscription, type BackendType } from "@parcel/watcher";
 import { z } from "zod";
-import { forcedBackend, retryDelay, steadyMs, type WatcherNews } from "./watch-plan.ts";
+import {
+  forcedBackend,
+  isIgnoredLiterally,
+  retryDelay,
+  splitIgnores,
+  steadyMs,
+  type WatcherNews,
+} from "./watch-plan.ts";
 
 interface Watched {
   key: string;
@@ -61,18 +68,24 @@ function start(root: string, ignore: string[]): void {
     over: false,
   };
   live.set(root, watched);
+  const { native, literal } = splitIgnores(ignore);
   watched.made = watcher
     .subscribe(
       root,
       (error, events) => {
         try {
           if (error !== null || events.some((event) => event.path === root)) failed(watched);
-          else if (events.length > 0 && !watched.over) tell({ kind: "changed", root });
+          else if (
+            !watched.over &&
+            events.some((event) => !isIgnoredLiterally(root, event.path, literal))
+          ) {
+            tell({ kind: "changed", root });
+          }
         } catch {
           failed(watched);
         }
       },
-      { backend, ignore },
+      { backend, ignore: native },
     )
     .then(
       (made) => {

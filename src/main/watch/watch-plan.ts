@@ -15,7 +15,24 @@ interface WatchedProject {
 export const ignoredInRoot = [".git/objects", ".git/lfs", "node_modules"];
 
 const ignoreLimit = 200;
-const globLike = /[*?[\]{}()!+@]/;
+const patternLike = /[*?[\]{}()!+@]/;
+
+export function splitIgnores(ignore: readonly string[]): { native: string[]; literal: string[] } {
+  return {
+    native: ignore.filter((each) => !patternLike.test(each)),
+    literal: ignore.filter((each) => patternLike.test(each)),
+  };
+}
+
+export function isIgnoredLiterally(
+  root: string,
+  path: string,
+  literal: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const paths = platform === "win32" ? win32 : posix;
+  return literal.some((each) => isInsidePath(paths.join(root, each), path, platform));
+}
 const firstRetryMs = 5000;
 
 export const steadyMs = 60_000;
@@ -66,7 +83,6 @@ export function plannedRoots(
     if (planned === undefined) continue;
     planned.ids.add(id);
     const inside = paths.relative(holder, path);
-    if (globLike.test(inside)) continue;
     for (const each of ignoredInRoot) {
       const ignored = inside === "" ? paths.join(each) : paths.join(inside, each);
       if (!planned.ignore.includes(ignored) && planned.ignore.length < ignoreLimit) {
