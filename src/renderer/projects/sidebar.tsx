@@ -373,6 +373,7 @@ export function Sidebar({
         text="Commands"
         testId="open-command-menu"
       />
+      <CommandRow command="palette.agents" icon="agents" text="Agents" testId="open-agents" />
       <CommandRow
         command="palette.switcher"
         icon="search"

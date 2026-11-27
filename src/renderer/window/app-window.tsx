@@ -38,7 +38,7 @@ import { useFileTabs } from "../files/use-file-tabs.ts";
 import { ProcessesDialog } from "../processes/processes-dialog.tsx";
 import { portLinkSentence } from "../processes/process-words.ts";
 import { useProcesses } from "../processes/use-processes.ts";
-import { Palette, type SwitcherItem } from "../palette/palette.tsx";
+import { Palette, type PaletteMode, type SwitcherItem } from "../palette/palette.tsx";
 import { focusColumn } from "./focus-column.ts";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
@@ -57,6 +57,7 @@ import { useProjects, workspaceLabel } from "../projects/use-projects.ts";
 import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
 import { runningHere } from "../projects/running-here.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
+import { agentList, type AgentItem } from "../sessions/agent-list.ts";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
@@ -75,7 +76,6 @@ import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 import { TitleBar } from "./title-bar.tsx";
 
-type PaletteMode = "commands" | "switcher" | "files";
 type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
 interface AppWindowProps {
@@ -625,6 +625,15 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         })),
       );
   }, [pixelFor, projects]);
+  const agents = useMemo(() => agentList(allSessions, projects ?? []), [allSessions, projects]);
+  const openAgent = useCallback(
+    (agent: AgentItem) => {
+      select(agent.ref);
+      activateSession(agent.tab);
+      focusSession(agent.terminalId);
+    },
+    [select, activateSession],
+  );
   const openFromInbox = useCallback(
     (target: InboxTarget) => {
       if (modal) return;
@@ -839,6 +848,15 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: newest !== undefined,
             run: () => {
               if (newest !== undefined) openFromInbox(newest);
+            },
+          },
+          {
+            id: "palette.agents",
+            title: "Show every agent",
+            shortcut: { key: "g" },
+            available: true,
+            run: () => {
+              setPalette((open) => (open === "agents" ? null : "agents"));
             },
           },
           {
@@ -1398,6 +1416,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
             switcher={switcher}
             onOpenWorkspace={select}
+            agents={agents}
+            onOpenAgent={openAgent}
             files={fileSearch.search}
             onOpenFile={openFound}
             onQuery={fileSearch.ask}

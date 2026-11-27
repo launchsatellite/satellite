@@ -149,6 +149,20 @@ async function firstNeed(session: AppSession): Promise<void> {
   await stillShown(session, [alphaNotice], "after a permission notice and a helper asked,");
 }
 
+async function openFromAgents(session: AppSession): Promise<void> {
+  await session.page.getByTestId("open-agents").click();
+  await textIs(session, "agent-repo-alpha-1", "alpha\nNeeds you · repo", "in Agents");
+  await session.page.keyboard.press("Enter");
+  await attributeIs(
+    session,
+    "workspace-repo-alpha",
+    "aria-current",
+    "after opening alpha from Agents",
+  );
+  await terminalFocused(session);
+  await select(session, "beta");
+}
+
 async function openAndAnswer(session: AppSession): Promise<void> {
   await session.page.getByTestId("inbox-repo-alpha").click();
   await attributeIs(session, "workspace-repo-alpha", "aria-current", "after opening alpha");
@@ -200,6 +214,7 @@ export const inboxJourney: Journey = {
   async run(session) {
     await recorderAnswers(session, 0, [cleared], "at launch");
     await firstNeed(session);
+    await openFromAgents(session);
     await openAndAnswer(session);
     await keptAfterRestart(session);
   },
