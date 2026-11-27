@@ -337,7 +337,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const archivable =
     selectedProject?.missing === null &&
     selectedWorkspace !== undefined &&
-    selectedWorkspace.key !== "main"
+    selectedWorkspace.key !== "main" &&
+    !selectedWorkspace.outside
       ? selectedProject
       : undefined;
   const archivableWorkspace = archivable === undefined ? undefined : selectedWorkspace;

@@ -23,6 +23,7 @@ function input(worktrees: ListedWorktree[], overrides: Partial<AdoptionInput> = 
     listed: { worktrees: [worktree("/Users/<name>/repo", "main"), ...worktrees], separator: "\0" },
     recorded: [],
     room: 20,
+    root: "/Users/<name>/.satellite/worktrees",
     segmentFolder: segment,
     blocked: false,
     ...overrides,
@@ -46,9 +47,25 @@ describe("adoptable", () => {
       worktree(`${segment}/odd`, "bad..name"),
       worktree(`${segment}/nested/deeper`, "deeper"),
       worktree("/Users/<name>/.satellite/worktrees/other/elsewhere", "elsewhere"),
-      worktree("/Users/<name>/own-worktree", "own"),
     ];
     expect(adoptable(input(skipped, { recorded: [`${segment}/recorded`] }))).toEqual([]);
+  });
+
+  it("adopts a worktree an agent made outside Satellite under a name it can show", () => {
+    const outside = [
+      worktree("/Users/<name>/repo/.claude/worktrees/Agent_A1", "agent-a1"),
+      worktree("/Users/<name>/elsewhere/fix-login", "fix-login"),
+      worktree("/Users/<name>/elsewhere/loose", null),
+      worktree("/Users/<name>/elsewhere/gone", "gone", { prunable: true }),
+    ];
+    expect(adoptable(input(outside))).toEqual([
+      {
+        name: "agent-a1",
+        path: "/Users/<name>/repo/.claude/worktrees/Agent_A1",
+        branch: "agent-a1",
+      },
+      { name: "fix-login", path: "/Users/<name>/elsewhere/fix-login", branch: "fix-login" },
+    ]);
   });
 
   it("adopts a folder git lists twice only once", () => {
@@ -90,6 +107,7 @@ describe("droppedSentences", () => {
       name: `workspace-number-${String(index)}-with-a-long-name`,
       project,
       prunable: true,
+      quiet: false,
       sentence: "unused",
     }));
     const [sentence = ""] = droppedSentences(drops);
@@ -97,5 +115,18 @@ describe("droppedSentences", () => {
     expect(sentence).toMatch(
       /^8 workspaces left a-project-with-a-long-name-for-its-folder because they were removed outside Satellite, workspace-number-0-with-a-long-name, .* and \d more\. git still counts some of their branches as checked out until you run git worktree prune\.$/,
     );
+  });
+
+  it("says nothing about a worktree an agent made and removed again", () => {
+    const quiet = {
+      workspaceId: "q",
+      projectId: "p",
+      name: "agent-a1",
+      project: "repo",
+      prunable: false,
+      quiet: true,
+      sentence: "agent-a1 left repo.",
+    };
+    expect(droppedSentences([quiet])).toEqual([]);
   });
 });

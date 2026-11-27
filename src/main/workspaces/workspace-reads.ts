@@ -5,7 +5,11 @@ import type { WorkspaceKey, WorkspaceView } from "../../shared/bridge-contract.t
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isMissing } from "../platform/file-system.ts";
 import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { isBranchName, workspaceNameProblem } from "../../shared/workspace-name.ts";
+import {
+  isBranchName,
+  shownWorktreeName,
+  workspaceNameProblem,
+} from "../../shared/workspace-name.ts";
 import {
   workspaceLimit,
   type StoredProject,
@@ -15,7 +19,13 @@ import type { Slot } from "../projects/slots.ts";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { pacedStatus, type readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
-import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
+import {
+  isOutsideFolder,
+  isOutsidePath,
+  isWorktreeFolder,
+  projectSegment,
+  worktreesRoot,
+} from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 
 export interface Drop {
@@ -24,6 +34,7 @@ export interface Drop {
   name: string;
   project: string;
   prunable: boolean;
+  quiet: boolean;
   sentence: string;
 }
 export interface Adoption {
@@ -38,6 +49,7 @@ export interface AdoptionInput {
   listed: Listed;
   recorded: readonly string[];
   room: number;
+  root: string;
   segmentFolder: string;
   blocked: boolean;
 }
@@ -137,6 +149,7 @@ function view(
     ahead: track?.ahead ?? ahead,
     behind: track?.behind ?? null,
     changed: status === undefined ? null : Math.min(status.entries.length, changedCap),
+    outside: false,
   };
 }
 
@@ -184,15 +197,16 @@ async function adoptedWorkspaces(
     listed,
     recorded: [...project.workspaces.map((record) => record.path), ...realRecords],
     room: workspaceLimit - project.workspaces.length,
+    root: worktreesRoot(realHome),
     segmentFolder: join(worktreesRoot(realHome), projectSegment(project.path)),
     blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
   };
   const adopted: StoredWorkspace[] = [];
   for (const candidate of adoptable(input)) {
-    if (
-      (await isWorktreeFolder(rule.home, candidate.path)) &&
-      (await sharesRepository(project.path, candidate.path))
-    ) {
+    const folderTrusted = isInsidePath(input.root, candidate.path)
+      ? await isWorktreeFolder(rule.home, candidate.path)
+      : await isOutsideFolder(rule.home, candidate.path);
+    if (folderTrusted && (await sharesRepository(project.path, candidate.path))) {
       adopted.push({ id: randomUUID(), ...candidate });
     }
   }
@@ -204,13 +218,22 @@ async function adoptedWorkspaces(
   return { adopted, halfMade };
 }
 
+function unrecorded(worktree: ListedWorktree, input: AdoptionInput): boolean {
+  return !worktree.bare && !input.recorded.some((recorded) => samePath(recorded, worktree.path));
+}
+
 function inOwnFolder(worktree: ListedWorktree, input: AdoptionInput): boolean {
   return (
-    !worktree.bare &&
+    unrecorded(worktree, input) &&
     samePath(dirname(worktree.path), input.segmentFolder) &&
-    workspaceNameProblem(basename(worktree.path)) === null &&
-    !input.recorded.some((recordedPath) => samePath(recordedPath, worktree.path))
+    workspaceNameProblem(basename(worktree.path)) === null
   );
+}
+
+function shownName(worktree: ListedWorktree, input: AdoptionInput): string | undefined {
+  if (inOwnFolder(worktree, input)) return basename(worktree.path);
+  if (isInsidePath(input.root, worktree.path) || !unrecorded(worktree, input)) return undefined;
+  return shownWorktreeName(basename(worktree.path));
 }
 
 export function stoppedHalfway(input: AdoptionInput): string[] {
@@ -228,17 +251,18 @@ export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
   const found: Omit<StoredWorkspace, "id">[] = [];
   for (const worktree of listed.worktrees.slice(1)) {
     const { path, branch } = worktree;
+    const name = shownName(worktree, input);
     if (
       worktree.prunable ||
       worktree.initializing ||
       branch === null ||
       !isBranchName(branch) ||
-      !inOwnFolder(worktree, input)
+      name === undefined
     ) {
       continue;
     }
     if (found.some((kept) => samePath(kept.path, path))) continue;
-    found.push({ name: basename(path), path, branch });
+    found.push({ name, path, branch });
   }
   return found.slice(0, room);
 }
@@ -265,7 +289,7 @@ function foldedSentence(names: readonly string[], project: string, prune: string
 
 export function droppedSentences(drops: readonly Drop[]): string[] {
   const byProject = new Map<string, Drop[]>();
-  for (const drop of drops) {
+  for (const drop of drops.filter((dropped) => !dropped.quiet)) {
     byProject.set(drop.projectId, [...(byProject.get(drop.projectId) ?? []), drop]);
   }
   return [...byProject.values()].flatMap((group) => {
@@ -285,8 +309,12 @@ export function droppedSentences(drops: readonly Drop[]): string[] {
   });
 }
 
-export function blankWorkspace(key: WorkspaceKey, name: string | null): WorkspaceView {
-  return { key, name, branch: null, ahead: null, behind: null, changed: null };
+export function blankWorkspace(
+  key: WorkspaceKey,
+  name: string | null,
+  outside: boolean,
+): WorkspaceView {
+  return { key, name, branch: null, ahead: null, behind: null, changed: null, outside };
 }
 
 export async function readWorkspaces(
@@ -306,6 +334,7 @@ export async function readWorkspaces(
     listed === undefined
       ? await currentBranch(project.path)
       : shortBranch(listed.worktrees[0]?.branch);
+  const outsideOf = (path: string) => isOutsidePath(rule.home, path);
   const reads: RecordRead[] = [];
   const drops: Drop[] = [];
   for (const record of project.workspaces) {
@@ -329,6 +358,7 @@ export async function readWorkspaces(
       name: record.name,
       project: projectName,
       prunable: worktree !== undefined,
+      quiet: outsideOf(record.path),
       sentence: bounded(
         dropSentence(record, projectName, listed.worktrees, worktree !== undefined),
       ),
@@ -358,8 +388,11 @@ export async function readWorkspaces(
       view("main", null, mainBranch, tracking, unpushed, mainStatus),
       ...reads.map(({ record, branch, listed: isListed }) =>
         isListed
-          ? view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id))
-          : blankWorkspace(record.id, record.name),
+          ? {
+              ...view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id)),
+              outside: outsideOf(record.path),
+            }
+          : blankWorkspace(record.id, record.name, outsideOf(record.path)),
       ),
     ],
     drops,

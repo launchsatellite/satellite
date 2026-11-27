@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStartRef, workspaceNameProblem } from "./workspace-name.ts";
+import { isStartRef, shownWorktreeName, workspaceNameProblem } from "./workspace-name.ts";
 
 const patternSentence = "Use lowercase letters, digits and single hyphens, like fix-login.";
 
@@ -84,5 +84,20 @@ describe("isStartRef", () => {
       expect(isStartRef(`refs/heads/main${control}x`)).toBe(false);
     }
     expect(isStartRef("refs/heads/caf\u00e9")).toBe(true);
+  });
+});
+
+describe("shownWorktreeName", () => {
+  it("turns any folder an agent named into a valid workspace name", () => {
+    expect(shownWorktreeName("fix-login")).toBe("fix-login");
+    expect(shownWorktreeName("Agent_A1b2 (copy)")).toBe("agent-a1b2-copy");
+    expect(shownWorktreeName("--x--")).toBe("x");
+    expect(shownWorktreeName(`${"a".repeat(47)}-b`)).toBe("a".repeat(47));
+  });
+
+  it("falls back to worktree for a folder with nothing usable or a name Windows keeps", () => {
+    for (const folder of ["", "___", "Üï", "CON", "\u202e"]) {
+      expect(shownWorktreeName(folder)).toBe("worktree");
+    }
   });
 });

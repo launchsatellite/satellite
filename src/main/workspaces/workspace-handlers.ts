@@ -169,6 +169,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
         ahead: null,
         behind: null,
         changed: null,
+        outside: false,
       },
     };
   };

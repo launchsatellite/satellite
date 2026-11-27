@@ -380,7 +380,15 @@ describe("createProjects", () => {
     const answer = await projects.handlers["projects.list"]({}, owner);
     expect(answer.dropped).toEqual([]);
     expect(answer.projects[0]?.workspaces).toEqual([
-      { key: "main", name: null, branch: "main", ahead: null, behind: null, changed: 0 },
+      {
+        key: "main",
+        name: null,
+        branch: "main",
+        ahead: null,
+        behind: null,
+        changed: 0,
+        outside: false,
+      },
       {
         key: workspace.id,
         name: "fix-login",
@@ -388,6 +396,7 @@ describe("createProjects", () => {
         ahead: null,
         behind: null,
         changed: 1,
+        outside: false,
       },
     ]);
   });
@@ -639,6 +648,39 @@ describe("createProjects", () => {
       "being-made",
     );
     expect(await storedWorkspaceIds(home)).toEqual(stored);
+  });
+
+  it("shows a worktree an agent made outside Satellite, and lets it go quietly", async () => {
+    const { repo, gitIn, projects } = await repoWithWorkspace();
+    const agent = join(repo, ".claude", "worktrees", "Agent_One");
+    await gitIn(repo, ["worktree", "add", "-q", "-b", "agent-one", agent]);
+    const first = await projects.handlers["projects.list"]({}, owner);
+    const project = first.projects[0];
+    expect(
+      project?.workspaces.map(({ name, branch, outside }) => ({ name, branch, outside })),
+    ).toEqual([
+      { name: null, branch: "main", outside: false },
+      { name: "fix-login", branch: "fix-login", outside: false },
+      { name: "agent-one", branch: "agent-one", outside: true },
+    ]);
+    await gitIn(repo, ["worktree", "remove", "-f", agent]);
+    const after = await projects.handlers["projects.list"]({}, owner);
+    expect(after.dropped).toEqual([]);
+    expect(after.projects[0]?.workspaces.map((workspace) => workspace.name)).toEqual([
+      null,
+      "fix-login",
+    ]);
+  });
+
+  it("never holds back removing a project for a worktree an agent made", async () => {
+    const { home, repo, gitIn, projects } = await repoWithWorkspace();
+    await gitIn(repo, ["worktree", "remove", "-f", join(home, "worktrees", "repo", "fix-login")]);
+    await gitIn(repo, ["worktree", "add", "-q", "-b", "agent-two", join(repo, "agent-two")]);
+    const listed = await projects.handlers["projects.list"]({}, owner);
+    const project = listed.projects[0];
+    expect(project?.workspaces.map((workspace) => workspace.name)).toEqual([null, "agent-two"]);
+    await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner);
+    expect((await projects.handlers["projects.list"]({}, owner)).projects).toEqual([]);
   });
 
   it.skipIf(process.platform === "win32")(

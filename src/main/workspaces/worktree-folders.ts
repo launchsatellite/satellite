@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { lstat, mkdir, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { reservedWorkspaceNames, workspaceNameProblem } from "../../shared/workspace-name.ts";
@@ -99,4 +100,27 @@ export async function isWorktreeFolder(home: string, path: string): Promise<bool
     samePath(dirname(dirname(realFolder)), realRoot) &&
     isInsidePath(realRoot, realFolder)
   );
+}
+
+export async function isOutsideFolder(home: string, path: string): Promise<boolean> {
+  if (!isFullyQualified(path) || !(await isPlainFolder(path))) return false;
+  const realHome = await realpathOrUndefined(home);
+  const realFolder = await realpathOrUndefined(path);
+  if (realHome === undefined || realFolder === undefined) return false;
+  return (
+    samePath(realFolder, path) &&
+    !samePath(realHome, realFolder) &&
+    !isInsidePath(realHome, realFolder) &&
+    !isInsidePath(realFolder, realHome)
+  );
+}
+
+export function isOutsidePath(home: string, path: string): boolean {
+  let realHome: string;
+  try {
+    realHome = realpathSync.native(home);
+  } catch {
+    realHome = home;
+  }
+  return [home, realHome].every((form) => !isInsidePath(worktreesRoot(form), path));
 }

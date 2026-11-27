@@ -195,6 +195,7 @@ describe("workspaceHandlers", { timeout: 30_000 }, () => {
       ahead: null,
       behind: null,
       changed: null,
+      outside: false,
     });
     expect(events.map((event) => `${event.step} ${event.state}`)).toEqual([
       "start running",

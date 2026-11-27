@@ -606,8 +606,9 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     await writeFile(join(outside, "keep.md"), "Mine.\n");
     const record = { id: randomUUID(), name: "outside", path: outside, branch: "outside" };
     const refusal = {
-      code: "failed",
-      message: "Satellite couldn't read outside, so it won't archive it. Try again.",
+      code: "refused",
+      message:
+        "outside was made outside Satellite, so Satellite leaves removing it to whoever made it.",
     };
     await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject(refusal);
     await expect(

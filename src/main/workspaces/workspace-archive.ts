@@ -10,7 +10,7 @@ import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { hasRemote, parseCount } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
-import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
+import { isOutsidePath, isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 import {
   boundaryInside,
@@ -164,6 +164,12 @@ async function readInspection(
 ): Promise<Inspection> {
   const failure = unreadable(record.name);
   const folder = leftoverFolder(project, record);
+  if (isOutsidePath(home, record.path)) {
+    throw new BridgeFailure(
+      "refused",
+      `${record.name} was made outside Satellite, so Satellite leaves removing it to whoever made it.`,
+    );
+  }
   if (!(await isConfined(home, project, record))) {
     const gone = await lstat(record.path).then(
       () => false,

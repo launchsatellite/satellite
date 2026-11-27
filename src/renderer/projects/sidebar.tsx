@@ -268,7 +268,8 @@ function ProjectRows({
             selected?.projectId === project.id && selected.workspace === workspace.key;
           const pixel = pixelFor(project.id, workspace.key);
           const testId = workspaceTestIds[index];
-          const archivable = workspace.key !== "main" && project.missing === null;
+          const archivable =
+            workspace.key !== "main" && !workspace.outside && project.missing === null;
           return (
             <li key={workspace.key} className="group relative">
               <button

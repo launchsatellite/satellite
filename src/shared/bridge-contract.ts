@@ -186,6 +186,7 @@ export const workspaceView = z.strictObject({
   ahead: count.nullable(),
   behind: count.nullable(),
   changed: count.nullable(),
+  outside: z.boolean(),
 });
 export const projectView = z.strictObject({
   id: z.uuid(),
