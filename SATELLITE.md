@@ -44,7 +44,7 @@ The title bar is the window's own top strip. On the left, after the window butto
 | Column | Holds |
 | --- | --- |
 | Left | Projects, their workspaces and the inbox. Every row tells its state with one status pixel, and with a count of running processes when it has any. |
-| Centre | The repository, never a chat. Changes, Files and Pull request for the selected workspace, under a header that names its branch and base and carries the pull request and running process readouts. |
+| Centre | The repository, never a chat. Files, Changes and Pull request for the selected workspace, as tabs at the top of a header that also names its branch and base when it has room and carries the pull request and running process readouts. |
 | Right | The real Claude Code sessions of the selected workspace. |
 
 Selecting a workspace switches the centre and the right column together. Sessions in other workspaces keep running.

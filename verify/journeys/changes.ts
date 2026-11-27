@@ -130,6 +130,7 @@ async function modifiedShows(session: AppSession, text: string, when: string): P
 async function listsBranch(session: AppSession): Promise<void> {
   const { page } = session;
   await page.getByTestId("workspace-repo-alpha").click();
+  await page.getByTestId("centre-tab-changes").click();
   let listed: Row[] = [];
   await waitUntil(
     async () => {

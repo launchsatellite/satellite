@@ -56,8 +56,9 @@ export function WorkspaceHeader({
           : `${visibleText(project.name)} / ${workspace.name}`}
       </h1>
       {tabs}
+      <span className="flex-1" />
       {project.missing === null && (
-        <span className="ml-auto hidden min-w-[6ch] items-center gap-[10px] text-dim @lg:flex">
+        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @md:flex">
           <span className="flex-none">
             <Icon name="branch" size={13} />
           </span>
@@ -90,7 +91,7 @@ export function WorkspaceHeader({
           )}
         </span>
       )}
-      <span className="ml-auto flex min-w-0 flex-none items-center gap-1 @lg:ml-0">
+      <span className="flex min-w-0 flex-none items-center gap-1">
         {project.missing === null && processes > 0 && (
           <Button
             variant="ghost"
@@ -132,8 +133,9 @@ export function WorkspaceHeader({
             size="small"
             icon="archive"
             testId="archive-workspace"
+            label="Archive"
           >
-            Archive
+            <span className="hidden @xl:inline">Archive</span>
           </CommandButton>
         )}
         <span className={project.missing === null ? "hidden @3xl:flex" : "flex"}>

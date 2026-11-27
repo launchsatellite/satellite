@@ -28,7 +28,7 @@ export function CentreTabs({
   onChange: (view: CentreView) => void;
 }) {
   return (
-    <div className="flex h-10 min-w-0 items-center">
+    <div className="flex h-10 min-w-0 items-center overflow-x-auto [scrollbar-width:none]">
       <Tabs
         label="Workspace views"
         value={value}
