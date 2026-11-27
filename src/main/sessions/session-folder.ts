@@ -4,6 +4,8 @@ import { BridgeFailure } from "../bridge/registry.ts";
 import type { ProjectStore } from "../projects/project-list.ts";
 import { answerWithin, folderReadMs } from "../projects/repository-check.ts";
 import { isConfined } from "../workspaces/workspace-archive.ts";
+import { isOutsideFolder, isOutsidePath } from "../workspaces/worktree-folders.ts";
+import { sharesRepository } from "../workspaces/worktree-list.ts";
 
 export interface FolderSentences {
   gone: string;
@@ -37,7 +39,12 @@ async function isUsableFolder(
     () => false,
   );
   if (!isFolder) return false;
-  return found.record === undefined || isConfined(home, found.project, found.record);
+  if (found.record === undefined) return true;
+  if (!isOutsidePath(home, found.path)) return isConfined(home, found.project, found.record);
+  return (
+    (await isOutsideFolder(home, found.path)) &&
+    (await sharesRepository(found.project.path, found.path))
+  );
 }
 
 export async function sessionFolder(

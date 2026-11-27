@@ -222,10 +222,18 @@ async function run(session: AppSession): Promise<void> {
     0,
     "the worktree an agent made offered Archive",
   );
+  await session.page.getByTestId("workspace-beta-agent-one").click();
+  await waitUntil(
+    async () =>
+      (await session.page.getByTestId("files-tree").locator('[data-path="README.md"]').count()) > 0,
+    waitMs,
+    "Files never listed README.md in the worktree an agent made",
+  );
   await session.screenshot("projects-agent-worktree");
   await gitInBeta(session, ["worktree", "remove", "-f", agentMade]);
   await refocus(session);
   await gone(session, "workspace-beta-agent-one", "after the agent removed its worktree");
+  await session.page.getByTestId("workspace-beta-main").click();
 
   await gitInBeta(session, [
     "worktree",
