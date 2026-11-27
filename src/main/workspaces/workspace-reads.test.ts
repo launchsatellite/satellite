@@ -23,6 +23,8 @@ function input(worktrees: ListedWorktree[], overrides: Partial<AdoptionInput> = 
     listed: { worktrees: [worktree("/Users/<name>/repo", "main"), ...worktrees], separator: "\0" },
     recorded: [],
     room: 20,
+    outsideRoom: 20,
+    root: "/Users/<name>/.satellite/worktrees",
     segmentFolder: segment,
     blocked: false,
     ...overrides,
@@ -44,11 +46,28 @@ describe("adoptable", () => {
       worktree(`${segment}/loose`, null),
       worktree(`${segment}/Upper`, "upper"),
       worktree(`${segment}/odd`, "bad..name"),
-      worktree(`${segment}/nested/deeper`, "deeper"),
       worktree("/Users/<name>/.satellite/worktrees/other/elsewhere", "elsewhere"),
-      worktree("/Users/<name>/own-worktree", "own"),
     ];
     expect(adoptable(input(skipped, { recorded: [`${segment}/recorded`] }))).toEqual([]);
+  });
+
+  it("adopts a worktree an agent made outside Satellite under a name it can show", () => {
+    const outside = [
+      worktree("/Users/<name>/repo/.claude/worktrees/Agent_A1", "agent-a1"),
+      worktree("/Users/<name>/elsewhere/fix-login", "fix-login"),
+      worktree(`${segment}/mine/.claude/worktrees/nested`, "nested"),
+      worktree("/Users/<name>/elsewhere/loose", null),
+      worktree("/Users/<name>/elsewhere/gone", "gone", { prunable: true }),
+    ];
+    expect(adoptable(input(outside))).toEqual([
+      {
+        name: "agent-a1",
+        path: "/Users/<name>/repo/.claude/worktrees/Agent_A1",
+        branch: "agent-a1",
+      },
+      { name: "fix-login", path: "/Users/<name>/elsewhere/fix-login", branch: "fix-login" },
+      { name: "nested", path: `${segment}/mine/.claude/worktrees/nested`, branch: "nested" },
+    ]);
   });
 
   it("adopts a folder git lists twice only once", () => {
@@ -64,10 +83,9 @@ describe("adoptable", () => {
     expect(adoptable({ ...input([]), listed: { worktrees: [main], separator: "\0" } })).toEqual([]);
   });
 
-  it("adopts nothing while the project is busy, on newline output or past the limit", () => {
+  it("adopts nothing while the project is busy or on newline output", () => {
     const one = [worktree(`${segment}/left-over`, "left-over")];
     expect(adoptable(input(one, { blocked: true }))).toEqual([]);
-    expect(adoptable(input(one, { room: 0 }))).toEqual([]);
     expect(adoptable(input(one, { listed: undefined }))).toEqual([]);
     const newline = input(one);
     expect(
@@ -76,8 +94,6 @@ describe("adoptable", () => {
         listed: { worktrees: newline.listed?.worktrees ?? [], separator: "\n" },
       }),
     ).toEqual([]);
-    const three = ["a", "b", "c"].map((name) => worktree(`${segment}/${name}`, name));
-    expect(adoptable(input(three, { room: 2 })).map((found) => found.name)).toEqual(["a", "b"]);
   });
 });
 
@@ -90,6 +106,7 @@ describe("droppedSentences", () => {
       name: `workspace-number-${String(index)}-with-a-long-name`,
       project,
       prunable: true,
+      quiet: false,
       sentence: "unused",
     }));
     const [sentence = ""] = droppedSentences(drops);
@@ -97,5 +114,18 @@ describe("droppedSentences", () => {
     expect(sentence).toMatch(
       /^8 workspaces left a-project-with-a-long-name-for-its-folder because they were removed outside Satellite, workspace-number-0-with-a-long-name, .* and \d more\. git still counts some of their branches as checked out until you run git worktree prune\.$/,
     );
+  });
+
+  it("says nothing about a worktree an agent made and removed again", () => {
+    const quiet = {
+      workspaceId: "q",
+      projectId: "p",
+      name: "agent-a1",
+      project: "repo",
+      prunable: false,
+      quiet: true,
+      sentence: "agent-a1 left repo.",
+    };
+    expect(droppedSentences([quiet])).toEqual([]);
   });
 });

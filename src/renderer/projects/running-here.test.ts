@@ -11,6 +11,7 @@ const workspace = (key: string): WorkspaceView => ({
   ahead: null,
   behind: null,
   changed: null,
+  outside: false,
 });
 const project = { id: projectId, workspaces: [workspace("main"), workspace(alpha)] };
 

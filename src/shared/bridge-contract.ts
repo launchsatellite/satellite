@@ -59,6 +59,7 @@ export const bridgeLimits = {
   terminalOutputChars: 65536,
   terminals: 16,
   workspacesPerProject: 20,
+  outsideWorktreesPerProject: 30,
   workspacesNeeding: 4200,
   messageChars: 1000,
   linkChars: 2048,
@@ -186,6 +187,7 @@ export const workspaceView = z.strictObject({
   ahead: count.nullable(),
   behind: count.nullable(),
   changed: count.nullable(),
+  outside: z.boolean(),
 });
 export const projectView = z.strictObject({
   id: z.uuid(),
@@ -196,7 +198,7 @@ export const projectView = z.strictObject({
   workspaces: z
     .array(workspaceView)
     .min(1)
-    .max(bridgeLimits.workspacesPerProject + 1),
+    .max(bridgeLimits.workspacesPerProject + bridgeLimits.outsideWorktreesPerProject + 1),
 });
 export const startView = z.discriminatedUnion("kind", [
   z.strictObject({

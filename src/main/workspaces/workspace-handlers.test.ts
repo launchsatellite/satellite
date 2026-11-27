@@ -165,7 +165,7 @@ describe("workspaceHandlers", { timeout: 30_000 }, () => {
       ...Array.from({ length: 20 }, (_, index) => ({
         id: randomUUID(),
         name: `w${String(index)}`,
-        path: join(base, "home", `w${String(index)}`),
+        path: join(base, "home", "worktrees", "repo", `w${String(index)}`),
         branch: `w${String(index)}`,
       })),
     );
@@ -195,6 +195,7 @@ describe("workspaceHandlers", { timeout: 30_000 }, () => {
       ahead: null,
       behind: null,
       changed: null,
+      outside: false,
     });
     expect(events.map((event) => `${event.step} ${event.state}`)).toEqual([
       "start running",

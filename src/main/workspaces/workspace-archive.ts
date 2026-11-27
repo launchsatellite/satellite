@@ -4,13 +4,13 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { BridgeResponse, LossView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isMissing, sameIdentity, type FolderIdentity } from "../platform/file-system.ts";
-import { samePath } from "../platform/paths.ts";
+import { isInsidePath, samePath } from "../platform/paths.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { hasRemote, parseCount } from "./branch-tracking.ts";
 import { readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
-import { isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
+import { isOutsidePath, isWorktreeFolder, projectSegment } from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 import {
   boundaryInside,
@@ -164,6 +164,12 @@ async function readInspection(
 ): Promise<Inspection> {
   const failure = unreadable(record.name);
   const folder = leftoverFolder(project, record);
+  if (isOutsidePath(home, record.path)) {
+    throw new BridgeFailure(
+      "refused",
+      `${record.name} was made outside Satellite, so Satellite leaves removing it to whoever made it.`,
+    );
+  }
   if (!(await isConfined(home, project, record))) {
     const gone = await lstat(record.path).then(
       () => false,
@@ -190,6 +196,18 @@ async function readInspection(
     );
   }
   if (listed.bare) throw failure;
+  const nested = listing.worktrees.find(
+    (worktree) =>
+      !worktree.prunable &&
+      !samePath(worktree.path, record.path) &&
+      isInsidePath(record.path, worktree.path),
+  );
+  if (nested !== undefined) {
+    throw new BridgeFailure(
+      "refused",
+      `${record.name} holds the worktree ${basename(nested.path)} made outside Satellite, so Satellite won't archive it. Once whoever made it removes it, archive ${record.name} again.`,
+    );
+  }
   if (!(await sharesRepository(project.path, record.path))) throw failure;
   const status = await readStatus(record.path);
   if (status === undefined) throw failure;
@@ -249,6 +267,11 @@ function keptFailure(name: string, kept: Kept, linksRemoved: number): BridgeFail
       return new BridgeFailure(
         "refused",
         `${name} holds a folder from another drive at ${kept.at}, so Satellite won't archive it. Unmount it, then try again. Nothing was removed.`,
+      );
+    case "worktree":
+      return new BridgeFailure(
+        "refused",
+        `${name} holds the worktree ${kept.at} made outside Satellite, so Satellite won't archive it.${linksRemoved > 0 ? " Links Satellite removed inside it are gone, and what they pointed to is untouched." : " Nothing was removed."}`,
       );
     case "link":
       return new BridgeFailure(

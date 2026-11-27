@@ -58,3 +58,12 @@ export function isStartRef(ref: string): boolean {
   const prefix = startPrefixes.find((candidate) => ref.startsWith(candidate));
   return prefix !== undefined && isBranchName(ref.slice(prefix.length));
 }
+
+export function shownWorktreeName(folder: string): string {
+  const name = folder
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .slice(0, workspaceNameLimit)
+    .replaceAll(/^-+|-+$/g, "");
+  return workspaceNameProblem(name) === null ? name : "worktree";
+}

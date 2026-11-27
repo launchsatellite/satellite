@@ -126,7 +126,7 @@ export function WorkspaceHeader({
             </span>
           </Button>
         )}
-        {workspace.key !== "main" && (
+        {workspace.key !== "main" && !workspace.outside && (
           <CommandButton
             command="workspace.archive"
             variant="ghost"
