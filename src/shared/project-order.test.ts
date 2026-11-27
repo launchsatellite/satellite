@@ -10,6 +10,10 @@ describe("movedBefore", () => {
     expect(ids(movedBefore(items, "a", "c"))).toEqual(["b", "a", "c"]);
   });
 
+  it("keeps the order when a project is moved before itself", () => {
+    expect(ids(movedBefore(items, "b", "b"))).toEqual(["a", "b", "c"]);
+  });
+
   it("puts it last without a neighbour", () => {
     expect(ids(movedBefore(items, "a", null))).toEqual(["b", "c", "a"]);
   });
@@ -17,6 +21,5 @@ describe("movedBefore", () => {
   it("answers nothing for a project or neighbour that is gone, so no project is lost", () => {
     expect(movedBefore(items, "x", "a")).toBeUndefined();
     expect(movedBefore(items, "a", "x")).toBeUndefined();
-    expect(ids(movedBefore(items, "a", "a"))).toBeUndefined();
   });
 });

@@ -276,7 +276,7 @@ function ProjectRows({
                 onClick={() => {
                   onSelect({ projectId: project.id, workspace: workspace.key });
                 }}
-                className={`flex h-7 w-full items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
+                className={`flex h-7 w-full items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap ${archivable ? "group-hover:pr-8 group-has-[:focus-visible]:pr-8" : ""} ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
               >
                 <StatusPixel
                   state={pixel}
@@ -291,7 +291,7 @@ function ProjectRows({
                   <VisibleName text={workspaceLabel(project, workspace)} />
                 </span>
                 <span
-                  className={`ml-auto flex min-w-0 ${archivable ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
+                  className={`ml-auto flex flex-none ${archivable ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
                 >
                   <Readouts
                     workspace={workspace}
@@ -331,10 +331,14 @@ function dropBefore(
   event: DragEvent<HTMLElement>,
   projects: readonly ProjectView[],
   index: number,
-): string | null {
+  dragged: string | undefined,
+): string | null | undefined {
   const box = event.currentTarget.getBoundingClientRect();
   const after = event.clientY > box.top + box.height / 2;
-  return (after ? projects[index + 1] : projects[index])?.id ?? null;
+  const before = (after ? projects[index + 1] : projects[index])?.id ?? null;
+  const at = projects.findIndex((project) => project.id === dragged);
+  const stays = before === dragged || before === (projects[at + 1]?.id ?? null);
+  return at === -1 || stays ? undefined : before;
 }
 
 function guidedProject(
@@ -362,6 +366,7 @@ export function Sidebar({
 }: SidebarProps) {
   const guided = guidedProject(projects ?? [], selected);
   const [dropAt, setDropAt] = useState<string | null>();
+  const [dragged, setDragged] = useState<string>();
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
       <CommandRow
@@ -401,8 +406,12 @@ export function Sidebar({
             const into = event.relatedTarget;
             if (!(into instanceof Node && event.currentTarget.contains(into))) setDropAt(undefined);
           }}
+          onDragStart={(event) => {
+            setDragged(event.dataTransfer.getData(projectDrag));
+          }}
           onDragEnd={() => {
             setDropAt(undefined);
+            setDragged(undefined);
           }}
         >
           {projectRows(projects).map((row, index) => (
@@ -414,14 +423,15 @@ export function Sidebar({
                 if (!event.dataTransfer.types.includes(projectDrag)) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
-                setDropAt(dropBefore(event, projects, index));
+                setDropAt(dropBefore(event, projects, index, dragged));
               }}
               onDrop={(event) => {
                 const moved = event.dataTransfer.getData(projectDrag);
                 if (moved === "") return;
                 event.preventDefault();
                 setDropAt(undefined);
-                onMove(moved, dropBefore(event, projects, index));
+                const before = dropBefore(event, projects, index, moved);
+                if (before !== undefined) onMove(moved, before);
               }}
             >
               <ProjectRows

@@ -111,7 +111,6 @@ A new tool joins the `Tool` union. Its override variable, a JSON array of string
 - `Icon`, the line icons by `IconName`.
 - `KeyHint`, a key cap such as `⌘K`, framed or `plain`.
 - `StatusPixel`, the square status pixel in the state colours of `DESIGN.md`, `idle` grey, `working` ultraviolet, `ready` volt, `done` lilac or `needs-you` signal.
-- `PixelAvatar`, a project's generated avatar from a seed, its id.
 - `Toast`, an `info`, `notice` or `error` toast with a dismiss button, raised through the `Notify` function the window passes down. One shows at a time inside one polite status region, which a dialog and the command menu leave out of the `inert` they put on everything else, so a toast under them is still announced and dismissable with the mouse, and a press on a toast never takes focus, so the menu or dialog keeps the keys, an error goes to the front, and an `info` toast, a plain confirmation, goes ahead of the notices still waiting and is dropped rather than shown late when it waited more than 10 seconds, while a `notice`, which reports something Satellite forgot, stopped or could not read, and an error, which reports a failure or a refusal, always show (`window/toast-queue.ts`).
 - `withUniqueTestIds`, which suffixes repeated test ids with `-2`, `-3`, so two projects of one name stay apart.
 

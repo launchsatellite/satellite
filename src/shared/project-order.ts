@@ -5,6 +5,7 @@ export function movedBefore<T extends { id: string }>(
 ): T[] | undefined {
   const moved = items.find((item) => item.id === id);
   if (moved === undefined) return undefined;
+  if (before === id) return [...items];
   const rest = items.filter((item) => item.id !== id);
   if (before === null) return [...rest, moved];
   const at = rest.findIndex((item) => item.id === before);

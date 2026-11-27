@@ -168,15 +168,18 @@ async function run(session: AppSession): Promise<void> {
   await refocus(session);
   await workspaceReads(session, "beta", "feature");
   await runCommand(session, "move this project down", "command-project-down");
+  await waitUntil(
+    async () => (await topOf(session, "beta")) < (await topOf(session, "alpha")),
+    promptTimeoutMs,
+    "beta never rose above alpha after Move this project down",
+  );
 
   await session.relaunch();
   await workspaceReads(session, "alpha", "main");
   await workspaceReads(session, "beta", "feature");
   await isSelected(session, "alpha", "after the restart");
-  const top = async (name: string) =>
-    (await session.page.getByTestId(`project-${name}`).boundingBox())?.y ?? Number.NaN;
   assert.ok(
-    (await top("beta")) < (await top("alpha")),
+    (await topOf(session, "beta")) < (await topOf(session, "alpha")),
     "alpha moved down was above beta again after the restart",
   );
 
@@ -251,6 +254,10 @@ async function run(session: AppSession): Promise<void> {
     0,
     `the window logged ${String(session.consoleErrors.length)} console errors, the first is ${JSON.stringify(session.consoleErrors[0])}`,
   );
+}
+
+async function topOf(session: AppSession, name: string): Promise<number> {
+  return (await session.page.getByTestId(`project-${name}`).boundingBox())?.y ?? Number.NaN;
 }
 
 async function runCommand(session: AppSession, query: string, testId: string): Promise<void> {

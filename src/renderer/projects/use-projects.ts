@@ -170,8 +170,8 @@ export function useProjects(notify: Notify): {
         current === undefined ? current : (movedBefore(current, projectId, before) ?? current),
       );
       void invoke("projects.move", { projectId, before }).then((result) => {
-        if (result.ok) return;
-        notify(result.error.message, "error");
+        changes.current += 1;
+        if (!result.ok) notify(result.error.message, "error");
         refresher.current();
       });
     },
