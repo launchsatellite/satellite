@@ -43,6 +43,7 @@ function spies() {
     "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() =>
       Promise.resolve({ forgotWorkspaces: 0 }),
     ),
+    "projects.move": vi.fn<BridgeHandler<"projects.move">>(() => Promise.resolve({})),
     "workspaces.prepare": vi.fn<BridgeHandler<"workspaces.prepare">>(() =>
       Promise.resolve({
         name: "swift-comet",
@@ -259,6 +260,27 @@ describe("createBridgeRouter", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
     }
     noHandlerRan(handlers);
+  });
+
+  it("moves a project only by two uuids, refusing paths and extra fields", async () => {
+    const handlers = spies();
+    const route = createBridgeRouter(handlers);
+    const payloads = [
+      { projectId: "../../etc", before: null },
+      { projectId: terminalId, before: "/Users/<name>/repo" },
+      { projectId: terminalId, before: null, path: "/Users/<name>/repo" },
+      { projectId: terminalId },
+    ];
+    for (const payload of payloads) {
+      const result = await route("projects.move", payload, owner);
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid-request" } });
+    }
+    noHandlerRan(handlers);
+    for (const before of [null, terminalId]) {
+      const valid = { projectId: terminalId, before };
+      expect(await route("projects.move", valid, owner)).toMatchObject({ ok: true });
+      expect(handlers["projects.move"]).toHaveBeenCalledWith(valid, owner);
+    }
   });
 
   it("refuses workspace names that are not branches or that leave the folder", async () => {

@@ -152,7 +152,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   }, []);
   const toast = toasts[0];
   const { state, update } = useInterfaceState(initial, notify);
-  const { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh } =
+  const { projects, add, drop, remove, move, upsertWorkspace, dropWorkspace, refresh } =
     useProjects(notify);
   const sessions = useSessions(notify);
   const {
@@ -327,16 +327,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (workspace) => workspace.key === state.selected?.workspace,
   );
   const removable = selectedWorkspace === undefined ? undefined : selectedProject;
-  const removableId = removable?.id;
-  const removableWorktrees = removable?.worktrees;
-  const removableParent =
-    removable === undefined ? undefined : shownParent(removable, repeatedNames(projects ?? []));
-  const removableName =
-    removable === undefined
+  const removableAt = removable === undefined ? -1 : (projects?.indexOf(removable) ?? -1);
+  const above = removableAt < 1 ? undefined : projects?.[removableAt - 1]?.id;
+  const twoBelow =
+    removableAt === -1 || projects?.[removableAt + 1] === undefined
       ? undefined
-      : removableParent === undefined
-        ? removable.name
-        : `${removable.name} in ${removableParent}`;
+      : (projects[removableAt + 2]?.id ?? null);
   const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
   const archivable =
     selectedProject?.missing === null &&
@@ -570,13 +566,21 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
     [processes],
   );
-  const removableRunning = useMemo(
-    () =>
-      removable === undefined
-        ? { sessions: 0, processes: 0 }
-        : runningHere(removable, allSessions, (ref) => processes.rowsOf(ref).length),
-    [removable, allSessions, processes],
+  const askRemove = useCallback(
+    (project: ProjectView) => {
+      const parent = shownParent(project, repeatedNames(projects ?? []));
+      setRemoving({
+        projectId: project.id,
+        name: parent === undefined ? project.name : `${project.name} in ${parent}`,
+        worktrees: project.worktrees,
+        ...runningHere(project, allSessions, (ref) => processes.rowsOf(ref).length),
+      });
+    },
+    [projects, allSessions, processes],
   );
+  const askArchive = useCallback((project: ProjectView, workspace: WorkspaceView) => {
+    setArchiving({ project, workspace });
+  }, []);
   const sessionNumber = useCallback(
     (terminalId: string) => allSessions.find((tab) => tab.terminalId === terminalId)?.number,
     [allSessions],
@@ -753,19 +757,25 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           {
             id: "project.remove",
             title: "Remove this project",
-            available: removableId !== undefined,
-            run: async () => {
-              if (removableId === undefined || removableName === undefined) return;
-              if (removableRunning.sessions + removableRunning.processes > 0) {
-                setRemoving({
-                  projectId: removableId,
-                  name: removableName,
-                  worktrees: removableWorktrees,
-                  ...removableRunning,
-                });
-                return;
-              }
-              await removeProject(removableId, removableName, removableWorktrees);
+            available: removable !== undefined,
+            run: () => {
+              if (removable !== undefined) askRemove(removable);
+            },
+          },
+          {
+            id: "project.up",
+            title: "Move this project up",
+            available: above !== undefined,
+            run: () => {
+              if (removable !== undefined && above !== undefined) move(removable.id, above);
+            },
+          },
+          {
+            id: "project.down",
+            title: "Move this project down",
+            available: twoBelow !== undefined,
+            run: () => {
+              if (removable !== undefined && twoBelow !== undefined) move(removable.id, twoBelow);
             },
           },
           {
@@ -1098,11 +1108,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     update,
     add,
     open,
-    removableId,
-    removableName,
-    removableWorktrees,
-    removableRunning,
-    removeProject,
+    removable,
+    askRemove,
+    above,
+    twoBelow,
+    move,
     notify,
     dismissToast,
     sessionHere,
@@ -1319,6 +1329,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               selected={state.selected}
               onSelect={select}
               onNewWorkspace={setCreatingIn}
+              onRemoveProject={askRemove}
+              onArchive={askArchive}
+              onMove={move}
               focusProjectId={added}
               pixelFor={pixelFor}
               pullRequestFor={pullRequestFor}

@@ -4,6 +4,7 @@ import { lstat, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { BrowserWindow } from "electron";
 import type { ProjectView } from "../../shared/bridge-contract.ts";
+import { movedBefore } from "../../shared/project-order.ts";
 import { BridgeFailure, type BridgeHandlers } from "../bridge/registry.ts";
 import { isDevicePath, isNetworkPath, samePath } from "../platform/paths.ts";
 import { userHomeFolder } from "../platform/satellite-home.ts";
@@ -59,7 +60,7 @@ export interface ProjectStore {
 export interface Projects {
   handlers: Pick<
     BridgeHandlers,
-    "projects.list" | "projects.choose" | "projects.drop" | "projects.remove"
+    "projects.list" | "projects.choose" | "projects.drop" | "projects.remove" | "projects.move"
   >;
   store: ProjectStore;
   flush(): Promise<void>;
@@ -506,6 +507,14 @@ export function createProjects({
         });
         await Promise.all(forgotten.map(stopSessions));
         return { forgotWorkspaces };
+      },
+      "projects.move": async ({ projectId, before }) => {
+        await replace((latest) => {
+          const moved = movedBefore(latest, projectId, before);
+          if (moved === undefined) throw new BridgeFailure("not-found", notInSatellite);
+          return moved;
+        });
+        return {};
       },
     },
   };
