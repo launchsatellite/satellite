@@ -96,11 +96,13 @@ function Readouts({
   pullRequest,
   processes,
   testId,
+  givesWay,
 }: {
   workspace: WorkspaceView;
   pullRequest: PullRequestFound | null;
   processes: number;
   testId: string | undefined;
+  givesWay: boolean;
 }) {
   const ahead = counted(workspace.ahead);
   const behind = counted(workspace.behind);
@@ -119,7 +121,7 @@ function Readouts({
       <span
         data-testid={testId === undefined ? undefined : `${testId}-meta`}
         aria-hidden="true"
-        className="ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase"
+        className={`ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase ${givesWay ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
       >
         {ahead !== undefined && <span>↑{ahead}</span>}
         {behind !== undefined && <span>↓{behind}</span>}
@@ -290,19 +292,13 @@ function ProjectRows({
                 >
                   <VisibleName text={workspaceLabel(project, workspace)} />
                 </span>
-                <span
-                  className={`ml-auto flex flex-none ${archivable ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
-                >
-                  <Readouts
-                    workspace={workspace}
-                    pullRequest={pullRequestFor({
-                      projectId: project.id,
-                      workspace: workspace.key,
-                    })}
-                    processes={processesFor({ projectId: project.id, workspace: workspace.key })}
-                    testId={testId}
-                  />
-                </span>
+                <Readouts
+                  workspace={workspace}
+                  pullRequest={pullRequestFor({ projectId: project.id, workspace: workspace.key })}
+                  processes={processesFor({ projectId: project.id, workspace: workspace.key })}
+                  testId={testId}
+                  givesWay={archivable}
+                />
               </button>
               {archivable && (
                 <span className={`absolute inset-y-0 right-[2px] flex items-center ${hoverAction}`}>

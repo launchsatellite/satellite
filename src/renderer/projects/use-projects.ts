@@ -29,6 +29,7 @@ export function useProjects(notify: Notify): {
   const [projects, setProjects] = useState<ProjectView[]>();
   const changes = useRef(0);
   const removing = useRef(new Set<string>());
+  const moving = useRef(0);
   const refresher = useRef<() => void>(() => undefined);
   const refresh = useCallback(() => {
     refresher.current();
@@ -49,6 +50,7 @@ export function useProjects(notify: Notify): {
         failing = false;
         if (result.value.notice !== null) notify(result.value.notice, "notice");
         for (const sentence of result.value.dropped) notify(sentence, "notice");
+        if (moving.current > 0) return { files: true, key: "" };
         if (startedAt === changes.current) {
           const key = JSON.stringify(result.value.projects);
           setProjects((current) =>
@@ -166,10 +168,12 @@ export function useProjects(notify: Notify): {
     (projectId: string, before: string | null) => {
       if (projectId === before) return;
       changes.current += 1;
+      moving.current += 1;
       setProjects((current) =>
         current === undefined ? current : (movedBefore(current, projectId, before) ?? current),
       );
       void invoke("projects.move", { projectId, before }).then((result) => {
+        moving.current -= 1;
         changes.current += 1;
         if (!result.ok) notify(result.error.message, "error");
         refresher.current();
