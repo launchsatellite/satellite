@@ -90,6 +90,7 @@ export function useChanges(
     let stopped = false;
     const schedule = createSchedule({
       visible: isVisible,
+      focused: () => document.hasFocus(),
       watched: () => isWatched([projectId]),
       now: () => performance.now(),
       after: (ms, run) => {

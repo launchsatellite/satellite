@@ -175,6 +175,7 @@ export function useFiles(
     const here = { projectId, workspace: key };
     const schedule = createSchedule({
       visible: isVisible,
+      focused: () => document.hasFocus(),
       watched: () => isWatched([projectId]),
       now: () => performance.now(),
       after: (ms, run) => {

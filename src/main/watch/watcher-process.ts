@@ -17,11 +17,12 @@ const plan = z
       ignore: z.array(z.string().min(1).max(4096)).max(200),
     }),
   )
-  .max(1000);
+  .max(12_000);
 const parent = process.parentPort;
 const backend: BackendType | undefined = forcedBackend(process.platform);
 const live = new Map<string, Watched>();
 const failures = new Map<string, number>();
+const waiting = new Set<string>();
 let wanted = new Map<string, string[]>();
 
 function tell(news: WatcherNews): void {
@@ -36,7 +37,7 @@ function end(watched: Watched): void {
 
 function startWanted(root: string): void {
   const ignore = wanted.get(root);
-  if (ignore !== undefined && !live.has(root)) start(root, ignore);
+  if (ignore !== undefined && !live.has(root) && !waiting.has(root)) start(root, ignore);
 }
 
 function failed(watched: Watched): void {
@@ -45,7 +46,9 @@ function failed(watched: Watched): void {
   tell({ kind: "error", root: watched.root });
   const count = (failures.get(watched.root) ?? 0) + 1;
   failures.set(watched.root, count);
+  waiting.add(watched.root);
   setTimeout(() => {
+    waiting.delete(watched.root);
     startWanted(watched.root);
   }, retryDelay(count));
 }

@@ -38,6 +38,11 @@ describe("plannedRoots", () => {
     ]);
   });
 
+  it("never folds an ignore that reads as a pattern", () => {
+    const roots = plannedRoots([project("a", "/code/app", ["/code/app/packages/[ab]"])], "linux");
+    expect(roots.get("/code/app")?.ignore).toEqual([".git/objects", ".git/lfs", "node_modules"]);
+  });
+
   it("folds paths by the platform's rule", () => {
     const roots = plannedRoots([project("a", "C:\\Code\\App", ["c:\\code\\app\\wt"])], "win32");
     expect([...roots.keys()]).toEqual(["C:\\Code\\App"]);

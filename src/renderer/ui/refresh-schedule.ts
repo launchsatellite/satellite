@@ -54,9 +54,16 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
   let lastTook = 0;
   let lastEnded = Number.NEGATIVE_INFINITY;
   let cancel: (() => void) | undefined;
+  let due = Number.POSITIVE_INFINITY;
   const clear = () => {
     cancel?.();
     cancel = undefined;
+    due = Number.POSITIVE_INFINITY;
+  };
+  const askIn = (ms: number) => {
+    clear();
+    due = hooks.now() + ms;
+    cancel = hooks.after(ms, ask);
   };
   const ask = () => {
     clear();
@@ -79,7 +86,7 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
         ask();
       } else if (hooks.visible()) {
         const idle = { ...pace, maxMs: idleMaxMs(pace, hooks) };
-        cancel = hooks.after(pollDelay(hooks.now() - began, steps, idle), ask);
+        askIn(pollDelay(hooks.now() - began, steps, idle));
       }
     });
   };
@@ -96,14 +103,13 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
     nudge: () => {
       steps = -1;
       if (stopped || running || !hooks.visible()) return;
-      clear();
-      cancel = hooks.after(Math.max(0, pace.factor * lastTook - (hooks.now() - lastEnded)), ask);
+      const wait = Math.max(0, pace.factor * lastTook - (hooks.now() - lastEnded));
+      if (hooks.now() + wait < due) askIn(wait);
     },
     calm: () => {
       steps = -1;
       if (cancel === undefined) return;
-      clear();
-      cancel = hooks.after(pace.firstMs, ask);
+      askIn(pace.firstMs);
     },
     hide: clear,
   };
