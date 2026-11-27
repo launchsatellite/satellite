@@ -165,7 +165,7 @@ describe("workspaceHandlers", { timeout: 30_000 }, () => {
       ...Array.from({ length: 20 }, (_, index) => ({
         id: randomUUID(),
         name: `w${String(index)}`,
-        path: join(base, "home", `w${String(index)}`),
+        path: join(base, "home", "worktrees", "repo", `w${String(index)}`),
         branch: `w${String(index)}`,
       })),
     );

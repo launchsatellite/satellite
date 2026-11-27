@@ -16,10 +16,11 @@ import {
   type Drop,
   type HalfMade,
 } from "../workspaces/workspace-reads.ts";
-import { isOutsidePath, projectSegment } from "../workspaces/worktree-folders.ts";
+import { isOutsidePath, ownCount, projectSegment } from "../workspaces/worktree-folders.ts";
 import { listWorktrees } from "../workspaces/worktree-list.ts";
 import {
   createProjectsFile,
+  outsideLimit,
   projectLimit,
   workspaceLimit,
   type StoredProject,
@@ -340,10 +341,19 @@ export function createProjects({
         };
         return latest.map((project) => {
           if (creating.has(project.id)) return project;
-          const added = adoptions
+          const fresh = adoptions
             .filter(({ projectId, workspace }) => projectId === project.id && isNew(workspace.path))
-            .slice(0, Math.max(0, workspaceLimit - project.workspaces.length))
             .map(({ workspace }) => workspace);
+          const own = ownCount(home, project.workspaces);
+          const outside = project.workspaces.length - own;
+          const added = [
+            ...fresh
+              .filter((workspace) => !isOutsidePath(home, workspace.path))
+              .slice(0, Math.max(0, workspaceLimit - own)),
+            ...fresh
+              .filter((workspace) => isOutsidePath(home, workspace.path))
+              .slice(0, Math.max(0, outsideLimit - outside)),
+          ];
           for (const workspace of added) kept.add(workspace.id);
           return added.length === 0
             ? project
@@ -409,7 +419,7 @@ export function createProjects({
         }));
         return withoutStale.map((project) => {
           if (project.id !== projectId) return project;
-          if (project.workspaces.length >= workspaceLimit) {
+          if (ownCount(home, project.workspaces) >= workspaceLimit) {
             throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
           }
           return { ...project, workspaces: [...project.workspaces, workspace] };
@@ -486,8 +496,7 @@ export function createProjects({
         const removed = list.find((project) => project.id === projectId);
         if (removed === undefined) throw new BridgeFailure("not-found", notInSatellite);
         refuseWhileCreating(removed);
-        const ownOf = (project: StoredProject) =>
-          project.workspaces.filter((workspace) => !isOutsidePath(home, workspace.path)).length;
+        const ownOf = (project: StoredProject) => ownCount(home, project.workspaces);
         const count = ownOf(removed);
         if (count > 0 && (await checkedWithin(removed)).checked === null) {
           const live = await liveWorkspaces(removed, home);

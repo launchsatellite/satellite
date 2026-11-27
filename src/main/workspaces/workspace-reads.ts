@@ -11,6 +11,7 @@ import {
   workspaceNameProblem,
 } from "../../shared/workspace-name.ts";
 import {
+  outsideLimit,
   workspaceLimit,
   type StoredProject,
   type StoredWorkspace,
@@ -22,7 +23,9 @@ import { gitReadMs, runGit } from "./git-command.ts";
 import {
   isOutsideFolder,
   isOutsidePath,
+  isOwnShaped,
   isWorktreeFolder,
+  ownCount,
   projectSegment,
   worktreesRoot,
 } from "./worktree-folders.ts";
@@ -49,6 +52,7 @@ export interface AdoptionInput {
   listed: Listed;
   recorded: readonly string[];
   room: number;
+  outsideRoom: number;
   root: string;
   segmentFolder: string;
   blocked: boolean;
@@ -196,14 +200,16 @@ async function adoptedWorkspaces(
   const input = {
     listed,
     recorded: [...project.workspaces.map((record) => record.path), ...realRecords],
-    room: workspaceLimit - project.workspaces.length,
+    room: workspaceLimit - ownCount(rule.home, project.workspaces),
+    outsideRoom:
+      outsideLimit - (project.workspaces.length - ownCount(rule.home, project.workspaces)),
     root: worktreesRoot(realHome),
     segmentFolder: join(worktreesRoot(realHome), projectSegment(project.path)),
     blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
   };
   const adopted: StoredWorkspace[] = [];
   for (const candidate of adoptable(input)) {
-    const folderTrusted = isInsidePath(input.root, candidate.path)
+    const folderTrusted = isOwnShaped(input.root, candidate.path)
       ? await isWorktreeFolder(rule.home, candidate.path)
       : await isOutsideFolder(rule.home, candidate.path);
     if (folderTrusted && (await sharesRepository(project.path, candidate.path))) {
@@ -232,7 +238,7 @@ function inOwnFolder(worktree: ListedWorktree, input: AdoptionInput): boolean {
 
 function shownName(worktree: ListedWorktree, input: AdoptionInput): string | undefined {
   if (inOwnFolder(worktree, input)) return basename(worktree.path);
-  if (isInsidePath(input.root, worktree.path) || !unrecorded(worktree, input)) return undefined;
+  if (isOwnShaped(input.root, worktree.path) || !unrecorded(worktree, input)) return undefined;
   return shownWorktreeName(basename(worktree.path));
 }
 
@@ -246,9 +252,10 @@ export function stoppedHalfway(input: AdoptionInput): string[] {
 }
 
 export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
-  const { listed, room, blocked } = input;
-  if (blocked || listed?.separator !== "\0" || room <= 0) return [];
-  const found: Omit<StoredWorkspace, "id">[] = [];
+  const { listed, blocked } = input;
+  if (blocked || listed?.separator !== "\0") return [];
+  const own: Omit<StoredWorkspace, "id">[] = [];
+  const outside: Omit<StoredWorkspace, "id">[] = [];
   for (const worktree of listed.worktrees.slice(1)) {
     const { path, branch } = worktree;
     const name = shownName(worktree, input);
@@ -261,10 +268,13 @@ export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
     ) {
       continue;
     }
-    if (found.some((kept) => samePath(kept.path, path))) continue;
-    found.push({ name, path, branch });
+    if ([...own, ...outside].some((kept) => samePath(kept.path, path))) continue;
+    (isOwnShaped(input.root, path) ? own : outside).push({ name, path, branch });
   }
-  return found.slice(0, room);
+  return [
+    ...own.slice(0, Math.max(0, input.room)),
+    ...outside.slice(0, Math.max(0, input.outsideRoom)),
+  ];
 }
 
 function namesList(names: readonly string[], shown: number): string {
@@ -334,7 +344,17 @@ export async function readWorkspaces(
     listed === undefined
       ? await currentBranch(project.path)
       : shortBranch(listed.worktrees[0]?.branch);
-  const outsideOf = (path: string) => isOutsidePath(rule.home, path);
+  const realPaths = new Map(
+    await Promise.all(
+      project.workspaces.map(
+        async (record) =>
+          [record.id, (await realpathOrUndefined(record.path)) ?? record.path] as const,
+      ),
+    ),
+  );
+  const isOutside = (record: StoredWorkspace) =>
+    isOutsidePath(rule.home, record.path) &&
+    isOutsidePath(rule.home, realPaths.get(record.id) ?? record.path);
   const reads: RecordRead[] = [];
   const drops: Drop[] = [];
   for (const record of project.workspaces) {
@@ -348,7 +368,7 @@ export async function readWorkspaces(
       listed === undefined ||
       listed.separator === "\n" ||
       busy.has(record.id) ||
-      !(await folderDeleted(record.path, rule.home))
+      (!isOutside(record) && !(await folderDeleted(record.path, rule.home)))
     ) {
       continue;
     }
@@ -358,7 +378,7 @@ export async function readWorkspaces(
       name: record.name,
       project: projectName,
       prunable: worktree !== undefined,
-      quiet: outsideOf(record.path),
+      quiet: isOutside(record),
       sentence: bounded(
         dropSentence(record, projectName, listed.worktrees, worktree !== undefined),
       ),
@@ -390,9 +410,9 @@ export async function readWorkspaces(
         isListed
           ? {
               ...view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id)),
-              outside: outsideOf(record.path),
+              outside: isOutside(record),
             }
-          : blankWorkspace(record.id, record.name, outsideOf(record.path)),
+          : blankWorkspace(record.id, record.name, isOutside(record)),
       ),
     ],
     drops,

@@ -672,6 +672,22 @@ describe("createProjects", () => {
     ]);
   });
 
+  it("shows a worktree an agent made inside a workspace, and drops it once git lets go", async () => {
+    const { repo, gitIn, workspace, projects } = await repoWithWorkspace();
+    const nested = join(workspace.path, ".claude", "worktrees", "nested");
+    await gitIn(repo, ["worktree", "add", "-q", "-b", "nested", nested]);
+    const first = await projects.handlers["projects.list"]({}, owner);
+    expect(first.projects[0]?.workspaces.map(({ name, outside }) => ({ name, outside }))).toEqual([
+      { name: null, outside: false },
+      { name: "fix-login", outside: false },
+      { name: "nested", outside: true },
+    ]);
+    await rm(join(repo, ".git", "worktrees", "nested"), { recursive: true, force: true });
+    const after = await projects.handlers["projects.list"]({}, owner);
+    expect(after.dropped).toEqual([]);
+    expect(after.projects[0]?.workspaces.map((each) => each.name)).toEqual([null, "fix-login"]);
+  });
+
   it("never holds back removing a project for a worktree an agent made", async () => {
     const { home, repo, gitIn, projects } = await repoWithWorkspace();
     await gitIn(repo, ["worktree", "remove", "-f", join(home, "worktrees", "repo", "fix-login")]);

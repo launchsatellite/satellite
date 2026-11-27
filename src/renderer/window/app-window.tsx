@@ -1220,7 +1220,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             parent={visibleText(selectedProject.parent)}
             missing={selectedProject.missing}
             worktrees={selectedProject.worktrees}
-            workspaces={selectedProject.workspaces.length - 1}
+            workspaces={
+              selectedProject.workspaces.filter(
+                (workspace) => workspace.key !== "main" && !workspace.outside,
+              ).length
+            }
           />
         ) : (
           changesHere !== null &&

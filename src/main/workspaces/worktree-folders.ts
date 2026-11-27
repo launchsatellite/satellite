@@ -107,12 +107,19 @@ export async function isOutsideFolder(home: string, path: string): Promise<boole
   const realHome = await realpathOrUndefined(home);
   const realFolder = await realpathOrUndefined(path);
   if (realHome === undefined || realFolder === undefined) return false;
+  const root = worktreesRoot(realHome);
+  const grandparent = dirname(dirname(realFolder));
+  const insideWorkspace = isInsidePath(root, grandparent) && !samePath(root, grandparent);
   return (
     samePath(realFolder, path) &&
     !samePath(realHome, realFolder) &&
-    !isInsidePath(realHome, realFolder) &&
-    !isInsidePath(realFolder, realHome)
+    !isInsidePath(realFolder, realHome) &&
+    (!isInsidePath(realHome, realFolder) || insideWorkspace)
   );
+}
+
+export function isOwnShaped(root: string, path: string): boolean {
+  return samePath(dirname(dirname(path)), root);
 }
 
 export function isOutsidePath(home: string, path: string): boolean {
@@ -122,5 +129,9 @@ export function isOutsidePath(home: string, path: string): boolean {
   } catch {
     realHome = home;
   }
-  return [home, realHome].every((form) => !isInsidePath(worktreesRoot(form), path));
+  return [home, realHome].every((form) => !isOwnShaped(worktreesRoot(form), path));
+}
+
+export function ownCount(home: string, workspaces: readonly { path: string }[]): number {
+  return workspaces.filter((workspace) => !isOutsidePath(home, workspace.path)).length;
 }

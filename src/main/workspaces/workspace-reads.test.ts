@@ -23,6 +23,7 @@ function input(worktrees: ListedWorktree[], overrides: Partial<AdoptionInput> = 
     listed: { worktrees: [worktree("/Users/<name>/repo", "main"), ...worktrees], separator: "\0" },
     recorded: [],
     room: 20,
+    outsideRoom: 20,
     root: "/Users/<name>/.satellite/worktrees",
     segmentFolder: segment,
     blocked: false,
@@ -45,7 +46,6 @@ describe("adoptable", () => {
       worktree(`${segment}/loose`, null),
       worktree(`${segment}/Upper`, "upper"),
       worktree(`${segment}/odd`, "bad..name"),
-      worktree(`${segment}/nested/deeper`, "deeper"),
       worktree("/Users/<name>/.satellite/worktrees/other/elsewhere", "elsewhere"),
     ];
     expect(adoptable(input(skipped, { recorded: [`${segment}/recorded`] }))).toEqual([]);
@@ -55,6 +55,7 @@ describe("adoptable", () => {
     const outside = [
       worktree("/Users/<name>/repo/.claude/worktrees/Agent_A1", "agent-a1"),
       worktree("/Users/<name>/elsewhere/fix-login", "fix-login"),
+      worktree(`${segment}/mine/.claude/worktrees/nested`, "nested"),
       worktree("/Users/<name>/elsewhere/loose", null),
       worktree("/Users/<name>/elsewhere/gone", "gone", { prunable: true }),
     ];
@@ -65,6 +66,7 @@ describe("adoptable", () => {
         branch: "agent-a1",
       },
       { name: "fix-login", path: "/Users/<name>/elsewhere/fix-login", branch: "fix-login" },
+      { name: "nested", path: `${segment}/mine/.claude/worktrees/nested`, branch: "nested" },
     ]);
   });
 

@@ -124,8 +124,8 @@ describe("createProjectsFile", { timeout: 20_000 }, () => {
     expect(loaded.projects).toHaveLength(foldsCase ? 0 : 2);
   });
 
-  it("sets aside a project with 21 workspaces", async () => {
-    const workspaces = Array.from({ length: 21 }, (_, index) =>
+  it("sets aside a project with 41 workspace records", async () => {
+    const workspaces = Array.from({ length: 41 }, (_, index) =>
       workspace(`w${String(index)}`, userPath(`.satellite/worktrees/alpha/w${String(index)}`)),
     );
     const project = { id: randomUUID(), path: userPath("code/alpha") };
@@ -136,10 +136,10 @@ describe("createProjectsFile", { timeout: 20_000 }, () => {
     const loaded = await createProjectsFile(home).load();
     expect(loaded.projects).toEqual([]);
     expect(loaded.notice).toBe(setAsideNotice);
-    const twenty = await homeWith({
+    const forty = await homeWith({
       version: 2,
-      projects: [{ ...project, workspaces: workspaces.slice(0, 20) }],
+      projects: [{ ...project, workspaces: workspaces.slice(0, 40) }],
     });
-    expect((await createProjectsFile(twenty).load()).projects[0]?.workspaces).toHaveLength(20);
+    expect((await createProjectsFile(forty).load()).projects[0]?.workspaces).toHaveLength(40);
   });
 });
