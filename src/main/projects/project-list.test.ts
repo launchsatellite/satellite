@@ -679,7 +679,11 @@ describe("createProjects", () => {
     const listed = await projects.handlers["projects.list"]({}, owner);
     const project = listed.projects[0];
     expect(project?.workspaces.map((workspace) => workspace.name)).toEqual([null, "agent-two"]);
-    await projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner);
+    const removed = await projects.handlers["projects.remove"](
+      { projectId: project?.id ?? "" },
+      owner,
+    );
+    expect(removed.forgotWorkspaces).toBe(0);
     expect((await projects.handlers["projects.list"]({}, owner)).projects).toEqual([]);
   });
 

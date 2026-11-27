@@ -71,7 +71,7 @@ Each workspace row shows its branch, how far it is ahead of and behind its remot
 
 Archive this workspace runs from the command menu, the workspace header or the archive button a workspace's row shows under the pointer. It first shows what would be lost, uncommitted changes, commits that are not pushed and anything Satellite cannot rule out, then stops Satellite's terminals there and removes the worktree with its ignored files. The branch stays. A worktree git has locked, one with submodules checked out, one holding a folder from another drive or one Satellite cannot check whole is never archived, and when anything changed since the dialog opened it shows the latest instead. A project's main workspace is never archived.
 
-On every list Satellite compares its records with what git reports. A workspace whose worktree was removed outside Satellite leaves the list with a sentence that says why, and a worktree in the project's own worktrees folder with no record shows up as a workspace.
+On every list Satellite compares its records with what git reports. A workspace whose worktree was removed outside Satellite leaves the list with a sentence that says why, and every other worktree git lists for the project shows up as a workspace, Satellite's own and those an agent made anywhere else. Satellite archives only the ones it made, and one an agent made leaves the list quietly once git no longer lists it.
 
 ## Sessions
 

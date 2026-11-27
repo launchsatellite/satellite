@@ -486,7 +486,9 @@ export function createProjects({
         const removed = list.find((project) => project.id === projectId);
         if (removed === undefined) throw new BridgeFailure("not-found", notInSatellite);
         refuseWhileCreating(removed);
-        const count = removed.workspaces.length;
+        const ownOf = (project: StoredProject) =>
+          project.workspaces.filter((workspace) => !isOutsidePath(home, workspace.path)).length;
+        const count = ownOf(removed);
         if (count > 0 && (await checkedWithin(removed)).checked === null) {
           const live = await liveWorkspaces(removed, home);
           if (live > 0)
@@ -498,13 +500,13 @@ export function createProjects({
           const project = latest.find((candidate) => candidate.id === projectId);
           if (project !== undefined) {
             refuseWhileCreating(project);
-            if (project.workspaces.length > count) {
+            if (ownOf(project) > count) {
               throw new BridgeFailure(
                 "refused",
-                stillHas(projectName(project.path), project.workspaces.length),
+                stillHas(projectName(project.path), ownOf(project)),
               );
             }
-            forgotWorkspaces = project.workspaces.length;
+            forgotWorkspaces = ownOf(project);
             forgotten = [project.path, ...project.workspaces.map((workspace) => workspace.path)];
           }
           return latest.filter((candidate) => candidate.id !== projectId);
