@@ -10,7 +10,7 @@ Work is spread over several repositories, each in its own editor window. Satelli
 
 - The three columns from `SATELLITE.md`, with the left and right columns resizable within limits and remembered.
 - Add a project by choosing a folder or dropping one on the window. The folder must be a git repository. Satellite records its path and writes nothing into it.
-- The sidebar lists every project by name alone with its main workspace, which is the project's own folder on its current branch.
+- The sidebar opens with Satellite's lockup, the Twin mark beside the wordmark, then lists every project by name alone with its main workspace, which is the project's own folder on its current branch.
 - Remove a project from the command menu, the workspace header or the remove button its sidebar row shows under the pointer or keyboard focus, always after a question. It is only forgotten, the folder is untouched.
 - Drag a project's row to put it anywhere in the list, or use Move this project up and Move this project down. The order is saved.
 - Projects, the selected workspace and the column widths are restored on restart from `~/.satellite`.
