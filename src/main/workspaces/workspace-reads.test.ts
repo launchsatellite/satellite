@@ -83,10 +83,9 @@ describe("adoptable", () => {
     expect(adoptable({ ...input([]), listed: { worktrees: [main], separator: "\0" } })).toEqual([]);
   });
 
-  it("adopts nothing while the project is busy, on newline output or past the limit", () => {
+  it("adopts nothing while the project is busy or on newline output", () => {
     const one = [worktree(`${segment}/left-over`, "left-over")];
     expect(adoptable(input(one, { blocked: true }))).toEqual([]);
-    expect(adoptable(input(one, { room: 0 }))).toEqual([]);
     expect(adoptable(input(one, { listed: undefined }))).toEqual([]);
     const newline = input(one);
     expect(
@@ -95,8 +94,6 @@ describe("adoptable", () => {
         listed: { worktrees: newline.listed?.worktrees ?? [], separator: "\n" },
       }),
     ).toEqual([]);
-    const three = ["a", "b", "c"].map((name) => worktree(`${segment}/${name}`, name));
-    expect(adoptable(input(three, { room: 2 })).map((found) => found.name)).toEqual(["a", "b"]);
   });
 });
 

@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { BridgeResponse, LossView } from "../../shared/bridge-contract.ts";
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isMissing, sameIdentity, type FolderIdentity } from "../platform/file-system.ts";
-import { samePath } from "../platform/paths.ts";
+import { isInsidePath, samePath } from "../platform/paths.ts";
 import type { StoredProject, StoredWorkspace } from "../projects/projects-file.ts";
 import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { hasRemote, parseCount } from "./branch-tracking.ts";
@@ -196,6 +196,18 @@ async function readInspection(
     );
   }
   if (listed.bare) throw failure;
+  const nested = listing.worktrees.find(
+    (worktree) =>
+      !worktree.prunable &&
+      !samePath(worktree.path, record.path) &&
+      isInsidePath(record.path, worktree.path),
+  );
+  if (nested !== undefined) {
+    throw new BridgeFailure(
+      "refused",
+      `${record.name} holds the worktree ${basename(nested.path)} made outside Satellite, so Satellite won't archive it. Once whoever made it removes it, archive ${record.name} again.`,
+    );
+  }
   if (!(await sharesRepository(project.path, record.path))) throw failure;
   const status = await readStatus(record.path);
   if (status === undefined) throw failure;

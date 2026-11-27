@@ -599,6 +599,24 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     expect(await exists(join(record.path, "lib", "local.txt"))).toBe(true);
   });
 
+  it("never archives a workspace that holds a worktree made outside Satellite", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "holder");
+    const nested = join(record.path, ".claude", "worktrees", "agent");
+    await git(project.path, ["worktree", "add", "-q", "-b", "agent", nested]);
+    await writeFile(join(nested, "work.md"), "Unsaved.\n");
+    const refusal = {
+      code: "refused",
+      message:
+        "holder holds the worktree agent made outside Satellite, so Satellite won't archive it. Once whoever made it removes it, archive holder again.",
+    };
+    await expect(inspectWorkspace(home, project, record, 0)).rejects.toMatchObject(refusal);
+    await expect(
+      archiveWorkspace(home, project, record, "0".repeat(64), sessionsStub()),
+    ).rejects.toMatchObject(refusal);
+    expect(await readFile(join(nested, "work.md"), "utf8")).toBe("Unsaved.\n");
+  });
+
   it("never touches a folder outside the worktrees folder", async () => {
     const project = await repository("repo", true);
     const outside = join(base, "outside");

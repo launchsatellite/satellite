@@ -208,12 +208,17 @@ async function adoptedWorkspaces(
     blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
   };
   const adopted: StoredWorkspace[] = [];
+  const room = { own: input.room, outside: input.outsideRoom };
   for (const candidate of adoptable(input)) {
-    const folderTrusted = isOwnShaped(input.root, candidate.path)
-      ? await isWorktreeFolder(rule.home, candidate.path)
-      : await isOutsideFolder(rule.home, candidate.path);
+    const kind = isOwnShaped(input.root, candidate.path) ? "own" : "outside";
+    if (room[kind] <= 0) continue;
+    const folderTrusted =
+      kind === "own"
+        ? await isWorktreeFolder(rule.home, candidate.path)
+        : await isOutsideFolder(rule.home, candidate.path);
     if (folderTrusted && (await sharesRepository(project.path, candidate.path))) {
       adopted.push({ id: randomUUID(), ...candidate });
+      room[kind] -= 1;
     }
   }
   if (rule.blocked()) return { adopted: [], halfMade: [] };
@@ -271,10 +276,7 @@ export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
     if ([...own, ...outside].some((kept) => samePath(kept.path, path))) continue;
     (isOwnShaped(input.root, path) ? own : outside).push({ name, path, branch });
   }
-  return [
-    ...own.slice(0, Math.max(0, input.room)),
-    ...outside.slice(0, Math.max(0, input.outsideRoom)),
-  ];
+  return [...own, ...outside];
 }
 
 function namesList(names: readonly string[], shown: number): string {
