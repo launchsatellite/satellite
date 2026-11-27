@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ProjectView, PullRequestFound, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
@@ -25,6 +26,7 @@ interface WorkspaceHeaderProps {
   processes: number;
   onShowProcesses: () => void;
   onShowPullRequest: () => void;
+  tabs: ReactNode;
 }
 
 const readoutButton = "min-w-0 flex-none px-[7px] font-pixel font-normal text-dim uppercase";
@@ -39,21 +41,24 @@ export function WorkspaceHeader({
   processes,
   onShowProcesses,
   onShowPullRequest,
+  tabs,
 }: WorkspaceHeaderProps) {
   const tracking = trackingWords(ahead, behind);
   return (
     <header
       data-testid="workspace-header"
       tabIndex={-1}
-      className="@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap"
+      className={`@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] whitespace-nowrap ${tabs === false ? "pl-4" : "pl-[7px]"}`}
     >
       <h1 className="sr-only">
         {workspace.name === null
           ? visibleText(project.name)
           : `${visibleText(project.name)} / ${workspace.name}`}
       </h1>
+      {tabs}
+      <span className="flex-1" />
       {project.missing === null && (
-        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @xs:flex">
+        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @md:flex">
           <span className="flex-none">
             <Icon name="branch" size={13} />
           </span>
@@ -86,7 +91,7 @@ export function WorkspaceHeader({
           )}
         </span>
       )}
-      <span className="ml-auto flex min-w-0 flex-none items-center gap-1">
+      <span className="flex min-w-0 flex-none items-center gap-1">
         {project.missing === null && processes > 0 && (
           <Button
             variant="ghost"
@@ -128,8 +133,9 @@ export function WorkspaceHeader({
             size="small"
             icon="archive"
             testId="archive-workspace"
+            label="Archive"
           >
-            Archive
+            <span className="hidden @xl:inline">Archive</span>
           </CommandButton>
         )}
         <span className={project.missing === null ? "hidden @3xl:flex" : "flex"}>

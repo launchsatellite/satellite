@@ -10,7 +10,7 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { Segmented } from "../ui/segmented.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
+import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { ChangeList } from "./change-list.tsx";
 import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
@@ -28,8 +28,6 @@ interface ChangesViewProps {
   diffHandle: RefObject<DiffHandle | null>;
   onShown: (shown: ShownText | null) => void;
   onNarrow: (narrow: boolean) => void;
-  onCentre: (view: CentreView) => void;
-  pullRequest: number | null;
   picked: Picked | null;
   onPick: (picked: Picked) => void;
 }
@@ -77,8 +75,6 @@ export function ChangesView({
   diffHandle,
   onShown,
   onNarrow,
-  onCentre,
-  pullRequest,
   picked,
   onPick: setPicked,
 }: ChangesViewProps) {
@@ -201,8 +197,7 @@ export function ChangesView({
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) inside.current = false;
       }}
     >
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs value="changes" pullRequest={pullRequest} onChange={onCentre} />
+      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side pr-2 pl-4">
         {list?.base != null && (
           <Tooltip text={`from ${visibleText(list.base)}`}>
             <span
