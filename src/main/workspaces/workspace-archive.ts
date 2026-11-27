@@ -268,6 +268,11 @@ function keptFailure(name: string, kept: Kept, linksRemoved: number): BridgeFail
         "refused",
         `${name} holds a folder from another drive at ${kept.at}, so Satellite won't archive it. Unmount it, then try again. Nothing was removed.`,
       );
+    case "worktree":
+      return new BridgeFailure(
+        "refused",
+        `${name} holds the worktree ${kept.at} made outside Satellite, so Satellite won't archive it.${linksRemoved > 0 ? " Links Satellite removed inside it are gone, and what they pointed to is untouched." : " Nothing was removed."}`,
+      );
     case "link":
       return new BridgeFailure(
         "failed",

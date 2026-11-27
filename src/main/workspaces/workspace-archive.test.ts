@@ -617,6 +617,20 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
     expect(await readFile(join(nested, "work.md"), "utf8")).toBe("Unsaved.\n");
   });
 
+  it("refuses when a worktree appears inside after it was inspected", async () => {
+    const project = await repository("repo", true);
+    const record = await workspace(project, "racing");
+    await writeFile(join(project.path, ".git", "info", "exclude"), ".claude/\n");
+    const { fingerprint } = await inspectWorkspace(home, project, record, 0);
+    const nested = join(record.path, ".claude", "worktrees", "late");
+    await git(project.path, ["worktree", "add", "-q", "-b", "late", nested]);
+    await writeFile(join(nested, "work.md"), "Unsaved.\n");
+    await expect(
+      archiveWorkspace(home, project, record, fingerprint, sessionsStub()),
+    ).rejects.toMatchObject({ code: "refused" });
+    expect(await readFile(join(nested, "work.md"), "utf8")).toBe("Unsaved.\n");
+  });
+
   it("never touches a folder outside the worktrees folder", async () => {
     const project = await repository("repo", true);
     const outside = join(base, "outside");
@@ -738,7 +752,7 @@ describe("archiveWorkspace", { timeout: realGitMs }, () => {
       let lists = 0;
       vi.mocked(listWorktrees).mockImplementation(async (root) => {
         lists += 1;
-        return lists > 3 || realList === undefined ? undefined : realList(root);
+        return lists > 4 || realList === undefined ? undefined : realList(root);
       });
       await expect(archive()).rejects.toThrow(
         "Satellite couldn't tell whether git removed fragile. The branch stays, and the next list shows what is left.",

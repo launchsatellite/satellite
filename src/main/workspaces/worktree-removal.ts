@@ -8,12 +8,17 @@ import {
   type FoundLinks,
   type ReadEntry,
 } from "./folder-links.ts";
+import { isInsidePath, samePath } from "../platform/paths.ts";
 import { runGit, worktreeRemoveMs } from "./git-command.ts";
+import { listWorktrees } from "./worktree-list.ts";
 
 export type Why = "unreadable" | "limits" | "late";
 export type Boundary =
   { kind: "clear" } | { kind: "mount"; at: string } | { kind: "unchecked"; why: Why };
-export type Kept = Exclude<Boundary, { kind: "clear" }> | { kind: "link"; at: string };
+export type Kept =
+  | Exclude<Boundary, { kind: "clear" }>
+  | { kind: "link"; at: string }
+  | { kind: "worktree"; at: string };
 export type Removal =
   | { kind: "kept"; kept: Kept; linksRemoved: number }
   | { kind: "ran"; run: ToolRun | undefined; forced: boolean; linksRemoved: number };
@@ -88,18 +93,32 @@ export function refusedAsUnclean(run: ToolRun | undefined): boolean {
   return run !== undefined && run.exitCode !== 0 && run.stderr.includes(uncleanAnswer);
 }
 
+async function heldWorktree(root: string, path: string): Promise<Kept | undefined> {
+  const listing = await listWorktrees(root);
+  if (listing === undefined) return { kind: "unchecked", why: "unreadable" };
+  const held = listing.worktrees.find(
+    (worktree) =>
+      !worktree.prunable && !samePath(worktree.path, path) && isInsidePath(path, worktree.path),
+  );
+  return held === undefined ? undefined : { kind: "worktree", at: placeIn(path, held.path) };
+}
+
 export async function removeWalked(
   root: string,
   { path, links }: Extract<Walked, { kind: "walked" }>,
   { force, locked, forceWhenUnclean = false }: Omit<RemovalOptions, "read">,
 ): Promise<Removal> {
   let linksRemoved = 0;
+  const heldFirst = await heldWorktree(root, path);
+  if (heldFirst !== undefined) return { kind: "kept", kept: heldFirst, linksRemoved };
   for (const link of links) {
     if (!(await removeLink(link))) {
       return { kind: "kept", kept: { kind: "link", at: placeIn(path, link) }, linksRemoved };
     }
     linksRemoved += 1;
   }
+  const heldNow = links.length === 0 ? undefined : await heldWorktree(root, path);
+  if (heldNow !== undefined) return { kind: "kept", kept: heldNow, linksRemoved };
   const first = locked ? ["--force", "--force"] : force ? ["--force"] : [];
   let forced = first.length > 0;
   let run = await runGit(
@@ -110,6 +129,8 @@ export async function removeWalked(
     { filtersOf: path },
   );
   if (!forced && forceWhenUnclean && refusedAsUnclean(run)) {
+    const heldLast = await heldWorktree(root, path);
+    if (heldLast !== undefined) return { kind: "kept", kept: heldLast, linksRemoved };
     forced = true;
     run = await runGit(
       root,
