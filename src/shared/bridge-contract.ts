@@ -59,7 +59,7 @@ export const bridgeLimits = {
   terminalOutputChars: 65536,
   terminals: 16,
   workspacesPerProject: 20,
-  outsideWorktreesPerProject: 20,
+  outsideWorktreesPerProject: 30,
   workspacesNeeding: 4200,
   messageChars: 1000,
   linkChars: 2048,
