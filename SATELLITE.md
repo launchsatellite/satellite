@@ -101,7 +101,7 @@ The view refreshes by itself while Satellite is visible, and at once when a sess
 
 ## Files
 
-Files is the first tab of a workspace and the one the window opens on, and the chosen tab stays while you switch workspaces. It shows its folder as it is on disk, read only. The tree reads like a code editor's explorer. Every file and folder has an icon for its kind, ignored entries are dimmed and never hidden, and a changed file carries its Git letter. Only `.git` stays out. Folders load when opened, so a large repository opens as fast as a small one, and every folder starts closed.
+Files is the first tab of a workspace and the one the window opens on, and the chosen tab stays while you switch workspaces, unless an inbox row opens the Pull request tab because the pull request needs you. It shows its folder as it is on disk, read only. The tree reads like a code editor's explorer. Every file and folder has an icon for its kind, ignored entries are dimmed and never hidden, and a changed file carries its Git letter. Only `.git` stays out. Folders load when opened, so a large repository opens as fast as a small one, and every folder starts closed.
 
 Clicking a file opens it in a tab with syntax shown in weight and grey and hidden characters written out. Several files stay open at once, and Satellite remembers each workspace's open files and the one in front, so they come back after a restart. Cmd+F, or Ctrl+Shift+F on Windows and Linux, or Find a file, opens a file by name with fuzzy matching, and finds files git does not ignore. The opened file takes focus, so the arrow keys move through it.
 
