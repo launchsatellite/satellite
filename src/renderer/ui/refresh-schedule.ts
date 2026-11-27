@@ -6,6 +6,7 @@ interface ScheduleHooks {
   read(): Promise<ScheduleAnswer>;
   visible(): boolean;
   focused?: () => boolean;
+  watched?: () => boolean;
   now(): number;
   after(ms: number, run: () => void): () => void;
 }
@@ -25,6 +26,8 @@ export interface Pace {
 
 const defaultPace: Pace = { firstMs: 2000, maxMs: 30_000, factor: 4 };
 export const unfocusedMaxMs = 120_000;
+export const watchedMaxMs = 300_000;
+export const watchedUnfocusedMaxMs = 600_000;
 
 export function pollDelay(elapsedMs: number, steps: number, pace: Pace = defaultPace): number {
   const backoff = pace.firstMs * 2 ** steps;
@@ -33,6 +36,12 @@ export function pollDelay(elapsedMs: number, steps: number, pace: Pace = default
 
 export function nextSteps(steps: number, answeredFiles: boolean, changed: boolean): number {
   return answeredFiles && changed ? 0 : steps + 1;
+}
+
+function idleMaxMs(pace: Pace, hooks: ScheduleHooks): number {
+  const away = hooks.focused?.() === false;
+  if (hooks.watched?.() === true) return away ? watchedUnfocusedMaxMs : watchedMaxMs;
+  return away ? unfocusedMaxMs : pace.maxMs;
 }
 
 export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): Schedule {
@@ -64,7 +73,7 @@ export function createSchedule(hooks: ScheduleHooks, pace: Pace = defaultPace): 
         again = false;
         ask();
       } else if (hooks.visible()) {
-        const idle = hooks.focused?.() === false ? { ...pace, maxMs: unfocusedMaxMs } : pace;
+        const idle = { ...pace, maxMs: idleMaxMs(pace, hooks) };
         cancel = hooks.after(pollDelay(hooks.now() - began, steps, idle), ask);
       }
     });

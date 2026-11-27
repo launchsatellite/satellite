@@ -66,6 +66,8 @@ export const bridgeLimits = {
   rows: { min: 1, max: 300 },
 };
 
+const watchedProjects = z.array(z.uuid()).max(200);
+
 export const changesLimits = {
   files: 1000,
   parsed: 5000,
@@ -713,6 +715,7 @@ export const bridgeRequests = {
     response: empty,
   },
   "window.frame": { request: empty, response: windowFrame },
+  "watch.start": { request: empty, response: z.strictObject({ live: watchedProjects }) },
   "links.open": {
     request: z.strictObject({ url: z.string().min(1).max(bridgeLimits.linkChars) }),
     response: empty,
@@ -780,6 +783,7 @@ export const bridgeEvents = {
   "notices.open": z.strictObject({ workspace: workspaceRef }),
   "window.frame": windowFrame,
   "window.settings": empty,
+  "watch.changed": z.strictObject({ changed: watchedProjects, live: watchedProjects }),
   "pullRequests.needing": z.strictObject({
     needing: z
       .array(

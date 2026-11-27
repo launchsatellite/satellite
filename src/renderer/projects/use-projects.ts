@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isWatched, onWatchedChange } from "../bridge/watch-news.ts";
 import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { movedBefore } from "../../shared/project-order.ts";
 import { invoke } from "../bridge/bridge-client.ts";
@@ -30,6 +31,7 @@ export function useProjects(notify: Notify): {
   const changes = useRef(0);
   const removing = useRef(new Set<string>());
   const moving = useRef(0);
+  const watchedIds = useRef<string[]>([]);
   const refresher = useRef<() => void>(() => undefined);
   const refresh = useCallback(() => {
     refresher.current();
@@ -52,6 +54,7 @@ export function useProjects(notify: Notify): {
         for (const sentence of result.value.dropped) notify(sentence, "notice");
         if (moving.current > 0) return { files: true, key: "" };
         if (startedAt === changes.current) {
+          watchedIds.current = result.value.projects.map(({ id }) => id);
           const key = JSON.stringify(result.value.projects);
           setProjects((current) =>
             current !== undefined && JSON.stringify(current) === key
@@ -65,6 +68,7 @@ export function useProjects(notify: Notify): {
     const schedule = createSchedule({
       visible: isVisible,
       focused: () => document.hasFocus(),
+      watched: () => isWatched(watchedIds.current),
       now: () => performance.now(),
       after: (ms, run) => {
         const timer = setTimeout(run, ms);
@@ -82,8 +86,10 @@ export function useProjects(notify: Notify): {
     window.addEventListener("focus", schedule.refresh);
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
+    const unwatch = onWatchedChange(schedule.refresh);
     return () => {
       stopped = true;
+      unwatch();
       schedule.stop();
       refresher.current = () => undefined;
       window.removeEventListener("focus", schedule.refresh);

@@ -95,6 +95,8 @@ jobs:
       - run: npm ci
         timeout-minutes: 5
       - run: npm run build
+      - if: runner.os == 'macOS'
+        run: node scripts/mac-watchers.ts
       - run: npx electron-builder $PACKAGE --publish never
         env:
           PACKAGE: ${{ inputs.release && matrix.installers || matrix.unpacked }}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isWatched, onWatchedChange } from "../bridge/watch-news.ts";
 import type {
   BridgeResult,
   ChangesList,
@@ -89,6 +90,7 @@ export function useChanges(
     let stopped = false;
     const schedule = createSchedule({
       visible: isVisible,
+      watched: () => isWatched([projectId]),
       now: () => performance.now(),
       after: (ms, run) => {
         const timer = setTimeout(run, ms);
@@ -125,8 +127,12 @@ export function useChanges(
     window.addEventListener("focus", schedule.refresh);
     document.addEventListener("visibilitychange", onVisibility);
     schedule.start();
+    const unwatch = onWatchedChange((changed) => {
+      if (changed.has(projectId)) schedule.refresh();
+    });
     return () => {
       stopped = true;
+      unwatch();
       schedule.stop();
       refresh.current = () => undefined;
       calm.current = () => undefined;
