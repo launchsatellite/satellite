@@ -43,6 +43,7 @@ function spies() {
     "projects.remove": vi.fn<BridgeHandler<"projects.remove">>(() =>
       Promise.resolve({ forgotWorkspaces: 0 }),
     ),
+    "projects.move": vi.fn<BridgeHandler<"projects.move">>(() => Promise.resolve({})),
     "workspaces.prepare": vi.fn<BridgeHandler<"workspaces.prepare">>(() =>
       Promise.resolve({
         name: "swift-comet",

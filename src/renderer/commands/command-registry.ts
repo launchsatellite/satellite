@@ -15,6 +15,8 @@ export type CommandId =
   | "focus.terminal"
   | "project.add"
   | "project.remove"
+  | "project.up"
+  | "project.down"
   | "workspace.new"
   | "workspace.archive"
   | "session.new"

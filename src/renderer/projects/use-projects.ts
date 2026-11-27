@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProjectView, WorkspaceRef, WorkspaceView } from "../../shared/bridge-contract.ts";
+import { movedBefore } from "../../shared/project-order.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule, type ScheduleAnswer } from "../ui/refresh-schedule.ts";
 import type { Notify } from "../ui/toast.tsx";
@@ -20,6 +21,7 @@ export function useProjects(notify: Notify): {
   add: () => Promise<WorkspaceRef | undefined>;
   drop: (path: string) => Promise<WorkspaceRef | undefined>;
   remove: (projectId: string) => Promise<number | undefined>;
+  move: (projectId: string, before: string | null) => void;
   upsertWorkspace: (projectId: string, workspace: WorkspaceView) => void;
   dropWorkspace: (projectId: string, key: string) => void;
   refresh: () => void;
@@ -160,5 +162,20 @@ export function useProjects(notify: Notify): {
     },
     [changeWorkspaces],
   );
-  return { projects, add, drop, remove, upsertWorkspace, dropWorkspace, refresh };
+  const move = useCallback(
+    (projectId: string, before: string | null) => {
+      if (projectId === before) return;
+      changes.current += 1;
+      setProjects((current) =>
+        current === undefined ? current : (movedBefore(current, projectId, before) ?? current),
+      );
+      void invoke("projects.move", { projectId, before }).then((result) => {
+        if (result.ok) return;
+        notify(result.error.message, "error");
+        refresher.current();
+      });
+    },
+    [notify],
+  );
+  return { projects, add, drop, remove, move, upsertWorkspace, dropWorkspace, refresh };
 }

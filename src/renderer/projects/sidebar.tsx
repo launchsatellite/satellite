@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type DragEvent, type ReactNode } from "react";
 import type {
   ProjectView,
   PullRequestFound,
@@ -11,7 +11,6 @@ import { CommandButton, commandShortcut, useCommands } from "../commands/command
 import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
-import { PixelAvatar } from "../ui/pixel-avatar.tsx";
 import { rowLook, rowRing } from "../ui/row-look.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
@@ -29,6 +28,9 @@ interface SidebarProps {
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
+  onRemoveProject: (project: ProjectView) => void;
+  onArchive: (project: ProjectView, workspace: WorkspaceView) => void;
+  onMove: (projectId: string, before: string | null) => void;
   focusProjectId: string | undefined;
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
   pullRequestFor: (ref: WorkspaceRef) => PullRequestFound | null;
@@ -44,6 +46,8 @@ interface ProjectRow {
 }
 
 const countCap = 1_000_000;
+const projectDrag = "application/x-satellite-project";
+const hoverAction = "opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100";
 
 function CommandRow({
   command,
@@ -184,6 +188,8 @@ function ProjectRows({
   selected,
   onSelect,
   onNewWorkspace,
+  onRemoveProject,
+  onArchive,
   focus,
   pixelFor,
   pullRequestFor,
@@ -194,18 +200,25 @@ function ProjectRows({
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
+  onRemoveProject: SidebarProps["onRemoveProject"];
+  onArchive: SidebarProps["onArchive"];
   focus: boolean;
   pixelFor: SidebarProps["pixelFor"];
   pullRequestFor: SidebarProps["pullRequestFor"];
   processesFor: SidebarProps["processesFor"];
 }) {
+  const name = visibleText(project.name);
   return (
     <>
       <div
         data-testid={testId}
-        className="flex h-7 flex-none items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData(projectDrag, project.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        className="group flex h-7 flex-none cursor-grab items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg active:cursor-grabbing"
       >
-        <PixelAvatar seed={project.id} />
         <span className="min-w-0 truncate">
           <VisibleName text={project.name} />
         </span>
@@ -214,31 +227,47 @@ function ProjectRows({
             <VisibleName text={project.parent} />
           </span>
         )}
-        {project.missing !== null ? (
-          <span className="ml-auto font-pixel text-[12px] text-dim uppercase">Missing</span>
-        ) : (
-          <span className="ml-auto flex flex-none" data-guide={guided ? "workspace" : undefined}>
+        <span className="ml-auto flex flex-none items-center">
+          <span className={`flex ${hoverAction}`}>
             <Button
               variant="ghost"
               size="small"
-              icon="plus"
-              label={`New workspace in ${visibleText(project.name)}`}
-              testId={newWorkspaceTestId}
+              icon="close"
+              label={`Remove ${name}`}
+              tooltip={`Remove ${name}`}
+              testId={`remove-${testId}`}
               onClick={() => {
-                onNewWorkspace(project.id);
+                onRemoveProject(project);
               }}
             />
           </span>
-        )}
+          {project.missing !== null ? (
+            <span className="pl-1 font-pixel text-[12px] text-dim uppercase">Missing</span>
+          ) : (
+            <span className="flex" data-guide={guided ? "workspace" : undefined}>
+              <Button
+                variant="ghost"
+                size="small"
+                icon="plus"
+                label={`New workspace in ${name}`}
+                testId={newWorkspaceTestId}
+                onClick={() => {
+                  onNewWorkspace(project.id);
+                }}
+              />
+            </span>
+          )}
+        </span>
       </div>
-      <ul aria-label={visibleText(project.name)} className="flex flex-col gap-px">
+      <ul aria-label={name} className="flex flex-col gap-px">
         {project.workspaces.map((workspace, index) => {
           const current =
             selected?.projectId === project.id && selected.workspace === workspace.key;
           const pixel = pixelFor(project.id, workspace.key);
           const testId = workspaceTestIds[index];
+          const archivable = workspace.key !== "main" && project.missing === null;
           return (
-            <li key={workspace.key}>
+            <li key={workspace.key} className="group relative">
               <button
                 type="button"
                 data-testid={testId}
@@ -247,7 +276,7 @@ function ProjectRows({
                 onClick={() => {
                   onSelect({ projectId: project.id, workspace: workspace.key });
                 }}
-                className={`flex h-7 w-full items-center gap-[9px] pr-2 pl-[33px] text-[13px] font-medium whitespace-nowrap ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
+                className={`flex h-7 w-full items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
               >
                 <StatusPixel
                   state={pixel}
@@ -261,19 +290,51 @@ function ProjectRows({
                 >
                   <VisibleName text={workspaceLabel(project, workspace)} />
                 </span>
-                <Readouts
-                  workspace={workspace}
-                  pullRequest={pullRequestFor({ projectId: project.id, workspace: workspace.key })}
-                  processes={processesFor({ projectId: project.id, workspace: workspace.key })}
-                  testId={testId}
-                />
+                <span
+                  className={`ml-auto flex min-w-0 ${archivable ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
+                >
+                  <Readouts
+                    workspace={workspace}
+                    pullRequest={pullRequestFor({
+                      projectId: project.id,
+                      workspace: workspace.key,
+                    })}
+                    processes={processesFor({ projectId: project.id, workspace: workspace.key })}
+                    testId={testId}
+                  />
+                </span>
               </button>
+              {archivable && (
+                <span className={`absolute inset-y-0 right-[2px] flex items-center ${hoverAction}`}>
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    icon="archive"
+                    label={`Archive ${workspaceLabel(project, workspace)}`}
+                    tooltip="Archive this workspace"
+                    testId={testId === undefined ? undefined : `archive-${testId}`}
+                    onClick={() => {
+                      onArchive(project, workspace);
+                    }}
+                  />
+                </span>
+              )}
             </li>
           );
         })}
       </ul>
     </>
   );
+}
+
+function dropBefore(
+  event: DragEvent<HTMLElement>,
+  projects: readonly ProjectView[],
+  index: number,
+): string | null {
+  const box = event.currentTarget.getBoundingClientRect();
+  const after = event.clientY > box.top + box.height / 2;
+  return (after ? projects[index + 1] : projects[index])?.id ?? null;
 }
 
 function guidedProject(
@@ -290,6 +351,9 @@ export function Sidebar({
   selected,
   onSelect,
   onNewWorkspace,
+  onRemoveProject,
+  onArchive,
+  onMove,
   focusProjectId,
   pixelFor,
   pullRequestFor,
@@ -297,6 +361,7 @@ export function Sidebar({
   inbox,
 }: SidebarProps) {
   const guided = guidedProject(projects ?? [], selected);
+  const [dropAt, setDropAt] = useState<string | null>();
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
       <CommandRow
@@ -329,21 +394,55 @@ export function Sidebar({
         </p>
       )}
       {projects !== undefined && projects.length > 0 && (
-        <nav aria-label="Projects" className="flex flex-col gap-px">
-          {projectRows(projects).map((row) => (
-            <ProjectRows
+        <nav
+          aria-label="Projects"
+          className="flex flex-col"
+          onDragLeave={(event) => {
+            const into = event.relatedTarget;
+            if (!(into instanceof Node && event.currentTarget.contains(into))) setDropAt(undefined);
+          }}
+          onDragEnd={() => {
+            setDropAt(undefined);
+          }}
+        >
+          {projectRows(projects).map((row, index) => (
+            <div
               key={row.project.id}
-              row={row}
-              guided={row.project.id === guided}
-              selected={selected}
-              onSelect={onSelect}
-              onNewWorkspace={onNewWorkspace}
-              focus={row.project.id === focusProjectId}
-              pixelFor={pixelFor}
-              pullRequestFor={pullRequestFor}
-              processesFor={processesFor}
-            />
+              data-testid={`${row.testId}-group`}
+              className={`flex flex-col gap-px border-t-2 ${dropAt === row.project.id ? "border-accent" : "border-transparent"}`}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes(projectDrag)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropAt(dropBefore(event, projects, index));
+              }}
+              onDrop={(event) => {
+                const moved = event.dataTransfer.getData(projectDrag);
+                if (moved === "") return;
+                event.preventDefault();
+                setDropAt(undefined);
+                onMove(moved, dropBefore(event, projects, index));
+              }}
+            >
+              <ProjectRows
+                row={row}
+                guided={row.project.id === guided}
+                selected={selected}
+                onSelect={onSelect}
+                onNewWorkspace={onNewWorkspace}
+                onRemoveProject={onRemoveProject}
+                onArchive={onArchive}
+                focus={row.project.id === focusProjectId}
+                pixelFor={pixelFor}
+                pullRequestFor={pullRequestFor}
+                processesFor={processesFor}
+              />
+            </div>
           ))}
+          <div
+            aria-hidden="true"
+            className={`h-0 border-t-2 ${dropAt === null ? "border-accent" : "border-transparent"}`}
+          />
         </nav>
       )}
     </div>
