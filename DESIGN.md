@@ -89,7 +89,7 @@ Twin is a 9 by 9 pixel planet with two rows slipping in opposite directions, lik
 - Never below 12px. At 16px and under it snaps to whole pixels.
 - One flat colour. Paper on void, void on paper, white on ultraviolet.
 - The wordmark is Funnel Display 700 in lowercase. In a lockup it sits beside Twin at the mark's height.
-- In the app the lockup heads the sidebar in a 40px row above the command rows, Twin at 18px in `fg`, two pixels to each of its own, its left edge on the rows' icon edge, and the wordmark at 22px beside it.
+- In the app the lockup heads the sidebar in a 40px row above the command rows, Twin at 18px in `fg`, each Twin pixel two screen pixels, its left edge on the rows' icon edge, and the wordmark at 22px beside it.
 - While agents work the two rows may slip apart, and they close when the work lands. Pixel steps only, no easing.
 
 The app icon is one fixed artwork. The exact Twin sits on a clear plate inside a hand-placed mosaic frame on a 17 by 17 grid, where one Twin pixel equals one mosaic block. Its map lives in BRAND.html chapter 01, and every icon size is exported from that map.
