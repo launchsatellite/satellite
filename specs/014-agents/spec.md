@@ -10,7 +10,7 @@ With agents running in several projects at once, the sidebar shows each workspac
 
 - An Agents row in the sidebar under Commands, with the `agents` icon and its shortcut, and the command Show every agent on Cmd+G, or Ctrl+Shift+G on Windows and Linux.
 - It opens the palette in a fourth mode, Agents, listing every open Claude Code session tab across all projects. A row is the session's status pixel, its workspace's name and, at the right, its state, Needs you, Working, Done, Idle or Stopped, then Session n when the workspace holds more than one, then its project, with the parent folder when two project names read the same.
-- Rows go needs you first, longest waiting first, then working, done, idle and stopped, each in sidebar order. The list follows the sessions live while it is open.
+- Rows go needs you first, longest waiting first, then working, done, idle and stopped, each in sidebar order. The list follows the sessions live while it is open, and the highlighted row stays on its session when the order changes.
 - Typing filters by workspace, project or state, as the switcher does.
 - Choosing a row opens its workspace on that session and puts focus in its terminal, as the inbox does.
 - With no session open anywhere it says No Claude Code session is open in any project.
@@ -30,5 +30,5 @@ Starting, stopping or answering a session from the list. Those stay in the sessi
 
 A Satellite feature is accepted on macOS, Windows and Linux.
 
-- [x] The Agents row and Show every agent open the list, with each open session in every workspace and its state. Proof, the agent in the real window with scenario `needs-permission`, sessions in alpha and beta read as Working and Idle in light and dark.
-- [x] Choosing a row opens its workspace on that session with focus in its terminal. Proof, the same run, where Enter on alpha selected alpha and `focused` read `terminal`.
+- [x] The Agents row and Show every agent open the list, with each open session in every workspace and its state. Proof, the agent in the real window with scenario `needs-permission`, sessions in alpha and beta read as Working and Idle in light and dark, and the `inbox` journey, which finds alpha as Needs you in Agents.
+- [x] Choosing a row opens its workspace on that session with focus in its terminal. Proof, the `inbox` journey, where Enter on alpha in Agents selects alpha with the keys in its terminal.

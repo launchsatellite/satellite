@@ -255,6 +255,15 @@ export function Palette({
     files.paths,
     onOpenFile,
   ]);
+  const [shownAgents, setShownAgents] = useState({ agents, options });
+  if (shownAgents.agents !== agents) {
+    const key = shownAgents.options[active]?.key;
+    const held = options.findIndex((option) => option.key === key);
+    setShownAgents({ agents, options });
+    setActive(held === -1 ? 0 : held);
+  } else if (shownAgents.options !== options) {
+    setShownAgents({ agents, options });
+  }
   const stale = mode === "files" && (files.query !== query || files.state === "searching");
   const optionId = (index: number) => `${listId}-${String(index)}`;
   const activeOption = options[active];
