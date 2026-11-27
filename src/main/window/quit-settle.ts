@@ -5,6 +5,7 @@ export interface QuitParts {
   files: { stopAll(): Promise<void> };
   pullRequests: { stopAll(): Promise<void> };
   notices: { stop(): void };
+  watch: { stop(): void };
   terminals: { closeAll(): Promise<void> };
   last: { flush(): Promise<void> };
   interfaceFile: { flush(): Promise<void> };
@@ -16,6 +17,7 @@ export interface QuitParts {
 export async function settleForQuit(parts: QuitParts | undefined, boundMs: number): Promise<void> {
   if (parts === undefined) return;
   parts.notices.stop();
+  parts.watch.stop();
   const bounded = (work: Promise<unknown>) => Promise.race([work, delay(boundMs)]);
   await Promise.all([
     bounded(
