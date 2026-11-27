@@ -11,6 +11,7 @@ import { CommandButton, commandShortcut, useCommands } from "../commands/command
 import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
+import { Lockup } from "../ui/lockup.tsx";
 import { rowLook, rowRing } from "../ui/row-look.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
@@ -364,7 +365,8 @@ export function Sidebar({
   const [dropAt, setDropAt] = useState<string | null>();
   const [dragged, setDragged] = useState<string>();
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-2 pb-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-1 pb-2">
+      <Lockup testId="sidebar-lockup" />
       <CommandRow
         command="palette.commands"
         icon="keys"

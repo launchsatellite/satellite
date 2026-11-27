@@ -43,7 +43,7 @@ The title bar is the window's own top strip. On the left, after the window butto
 
 | Column | Holds |
 | --- | --- |
-| Left | Projects, their workspaces and the inbox. Every row tells its state with one status pixel, and with a count of running processes when it has any. |
+| Left | Satellite's mark and name at the top, then projects, their workspaces and the inbox. Every row tells its state with one status pixel, and with a count of running processes when it has any. |
 | Centre | The repository, never a chat. Files, Changes and Pull request for the selected workspace, as tabs at the top of a header that also names its branch and base when it has room and carries the pull request and running process readouts. |
 | Right | The real Claude Code sessions of the selected workspace. |
 
@@ -83,7 +83,7 @@ On Windows Satellite runs the native install of Claude Code, since an npm instal
 
 ## Inbox
 
-The inbox sits at the top of the sidebar, under the command menu and the switcher and above the projects. It lists every workspace with a session that needs you, or whose pull request does, across all projects, newest first by when the workspace started needing you, and its count turns signal orange while anything is listed. Each row names the workspace and its project, with the parent folder when two project names read the same, which reads your home folder for a project kept directly in it, as the home folder itself does when it is a project, and says why in one sentence, such as Claude Code needs you, Session 2 needs you, 3 sessions need you, Checks failed on the pull request, A review asks for changes or The pull request has conflicts.
+The inbox sits near the top of the sidebar, under the command menu and the switcher and above the projects. It lists every workspace with a session that needs you, or whose pull request does, across all projects, newest first by when the workspace started needing you, and its count turns signal orange while anything is listed. Each row names the workspace and its project, with the parent folder when two project names read the same, which reads your home folder for a project kept directly in it, as the home folder itself does when it is a project, and says why in one sentence, such as Claude Code needs you, Session 2 needs you, 3 sessions need you, Checks failed on the pull request, A review asks for changes or The pull request has conflicts.
 
 Selecting a row, or Go to the newest workspace that needs you in the command menu, opens that workspace on the session that has waited longest and puts focus in its terminal, without typing anything, or on its Pull request tab when the pull request is why it is listed. A key already held when the terminal takes focus is dropped until the next fresh press, so a held Enter never answers a permission question. A row leaves by itself once nothing there needs you, whether the session was answered, ended or closed, the checks pass, the review is answered, the conflicts are gone, or its workspace was archived or its project removed. Nothing about the inbox is saved, since every reason ends with its session or its pull request answer.
 

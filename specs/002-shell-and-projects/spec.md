@@ -10,7 +10,7 @@ Work is spread over several repositories, each in its own editor window. Satelli
 
 - The three columns from `SATELLITE.md`, with the left and right columns resizable within limits and remembered.
 - Add a project by choosing a folder or dropping one on the window. The folder must be a git repository. Satellite records its path and writes nothing into it.
-- The sidebar lists every project by name alone with its main workspace, which is the project's own folder on its current branch.
+- The sidebar opens with Satellite's lockup, the Twin mark beside the wordmark, then lists every project by name alone with its main workspace, which is the project's own folder on its current branch.
 - Remove a project from the command menu, the workspace header or the remove button its sidebar row shows under the pointer or keyboard focus, always after a question. It is only forgotten, the folder is untouched.
 - Drag a project's row to put it anywhere in the list, or use Move this project up and Move this project down. The order is saved.
 - Projects, the selected workspace and the column widths are restored on restart from `~/.satellite`.
@@ -41,6 +41,7 @@ Worktree workspaces belong to spec 003. The agent pane belongs to spec 004.
 - [x] Removing a project leaves its folder byte for byte unchanged. Proof, the `projects` journey, which compares every file of alpha before adding it and after removing it.
 - [x] Removing a project from its sidebar row asks first and then forgets it. Proof, the `projects` journey, which removes the moved beta from its row's button and confirms.
 - [x] A project dragged or moved keeps its place after a restart. Proof, the `projects` journey, which runs Move this project down on alpha and finds beta above it after the restart, and a drag of beta above alpha through the driver, read back after a restart.
+- [x] The sidebar opens with the lockup, its mark on the rows' icon edge. Proof, the agent looking at the real window in light and dark.
 - [x] Every command in the registry appears in the command menu and runs from it. Proof for one command only, the `projects` journey runs Remove this project from the menu.
 - [x] The quick switcher reaches a workspace in another project. Proof, the driver, and the `projects` journey selecting alpha from the switcher after beta was added.
 - [x] With `claude` missing or `gh` signed out, the first run check names the problem and the next step that fixes it. Proof, scenarios `claude-missing` and `not-signed-in`, and `gh-auth.test.ts`.
