@@ -44,7 +44,7 @@ The title bar is the window's own top strip. On the left, after the window butto
 | Column | Holds |
 | --- | --- |
 | Left | Projects, their workspaces and the inbox. Every row tells its state with one status pixel, and with a count of running processes when it has any. |
-| Centre | The repository, never a chat. Changes, Files and Pull request for the selected workspace, under a header that names its branch and base and carries the pull request and running process readouts. |
+| Centre | The repository, never a chat. Files, Changes and Pull request for the selected workspace, as tabs at the top of a header that also names its branch and base when it has room and carries the pull request and running process readouts. |
 | Right | The real Claude Code sessions of the selected workspace. |
 
 Selecting a workspace switches the centre and the right column together. Sessions in other workspaces keep running.
@@ -93,7 +93,7 @@ The app icon carries the inbox count on macOS and on Linux launchers that suppor
 
 ## Changes
 
-Changes is the default tab of a workspace and shows what it changed as diffs. A switch picks the view. Branch, the one a workspace opens on, compares the working tree with the point where the branch left its base, so commits and uncommitted work sit in one list. Uncommitted compares it with the last commit. The base is the remote's default branch as git already records it, or for a project without a remote the branch of its main folder, and the main workspace of a project without a remote default has none. A workspace with no base opens on Uncommitted, and Branch there says in one sentence why it has nothing to compare. Files git does not track yet are listed as added in both views.
+Changes is the second tab of a workspace and shows what it changed as diffs. A switch picks the view. Branch, the one a workspace opens on, compares the working tree with the point where the branch left its base, so commits and uncommitted work sit in one list. Uncommitted compares it with the last commit. The base is the remote's default branch as git already records it, or for a project without a remote the branch of its main folder, and the main workspace of a project without a remote default has none. A workspace with no base opens on Uncommitted, and Branch there says in one sentence why it has nothing to compare. Files git does not track yet are listed as added in both views.
 
 Each row shows the file's Git letter, its name and how many lines it added and removed, and the diff of the selected file sits beside the list, read only, side by side or inline as you choose, and always inline in a pane too narrow for two sides, with syntax shown in weight and grey, hidden characters in names and lines written out and look-alike letters outlined. The workspace header names the branch, its base and how far it is ahead of and behind its remote. A file that is binary, over 1 MB or 20,000 lines, a repository of its own or not UTF-8 text shows one sentence in place of a diff.
 
@@ -101,7 +101,7 @@ The view refreshes by itself while Satellite is visible, and at once when a sess
 
 ## Files
 
-Files is the second tab of a workspace and shows its folder as it is on disk, read only. The tree reads like a code editor's explorer. Every file and folder has an icon for its kind, ignored entries are dimmed and never hidden, and a changed file carries its Git letter. Only `.git` stays out. Folders load when opened, so a large repository opens as fast as a small one, and every folder starts closed.
+Files is the first tab of a workspace and the one the window opens on, and the chosen tab stays while you switch workspaces, unless an inbox row opens the Pull request tab because the pull request needs you. It shows its folder as it is on disk, read only. The tree reads like a code editor's explorer. Every file and folder has an icon for its kind, ignored entries are dimmed and never hidden, and a changed file carries its Git letter. Only `.git` stays out. Folders load when opened, so a large repository opens as fast as a small one, and every folder starts closed.
 
 Clicking a file opens it in a tab with syntax shown in weight and grey and hidden characters written out. Several files stay open at once, and Satellite remembers each workspace's open files and the one in front, so they come back after a restart. Cmd+F, or Ctrl+Shift+F on Windows and Linux, or Find a file, opens a file by name with fuzzy matching, and finds files git does not ignore. The opened file takes focus, so the arrow keys move through it.
 

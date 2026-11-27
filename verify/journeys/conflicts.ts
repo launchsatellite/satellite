@@ -72,6 +72,7 @@ async function leavesNothing(session: AppSession, when: string): Promise<void> {
 
 async function namesTheConflict(session: AppSession): Promise<void> {
   await session.page.getByTestId("workspace-repo-alpha").click();
+  await session.page.getByTestId("centre-tab-changes").click();
   await bannerReads(session, bannerSentence, "on opening the workspace");
   let files = "";
   await waitUntil(
@@ -131,6 +132,7 @@ async function saysItNeedsANewerGit(session: AppSession): Promise<void> {
     await writeFile(join(session.home, "git-version"), "2.35.0\n");
   });
   await session.page.getByTestId("workspace-repo-alpha").click();
+  await session.page.getByTestId("centre-tab-changes").click();
   await bannerReads(session, oldGitSentence, "on a git older than 2.38");
   assert.equal(
     await session.page.getByTestId("changes-banner-send").count(),

@@ -3,7 +3,7 @@ import { Tab, Tabs } from "../ui/tabs.tsx";
 
 export type CentreView = "changes" | "files" | "pull-request";
 
-const views: readonly CentreView[] = ["changes", "files", "pull-request"];
+const views: readonly CentreView[] = ["files", "changes", "pull-request"];
 
 export function centreTabId(view: CentreView): string {
   return `centre-tab-${view}`;
@@ -28,7 +28,7 @@ export function CentreTabs({
   onChange: (view: CentreView) => void;
 }) {
   return (
-    <div className="flex h-10 min-w-0 items-center">
+    <div className="flex h-10 min-w-0 items-center overflow-x-auto [scrollbar-width:none]">
       <Tabs
         label="Workspace views"
         value={value}
