@@ -167,17 +167,25 @@ async function run(session: AppSession): Promise<void> {
   });
   await refocus(session);
   await workspaceReads(session, "beta", "feature");
+  await runCommand(session, "move this project down", "command-project-down");
+  await waitUntil(
+    async () => (await topOf(session, "beta")) < (await topOf(session, "alpha")),
+    promptTimeoutMs,
+    "beta never rose above alpha after Move this project down",
+  );
 
   await session.relaunch();
   await workspaceReads(session, "alpha", "main");
   await workspaceReads(session, "beta", "feature");
   await isSelected(session, "alpha", "after the restart");
+  assert.ok(
+    (await topOf(session, "beta")) < (await topOf(session, "alpha")),
+    "alpha moved down was above beta again after the restart",
+  );
 
-  await session.page.keyboard.press(`${commandModifier}+K`);
-  await visible(session, "palette", "after opening the command menu");
-  await session.page.getByTestId("palette-input").fill("remove");
-  await visible(session, "command-project-remove", "in the command menu for remove");
-  await session.page.keyboard.press("Enter");
+  await runCommand(session, "remove", "command-project-remove");
+  await visible(session, "remove-project-dialog", "after Remove this project");
+  await session.page.getByTestId("remove-project-confirm").click();
   await toastReads(
     session,
     "Satellite removed alpha. Its folder is untouched.",
@@ -230,7 +238,10 @@ async function run(session: AppSession): Promise<void> {
   const centre = await session.page.getByTestId("folder-missing").innerText();
   assert.ok(centre.endsWith(kept), `folder-missing read "${centre}" without "${kept}"`);
   await session.screenshot("projects-missing");
-  await session.page.getByTestId("remove-project").click();
+  await session.page.getByTestId("project-beta").hover();
+  await session.page.getByTestId("remove-project-beta").click();
+  await visible(session, "remove-project-dialog", "after Remove beta in the sidebar");
+  await session.page.getByTestId("remove-project-confirm").click();
   await toastReads(
     session,
     "Satellite removed beta and its 1 workspace. The workspace's folder stays in worktrees/beta in the Satellite home.",
@@ -243,6 +254,18 @@ async function run(session: AppSession): Promise<void> {
     0,
     `the window logged ${String(session.consoleErrors.length)} console errors, the first is ${JSON.stringify(session.consoleErrors[0])}`,
   );
+}
+
+async function topOf(session: AppSession, name: string): Promise<number> {
+  return (await session.page.getByTestId(`project-${name}`).boundingBox())?.y ?? Number.NaN;
+}
+
+async function runCommand(session: AppSession, query: string, testId: string): Promise<void> {
+  await session.page.keyboard.press(`${commandModifier}+K`);
+  await visible(session, "palette", `after opening the command menu for ${query}`);
+  await session.page.getByTestId("palette-input").fill(query);
+  await visible(session, testId, `in the command menu for ${query}`);
+  await session.page.keyboard.press("Enter");
 }
 
 export const projectsJourney: Journey = { name: "projects", scenario: "two-projects", run };

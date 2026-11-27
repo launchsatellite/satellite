@@ -66,7 +66,7 @@ App components read only these semantic tokens, never raw colours. Each has one 
 | `danger` | `#FF5A1F` | `#BE400C` | Destructive actions, errors and their pixels, so an error toast's pixel is `#BE400C` in light |
 | `shadow` | `0 16px 40px rgb(0 0 0 / 0.55)` | `0 16px 40px rgb(10 10 11 / 0.12)` | The one shadow, on menus, the palette, dialogs, toasts and the guide card |
 
-Every text pair in use passes WCAG AA at 4.5 to 1, measured with the WCAG formula, the closest being light `sigfg` and `delfg` on `sel` at 4.51. On light grounds the volt, done and needs you pixels get a 1.5px inner edge, `volt-edge`, `lilac-edge` and `sigfg`, so each pixel measures at least 3 to 1 on `bg`, `side`, `sel` and `hover`, the lowest being lilac on `sel` at 3.7. In dark the edges equal their fills. Shapes too small for an edge, like the cells of a project avatar, draw volt and lilac in their edge colours, `volt-edge` and `lilac-edge`, which pass 3 to 1 against `side` and `sel` in both themes.
+Every text pair in use passes WCAG AA at 4.5 to 1, measured with the WCAG formula, the closest being light `sigfg` and `delfg` on `sel` at 4.51. On light grounds the volt, done and needs you pixels get a 1.5px inner edge, `volt-edge`, `lilac-edge` and `sigfg`, so each pixel measures at least 3 to 1 on `bg`, `side`, `sel` and `hover`, the lowest being lilac on `sel` at 3.7. In dark the edges equal their fills.
 
 ## Type
 
@@ -125,7 +125,8 @@ BRAND.html chapter 08 Kit draws every part in dark and light. Atoms are buttons,
 - An action that loses work is a danger button, `danger` text on the plain ground with a control border, never a filled one. It replaces the primary action only while something would be lost, as Archive anyway.
 - A dialog opens over the window dimmed behind a scrim, takes the keyboard until it closes and ends in a footer on `side` with its actions on the right, Cancel beside the main action, and any note on the left. Escape and a click outside close it only while nothing runs.
 - A control's accessible name starts with the text it shows, for a file row its Git letter, path and counts, then says the rest in words, so voice control finds it by what is on screen. The repository column is the window's main landmark.
-- Projects get a generated pixel avatar. People show their GitHub avatar, or a pixel one when they have none.
+- A project's row is its name alone. Its remove and a workspace row's archive are small ghost icon buttons that show only under the pointer or keyboard focus, the archive one over the row's readouts. Dragging a project's row draws a 2px `accent` line where it lands.
+- People show their GitHub avatar, or a pixel one when they have none.
 
 ## App
 

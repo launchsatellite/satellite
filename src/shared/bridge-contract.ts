@@ -484,6 +484,10 @@ export const bridgeRequests = {
       forgotWorkspaces: z.int().min(0).max(bridgeLimits.workspacesPerProject),
     }),
   },
+  "projects.move": {
+    request: z.strictObject({ projectId: z.uuid(), before: z.uuid().nullable() }),
+    response: empty,
+  },
   "workspaces.prepare": {
     request: z.strictObject({ projectId: z.uuid() }),
     response: z.strictObject({
