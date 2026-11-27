@@ -6,7 +6,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
-import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
+import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { FilePane } from "./file-pane.tsx";
 import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
@@ -21,8 +21,6 @@ interface FilesViewProps {
   tabs: ReturnType<typeof useFileTabs>;
   list: ChangesList | undefined;
   finished: string;
-  onCentre: (view: CentreView) => void;
-  pullRequest: number | null;
   handle: RefObject<DiffHandle | null>;
   onShown: (shown: ShownFile | null) => void;
 }
@@ -32,16 +30,7 @@ export interface ShownFile {
   kind: FileRead["kind"];
 }
 
-export function FilesView({
-  workspace,
-  tabs,
-  list,
-  finished,
-  onCentre,
-  pullRequest,
-  handle,
-  onShown,
-}: FilesViewProps) {
+export function FilesView({ workspace, tabs, list, finished, handle, onShown }: FilesViewProps) {
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
   const { open, setOpen, closeAll } = useFolders(workspace);
   const { listings, file, error } = useFiles(workspace, open, activePath, finished);
@@ -71,8 +60,7 @@ export function FilesView({
   }, [changes]);
   return (
     <div data-testid="files" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs value="files" pullRequest={pullRequest} onChange={onCentre} />
+      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side pr-2 pl-4">
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           <CommandButton
             command="changes.send-lines"

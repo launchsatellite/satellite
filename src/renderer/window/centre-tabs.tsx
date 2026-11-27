@@ -3,7 +3,7 @@ import { Tab, Tabs } from "../ui/tabs.tsx";
 
 export type CentreView = "changes" | "files" | "pull-request";
 
-const views: readonly CentreView[] = ["changes", "files", "pull-request"];
+const views: readonly CentreView[] = ["files", "changes", "pull-request"];
 
 export function centreTabId(view: CentreView): string {
   return `centre-tab-${view}`;

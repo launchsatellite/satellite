@@ -68,7 +68,7 @@ import { Toast, type Notify } from "../ui/toast.tsx";
 import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
-import type { CentreView } from "./centre-tabs.tsx";
+import { CentreTabs, type CentreView } from "./centre-tabs.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, reachableColumns } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
@@ -355,7 +355,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const folderHere = selectedProject?.missing === null;
-  const [centreView, setCentreView] = useState<CentreView>("changes");
+  const [centreView, setCentreView] = useState<CentreView>("files");
   const [pickedView, setPickedView] = useState<ChangesShown>("branch");
   const [noBase, setNoBase] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -1175,6 +1175,15 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           onShowPullRequest={() => {
             setCentreView("pull-request");
           }}
+          tabs={
+            changesHere !== null && (
+              <CentreTabs
+                value={centreView}
+                pullRequest={shownPullRequest?.number ?? null}
+                onChange={setCentreView}
+              />
+            )
+          }
         />
         {selectedProject.missing !== null ? (
           <FolderMissing
@@ -1189,10 +1198,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           (centreView === "pull-request" ? (
             <PullRequestView
               entry={shownEntry}
-              pullRequest={shownPullRequest?.number ?? null}
               section={pullRequestSection}
               onSection={setPullRequestSection}
-              onCentre={setCentreView}
               onLink={askPullRequestLink}
             >
               {shownPullRequest !== null && (
@@ -1235,8 +1242,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               tabs={fileTabs}
               list={changes.list}
               finished={finishedHere}
-              onCentre={setCentreView}
-              pullRequest={shownPullRequest?.number ?? null}
               handle={diffHandle}
               onShown={setFileShown}
             />
@@ -1252,8 +1257,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               diffHandle={diffHandle}
               onShown={setShownText}
               onNarrow={setDiffNarrow}
-              onCentre={setCentreView}
-              pullRequest={shownPullRequest?.number ?? null}
               picked={picked}
               onPick={setPicked}
             />

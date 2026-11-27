@@ -6,7 +6,7 @@ import { StatusPixel } from "../ui/status-pixel.tsx";
 import { Tab, Tabs } from "../ui/tabs.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
-import { CentreTabs, centrePanelId, centreTabId, type CentreView } from "../window/centre-tabs.tsx";
+import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
 import { foundOf, type PullRequestEntry } from "./use-pull-requests.ts";
 import { Sentence } from "./pull-request-sentence.tsx";
 import { openRequest } from "./pull-request-requests.ts";
@@ -24,10 +24,8 @@ export type PullRequestSection = "overview" | "checks" | "conversation" | "files
 
 interface PullRequestViewProps {
   entry: PullRequestEntry | undefined;
-  pullRequest: number | null;
   section: PullRequestSection;
   onSection: (section: PullRequestSection) => void;
-  onCentre: (view: CentreView) => void;
   onLink: (address: string) => void;
   children: ReactNode;
 }
@@ -117,10 +115,8 @@ function Header({ found }: { found: PullRequestFound }) {
 
 export function PullRequestView({
   entry,
-  pullRequest,
   section,
   onSection,
-  onCentre,
   onLink,
   children,
 }: PullRequestViewProps) {
@@ -179,23 +175,20 @@ export function PullRequestView({
   };
   return (
     <div data-testid="pull-request" data-state={state} className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side px-2">
-        <CentreTabs value="pull-request" pullRequest={pullRequest} onChange={onCentre} />
-        {found !== null && isHttps(found.url) && (
-          <div className="ml-auto flex items-center py-[5px]">
-            <Button
-              variant="secondary"
-              size="small"
-              testId="pull-request-open"
-              onClick={() => {
-                onLink(found.url);
-              }}
-            >
-              Open on GitHub
-            </Button>
-          </div>
-        )}
-      </div>
+      {found !== null && isHttps(found.url) && (
+        <div className="flex min-h-10 flex-none items-center justify-end border-b border-line bg-side pr-2 pl-4">
+          <Button
+            variant="secondary"
+            size="small"
+            testId="pull-request-open"
+            onClick={() => {
+              onLink(found.url);
+            }}
+          >
+            Open on GitHub
+          </Button>
+        </div>
+      )}
       {trouble !== null && (
         <p
           data-testid="pull-request-stale"

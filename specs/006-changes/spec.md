@@ -8,7 +8,7 @@ Reviewing what an agent did is the user's main job. Changes shows the work of a 
 
 ## Scope
 
-- The Changes tab in the centre column, the default tab of a workspace.
+- The Changes tab in the centre column, the second tab of a workspace after Files.
 - Two views. Uncommitted shows what differs from the last commit, including untracked files. Branch shows everything the workspace changed against its base branch.
 - A file list with Git letters and added and removed line counts, and the diff of the selected file beside it.
 - Diffs are read-only, side by side or inline, with syntax highlighting.
