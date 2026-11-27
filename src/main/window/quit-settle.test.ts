@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { settleForQuit, type QuitParts } from "./quit-settle.ts";
 
 describe("settleForQuit", () => {
-  it("stops notifications before any session ends", async () => {
+  it("stops notifications and the folder watcher before any session ends", async () => {
     const calls: string[] = [];
     const work = (name: string) => () => {
       calls.push(name);
@@ -12,6 +12,11 @@ describe("settleForQuit", () => {
       notices: {
         stop: () => {
           calls.push("stop");
+        },
+      },
+      watch: {
+        stop: () => {
+          calls.push("watch");
         },
       },
       changes: { stopAll: work("changes") },
@@ -25,8 +30,8 @@ describe("settleForQuit", () => {
       recorder: { flush: work("recorder") },
     };
     await settleForQuit(parts, 1000);
-    expect(calls[0]).toBe("stop");
-    expect(calls).toHaveLength(10);
+    expect(calls.slice(0, 2)).toEqual(["stop", "watch"]);
+    expect(calls).toHaveLength(11);
   });
 
   it("waits for the recorded notification lines once every session ended, within the bound", async () => {
@@ -34,6 +39,7 @@ describe("settleForQuit", () => {
     let endSessions: () => void = () => undefined;
     const parts: QuitParts = {
       notices: { stop: () => undefined },
+      watch: { stop: () => undefined },
       changes: { stopAll: () => Promise.resolve() },
       files: { stopAll: () => Promise.resolve() },
       pullRequests: { stopAll: () => Promise.resolve() },
