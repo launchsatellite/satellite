@@ -761,6 +761,8 @@ function leftSentence(context: CreationContext, kept: Kept): string {
       return `${left}, because a folder from another drive is mounted at ${kept.at} inside it. The branch ${name} stays. Unmount it, then archive ${name}.`;
     case "link":
       return `${left}, because it couldn't remove the link ${kept.at} inside it. The branch ${name} stays.`;
+    case "worktree":
+      return `${left}, because another worktree, ${kept.at}, sits inside it. The branch ${name} stays.`;
   }
 }
 

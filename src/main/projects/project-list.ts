@@ -16,10 +16,11 @@ import {
   type Drop,
   type HalfMade,
 } from "../workspaces/workspace-reads.ts";
-import { projectSegment } from "../workspaces/worktree-folders.ts";
+import { isOutsidePath, ownCount, projectSegment } from "../workspaces/worktree-folders.ts";
 import { listWorktrees } from "../workspaces/worktree-list.ts";
 import {
   createProjectsFile,
+  outsideLimit,
   projectLimit,
   workspaceLimit,
   type StoredProject,
@@ -106,18 +107,19 @@ async function folderChecks(project: StoredProject, inSlot: Slot): Promise<Missi
   return null;
 }
 
-function unread(project: StoredProject, missing: Missing | null): ProjectView {
+function unread(project: StoredProject, missing: Missing | null, home: string): ProjectView {
+  const own = project.workspaces.filter((workspace) => !isOutsidePath(home, workspace.path));
   return {
     id: project.id,
     name: shownProjectName(project.path),
     parent: parentName(project.path),
     missing,
-    ...(project.workspaces.length === 0
-      ? {}
-      : { worktrees: `worktrees/${projectSegment(project.path)}` }),
+    ...(own.length === 0 ? {} : { worktrees: `worktrees/${projectSegment(project.path)}` }),
     workspaces: [
-      blankWorkspace("main", null),
-      ...project.workspaces.map((workspace) => blankWorkspace(workspace.id, workspace.name)),
+      blankWorkspace("main", null, false),
+      ...project.workspaces.map((workspace) =>
+        blankWorkspace(workspace.id, workspace.name, isOutsidePath(home, workspace.path)),
+      ),
     ],
   };
 }
@@ -140,10 +142,11 @@ function stillHas(name: string, count: number): string {
     : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
 }
 
-async function liveWorkspaces(project: StoredProject): Promise<number> {
+async function liveWorkspaces(project: StoredProject, home: string): Promise<number> {
+  const own = project.workspaces.filter((record) => !isOutsidePath(home, record.path));
   const listed = await listWorktrees(project.path).catch(() => undefined);
-  if (listed?.separator !== "\0") return project.workspaces.length;
-  return project.workspaces.filter((record) =>
+  if (listed?.separator !== "\0") return own.length;
+  return own.filter((record) =>
     listed.worktrees.some((worktree) => !worktree.prunable && samePath(worktree.path, record.path)),
   ).length;
 }
@@ -210,14 +213,15 @@ export function createProjects({
   const startRead = (project: StoredProject): ProjectRead => {
     const checked = folderChecks(project, timedOut.has(project.id) ? inHungSlot : direct);
     const answer = checked.then(async (missing): Promise<ProjectAnswer> => {
-      if (missing !== null) return { view: unread(project, missing), drops: [], adoptions: [] };
+      if (missing !== null)
+        return { view: unread(project, missing, home), drops: [], adoptions: [] };
       const name = projectName(project.path);
       const read = await readWorkspaces(project, name, busy, inStatusSlot, {
         home,
         blocked: () => creating.has(project.id),
       });
       return {
-        view: { ...unread(project, null), workspaces: read.workspaces },
+        view: { ...unread(project, null, home), workspaces: read.workspaces },
         drops: read.drops,
         adoptions: read.adoptions,
         halfMade: read.halfMade,
@@ -240,10 +244,11 @@ export function createProjects({
   };
   const projectAnswer = async (project: StoredProject): Promise<ProjectAnswer> => {
     const { read, checked } = await checkedWithin(project);
-    if (checked === "late") return { view: unread(project, "folder"), drops: [], adoptions: [] };
+    if (checked === "late")
+      return { view: unread(project, "folder", home), drops: [], adoptions: [] };
     const answer = await answerWithin(read.answer, workspaceReadMs);
     return answer === "late"
-      ? { view: unread(project, checked), drops: [], adoptions: [] }
+      ? { view: unread(project, checked, home), drops: [], adoptions: [] }
       : answer;
   };
   const current = async () => {
@@ -336,10 +341,19 @@ export function createProjects({
         };
         return latest.map((project) => {
           if (creating.has(project.id)) return project;
-          const added = adoptions
+          const fresh = adoptions
             .filter(({ projectId, workspace }) => projectId === project.id && isNew(workspace.path))
-            .slice(0, Math.max(0, workspaceLimit - project.workspaces.length))
             .map(({ workspace }) => workspace);
+          const own = ownCount(home, project.workspaces);
+          const outside = project.workspaces.length - own;
+          const added = [
+            ...fresh
+              .filter((workspace) => !isOutsidePath(home, workspace.path))
+              .slice(0, Math.max(0, workspaceLimit - own)),
+            ...fresh
+              .filter((workspace) => isOutsidePath(home, workspace.path))
+              .slice(0, Math.max(0, outsideLimit - outside)),
+          ];
           for (const workspace of added) kept.add(workspace.id);
           return added.length === 0
             ? project
@@ -405,7 +419,7 @@ export function createProjects({
         }));
         return withoutStale.map((project) => {
           if (project.id !== projectId) return project;
-          if (project.workspaces.length >= workspaceLimit) {
+          if (ownCount(home, project.workspaces) >= workspaceLimit) {
             throw new BridgeFailure("limit", workspaceLimitSentence(projectName(project.path)));
           }
           return { ...project, workspaces: [...project.workspaces, workspace] };
@@ -482,9 +496,10 @@ export function createProjects({
         const removed = list.find((project) => project.id === projectId);
         if (removed === undefined) throw new BridgeFailure("not-found", notInSatellite);
         refuseWhileCreating(removed);
-        const count = removed.workspaces.length;
+        const ownOf = (project: StoredProject) => ownCount(home, project.workspaces);
+        const count = ownOf(removed);
         if (count > 0 && (await checkedWithin(removed)).checked === null) {
-          const live = await liveWorkspaces(removed);
+          const live = await liveWorkspaces(removed, home);
           if (live > 0)
             throw new BridgeFailure("refused", stillHas(projectName(removed.path), live));
         }
@@ -494,13 +509,13 @@ export function createProjects({
           const project = latest.find((candidate) => candidate.id === projectId);
           if (project !== undefined) {
             refuseWhileCreating(project);
-            if (project.workspaces.length > count) {
+            if (ownOf(project) > count) {
               throw new BridgeFailure(
                 "refused",
-                stillHas(projectName(project.path), project.workspaces.length),
+                stillHas(projectName(project.path), ownOf(project)),
               );
             }
-            forgotWorkspaces = project.workspaces.length;
+            forgotWorkspaces = ownOf(project);
             forgotten = [project.path, ...project.workspaces.map((workspace) => workspace.path)];
           }
           return latest.filter((candidate) => candidate.id !== projectId);

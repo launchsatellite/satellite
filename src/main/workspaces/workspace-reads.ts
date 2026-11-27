@@ -5,8 +5,13 @@ import type { WorkspaceKey, WorkspaceView } from "../../shared/bridge-contract.t
 import { BridgeFailure } from "../bridge/registry.ts";
 import { isMissing } from "../platform/file-system.ts";
 import { isInsidePath, realpathOrUndefined, samePath } from "../platform/paths.ts";
-import { isBranchName, workspaceNameProblem } from "../../shared/workspace-name.ts";
 import {
+  isBranchName,
+  shownWorktreeName,
+  workspaceNameProblem,
+} from "../../shared/workspace-name.ts";
+import {
+  outsideLimit,
   workspaceLimit,
   type StoredProject,
   type StoredWorkspace,
@@ -15,7 +20,15 @@ import type { Slot } from "../projects/slots.ts";
 import { countUnpushed, hasRemote, readTracking } from "./branch-tracking.ts";
 import { pacedStatus, type readStatus } from "./changed-files.ts";
 import { gitReadMs, runGit } from "./git-command.ts";
-import { isWorktreeFolder, projectSegment, worktreesRoot } from "./worktree-folders.ts";
+import {
+  isOutsideFolder,
+  isOutsidePath,
+  isOwnShaped,
+  isWorktreeFolder,
+  ownCount,
+  projectSegment,
+  worktreesRoot,
+} from "./worktree-folders.ts";
 import { listWorktrees, sharesRepository, type ListedWorktree } from "./worktree-list.ts";
 
 export interface Drop {
@@ -24,6 +37,7 @@ export interface Drop {
   name: string;
   project: string;
   prunable: boolean;
+  quiet: boolean;
   sentence: string;
 }
 export interface Adoption {
@@ -38,6 +52,8 @@ export interface AdoptionInput {
   listed: Listed;
   recorded: readonly string[];
   room: number;
+  outsideRoom: number;
+  root: string;
   segmentFolder: string;
   blocked: boolean;
 }
@@ -137,6 +153,7 @@ function view(
     ahead: track?.ahead ?? ahead,
     behind: track?.behind ?? null,
     changed: status === undefined ? null : Math.min(status.entries.length, changedCap),
+    outside: false,
   };
 }
 
@@ -183,17 +200,25 @@ async function adoptedWorkspaces(
   const input = {
     listed,
     recorded: [...project.workspaces.map((record) => record.path), ...realRecords],
-    room: workspaceLimit - project.workspaces.length,
+    room: workspaceLimit - ownCount(rule.home, project.workspaces),
+    outsideRoom:
+      outsideLimit - (project.workspaces.length - ownCount(rule.home, project.workspaces)),
+    root: worktreesRoot(realHome),
     segmentFolder: join(worktreesRoot(realHome), projectSegment(project.path)),
     blocked: rule.blocked() || project.workspaces.some((record) => busy.has(record.id)),
   };
   const adopted: StoredWorkspace[] = [];
+  const room = { own: input.room, outside: input.outsideRoom };
   for (const candidate of adoptable(input)) {
-    if (
-      (await isWorktreeFolder(rule.home, candidate.path)) &&
-      (await sharesRepository(project.path, candidate.path))
-    ) {
+    const kind = isOwnShaped(input.root, candidate.path) ? "own" : "outside";
+    if (room[kind] <= 0) continue;
+    const folderTrusted =
+      kind === "own"
+        ? await isWorktreeFolder(rule.home, candidate.path)
+        : await isOutsideFolder(rule.home, candidate.path);
+    if (folderTrusted && (await sharesRepository(project.path, candidate.path))) {
       adopted.push({ id: randomUUID(), ...candidate });
+      room[kind] -= 1;
     }
   }
   if (rule.blocked()) return { adopted: [], halfMade: [] };
@@ -204,13 +229,22 @@ async function adoptedWorkspaces(
   return { adopted, halfMade };
 }
 
+function unrecorded(worktree: ListedWorktree, input: AdoptionInput): boolean {
+  return !worktree.bare && !input.recorded.some((recorded) => samePath(recorded, worktree.path));
+}
+
 function inOwnFolder(worktree: ListedWorktree, input: AdoptionInput): boolean {
   return (
-    !worktree.bare &&
+    unrecorded(worktree, input) &&
     samePath(dirname(worktree.path), input.segmentFolder) &&
-    workspaceNameProblem(basename(worktree.path)) === null &&
-    !input.recorded.some((recordedPath) => samePath(recordedPath, worktree.path))
+    workspaceNameProblem(basename(worktree.path)) === null
   );
+}
+
+function shownName(worktree: ListedWorktree, input: AdoptionInput): string | undefined {
+  if (inOwnFolder(worktree, input)) return basename(worktree.path);
+  if (isOwnShaped(input.root, worktree.path) || !unrecorded(worktree, input)) return undefined;
+  return shownWorktreeName(basename(worktree.path));
 }
 
 export function stoppedHalfway(input: AdoptionInput): string[] {
@@ -223,24 +257,26 @@ export function stoppedHalfway(input: AdoptionInput): string[] {
 }
 
 export function adoptable(input: AdoptionInput): Omit<StoredWorkspace, "id">[] {
-  const { listed, room, blocked } = input;
-  if (blocked || listed?.separator !== "\0" || room <= 0) return [];
-  const found: Omit<StoredWorkspace, "id">[] = [];
+  const { listed, blocked } = input;
+  if (blocked || listed?.separator !== "\0") return [];
+  const own: Omit<StoredWorkspace, "id">[] = [];
+  const outside: Omit<StoredWorkspace, "id">[] = [];
   for (const worktree of listed.worktrees.slice(1)) {
     const { path, branch } = worktree;
+    const name = shownName(worktree, input);
     if (
       worktree.prunable ||
       worktree.initializing ||
       branch === null ||
       !isBranchName(branch) ||
-      !inOwnFolder(worktree, input)
+      name === undefined
     ) {
       continue;
     }
-    if (found.some((kept) => samePath(kept.path, path))) continue;
-    found.push({ name: basename(path), path, branch });
+    if ([...own, ...outside].some((kept) => samePath(kept.path, path))) continue;
+    (isOwnShaped(input.root, path) ? own : outside).push({ name, path, branch });
   }
-  return found.slice(0, room);
+  return [...own, ...outside];
 }
 
 function namesList(names: readonly string[], shown: number): string {
@@ -265,7 +301,7 @@ function foldedSentence(names: readonly string[], project: string, prune: string
 
 export function droppedSentences(drops: readonly Drop[]): string[] {
   const byProject = new Map<string, Drop[]>();
-  for (const drop of drops) {
+  for (const drop of drops.filter((dropped) => !dropped.quiet)) {
     byProject.set(drop.projectId, [...(byProject.get(drop.projectId) ?? []), drop]);
   }
   return [...byProject.values()].flatMap((group) => {
@@ -285,8 +321,12 @@ export function droppedSentences(drops: readonly Drop[]): string[] {
   });
 }
 
-export function blankWorkspace(key: WorkspaceKey, name: string | null): WorkspaceView {
-  return { key, name, branch: null, ahead: null, behind: null, changed: null };
+export function blankWorkspace(
+  key: WorkspaceKey,
+  name: string | null,
+  outside: boolean,
+): WorkspaceView {
+  return { key, name, branch: null, ahead: null, behind: null, changed: null, outside };
 }
 
 export async function readWorkspaces(
@@ -306,6 +346,17 @@ export async function readWorkspaces(
     listed === undefined
       ? await currentBranch(project.path)
       : shortBranch(listed.worktrees[0]?.branch);
+  const realPaths = new Map(
+    await Promise.all(
+      project.workspaces.map(
+        async (record) =>
+          [record.id, (await realpathOrUndefined(record.path)) ?? record.path] as const,
+      ),
+    ),
+  );
+  const isOutside = (record: StoredWorkspace) =>
+    isOutsidePath(rule.home, record.path) &&
+    isOutsidePath(rule.home, realPaths.get(record.id) ?? record.path);
   const reads: RecordRead[] = [];
   const drops: Drop[] = [];
   for (const record of project.workspaces) {
@@ -319,7 +370,7 @@ export async function readWorkspaces(
       listed === undefined ||
       listed.separator === "\n" ||
       busy.has(record.id) ||
-      !(await folderDeleted(record.path, rule.home))
+      (!isOutside(record) && !(await folderDeleted(record.path, rule.home)))
     ) {
       continue;
     }
@@ -329,6 +380,7 @@ export async function readWorkspaces(
       name: record.name,
       project: projectName,
       prunable: worktree !== undefined,
+      quiet: isOutside(record),
       sentence: bounded(
         dropSentence(record, projectName, listed.worktrees, worktree !== undefined),
       ),
@@ -358,8 +410,11 @@ export async function readWorkspaces(
       view("main", null, mainBranch, tracking, unpushed, mainStatus),
       ...reads.map(({ record, branch, listed: isListed }) =>
         isListed
-          ? view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id))
-          : blankWorkspace(record.id, record.name),
+          ? {
+              ...view(record.id, record.name, branch, tracking, unpushed, statusOf.get(record.id)),
+              outside: isOutside(record),
+            }
+          : blankWorkspace(record.id, record.name, isOutside(record)),
       ),
     ],
     drops,

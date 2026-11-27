@@ -30,6 +30,7 @@ export interface ProjectsFile {
 
 export const projectLimit = 200;
 export const workspaceLimit = bridgeLimits.workspacesPerProject;
+export const outsideLimit = bridgeLimits.outsideWorktreesPerProject;
 
 const newestVersion = 2;
 
@@ -60,7 +61,7 @@ const version2 = z.strictObject({
       z.strictObject({
         id: z.uuid(),
         path: storedPath,
-        workspaces: z.array(storedWorkspace).max(workspaceLimit),
+        workspaces: z.array(storedWorkspace).max(workspaceLimit + outsideLimit),
       }),
     )
     .max(projectLimit),

@@ -337,7 +337,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const archivable =
     selectedProject?.missing === null &&
     selectedWorkspace !== undefined &&
-    selectedWorkspace.key !== "main"
+    selectedWorkspace.key !== "main" &&
+    !selectedWorkspace.outside
       ? selectedProject
       : undefined;
   const archivableWorkspace = archivable === undefined ? undefined : selectedWorkspace;
@@ -1219,7 +1220,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             parent={visibleText(selectedProject.parent)}
             missing={selectedProject.missing}
             worktrees={selectedProject.worktrees}
-            workspaces={selectedProject.workspaces.length - 1}
+            workspaces={
+              selectedProject.workspaces.filter(
+                (workspace) => workspace.key !== "main" && !workspace.outside,
+              ).length
+            }
           />
         ) : (
           changesHere !== null &&

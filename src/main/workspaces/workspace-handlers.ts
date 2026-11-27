@@ -15,6 +15,7 @@ import type { WorkspaceSessions } from "../terminal/terminal-sessions.ts";
 import { creationSteps, failureSentence, nameTaken, prepareWorkspace } from "./create-steps.ts";
 import { archiveWorkspace, inspectWorkspace } from "./workspace-archive.ts";
 import { runCreation, type StepReport } from "./workspace-creation.ts";
+import { ownCount } from "./worktree-folders.ts";
 
 interface CreationRequest {
   operationId: string;
@@ -169,6 +170,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
         ahead: null,
         behind: null,
         changed: null,
+        outside: false,
       },
     };
   };
@@ -199,7 +201,7 @@ export function workspaceHandlers({ home, store, sessions }: WorkspaceOptions): 
             "Satellite is making four workspaces already. Try again when one is done.",
           );
         }
-        if (project.workspaces.length >= workspaceLimit) {
+        if (ownCount(home, project.workspaces) >= workspaceLimit) {
           throw new BridgeFailure("limit", workspaceLimitSentence(projectLabel));
         }
         if (creations.has(operationId)) {

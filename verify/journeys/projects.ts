@@ -212,15 +212,37 @@ async function run(session: AppSession): Promise<void> {
   await refocus(session);
   await workspaceReads(session, "beta", "feature");
 
-  await execute(
-    "git",
-    ["worktree", "add", "-q", "-b", "kept", join(session.home, "worktrees", "beta", "kept")],
-    {
-      cwd: session.folder("beta"),
-      env: { ...withoutGitVariables(process.env), ...session.gitEnv },
-      windowsHide: true,
-    },
+  const agentMade = join(session.folder("beta"), ".claude", "worktrees", "Agent_One");
+  await gitInBeta(session, ["worktree", "add", "-q", "-b", "agent-one", agentMade]);
+  await refocus(session);
+  await visible(session, "workspace-beta-agent-one", "after an agent made a worktree in beta");
+  await session.page.getByTestId("workspace-beta-agent-one").hover();
+  assert.equal(
+    await session.page.getByTestId("archive-workspace-beta-agent-one").count(),
+    0,
+    "the worktree an agent made offered Archive",
   );
+  await session.page.getByTestId("workspace-beta-agent-one").click();
+  await waitUntil(
+    async () =>
+      (await session.page.getByTestId("files-tree").locator('[data-path="README.md"]').count()) > 0,
+    waitMs,
+    "Files never listed README.md in the worktree an agent made",
+  );
+  await session.screenshot("projects-agent-worktree");
+  await gitInBeta(session, ["worktree", "remove", "-f", agentMade]);
+  await refocus(session);
+  await gone(session, "workspace-beta-agent-one", "after the agent removed its worktree");
+  await session.page.getByTestId("workspace-beta-main").click();
+
+  await gitInBeta(session, [
+    "worktree",
+    "add",
+    "-q",
+    "-b",
+    "kept",
+    join(session.home, "worktrees", "beta", "kept"),
+  ]);
   await refocus(session);
   await visible(session, "workspace-beta-kept", "after a worktree was left in beta's folder");
 
@@ -254,6 +276,14 @@ async function run(session: AppSession): Promise<void> {
     0,
     `the window logged ${String(session.consoleErrors.length)} console errors, the first is ${JSON.stringify(session.consoleErrors[0])}`,
   );
+}
+
+async function gitInBeta(session: AppSession, args: string[]): Promise<void> {
+  await execute("git", args, {
+    cwd: session.folder("beta"),
+    env: { ...withoutGitVariables(process.env), ...session.gitEnv },
+    windowsHide: true,
+  });
 }
 
 async function topOf(session: AppSession, name: string): Promise<number> {

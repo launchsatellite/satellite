@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { lstat, mkdir, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { reservedWorkspaceNames, workspaceNameProblem } from "../../shared/workspace-name.ts";
@@ -99,4 +100,38 @@ export async function isWorktreeFolder(home: string, path: string): Promise<bool
     samePath(dirname(dirname(realFolder)), realRoot) &&
     isInsidePath(realRoot, realFolder)
   );
+}
+
+export async function isOutsideFolder(home: string, path: string): Promise<boolean> {
+  if (!isFullyQualified(path) || !(await isPlainFolder(path))) return false;
+  const realHome = await realpathOrUndefined(home);
+  const realFolder = await realpathOrUndefined(path);
+  if (realHome === undefined || realFolder === undefined) return false;
+  const root = worktreesRoot(realHome);
+  const grandparent = dirname(dirname(realFolder));
+  const insideWorkspace = isInsidePath(root, grandparent) && !samePath(root, grandparent);
+  return (
+    samePath(realFolder, path) &&
+    !samePath(realHome, realFolder) &&
+    !isInsidePath(realFolder, realHome) &&
+    (!isInsidePath(realHome, realFolder) || insideWorkspace)
+  );
+}
+
+export function isOwnShaped(root: string, path: string): boolean {
+  return samePath(dirname(dirname(path)), root);
+}
+
+export function isOutsidePath(home: string, path: string): boolean {
+  let realHome: string;
+  try {
+    realHome = realpathSync.native(home);
+  } catch {
+    realHome = home;
+  }
+  return [home, realHome].every((form) => !isOwnShaped(worktreesRoot(form), path));
+}
+
+export function ownCount(home: string, workspaces: readonly { path: string }[]): number {
+  return workspaces.filter((workspace) => !isOutsidePath(home, workspace.path)).length;
 }
