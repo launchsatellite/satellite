@@ -1654,6 +1654,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
             onLink={askAboutLink}
             onClose={closeSettings}
+            returnFocusTo={sidebarShown ? "sidebar-settings" : "sidebar-show"}
           />
         )}
         {asking !== null && (

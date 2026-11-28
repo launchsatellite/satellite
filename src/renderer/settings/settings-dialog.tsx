@@ -18,6 +18,7 @@ interface SettingsDialogProps {
   onShowGuide: () => void;
   onLink: (address: string, description: string) => void;
   onClose: () => void;
+  returnFocusTo: string;
 }
 
 const repositoryAddress = "https://github.com/launchsatellite/satellite";
@@ -133,6 +134,7 @@ export function SettingsDialog({
   onShowGuide,
   onLink,
   onClose,
+  returnFocusTo,
 }: SettingsDialogProps) {
   const credited = curatedTheme(theme);
   return (
@@ -141,7 +143,7 @@ export function SettingsDialog({
       testId="settings-dialog"
       onClose={onClose}
       closable
-      returnFocusTo="sidebar-settings"
+      returnFocusTo={returnFocusTo}
       footer={
         <Button onClick={onClose} testId="settings-done">
           Done

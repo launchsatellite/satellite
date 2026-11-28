@@ -188,15 +188,19 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
 }
 
 function FoldedReadout({ pixel, sessions }: { pixel: PixelState; sessions: number }) {
-  if (sessions === 0) return null;
+  if (sessions === 0 && pixel === "idle") return null;
   const label =
     sessions === 1 ? "1 workspace has a session" : `${String(sessions)} workspaces have a session`;
   return (
-    <Tooltip text={label}>
+    <Tooltip text={sessions === 0 ? undefined : label}>
       <span className="flex items-center gap-[6px] font-pixel text-[11px] font-normal text-dim">
         <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
-        <span aria-hidden="true">{sessions}</span>
-        <span className="sr-only">{label}</span>
+        {sessions > 0 && (
+          <>
+            <span aria-hidden="true">{sessions}</span>
+            <span className="sr-only">{label}</span>
+          </>
+        )}
       </span>
     </Tooltip>
   );
