@@ -14,7 +14,7 @@ Layout owns the frame of the window, the rail, the repo view and the kit. Each f
 
 **Window**
 - A new ground token `win` carries the sidebar and the rail. The centre is one raised surface on `bg` with a hairline, a 10px corner and 8px from the window edges.
-- Columns are the sidebar at 252, the centre and the rail at 348. Both side columns resize within limits and hide, the sidebar on Cmd+B as today and the rail on Cmd+I, Ctrl+Shift+I on Windows and Linux. Under 1100px of window the rail folds to its icons, under 860 the sidebar hides. Widths and hidden states come back after a restart.
+- Columns are the sidebar at 252, the centre and the rail at 348. Both side columns resize within limits and hide, the sidebar on Cmd+B as today and the rail on Cmd+I, Ctrl+Shift+I on Windows and Linux. Under 1100px of window the rail folds to its icons, under 860 the sidebar hides. Widths and hidden states come back after a restart. With the sidebar hidden, the centre header becomes the top row. On macOS it keeps 76px clear at its left for the traffic lights, and its empty space is the drag area.
 
 **Centre**
 - The selected workspace shows a 48px header with the repo and workspace name, the branch with ahead and behind, the running processes readout and the pull request chip, then one tab strip holding its Claude Code sessions and any file or diff opened from the rail.

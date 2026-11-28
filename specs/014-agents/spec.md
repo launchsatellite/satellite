@@ -35,4 +35,4 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 
 ## Next
 
-- Agents opens as a centre page instead of a palette mode, sessions grouped by needs you, nothing blocks, working, done and idle, each row with its state word, pull request and how long it has been in that state. Part of [015 Layout](../015-layout/spec.md).
+- Agents opens as a centre page instead of a palette mode, sessions grouped by needs you, nothing blocks, working, done, and idle or stopped, so a stopped tab still has its row, each row with its state word, pull request and how long it has been in that state. Part of [015 Layout](../015-layout/spec.md).
