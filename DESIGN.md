@@ -2,7 +2,7 @@
 
 How Satellite looks, moves and speaks. [BRAND.html](BRAND.html) is the visual reference, open it in a browser to see every token, part and screen drawn. This file owns the rules. `SATELLITE.md` owns what the product does, so when a screen in BRAND.html and the product doc disagree, the product doc wins and the screen gets fixed.
 
-The screens in BRAND.html chapter 09 are a reference for patterns and states. Specs decide what ships and when.
+The screens in BRAND.html chapter 09 are a reference for patterns and states, and chapter 12 draws the layout spec 015 proposes. Specs decide what ships and when.
 
 ## One system, two volumes
 

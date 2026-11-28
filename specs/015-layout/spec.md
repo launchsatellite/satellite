@@ -8,6 +8,8 @@ The work happens in Claude Code, yet the window gives it a side column while the
 
 ## Scope
 
+[mockup.html](mockup.html) draws every screen in dark and light, and BRAND.html shows it as chapter 12. Where the drawing and this spec differ, the spec wins.
+
 Layout owns the frame of the window, the rail, the repo view and the kit. Each feature it moves keeps its own spec, and the change to each is proposed under that spec's Next.
 
 **Window**

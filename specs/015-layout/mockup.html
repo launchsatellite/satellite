@@ -1,0 +1,1466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>satellite · layout, spec 015</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Funnel+Sans:wght@300..800&family=Geist+Pixel&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#08080A;color:#EDEDEA;font-family:"Funnel Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{padding:0 0 160px}
+a{color:inherit}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.s{width:14px;height:14px}
+.ro{font-family:"Geist Pixel",monospace;text-transform:uppercase;letter-spacing:.02em}
+.mono{font-family:"Geist Mono",ui-monospace,monospace}
+
+/* page chrome */
+.page{max-width:1360px;margin:0 auto;padding:0 40px}
+.top{position:sticky;top:0;z-index:10;background:#08080Aee;backdrop-filter:blur(8px);border-bottom:1px solid #1C1C1F}
+.top .page{display:flex;align-items:center;gap:28px;height:56px}
+.lock{display:flex;align-items:center;gap:10px;font:700 20px "Funnel Display";text-decoration:none}
+.top nav{display:flex;gap:18px;font-size:13px;color:#8E8E95}
+.top nav a{text-decoration:none;display:flex;gap:6px;align-items:baseline}
+.top nav a:hover{color:#EDEDEA}
+.top nav .ro{font-size:11px;color:#5C5C63}
+.hero{padding:96px 0 56px;border-bottom:1px solid #1C1C1F}
+.hero h1{font:700 76px/0.95 "Funnel Display";letter-spacing:-.02em}
+.hero h1 span{color:#5C5C63}
+.hero p{max-width:720px;margin-top:28px;font-size:18px;line-height:1.5;color:#B4B4B8}
+.sec{padding:72px 0 0}
+.sec-h{display:grid;grid-template-columns:120px 1fr;gap:0 24px;margin-bottom:28px}
+.sec-h .ro{color:#5C5C63;font-size:13px;padding-top:6px}
+.sec-h h2{font:700 36px/1.05 "Funnel Display";letter-spacing:-.01em}
+.sec-h p{grid-column:2;margin-top:12px;max-width:760px;color:#B4B4B8;font-size:15px;line-height:1.55}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#1C1C1F;border:1px solid #1C1C1F}
+.cards.two{grid-template-columns:repeat(2,1fr)}
+.cards.four{grid-template-columns:repeat(4,1fr)}
+.card{background:#08080A;padding:22px 22px 24px}
+.card .ro{font-size:12px;color:#5C5C63}
+.card h3{font:600 17px "Funnel Sans";margin:10px 0 8px}
+.card p{font-size:14px;line-height:1.55;color:#B4B4B8}
+.card p + p{margin-top:8px}
+.card.bad h3::before{content:"";display:inline-block;width:8px;height:8px;background:#FF5A1F;margin-right:10px;vertical-align:1px}
+.card.good h3::before{content:"";display:inline-block;width:8px;height:8px;background:#DCFF3D;margin-right:10px;vertical-align:1px}
+.cap{display:flex;justify-content:space-between;gap:24px;margin:14px 0 0;font-size:13px;color:#8E8E95;line-height:1.5}
+.cap b{color:#EDEDEA;font-weight:600}
+.note{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.note div{font-size:13.5px;line-height:1.55;color:#B4B4B8;border-top:1px solid #2E2E33;padding-top:12px}
+.note b{display:block;color:#EDEDEA;font-weight:600;margin-bottom:4px}
+
+/* ============ app tokens ============ */
+.dk{--win:#0C0C0E;--bg:#08080A;--raised:#17171A;--sel:#1C1C20;--hover:#141417;--line:#1D1D21;--line2:#26262B;--ctl:#2E2E33;--fg:#EDEDEA;--fg2:#B4B4B8;--dim:#82828A;--faint:#4A4A50;--sigfg:#FF6A33;--add:#15122B;--addfg:#A493FF;--del:#2A130B;--delfg:#FF8A5C;--accent:#6A4BFF;--signal:#FF5A1F;--volt:#DCFF3D;--voltfg:#DCFF3D;--lilac:#C7B9FF;--idle:#5C5C63;--pri-bg:#F4F4F1;--pri-fg:#08080A;--shadow:0 16px 40px rgb(0 0 0/.55);--term:#08080A;--tc-o:#D97757;--tc-g:#8FCB6B;--tc-r:#E5796B;--tc-b:#8AA4FF;--tc-d:#6E6E76}
+.lt{--win:#F1F1EE;--bg:#FFFFFF;--raised:#FFFFFF;--sel:#E7E7E2;--hover:#ECECE8;--line:#E3E3DE;--line2:#D9D9D4;--ctl:#D2D2CC;--fg:#0A0A0B;--fg2:#45454B;--dim:#68686F;--faint:#A3A3A8;--sigfg:#BE400C;--add:#EEEBFF;--addfg:#4A2EE0;--del:#FFEDE6;--delfg:#BE400C;--accent:#6A4BFF;--signal:#FF5A1F;--volt:#DCFF3D;--voltfg:#5E6A00;--lilac:#C7B9FF;--idle:#A3A3A8;--pri-bg:#0A0A0B;--pri-fg:#F4F4F1;--shadow:0 16px 40px rgb(10 10 11/.12);--term:#FFFFFF;--tc-o:#C1592F;--tc-g:#3E8A1E;--tc-r:#C23B2B;--tc-b:#3C5BD6;--tc-d:#8E8E95}
+
+/* ============ window ============ */
+.win{width:1280px;height:800px;margin:0 auto;border-radius:12px;overflow:hidden;background:var(--win);color:var(--fg);font-size:13px;display:grid;grid-template-columns:var(--lw,252px) 1fr var(--rw,348px);grid-template-rows:100%;border:1px solid var(--line2);box-shadow:0 40px 120px rgb(0 0 0/.5);position:relative}
+.lt.win{box-shadow:0 40px 120px rgb(0 0 0/.35)}
+.win.norail{--rw:0px}
+.railset .win{width:auto;margin:0}
+.frame{overflow-x:auto;padding:8px 0 24px}
+
+/* sidebar */
+.side{display:flex;flex-direction:column;min-width:0;padding:0 8px 8px}
+.tl{height:44px;display:flex;align-items:center;gap:8px;padding-left:10px;flex:none}
+.tl i{width:12px;height:12px;border-radius:50%;background:var(--ctl);display:block}
+.lt .tl i{background:#D6D6D1}
+.tl .sp{flex:1}
+.ib{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--dim);cursor:pointer;flex:none;position:relative}
+.ib:hover{background:var(--hover);color:var(--fg)}
+.ib.on{background:var(--sel);color:var(--fg)}
+.brand{display:flex;align-items:center;gap:8px;padding:2px 8px 12px;font:700 17px "Funnel Display";letter-spacing:-.01em}
+.brand svg{width:17px;height:14px}
+.newws{display:flex;gap:6px;padding:0 0 10px}
+.btn{height:28px;border-radius:6px;padding:0 10px;display:inline-flex;align-items:center;gap:7px;font:600 12.5px "Funnel Sans";border:1px solid var(--ctl);background:transparent;color:var(--fg);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--pri-bg);color:var(--pri-fg);border-color:transparent}
+.btn.acc{background:var(--accent);color:#fff;border-color:transparent}
+.btn.ghost{border-color:transparent;color:var(--fg2)}
+.btn.ghost:hover{color:var(--fg)}
+.btn.dan{color:var(--sigfg)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px;gap:6px}
+.btn.wide{flex:1;justify-content:flex-start}
+.btn .k{margin-left:auto}
+.k{font:500 10.5px "Geist Mono";color:var(--dim);letter-spacing:.02em}
+.btn.pri .k{color:inherit;opacity:.55}
+.search{height:28px;border-radius:6px;display:flex;align-items:center;gap:8px;padding:0 8px;color:var(--dim);background:var(--hover);font-size:12.5px;margin-bottom:14px}
+.search .k{margin-left:auto}
+.grp{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;color:var(--dim);font-size:11.5px;font-weight:600;margin-top:6px}
+.grp .ro{font-size:11px;margin-left:auto}
+.grp .ro.sig{color:var(--sigfg)}
+.grp .add{margin-left:auto;opacity:0}
+.side:hover .grp .add{opacity:1}
+.row{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:6px;color:var(--fg2);cursor:pointer;min-width:0;position:relative}
+.row:hover{background:var(--hover)}
+.row.sel{background:var(--sel);color:var(--fg)}
+.row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.row .rt{margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--dim);font-size:11px;flex:none}
+.row.proj{color:var(--fg);font-weight:600;gap:6px}
+.row.proj .chev{color:var(--faint);width:12px;height:12px}
+.row.ws{padding-left:26px}
+.row.ws.mn{color:var(--dim)}
+.row.two{height:auto;padding:6px 8px;align-items:flex-start}
+.row.two .px{margin-top:5px}
+.row.two .txt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.row.two .txt span:first-child{color:var(--fg)}
+.row.two .txt span+span{color:var(--dim);font-size:12px}
+.side .fill{flex:1}
+.foot{display:flex;align-items:center;gap:2px;padding:6px 2px 0;border-top:1px solid var(--line)}
+.foot .row{flex:1}
+
+/* status pixel */
+.px{width:6px;height:6px;flex:none;background:var(--idle)}
+.px.w{background:var(--accent);animation:blink 1.2s steps(2,jump-none) infinite}
+.px.n{background:var(--signal)}
+.px.r{background:var(--volt)}
+.lt .px.r{box-shadow:inset 0 0 0 1.5px #6B7800}
+.px.d{background:var(--lilac)}
+.lt .px.d{box-shadow:inset 0 0 0 1.5px #8066D6}
+.px.lg{width:8px;height:8px}
+@keyframes blink{0%,60%{opacity:1}61%,100%{opacity:.35}}
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 7px;border-radius:5px;border:1px solid var(--line2);font-size:11.5px;color:var(--fg2);white-space:nowrap}
+.chip .mono{font-size:11px}
+.chip.n{border-color:color-mix(in srgb,var(--signal) 45%,transparent);color:var(--sigfg)}
+.chip.r{border-color:color-mix(in srgb,var(--voltfg) 40%,transparent);color:var(--voltfg)}
+.lt .chip.r{color:#5E6A00}
+.chip.d{border-color:color-mix(in srgb,var(--lilac) 40%,transparent);color:var(--lilac)}
+.lt .chip.d{color:#6A50C8}
+
+/* centre */
+.main{background:var(--bg);margin:8px 0 8px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.norail .main{margin-right:8px}
+.hd{height:48px;display:flex;align-items:center;gap:10px;padding:0 10px 0 16px;border-bottom:1px solid var(--line);flex:none}
+.hd .ttl{font:600 14px "Funnel Sans";white-space:nowrap}
+.hd .crumb{color:var(--dim);font-weight:400}
+.hd .sp{flex:1}
+.hd .br{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px}
+.hd .br .mono{color:var(--fg2);font-size:11.5px}
+.tabs{height:36px;display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--line);flex:none}
+.tab{height:26px;display:flex;align-items:center;gap:7px;padding:0 9px;border-radius:6px;color:var(--dim);font-weight:500;font-size:12.5px;cursor:pointer}
+.tab:hover{background:var(--hover);color:var(--fg2)}
+.tab.on{background:var(--sel);color:var(--fg)}
+.tab .x{color:var(--faint);margin-left:2px}
+.tabs .sp{flex:1}
+
+/* terminal (drawn as Claude Code draws itself) */
+.term{flex:1;background:var(--term);padding:14px 18px 10px;font:12.5px/1.45 "Geist Mono",Menlo,monospace;color:var(--fg);overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.term .lines{flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.term .l{white-space:pre;min-height:1.45em}
+.o{color:var(--tc-o)}.g{color:var(--tc-g)}.rd{color:var(--tc-r)}.b{color:var(--tc-b)}.dm{color:var(--tc-d)}.bo{font-weight:500}
+.dl{background:var(--del);color:var(--delfg)}.al{background:var(--add);color:var(--addfg)}
+.ubox{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.prompt{border:1px solid var(--tc-d);border-radius:6px;padding:6px 10px;margin-top:8px;color:var(--fg)}
+.prompt .cur{display:inline-block;width:7.5px;height:15px;background:var(--fg);vertical-align:-3px}
+.hint{color:var(--tc-d);margin-top:4px;display:flex;justify-content:space-between}
+.perm{border:1px solid var(--tc-o);border-radius:6px;padding:8px 12px;margin-top:8px}
+.ask{border-top:1px solid var(--line);padding:8px 10px;display:flex;gap:8px;align-items:center;flex:none;background:var(--bg)}
+
+/* right rail */
+.rail{display:flex;flex-direction:column;min-width:0;padding:0 8px 8px 8px}
+.rail .rtop{height:44px;display:flex;align-items:center;gap:2px;padding:0 2px;flex:none}
+.rail .rtop .sp{flex:1}
+.rail .ib .cnt{position:absolute;top:2px;right:1px;width:6px;height:6px;background:var(--signal)}
+.pane{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.ph{display:flex;align-items:center;gap:8px;padding:4px 6px 10px;flex:none}
+.ph b{font:600 14px "Funnel Sans"}
+.ph .sp{flex:1}
+.seg{display:flex;height:28px;padding:2px;border-radius:7px;background:var(--hover);gap:2px;flex:none;margin:0 4px 10px}
+.seg span{flex:1;border-radius:5px;display:grid;place-items:center;color:var(--dim);font-size:12px;font-weight:500;cursor:pointer}
+.seg span.on{background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line2)}
+.lt .seg span.on{box-shadow:0 1px 2px rgb(0 0 0/.08),0 0 0 1px var(--line2)}
+.seg.inl{display:inline-flex;margin:0;height:26px}
+.seg.inl span{padding:0 10px;white-space:nowrap}
+.f{display:flex;align-items:center;gap:8px;height:28px;padding:0 6px 0 8px;border-radius:6px;color:var(--fg2);cursor:pointer;min-width:0}
+.f:hover{background:var(--hover)}
+.f.sel{background:var(--sel);color:var(--fg)}
+.f .lt2{font:500 11px "Geist Mono";width:10px;flex:none}
+.f .lt2.M{color:var(--b)}
+.f .lt2.A{color:var(--addfg)}
+.f .lt2.D{color:var(--delfg)}
+.f .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;direction:rtl;text-align:left}
+.f .p bdi{direction:ltr}
+.f .p .d{color:var(--dim)}
+.f .n{margin-left:auto;font:11px "Geist Mono";display:flex;gap:6px;flex:none}
+.f .n .a{color:var(--addfg)}.f .n .r{color:var(--delfg)}
+.b{color:var(--tc-b)}
+.mini{margin:10px 4px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;font:11.5px/1.6 "Geist Mono";background:var(--bg)}
+.mini .mh{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font:12px "Funnel Sans";color:var(--fg2)}
+.mini .mh .sp{flex:1}
+.mini .ml{display:grid;grid-template-columns:28px 1fr;white-space:pre}
+.mini .ml span:first-child{color:var(--faint);text-align:right;padding-right:8px}
+.mini .ml.a{background:var(--add)}.mini .ml.a span+span{color:var(--addfg)}
+.mini .ml.r{background:var(--del)}.mini .ml.r span+span{color:var(--delfg)}
+.mini .ml.h{color:var(--dim);background:color-mix(in srgb,var(--fg) 4%,transparent)}
+.pfoot{margin-top:auto;padding:10px 4px 0;display:flex;gap:6px;flex:none}
+.pfoot .btn{flex:1;justify-content:center}
+.pfoot[style*="column"] .btn{flex:none}
+
+/* readiness */
+.ready{margin:0 4px 12px;border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px;background:var(--bg)}
+.ready .st{display:flex;align-items:center;gap:10px;font:600 15px "Funnel Sans"}
+.ready .sub{color:var(--dim);font-size:12px;margin:4px 0 0 18px}
+.ready .sub .mono{color:var(--fg2)}
+.chk{display:flex;align-items:center;gap:10px;min-height:32px;padding:6px 6px;border-radius:6px;color:var(--fg2)}
+.chk:hover{background:var(--hover)}
+.chk .t{flex:1;min-width:0}
+.chk .t small{display:block;color:var(--dim);font-size:11.5px;margin-top:1px}
+.chk .v{color:var(--dim);font-size:11px}
+.chk.bad .t{color:var(--fg)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--dim);padding:12px 8px 4px;display:flex;align-items:center}
+.lbl .ro{margin-left:auto;font-size:11px}
+.thread{margin:4px 4px 0;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--fg2);background:var(--bg)}
+.thread .who{display:flex;align-items:center;gap:7px;color:var(--fg);font-weight:600;font-size:12px;margin-bottom:4px}
+.thread .who .mono{color:var(--dim);font-weight:400;font-size:11px;margin-left:auto}
+.av{width:16px;height:16px;border-radius:4px;background:var(--ctl);flex:none;display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--fg)}
+.av.bot{background:#2A2440;color:#C7B9FF}
+.lt .av.bot{background:#E6E0FF;color:#4A2EE0}
+.thread .acts{display:flex;gap:6px;margin-top:8px}
+.log{margin:6px 4px 0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:11px/1.6 "Geist Mono";color:var(--fg2);background:var(--bg);white-space:pre;overflow:hidden}
+.log .rd{color:var(--delfg)}
+
+/* tree */
+.tree .f{height:26px}
+.tree .f .p{direction:ltr;font:12px "Geist Mono"}
+.tree .f.ign .p{color:var(--faint)}
+.find{height:30px;border:1px solid var(--ctl);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--dim);margin:0 4px 8px;font-size:12.5px}
+.find.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent);color:var(--fg)}
+.hit{padding:6px 8px;border-radius:6px;font:11.5px/1.5 "Geist Mono";color:var(--fg2)}
+.hit:hover{background:var(--hover)}
+.hit mark{background:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--fg);border-radius:2px}
+.hit .ln{color:var(--faint);display:inline-block;width:26px}
+.hitf{display:flex;align-items:center;gap:8px;padding:8px 8px 2px;font:600 12px "Funnel Sans";color:var(--fg)}
+.hitf .ro{margin-left:auto;color:var(--dim);font-size:11px;font-weight:400}
+
+/* overview */
+.ov{flex:1;overflow:hidden;padding:20px 24px}
+.ov h3{font:700 26px "Funnel Display";letter-spacing:-.01em}
+.ov .lead{color:var(--dim);margin-top:4px}
+.ovbar{display:flex;align-items:center;gap:10px;margin:18px 0 8px}
+.ovg{display:flex;align-items:center;gap:8px;padding:14px 4px 6px;font-size:12px;font-weight:600;color:var(--dim);border-bottom:1px solid var(--line)}
+.ovg .ro{font-size:11px}
+.ovr{display:grid;grid-template-columns:14px 1.3fr 1.6fr 120px 90px 80px;align-items:center;gap:12px;height:44px;padding:0 4px;border-bottom:1px solid var(--line);color:var(--fg2)}
+.ovr:hover{background:var(--hover)}
+.ovr .w b{color:var(--fg);font-weight:600;display:block}
+.ovr .w span{color:var(--dim);font-size:12px}
+.ovr .ro{font-size:12px;color:var(--dim)}
+.ovr .btn{justify-self:end}
+
+/* dialog */
+.scrim{position:absolute;inset:0;background:rgb(0 0 0/.5);display:grid;place-items:start center;padding-top:120px}
+.lt .scrim{background:rgb(10 10 11/.25)}
+.dlg{width:520px;background:var(--raised);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.dlg .db{padding:18px 18px 16px}
+.dlg h4{font:700 19px "Funnel Display"}
+.dlg p{color:var(--dim);margin-top:4px;font-size:12.5px}
+.field{margin-top:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--fg2);margin-bottom:6px}
+.inp{height:32px;border:1px solid var(--ctl);border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--win);color:var(--fg)}
+.inp.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.inp .mono{font-size:12px}
+.inp .sp{flex:1}
+.dlg .df{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 18px;background:var(--win);border-top:1px solid var(--line)}
+.dlg .df .sp{flex:1}
+.dlg .df small{color:var(--dim);font-size:12px}
+.opt{display:flex;gap:6px;flex-wrap:wrap}
+.opt .chip{height:26px;padding:0 9px;cursor:pointer}
+.opt .chip.on{border-color:var(--fg2);color:var(--fg);background:var(--sel)}
+
+/* toast */
+.toast{position:absolute;right:16px;bottom:16px;width:330px;background:var(--raised);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:12px 12px 10px;display:flex;gap:10px}
+.toast .px{margin-top:6px}
+.toast b{display:block;font-weight:600}
+.toast span{color:var(--dim);font-size:12.5px}
+.toast .acts{display:flex;gap:6px;margin-top:8px}
+
+/* split sessions */
+.split{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+.split > div{display:flex;flex-direction:column;min-width:0;min-height:0}
+.split > div + div{border-left:1px solid var(--line)}
+.split .sh{height:32px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--fg2);flex:none}
+.split .sh.foc{color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent)}
+.split .sh .sp{flex:1}
+.split .term{font-size:12px}
+
+/* system sheet */
+.sys{background:#08080A;border:1px solid #1C1C1F;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#1C1C1F}
+.sys > div{padding:24px;background:#08080A}
+.ts div > span + span{color:#EDEDEA}
+.sys .ro.h{font-size:12px;color:#5C5C63;margin-bottom:14px;display:block}
+.sw{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sw div{font-size:12px;color:#B4B4B8}
+.sw i{display:block;height:44px;border-radius:8px;margin-bottom:6px;border:1px solid #2E2E33}
+.sw b{display:block;color:#EDEDEA;font-weight:600}
+.sw span{font:11px "Geist Mono";color:#82828A}
+.kit{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.kit .lab{width:100%;font-size:12px;color:#82828A;margin-top:4px}
+.ts div{display:flex;align-items:baseline;gap:18px;padding:8px 0;border-bottom:1px solid #1C1C1F}
+.ts span{width:150px;flex:none;font:11px "Geist Mono";color:#82828A}
+table.cmp{width:100%;border-collapse:collapse;font-size:13.5px}
+table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid #1C1C1F;vertical-align:top;line-height:1.5}
+table.cmp th{color:#82828A;font-weight:600;font-size:12px}
+table.cmp td:first-child{color:#EDEDEA;font-weight:600;width:180px}
+table.cmp td{color:#B4B4B8}
+
+/* ============ v2 additions ============ */
+.win.pgw{grid-template-columns:252px minmax(0,1fr);justify-content:stretch}
+.win.pgw .main{margin-right:8px}
+.win.norail{grid-template-columns:252px minmax(0,1fr)}
+.pg{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.pg .in{max-width:680px;width:100%;margin:0 auto;padding:40px 32px}
+.pg h3{font:700 28px "Funnel Display";letter-spacing:-.01em}
+.pg .lead{color:var(--dim);margin-top:6px;font-size:13.5px}
+.sgrp{margin-top:28px}
+.sgrp h5{font:700 15px "Funnel Display";margin-bottom:10px}
+.scard{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.srow{display:flex;align-items:center;gap:16px;padding:12px 14px;min-height:56px}
+.srow + .srow{border-top:1px solid var(--line)}
+.srow .t{flex:1;min-width:0}
+.srow .t b{display:block;font-weight:500;color:var(--fg)}
+.srow .t span{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.sel2{height:28px;border:1px solid var(--ctl);border-radius:6px;display:inline-flex;align-items:center;gap:8px;padding:0 8px 0 10px;background:var(--win);font-size:12.5px;color:var(--fg)}
+.sel2 svg{color:var(--dim)}
+.tg{width:30px;height:18px;border-radius:9px;background:var(--ctl);position:relative;flex:none;cursor:pointer}
+.tg::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:7px;background:var(--fg);transition:left .12s}
+.tg.on{background:var(--accent)}
+.tg.on::after{left:14px;background:#fff}
+.cb{width:16px;height:16px;border-radius:4px;border:1px solid var(--ctl);background:var(--win);display:grid;place-items:center;flex:none}
+.cb.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.rb{width:16px;height:16px;border-radius:8px;border:1px solid var(--ctl);background:var(--win);display:grid;place-items:center;flex:none}
+.rb.on{border-color:var(--accent)}
+.rb.on::after{content:"";width:8px;height:8px;border-radius:4px;background:var(--accent)}
+.tool{display:flex;align-items:center;gap:10px}
+.tool .mono{font-size:11.5px;color:var(--dim)}
+.snav .row{color:var(--fg2)}
+.snav .row svg{color:var(--dim)}
+.back{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:6px;color:var(--fg2);margin-bottom:12px}
+.back:hover{background:var(--hover)}
+.back .k{margin-left:auto}
+
+/* composer page */
+.cmp-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 48px 60px}
+.cmp-wrap h3{font:700 30px "Funnel Display";letter-spacing:-.01em;text-align:center}
+.cmp-wrap .lead{text-align:center;color:var(--dim);margin:6px 0 22px}
+.composer{width:100%;max-width:640px;border:1px solid var(--ctl);border-radius:12px;background:var(--win);overflow:hidden}
+.composer.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.composer .ta{padding:14px 14px 6px;min-height:92px;font-size:14px;line-height:1.5}
+.composer .ta .ph{color:var(--dim)}
+.composer .bar{display:flex;align-items:center;gap:6px;padding:8px 8px 8px 10px}
+.composer .bar .sp{flex:1}
+.pick{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:6px;color:var(--fg2);font-size:12px;border:1px solid transparent}
+.pick:hover{background:var(--hover);border-color:var(--line2)}
+.pick svg{color:var(--dim)}
+.pick .mono{font-size:11.5px}
+.under{width:100%;max-width:640px;margin-top:18px}
+.under .lbl{padding-left:2px}
+.sug{display:flex;align-items:center;gap:10px;height:34px;padding:0 8px;border-radius:6px;color:var(--fg2)}
+.sug:hover{background:var(--hover)}
+.sug .ro{color:var(--dim);font-size:11px;width:38px}
+.sug .sp{flex:1}
+.sug .chip{height:20px}
+
+/* palette + dialogs */
+.pal{width:600px;background:var(--raised);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.pal .pin{height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);font-size:14px}
+.pal .pin svg{color:var(--dim)}
+.pal .pin .cur{display:inline-block;width:1.5px;height:17px;background:var(--fg)}
+.pal .pin .k{margin-left:auto}
+.pal .pg2{padding:6px}
+.pal .pl{font-size:11.5px;font-weight:600;color:var(--dim);padding:8px 8px 4px}
+.pal .po{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:6px;color:var(--fg2)}
+.pal .po svg{color:var(--dim)}
+.pal .po.act{background:var(--sel);color:var(--fg);box-shadow:inset 0 0 0 1px var(--accent)}
+.pal .po .rr{margin-left:auto;color:var(--dim);font-size:11.5px;display:flex;gap:8px;align-items:center}
+.pal .pf{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:11.5px;background:var(--win)}
+.pal .pf .k{margin-right:4px}
+.cdlg{width:420px;background:var(--raised);border:1px solid var(--line2);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.cdlg .db{padding:18px}
+.cdlg h4{font:600 15px "Funnel Sans"}
+.cdlg p{color:var(--fg2);margin-top:6px;font-size:13px;line-height:1.5}
+.cdlg ul{list-style:none;margin-top:12px;border:1px solid var(--line);border-radius:8px}
+.cdlg li{display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:12.5px;color:var(--fg2)}
+.cdlg li + li{border-top:1px solid var(--line)}
+.cdlg li .ro{margin-left:auto;color:var(--dim);font-size:11px}
+.cdlg .df{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 18px;background:var(--win);border-top:1px solid var(--line)}
+.cdlg .df .sp{flex:1}
+.cdlg .df small{color:var(--dim);font-size:12px}
+.backdrop{border-radius:12px;padding:40px;display:flex;gap:28px;justify-content:center;align-items:flex-start;background:repeating-linear-gradient(0deg,transparent 0 27px,color-mix(in srgb,var(--fg) 4%,transparent) 27px 28px),var(--win);border:1px solid var(--line2);width:1280px;margin:0 auto}
+
+/* first run */
+.mos{display:grid;grid-template-columns:repeat(9,10px);gap:0;margin:0 auto 22px;width:max-content}
+.mos i{width:10px;height:10px;display:block}
+.steps{width:100%;max-width:420px;margin-top:26px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.steps .st2{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;color:var(--fg2)}
+.steps .st2 + .st2{border-top:1px solid var(--line)}
+.steps .st2 .ro{color:var(--dim);font-size:11px;width:20px}
+.steps .st2.done{color:var(--dim);text-decoration:line-through}
+.steps .st2 .r{margin-left:auto;color:var(--dim);font-size:12px}
+
+/* kit */
+.kitwrap{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#1C1C1F;border:1px solid #1C1C1F}
+.kitp{background:var(--bg);color:var(--fg);padding:24px 24px 8px;font-size:13px}
+.kitp.lt{background:#FFFFFF}
+.kg{margin-bottom:24px}
+.kg > .ro{display:block;font-size:11px;color:var(--dim);margin-bottom:10px;letter-spacing:.04em}
+.kr{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+.kn{font-size:11.5px;color:var(--dim);line-height:1.5;margin:-2px 0 10px}
+.btn.hov{background:var(--hover)}
+.btn.foc{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.btn.dis{opacity:.38}
+.btn.pri.hov{filter:brightness(.92)}
+.menu{width:220px;background:var(--raised);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:4px}
+.menu .mi{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:6px;color:var(--fg2);font-size:12.5px}
+.menu .mi svg{color:var(--dim)}
+.menu .mi.hl{background:var(--accent);color:#fff}
+.menu .mi.hl svg{color:#fff}
+.menu .mi .k{margin-left:auto}
+.menu .mi.hl .k{color:#fff;opacity:.7}
+.menu .mi.dz{color:var(--sigfg)}
+.menu .sep{height:1px;background:var(--line);margin:4px 2px}
+.tip{display:inline-flex;align-items:center;gap:8px;background:var(--raised);border:1px solid var(--line2);border-radius:6px;padding:4px 8px;font-size:12px}
+.banner{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--win);font-size:12.5px;color:var(--fg2)}
+.banner .sp{flex:1}
+.spin{display:inline-grid;grid-template-columns:repeat(3,4px);gap:2px}
+.spin i{width:4px;height:4px;background:var(--accent);animation:sp 0.9s steps(1) infinite}
+.spin i:nth-child(2){animation-delay:.3s}.spin i:nth-child(3){animation-delay:.6s}
+@keyframes sp{0%{opacity:1}33%{opacity:.25}}
+.prog{display:inline-grid;grid-template-columns:repeat(12,6px);gap:2px}
+.prog i{width:6px;height:6px;background:var(--line2)}
+.prog i.f{background:var(--accent)}
+.err{font-size:12px;color:var(--sigfg);margin-top:6px}
+.spec td:first-child{width:220px}
+.rule{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:#1C1C1F;border:1px solid #1C1C1F}
+.rule > div{background:#08080A;padding:20px 22px}
+.rule h3{font:600 15px "Funnel Sans";margin-bottom:10px}
+.rule li{font-size:13.5px;color:#B4B4B8;line-height:1.55;margin:0 0 6px 16px}
+.rule li b{color:#EDEDEA;font-weight:600}
+/* repo view */
+.tiles{flex:1;min-height:0;padding:6px;gap:6px;display:grid}
+.tiles.g4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.tiles.fo{grid-template-columns:1fr 230px}
+.tile{border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:var(--term);cursor:pointer}
+.tile.foc{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tile.need{border-color:color-mix(in srgb,var(--signal) 60%,transparent)}
+.tile .th{height:30px;display:flex;align-items:center;gap:7px;padding:0 4px 0 10px;border-bottom:1px solid var(--line);font-size:12px;flex:none;background:var(--bg)}
+.tile .th b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .th .mono{font-size:11px;color:var(--dim)}
+.tile .th .ro{font-size:10.5px;color:var(--dim)}
+.tile .th .sp{flex:1}
+.tile .th .st{font-size:11.5px;color:var(--dim)}
+.tile .th .st.sg{color:var(--sigfg);font-weight:600}
+.tile .th .st.vt{color:var(--voltfg)}
+.tile .th .tb{width:22px;height:22px}
+.tile .term{font-size:11.5px;padding:8px 10px 8px}
+.tile:not(.foc) .prompt{border-color:var(--line2);color:var(--dim)}
+.tile:not(.foc) .prompt .cur{display:none}
+.tile .perm{padding:6px 10px}
+.strip{display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden}
+.tile.mtile{flex:none}
+.tile.mtile .mt{padding:8px 10px;font:11px/1.4 "Geist Mono";color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.mtile:hover{border-color:var(--line2)}
+.tv{width:4px;height:14px;border-radius:2px;background:var(--line2);margin-left:-14px;margin-right:6px;flex:none}
+.tv.on{background:var(--accent)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="mk-twin" viewBox="-1 0 11 9"><path fill="currentColor" stroke="none" d="M3 0h3v1h-3zM1 1h7v1h-7zM3 2h7v1h-7zM0 3h9v1h-9zM0 4h9v1h-9zM0 5h9v1h-9zM-1 6h7v1h-7zM1 7h7v1h-7zM3 8h3v1h-3z"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 16 16"><circle cx="5" cy="3.75" r="1.5"/><circle cx="5" cy="12.25" r="1.5"/><circle cx="11" cy="5.5" r="1.5"/><path d="M5 5.25v5.5M11 7c0 2.5-2 3-6 3.75"/></symbol>
+  <symbol id="i-pr" viewBox="0 0 16 16"><circle cx="4.5" cy="3.75" r="1.5"/><circle cx="4.5" cy="12.25" r="1.5"/><circle cx="11.5" cy="12.25" r="1.5"/><path d="M4.5 5.25v5.5M11.5 10.75V7a2 2 0 0 0-2-2H7M8.5 3.5 7 5l1.5 1.5"/></symbol>
+  <symbol id="i-term" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2"/><path d="m4.75 6 2 2-2 2M8.5 10.25h3"/></symbol>
+  <symbol id="i-diff" viewBox="0 0 16 16"><rect x="2.75" y="1.75" width="10.5" height="12.5" rx="2"/><path d="M8 4.5v4M6 6.5h4M6 11h4"/></symbol>
+  <symbol id="i-files" viewBox="0 0 16 16"><path d="M1.75 4.5c0-.7.55-1.25 1.25-1.25h3l1.5 1.5H13c.7 0 1.25.55 1.25 1.25v6c0 .7-.55 1.25-1.25 1.25H3c-.7 0-1.25-.55-1.25-1.25z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.75h5l3.25 3.25v8.25c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1V2.75c0-.55.45-1 1-1zM9 1.75V5h3.25"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3.5 3.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 16 16"><path d="M4 10.75V7a4 4 0 0 1 8 0v3.75l1.25 1.5H2.75zM6.5 14h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="i-run" viewBox="0 0 16 16"><path d="M5 3.5 12 8l-7 4.5z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M2.5 4.75h11M2.5 11.25h11"/><circle cx="6" cy="4.75" r="1.75"/><circle cx="10" cy="11.25" r="1.75"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 16 16"><rect x="2" y="2.75" width="12" height="3.25" rx="1"/><path d="M3 6v6.25c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V6M6.5 8.75h3"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M11.5 9.5v3c0 .55-.45 1-1 1h-7c-.55 0-1-.45-1-1v-7c0-.55.45-1 1-1h3"/></symbol>
+  <symbol id="i-agents" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1.25"/><rect x="9" y="2" width="5" height="5" rx="1.25"/><rect x="2" y="9" width="5" height="5" rx="1.25"/><rect x="9" y="9" width="5" height="5" rx="1.25"/></symbol>
+  <symbol id="i-side" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2"/><path d="M6 2.75v10.5"/></symbol>
+  <symbol id="i-rside" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2"/><path d="M10 2.75v10.5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M2.5 8h9M8 4.5 11.5 8 8 11.5M13.5 3v10"/></symbol>
+  <symbol id="i-split" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2"/><path d="M8 2.75v10.5"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.25 14.25 13H1.75z"/><path d="M8 6.5v2.75M8 11.25v.01"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.46-3.54M13 2.75v2.5h-2.5"/></symbol>
+</defs></svg>
+
+<header class="top"><div class="page">
+  <a class="lock" href="#"><svg width="22" height="18" style="color:#F4F4F1"><use href="#mk-twin"/></svg>satellite</a>
+  <nav>
+    <a href="#why"><span class="ro">00</span>Why</a>
+    <a href="#main"><span class="ro">01</span>Window</a>
+    <a href="#rail"><span class="ro">02</span>Rail</a>
+    <a href="#needs"><span class="ro">03</span>Needs you</a>
+    <a href="#agents"><span class="ro">04</span>Agents</a>
+    <a href="#split"><span class="ro">05</span>Repo view</a>
+    <a href="#new"><span class="ro">06</span>New</a>
+    <a href="#light"><span class="ro">07</span>Light</a>
+    <a href="#settings"><span class="ro">08</span>Settings</a>
+    <a href="#overlays"><span class="ro">09</span>Overlays</a>
+    <a href="#first"><span class="ro">10</span>First run</a>
+    <a href="#kit"><span class="ro">11</span>Components</a>
+    <a href="#system"><span class="ro">12</span>Tokens</a>
+    <a href="#build"><span class="ro">13</span>Build</a>
+  </nav>
+</div></header>
+
+<div class="page">
+
+<section class="hero">
+  <h1>the agent at the centre<br><span>everything else one glance away</span></h1>
+  <p class="ro" style="font-size:13px;color:#DCFF3D;margin-top:20px">SPEC 015 · DRAFT</p>
+  <p>A new shape for Satellite. Your Claude Code session takes the middle of the window, a slim rail on the right answers one question, what still blocks this pull request, and the sidebar tells you which agent needs you. Fewer surfaces, denser controls, nothing that redraws GitHub.</p>
+</section>
+
+<!-- 00 WHY -->
+<section class="sec" id="why">
+  <div class="sec-h"><span class="ro">00</span><h2>what is wrong today</h2>
+    <p>Read against the current build and the research on what people who run parallel agents keep using and what makes them quit. The verdict is that the shape fights the job. The thing you watch all day sits in a side column, the thing you glance at sits in the middle.</p></div>
+  <div class="cards">
+    <div class="card bad"><span class="ro">01</span><h3>The agent is a side panel</h3><p>Claude Code is where the work happens, yet it gets 440px on the right while the centre shows a file tree you open now and then. People who stay with these tools use the agent's own terminal all day.</p></div>
+    <div class="card bad"><span class="ro">02</span><h3>The pull request tab mirrors github.com</h3><p>Overview, Checks, Conversation and Files copy a website that will always be better at being itself. It answers nothing the browser does not, so it reads as useless.</p></div>
+    <div class="card bad"><span class="ro">03</span><h3>Chrome before content</h3><p>A 22px wordmark, three boxed command rows with key caps, an uppercase label and a 40px title bar take 330px before the first repo. Empty states float in a sea of white.</p></div>
+    <div class="card bad"><span class="ro">04</span><h3>Controls feel heavy</h3><p>Boxed key hints everywhere, borders on every control, two segmented controls in one bar, three header readouts. Weight sits on what matters least.</p></div>
+    <div class="card bad"><span class="ro">05</span><h3>No sense of done</h3><p>Status tells you working or needs you, never "this one is ready to ship". That is the question people with five agents actually ask.</p></div>
+    <div class="card bad"><span class="ro">06</span><h3>One flat plane</h3><p>Three equal columns on one ground give no hierarchy. Nothing says where to look first.</p></div>
+  </div>
+  <div class="cards" style="margin-top:24px">
+    <div class="card good"><span class="ro">A</span><h3>Agent in the middle</h3><p>The real Claude Code, untouched, on its own raised surface. Session tabs on top. Click a repo and every agent in it is live at once.</p></div>
+    <div class="card good"><span class="ro">B</span><h3>A rail that answers one question</h3><p>Changes, Files and Ready as icon tabs on a 348px rail. Ready replaces the pull request mirror with what still blocks the merge and one send per blocker.</p></div>
+    <div class="card good"><span class="ro">C</span><h3>A sidebar that triages</h3><p>Needs you on top, then repos. Every workspace row carries its pixel and its ship state, so the window works at a glance.</p></div>
+  </div>
+</section>
+
+<!-- 01 MAIN -->
+<section class="sec" id="main">
+  <div class="sec-h"><span class="ro">01</span><h2>the window</h2>
+    <p>Three columns, re-weighted. Sidebar 252, centre flexible, rail 348 and collapsible with Cmd+I. The centre floats as one raised surface with a 10px corner, so the eye lands on the agent first. The title bar is gone as a strip, the traffic lights share the sidebar's top row and the header names the workspace.</p></div>
+  <div class="frame">
+  <div class="win dk">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+
+      <div class="grp">Needs you<span class="ro sig">2</span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>pr-tab</span><span>Claude Code wants to run a command</span></span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>billing-webhook</span><span>2 checks failed</span></span></div>
+
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">satellite</span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws sel"><span class="px w"></span><span class="nm">fix-login</span><span class="rt"><span class="ro">↑2</span></span></div>
+      <div class="row ws"><span class="px n"></span><span class="nm">pr-tab</span><span class="rt"><span class="ro">#51</span></span></div>
+      <div class="row ws"><span class="px r"></span><span class="nm">theme-picker</span><span class="rt"><span class="chip r" style="height:18px;font-size:10.5px">ready</span></span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">folder-watch-windows</span><span class="rt"><span class="ro"><svg class="i s" style="width:10px;height:10px;vertical-align:-1px"><use href="#i-run"/></svg> 1</span></span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">website</span></div>
+      <div class="row ws"><span class="px d"></span><span class="nm">hero-copy</span><span class="rt"><span class="ro">merged</span></span></div>
+      <div class="row ws"><span class="px n"></span><span class="nm">billing-webhook</span><span class="rt"><span class="ro">#18</span></span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">api</span><span class="rt"><span class="px w"></span><span class="ro">3</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+
+    <main class="main">
+      <div class="hd">
+        <span class="ttl"><span class="crumb">satellite /</span> fix-login</span>
+        <span class="br"><svg class="i s"><use href="#i-branch"/></svg><span class="mono">fix-login</span><span class="ro" style="font-size:11px">↑2 ↓0</span></span>
+        <span class="sp"></span>
+        <span class="btn sm ghost" title="1 running process"><svg class="i s"><use href="#i-run"/></svg><span class="ro">1</span><span class="mono" style="font-size:11px;color:var(--dim)">:5173</span></span>
+        <span class="chip"><span class="mono">no pull request yet</span></span>
+        <span class="ib"><svg class="i"><use href="#i-dots"/></svg></span>
+      </div>
+      <div class="tabs">
+        <span class="tab on"><span class="px w"></span>Session 1<span class="x"><svg class="i s" style="width:12px;height:12px"><use href="#i-x"/></svg></span></span>
+        <span class="tab"><span class="px d"></span>Session 2</span>
+        <span class="ib" style="width:24px;height:24px"><svg class="i s"><use href="#i-plus"/></svg></span>
+        <span class="sp"></span>
+        <span class="ro" style="color:var(--dim);font-size:11px;padding-right:6px" title="Working for 4 minutes 12 seconds">T+04:12</span>
+      </div>
+      <div class="term">
+        <div class="lines">
+<div class="l ubox"><span class="dm">&gt;</span> Users get logged out after five minutes. Find why and fix it, then run the session tests</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> I'll start with how sessions are issued and refreshed.</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Read</span>(src/auth/session.ts)</div>
+<div class="l"><span class="dm">  ⎿  Read 142 lines</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> The TTL is stored in seconds but compared against milliseconds, so a 300 second</div>
+<div class="l">  TTL expires after 300 ms of idle refresh drift. Fixing the comparison.</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(src/auth/session.ts)</div>
+<div class="l"><span class="dm">  ⎿  Updated src/auth/session.ts with 2 additions and 1 removal</span></div>
+<div class="l"><span class="dm">       38</span>    const ttl = config.session.ttl</div>
+<div class="l"><span class="dm">       39</span> <span class="dl">-  if (Date.now() - issuedAt &gt; ttl) {</span></div>
+<div class="l"><span class="dm">       39</span> <span class="al">+  const age = Date.now() - issuedAt</span></div>
+<div class="l"><span class="dm">       40</span> <span class="al">+  if (age &gt; ttl * 1000) {</span></div>
+<div class="l"><span class="dm">       41</span>      return refresh(session)</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Bash</span>(npm test -- session)</div>
+<div class="l"><span class="dm">  ⎿  </span><span class="g">PASS</span> src/auth/session.test.ts <span class="dm">(12 tests, 0.8s)</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">✻ Committing the fix…</span> <span class="dm">(41s · ↓ 1.8k tokens · esc to interrupt)</span></div>
+        </div>
+        <div class="prompt"><span class="dm">&gt;</span> <span class="cur"></span></div>
+        <div class="hint"><span>  ⏵⏵ accept edits on <span class="dm">(shift+tab to cycle)</span></span><span>Opus 5.5</span></div>
+      </div>
+    </main>
+
+    <aside class="rail">
+      <div class="rtop">
+        <span class="ib on" title="Changes"><svg class="i"><use href="#i-diff"/></svg></span>
+        <span class="ib" title="Files"><svg class="i"><use href="#i-files"/></svg></span>
+        <span class="ib" title="Ready"><svg class="i"><use href="#i-pr"/></svg></span>
+        <span class="sp"></span>
+        <span class="ib"><svg class="i"><use href="#i-rside"/></svg></span>
+      </div>
+      <div class="pane">
+        <div class="ph"><b>Changes</b><span class="ro" style="color:var(--dim);font-size:11px">3 FILES</span><span class="sp"></span><span class="ro" style="font-size:11px;color:var(--addfg)">+14</span><span class="ro" style="font-size:11px;color:var(--delfg)">−3</span></div>
+        <div class="seg"><span class="on">Branch</span><span>Uncommitted</span></div>
+        <div class="f sel"><span class="lt2 M">M</span><span class="p"><bdi><span class="d">src/auth/</span>session.ts</bdi></span><span class="n"><span class="a">+2</span><span class="r">−1</span></span></div>
+        <div class="f"><span class="lt2 M">M</span><span class="p"><bdi><span class="d">src/auth/</span>session.test.ts</bdi></span><span class="n"><span class="a">+11</span><span class="r">−2</span></span></div>
+        <div class="f"><span class="lt2 A">A</span><span class="p"><bdi><span class="d">.changeset/</span>quiet-owls.md</bdi></span><span class="n"><span class="a">+1</span></span></div>
+        <div class="mini">
+          <div class="mh"><svg class="i s"><use href="#i-file"/></svg><span class="mono" style="font-size:11.5px">session.ts</span><span class="sp"></span><span class="ib" style="width:22px;height:22px"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="ml h"><span></span><span>@@ -36,6 +36,7 @@</span></div>
+          <div class="ml"><span>37</span><span>export function check(s) {</span></div>
+          <div class="ml"><span>38</span><span>  const ttl = config.session.ttl</span></div>
+          <div class="ml r"><span>39</span><span>  if (Date.now() - issuedAt &gt; ttl) {</span></div>
+          <div class="ml a"><span>39</span><span>  const age = Date.now() - issuedAt</span></div>
+          <div class="ml a"><span>40</span><span>  if (age &gt; ttl * 1000) {</span></div>
+          <div class="ml"><span>41</span><span>    return refresh(session)</span></div>
+          <div class="ml"><span>42</span><span>  }</span></div>
+        </div>
+        <div class="pfoot"><span class="btn"><svg class="i s"><use href="#i-send"/></svg>Send lines<span class="k">⌘L</span></span><span class="btn"><svg class="i s"><use href="#i-ext"/></svg>Open diff</span></div>
+      </div>
+    </aside>
+  </div>
+  </div>
+  <div class="note">
+    <div><b>The agent owns the middle</b>The terminal is Claude Code exactly as it draws itself. Satellite adds only the header, the session tabs and the elapsed readout. No chat UI to maintain, every Claude Code release works the day it ships.</div>
+    <div><b>The sidebar triages</b>Needs you sits on top with a sentence that says why. Repos follow with one line per workspace, pixel left, the one fact that matters right, ahead count, pull request number, nothing blocks, merged or running processes, the rest in its tooltip. A folded repo shows its most urgent pixel and how many of its workspaces have a session.</div>
+    <div><b>The rail reviews</b>Changes is a compact list with the selected file's hunk under it. Open diff takes the full diff into the centre as a tab beside the sessions when you really want to read, and closing it brings the agent back.</div>
+  </div>
+</section>
+
+<!-- 02 RAIL -->
+<section class="sec" id="rail">
+  <div class="sec-h"><span class="ro">02</span><h2>the rail, three tabs</h2>
+    <p>Three icon tabs, Changes, Files and Ready. Ready is the new idea. It answers one question, what still blocks this pull request, with a checklist read through your own <span class="mono">gh</span>. Every blocker carries one button that hands a pointer to it to Claude Code. Merging and the full conversation stay on GitHub, one click away. Search is left out on purpose, your agent already searches.</p></div>
+  <div class="frame">
+  <div class="dk railset" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;width:1280px;margin:0 auto">
+
+    <!-- Ready, green -->
+    <div class="win dk" style="width:auto;height:640px;display:flex;--rw:auto;background:var(--win)">
+      <aside class="rail" style="flex:1">
+        <div class="rtop"><span class="ib"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib on"><svg class="i"><use href="#i-pr"/></svg></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-ext"/></svg></span></div>
+        <div class="pane">
+          <div class="ready">
+            <div class="st"><span class="px r lg"></span>Nothing blocks the merge</div>
+            <div class="sub"><span class="ro">#52</span> · <span class="mono">theme-picker → main</span></div>
+          </div>
+          <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Checks passed<small>macOS, Windows, Linux, lint</small></span><span class="ro v">12/12</span></div>
+          <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Approved by alex<small>a maintainer, on the latest commit</small></span></div>
+          <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">No conflicts with main</span></div>
+          <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Every thread resolved</span><span class="ro v">4/4</span></div>
+          <div class="lbl">Commits<span class="ro">3</span></div>
+          <div class="f"><span class="ro" style="color:var(--dim);font-size:11px">A1F</span><span class="p" style="direction:ltr">feat(themes): pick a theme from the menu</span></div>
+          <div class="f"><span class="ro" style="color:var(--dim);font-size:11px">7C2</span><span class="p" style="direction:ltr">fix(themes): keep focus ring at 3 to 1</span></div>
+          <div class="f"><span class="ro" style="color:var(--dim);font-size:11px">E90</span><span class="p" style="direction:ltr">docs: themes in DESIGN.md</span></div>
+          <div class="pfoot" style="flex-direction:column"><span class="btn pri" style="justify-content:center"><svg class="i s"><use href="#i-ext"/></svg>Merge on GitHub</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Ready, blocked -->
+    <div class="win dk" style="width:auto;height:640px;display:flex;background:var(--win)">
+      <aside class="rail" style="flex:1">
+        <div class="rtop"><span class="ib"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib on"><svg class="i"><use href="#i-pr"/></svg><span class="cnt"></span></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-ext"/></svg></span></div>
+        <div class="pane">
+          <div class="ready" style="border-color:color-mix(in srgb,var(--signal) 40%,var(--line))">
+            <div class="st"><span class="px n lg"></span>2 things block the merge</div>
+            <div class="sub"><span class="ro">#18</span> · <span class="mono">billing-webhook → main</span></div>
+          </div>
+          <div class="chk bad"><svg class="i s" style="color:var(--sigfg)"><use href="#i-x"/></svg><span class="t">2 checks failed<small>test (ubuntu), test (windows)</small></span><span class="ro v">10/12</span></div>
+          <div class="log"><span class="dm">webhook.test.ts:48</span>
+<span class="rd">✕ retries a 502 three times</span>
+  Expected 3 calls, got 1</div>
+          <div style="padding:6px 4px 0;display:flex;gap:6px"><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span><span class="btn sm ghost">View run</span></div>
+          <div class="chk bad" style="margin-top:6px"><svg class="i s" style="color:var(--sigfg)"><use href="#i-x"/></svg><span class="t">Changes requested by alex<small>on the latest commit</small></span></div>
+          <div style="padding:2px 4px 0 30px;display:flex;gap:6px"><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span></div>
+          <div class="chk" style="margin-top:6px"><svg class="i s" style="color:var(--dim)"><use href="#i-pr"/></svg><span class="t">1 open thread<small>coderabbitai, outside the repository</small></span></div>
+          <div class="thread"><div class="who"><span class="av bot">CR</span>coderabbitai<span class="mono">webhook.ts:72</span></div>The retry loop swallows the last error, so a permanent 4xx still waits the full backoff.<div class="acts"><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span></div></div>
+          <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">No conflicts with main</span></div>
+          <div class="pfoot" style="flex-direction:column"><span class="btn ghost" style="justify-content:center"><svg class="i s"><use href="#i-ext"/></svg>Open on GitHub</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Files -->
+    <div class="win dk" style="width:auto;height:640px;display:flex;background:var(--win)">
+      <aside class="rail" style="flex:1">
+        <div class="rtop"><span class="ib"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib on"><svg class="i"><use href="#i-files"/></svg></span><span class="ib"><svg class="i"><use href="#i-pr"/></svg></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-refresh"/></svg></span></div>
+        <div class="pane tree">
+          <div class="ph"><b>fix-login</b><span class="sp"></span></div>
+          <div class="find"><svg class="i s"><use href="#i-search"/></svg>Find a file<span class="k" style="margin-left:auto">⌘F</span></div>
+          <div class="f"><svg class="i s" style="color:var(--faint)"><use href="#i-chev"/></svg><span class="p">.github</span></div>
+          <div class="f"><svg class="i s" style="color:var(--faint)"><use href="#i-chevd"/></svg><span class="p">src</span><span class="n"><span class="px" style="background:var(--b);width:5px;height:5px"></span></span></div>
+          <div class="f" style="padding-left:22px"><svg class="i s" style="color:var(--faint)"><use href="#i-chevd"/></svg><span class="p">auth</span></div>
+          <div class="f sel" style="padding-left:40px"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p" style="color:var(--b)">session.ts</span><span class="n"><span class="lt2 M" style="color:var(--b)">M</span></span></div>
+          <div class="f" style="padding-left:40px"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p" style="color:var(--b)">session.test.ts</span><span class="n"><span class="lt2 M" style="color:var(--b)">M</span></span></div>
+          <div class="f" style="padding-left:40px"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p">tokens.ts</span></div>
+          <div class="f" style="padding-left:22px"><svg class="i s" style="color:var(--faint)"><use href="#i-chev"/></svg><span class="p">billing</span></div>
+          <div class="f" style="padding-left:22px"><svg class="i s" style="color:var(--faint)"><use href="#i-chev"/></svg><span class="p">ui</span></div>
+          <div class="f ign"><svg class="i s" style="color:var(--faint)"><use href="#i-chev"/></svg><span class="p">node_modules</span></div>
+          <div class="f"><svg class="i s" style="color:var(--faint)"><use href="#i-chev"/></svg><span class="p">tests</span></div>
+          <div class="f"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p">package.json</span></div>
+          <div class="f"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p">README.md</span></div>
+          <div class="f"><svg class="i s" style="color:var(--dim)"><use href="#i-file"/></svg><span class="p">tsconfig.json</span></div>
+          <div class="pfoot"><span class="btn ghost" style="justify-content:flex-start;flex:1;color:var(--dim);font-weight:500">A file opens as a tab in the centre</span></div>
+        </div>
+      </aside>
+    </div>
+
+  </div>
+  </div>
+  <div class="cap"><span><b>Nothing blocks.</b> Said plainly, never "safe". Green checks are not a review, so merging stays your decision on GitHub.</span><span><b>Blocked.</b> Signal only on failed checks, changes requested and conflicts. Open threads and bot reviews stay grey, as outside voices.</span><span><b>Files.</b> A quiet tree with Find a file on Cmd+F. A file opens in the centre as a tab beside the sessions.</span></div>
+</section>
+
+<!-- 03 NEEDS YOU -->
+<section class="sec" id="needs">
+  <div class="sec-h"><span class="ro">03</span><h2>when an agent needs you</h2>
+    <p>The one moment that earns signal orange. The session tab, the sidebar row and the header all turn, and Claude Code's own question sits in the middle where you are already looking. A toast reaches you from any other workspace, and Cmd+J always jumps to the next thing that needs you.</p></div>
+  <div class="frame">
+  <div class="win dk">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Needs you<span class="ro sig">2</span></div>
+      <div class="row two sel"><span class="px n"></span><span class="txt"><span>pr-tab</span><span>Claude Code wants to run a command</span></span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>billing-webhook</span><span>2 checks failed</span></span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">satellite</span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">fix-login</span><span class="rt"><span class="ro">↑2</span></span></div>
+      <div class="row ws sel"><span class="px n"></span><span class="nm">pr-tab</span><span class="rt"><span class="ro">#51</span></span></div>
+      <div class="row ws"><span class="px r"></span><span class="nm">theme-picker</span><span class="rt"><span class="chip r" style="height:18px;font-size:10.5px">ready</span></span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">website</span><span class="rt"><span class="px n"></span><span class="ro">1</span></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">api</span><span class="rt"><span class="px w"></span><span class="ro">3</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="hd">
+        <span class="ttl"><span class="crumb">satellite /</span> pr-tab</span>
+        <span class="br"><svg class="i s"><use href="#i-branch"/></svg><span class="mono">pr-tab</span><span class="ro" style="font-size:11px">↑0 ↓0</span></span>
+        <span class="sp"></span>
+        <span class="chip r"><span class="px r"></span><span class="ro">#51</span> checks passed</span>
+        <span class="ib"><svg class="i"><use href="#i-dots"/></svg></span>
+      </div>
+      <div class="tabs">
+        <span class="tab on"><span class="px n"></span>Session 1<span class="x"><svg class="i s" style="width:12px;height:12px"><use href="#i-x"/></svg></span></span>
+        <span class="ib" style="width:24px;height:24px"><svg class="i s"><use href="#i-plus"/></svg></span>
+        <span class="sp"></span>
+        <span class="ro" style="color:var(--sigfg);font-size:11px;padding-right:6px">WAITING 00:48</span>
+      </div>
+      <div class="term">
+        <div class="lines">
+<div class="l ubox"><span class="dm">&gt;</span> Address the review on #51 and push</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Bash</span>(gh pr view 51 --json reviews,comments)</div>
+<div class="l"><span class="dm">  ⎿  3 review threads, 1 unresolved</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(src/renderer/pull-request/checks.tsx)</div>
+<div class="l"><span class="dm">  ⎿  Updated with 6 additions and 2 removals</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> Tests pass. I'll push the branch now.</div>
+<div class="l"> </div>
+        </div>
+        <div class="perm">
+<div class="l"><span class="bo">Bash command</span></div>
+<div class="l"> </div>
+<div class="l">  git push origin pr-tab</div>
+<div class="l"><span class="dm">  Push the review fixes to the pull request</span></div>
+<div class="l"> </div>
+<div class="l">Do you want to proceed?</div>
+<div class="l"><span class="o">❯ 1. Yes</span></div>
+<div class="l">  2. Yes, and don't ask again for <span class="bo">git push</span> commands in this project</div>
+<div class="l">  3. No, and tell Claude what to do differently <span class="dm">(esc)</span></div>
+        </div>
+      </div>
+    </main>
+    <aside class="rail">
+      <div class="rtop"><span class="ib"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib on"><svg class="i"><use href="#i-pr"/></svg></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-rside"/></svg></span></div>
+      <div class="pane">
+        <div class="ready"><div class="st"><span class="px w lg"></span>Claude Code is working on it</div><div class="sub"><span class="ro">#51</span> · <span class="mono">pr-tab → main</span></div></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Checks passed<small>on the previous commit</small></span><span class="ro v">12/12</span></div>
+        <div class="chk"><svg class="i s" style="color:var(--dim)"><use href="#i-pr"/></svg><span class="t">1 open thread</span></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">No conflicts with main</span></div>
+        <div class="pfoot"><span class="btn ghost" style="justify-content:center"><svg class="i s"><use href="#i-ext"/></svg>Open on GitHub</span></div>
+      </div>
+    </aside>
+    <div class="toast"><span class="px n"></span><div><b>billing-webhook needs you</b><span>2 checks failed on #18 in website</span><div class="acts"><span class="btn sm">Go there<span class="k">⌘J</span></span><span class="btn sm ghost">Later</span></div></div></div>
+  </div>
+  </div>
+</section>
+
+<!-- 04 AGENTS -->
+<section class="sec" id="agents">
+  <div class="sec-h"><span class="ro">04</span><h2>every agent, one list</h2>
+    <p>Agents opens in the centre instead of a palette. It is the home screen once you run more than three, grouped by what you do next, needs you, nothing blocks, working, done. One row per session across every repo, with its state and how long it has been in it. Satellite never reads what a session prints, so the row says what the hooks and gh say, nothing more.</p></div>
+  <div class="frame">
+  <div class="win dk norail">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Needs you<span class="ro sig">2</span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>pr-tab</span><span>Claude Code wants to run a command</span></span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>billing-webhook</span><span>2 checks failed</span></span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">satellite</span><span class="rt"><span class="px n"></span><span class="ro">5</span></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">website</span><span class="rt"><span class="px n"></span><span class="ro">2</span></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">api</span><span class="rt"><span class="px w"></span><span class="ro">3</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row sel"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="ov">
+        <h3>agents</h3>
+        <div class="lead">10 sessions in 3 repos. 2 need you, nothing blocks 2.</div>
+        <div class="ovbar"><span class="seg inl"><span class="on">All</span><span>Needs you</span><span>Working</span></span></div>
+        <div class="ovg"><span class="px n"></span>Needs you<span class="ro">2</span></div>
+        <div class="ovr"><span class="px n"></span><span class="w"><b>pr-tab</b><span>satellite · Session 1</span></span><span>Claude Code needs you</span><span><span class="chip"><span class="ro">#51</span></span></span><span class="ro">00:48</span><span class="btn sm">Open</span></div>
+        <div class="ovr"><span class="px n"></span><span class="w"><b>billing-webhook</b><span>website · Session 1</span></span><span>2 checks failed</span><span><span class="chip n"><span class="ro">#18</span></span></span><span class="ro">12:04</span><span class="btn sm">Open</span></div>
+        <div class="ovg"><span class="px r"></span>Nothing blocks<span class="ro">2</span></div>
+        <div class="ovr"><span class="px r"></span><span class="w"><b>theme-picker</b><span>satellite · Session 1</span></span><span>Nothing blocks the merge</span><span><span class="chip r"><span class="ro">#52</span></span></span><span class="ro">1H 20</span><span class="btn sm ghost">Open</span></div>
+        <div class="ovr"><span class="px r"></span><span class="w"><b>rate-limit</b><span>api · Session 2</span></span><span>Nothing blocks the merge</span><span><span class="chip r"><span class="ro">#204</span></span></span><span class="ro">2H 02</span><span class="btn sm ghost">Open</span></div>
+        <div class="ovg"><span class="px w"></span>Working<span class="ro">4</span></div>
+        <div class="ovr"><span class="px w"></span><span class="w"><b>fix-login</b><span>satellite · Session 1</span></span><span>Working</span><span><span class="chip">no PR</span></span><span class="ro">04:12</span><span class="btn sm ghost">Open</span></div>
+        <div class="ovr"><span class="px w"></span><span class="w"><b>folder-watch-windows</b><span>satellite · Session 1</span></span><span>Working</span><span><span class="chip"><span class="ro">#53</span></span></span><span class="ro">18:40</span><span class="btn sm ghost">Open</span></div>
+        <div class="ovr"><span class="px w"></span><span class="w"><b>pagination</b><span>api · Session 1</span></span><span>Working</span><span><span class="chip">no PR</span></span><span class="ro">00:52</span><span class="btn sm ghost">Open</span></div>
+      </div>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- 05 REPO VIEW -->
+<section class="sec" id="split">
+  <div class="sec-h"><span class="ro">05</span><h2>the whole repo at once</h2>
+    <p>Click a repo instead of a workspace and the centre shows every workspace in it, each one a live Claude Code. You read all of them, answer a question in place and type into whichever one has focus, without switching anything. Grid gives every agent the same room. Focus gives one agent the stage and keeps the others live in a strip beside it. The rail folds to its icons and opens for the focused tile, Cmd+I.</p></div>
+
+  <div class="frame">
+  <div class="win dk" style="--rw:52px">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Needs you<span class="ro sig">1</span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>rate-limit</span><span>Claude Code wants to edit a file</span></span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj sel"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">api</span><span class="rt"><span class="ro">4 LIVE</span></span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">pagination</span><span class="rt"><span class="ro">↑1</span></span></div>
+      <div class="row ws"><span class="px d"></span><span class="nm">pagination-docs</span><span class="rt"><span class="ro">↑3</span></span></div>
+      <div class="row ws"><span class="px n"></span><span class="nm">rate-limit</span><span class="rt"><span class="ro">#204</span></span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">auth-refactor</span><span class="rt"><span class="ro">↑5</span></span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">satellite</span><span class="rt"><span class="px w"></span><span class="ro">3</span></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">website</span><span class="rt"><span class="px d"></span><span class="ro">1</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="hd">
+        <span class="ttl">api <span class="crumb">· 4 workspaces</span></span>
+        <span class="sp"></span>
+        <span class="seg inl"><span class="on">Grid</span><span>Focus</span></span>
+        <span class="btn sm"><svg class="i s"><use href="#i-plus"/></svg>Workspace in api</span>
+        <span class="ib"><svg class="i"><use href="#i-dots"/></svg></span>
+      </div>
+      <div class="tiles g4">
+        <div class="tile foc">
+          <div class="th"><span class="px w"></span><b>pagination</b><span class="mono">↑1</span><span class="sp"></span><span class="st">Working</span><span class="ro">00:52</span><span class="ib tb"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="term"><div class="lines">
+<div class="l"><span class="o">⏺</span> <span class="bo">Search</span>(pattern: "offset", path: "src/routes")</div>
+<div class="l"><span class="dm">  ⎿  Found 7 files</span></div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(src/routes/orders.ts)</div>
+<div class="l"><span class="dm">  ⎿  Updated with 18 additions and 9 removals</span></div>
+<div class="l"><span class="o">✻ Moving users to cursors…</span> <span class="dm">(52s)</span></div>
+          </div><div class="prompt"><span class="dm">&gt;</span> also keep the old offset param for one release<span class="cur"></span></div></div>
+        </div>
+        <div class="tile need">
+          <div class="th"><span class="px n"></span><b>rate-limit</b><span class="chip" style="height:18px"><span class="ro">#204</span></span><span class="sp"></span><span class="st sg">Needs you</span><span class="ro">01:10</span><span class="ib tb"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="term"><div class="lines">
+<div class="l"><span class="o">⏺</span> Review asked for a burst allowance. Adding it.</div>
+          </div>
+          <div class="perm" style="margin-top:4px">
+<div class="l"><span class="bo">Edit file</span> src/middleware/limit.ts</div>
+<div class="l">Do you want to make this edit?</div>
+<div class="l"><span class="o">❯ 1. Yes</span>   2. Yes, allow all edits   3. No <span class="dm">(esc)</span></div>
+          </div></div>
+        </div>
+        <div class="tile">
+          <div class="th"><span class="px d"></span><b>pagination-docs</b><span class="mono">↑3</span><span class="sp"></span><span class="st">Done</span><span class="ro">4M AGO</span><span class="ib tb"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="term"><div class="lines">
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(API.md)</div>
+<div class="l"><span class="dm">  ⎿  Updated API.md with 34 additions</span></div>
+<div class="l"><span class="o">⏺</span> Done. The section covers the cursor format,</div>
+<div class="l">  page size limits and an example response.</div>
+          </div><div class="prompt dimp"><span class="dm">&gt;</span></div></div>
+        </div>
+        <div class="tile">
+          <div class="th"><span class="px w"></span><b>auth-refactor</b><span class="mono">↑5</span><span class="sp"></span><span class="st">Working</span><span class="ro">12:31</span><span class="ib tb"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="term"><div class="lines">
+<div class="l"><span class="o">⏺</span> <span class="bo">Bash</span>(npm test -- auth)</div>
+<div class="l"><span class="dm">  ⎿  </span><span class="rd">FAIL</span> src/auth/token.test.ts <span class="dm">(2 failed)</span></div>
+<div class="l"><span class="o">⏺</span> The refresh test still mocks the old clock.</div>
+<div class="l"><span class="o">✻ Fixing the test clock…</span> <span class="dm">(12m 31s)</span></div>
+          </div><div class="prompt dimp"><span class="dm">&gt;</span></div></div>
+        </div>
+      </div>
+    </main>
+    <aside class="rail" style="padding:0 6px 8px">
+      <div class="rtop" style="flex-direction:column;height:auto;gap:4px;padding-top:9px">
+        <span class="ib"><svg class="i"><use href="#i-rside"/></svg></span>
+        <span style="height:1px;width:20px;background:var(--line);margin:4px 0"></span>
+        <span class="ib"><svg class="i"><use href="#i-diff"/></svg></span>
+        <span class="ib"><svg class="i"><use href="#i-files"/></svg></span>
+        <span class="ib"><svg class="i"><use href="#i-pr"/></svg></span>
+        
+      </div>
+    </aside>
+  </div>
+  </div>
+  <div class="cap"><span><b>Grid.</b> Up to four tiles at equal size, two by two. The focused tile has the ultraviolet edge and takes your typing, a tile that needs you has a signal edge and its question answered right there. Click a tile or press Cmd+1 to 4 to focus it. Grid only lays out tiles that keep 64 columns and 24 rows, two side by side on most screens, four on a large one.</span></div>
+
+  <div class="frame" style="margin-top:28px">
+  <div class="win dk" style="--rw:348px">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj sel"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">api</span><span class="rt"><span class="ro">6 LIVE</span></span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">pagination</span><span class="rt"><span class="ro">↑1</span></span></div>
+      <div class="row ws"><span class="px d"></span><span class="nm">pagination-docs</span></div>
+      <div class="row ws"><span class="px r"></span><span class="nm">rate-limit</span><span class="rt"><span class="chip r" style="height:18px;font-size:10.5px">ready</span></span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">auth-refactor</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">webhooks-v2</span></div>
+      <div class="row ws"><span class="px"></span><span class="nm">openapi-types</span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="hd">
+        <span class="ttl">api <span class="crumb">· 6 workspaces</span></span>
+        <span class="sp"></span>
+        <span class="seg inl"><span>Grid</span><span class="on">Focus</span></span>
+        <span class="btn sm"><svg class="i s"><use href="#i-plus"/></svg>Workspace in api</span>
+        <span class="ib"><svg class="i"><use href="#i-dots"/></svg></span>
+      </div>
+      <div class="tiles fo">
+        <div class="tile foc big">
+          <div class="th"><span class="px w"></span><b>pagination</b><span class="mono">↑1</span><span class="sp"></span><span class="st">Working</span><span class="ro">00:52</span><span class="ib tb"><svg class="i s"><use href="#i-ext"/></svg></span></div>
+          <div class="term"><div class="lines">
+<div class="l ubox"><span class="dm">&gt;</span> Switch list endpoints to cursor pagination</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Search</span>(pattern: "offset", path: "src/routes")</div>
+<div class="l"><span class="dm">  ⎿  Found 7 files</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(src/routes/orders.ts)</div>
+<div class="l"><span class="dm">  ⎿  Updated with 18 additions and 9 removals</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Write</span>(src/lib/cursor.ts)</div>
+<div class="l"><span class="dm">  ⎿  Wrote 41 lines</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">✻ Moving users to cursors…</span> <span class="dm">(52s · esc to interrupt)</span></div>
+          </div><div class="prompt"><span class="dm">&gt;</span> <span class="cur"></span></div></div>
+        </div>
+        <div class="strip">
+          <div class="tile mtile"><div class="th"><span class="px r"></span><b>rate-limit</b><span class="sp"></span><span class="st vt">Ready</span></div><div class="mt">Nothing blocks #204</div></div>
+          <div class="tile mtile"><div class="th"><span class="px w"></span><b>auth-refactor</b><span class="sp"></span><span class="ro">12:31</span></div><div class="mt">Working · Session 1</div></div>
+          <div class="tile mtile"><div class="th"><span class="px w"></span><b>webhooks-v2</b><span class="sp"></span><span class="ro">03:02</span></div><div class="mt">Working · Session 2</div></div>
+          <div class="tile mtile"><div class="th"><span class="px d"></span><b>pagination-docs</b><span class="sp"></span><span class="st">Done</span></div><div class="mt">Done 4m ago</div></div>
+          <div class="tile mtile"><div class="th"><span class="px"></span><b>openapi-types</b><span class="sp"></span><span class="st">Idle</span></div><div class="mt" style="color:var(--dim)">Idle, no request yet</div></div>
+        </div>
+      </div>
+    </main>
+    <aside class="rail">
+      <div class="rtop"><span class="ib on"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib"><svg class="i"><use href="#i-pr"/></svg></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-rside"/></svg></span></div>
+      <div class="pane">
+        <div class="ph"><b>Changes</b><span class="ro" style="color:var(--dim);font-size:11px">PAGINATION</span></div>
+        <div class="seg"><span class="on">Branch</span><span>Uncommitted</span></div>
+        <div class="f sel"><span class="lt2 M">M</span><span class="p"><bdi><span class="d">src/routes/</span>orders.ts</bdi></span><span class="n"><span class="a">+18</span><span class="r">−9</span></span></div>
+        <div class="f"><span class="lt2 A">A</span><span class="p"><bdi><span class="d">src/lib/</span>cursor.ts</bdi></span><span class="n"><span class="a">+41</span></span></div>
+        <div class="mini">
+          <div class="mh"><svg class="i s"><use href="#i-file"/></svg><span class="mono" style="font-size:11.5px">orders.ts</span><span class="sp"></span></div>
+          <div class="ml h"><span></span><span>@@ -12,7 +12,8 @@</span></div>
+          <div class="ml r"><span>14</span><span>  const { offset = 0 } = req.query</span></div>
+          <div class="ml a"><span>14</span><span>  const cursor = parseCursor(req.query)</span></div>
+          <div class="ml a"><span>15</span><span>  const page = await list(cursor, 50)</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  </div>
+  <div class="cap"><span><b>Focus.</b> For five or more. One agent gets the stage, the others stay live in a strip with their state and last line, ordered needs you first. Click one, or press Cmd+1 to 9, and it swaps onto the stage. Strip cells are state, not shrunken terminals, so nothing resizes behind your back. The rail opens for the agent on stage.</span></div>
+
+  <div class="note">
+    <div><b>Nothing to configure</b>Every workspace of the repo with an open session is live in the view, showing its selected session. Opening the repo view starts nothing. Main and workspaces without a session stay in the sidebar.</div>
+    <div><b>Terminals keep a real size</b>A tile never goes under 64 columns or 24 rows, enough for a permission question. When they do not fit, Grid becomes Focus by itself, so Claude Code always draws properly.</div>
+    <div><b>One focus, always visible</b>Typing goes only to the focused tile, marked by the ultraviolet edge, the bright prompt and its name read aloud. Cmd+Enter makes it fill the centre and Cmd+Enter brings the view back. Escape always belongs to Claude Code.</div>
+  </div>
+</section>
+
+<!-- 06 NEW -->
+<section class="sec" id="new">
+  <div class="sec-h"><span class="ro">06</span><h2>new workspace is a page</h2>
+    <p>Not a dialog. Cmd+N turns the centre into a calm page with one large request box, the way people start agent work everywhere now. The repo and the starting point sit on the box as quiet pickers, the branch name fills itself from the request. Create and start makes the worktree and starts Claude Code with the request as its first message. Escape goes back to where you were.</p></div>
+  <div class="frame">
+  <div class="win dk norail">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide" style="box-shadow:0 0 0 2px var(--win),0 0 0 3px var(--fg2)"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Needs you<span class="ro sig">1</span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>billing-webhook</span><span>2 checks failed</span></span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">satellite</span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">fix-login</span><span class="rt"><span class="ro">↑2</span></span></div>
+      <div class="row ws"><span class="px r"></span><span class="nm">theme-picker</span><span class="rt"><span class="chip r" style="height:18px;font-size:10.5px">ready</span></span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">website</span><span class="rt"><span class="px n"></span><span class="ro">1</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="hd"><span class="ttl"><span class="crumb">satellite /</span> new workspace</span><span class="sp"></span><span class="btn sm ghost">Cancel<span class="k">esc</span></span></div>
+      <div class="cmp-wrap">
+        <h3>what should claude code do</h3>
+        <div class="lead">A fresh worktree and branch from the latest main, with its own session.</div>
+        <div class="composer on">
+          <div class="ta">Add a keyboard shortcut to open settings on Windows and Linux, matching Cmd+Comma on macOS<span style="display:inline-block;width:1.5px;height:17px;background:var(--fg);vertical-align:-3px;margin-left:1px"></span></div>
+          <div class="bar">
+            <span class="pick"><svg class="i s"><use href="#i-files"/></svg>satellite<svg class="i s"><use href="#i-chevd"/></svg></span>
+            <span class="pick"><svg class="i s"><use href="#i-branch"/></svg>from latest main<svg class="i s"><use href="#i-chevd"/></svg></span>
+            <span class="pick"><span class="mono">settings-shortcut</span></span>
+            <span class="sp"></span>
+            <span class="btn pri">Create and start<span class="k">⌘⏎</span></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  </div>
+  <div class="note">
+    <div><b>Why a page</b>The request deserves room, and a page keeps the sidebar live, so a needs you that lands while you type is still visible. Each step of making the worktree shows under the box while it runs.</div>
+    <div><b>Leave it empty</b>An empty request makes the worktree and opens a blank session, the fastest path for people who prefer to talk to Claude Code directly.</div>
+    <div><b>Your words only</b>The request is what you typed, passed to Claude Code as it starts, so it runs as your first message. Nothing from GitHub is pasted into it.</div>
+  </div>
+</section>
+
+<!-- 07 LIGHT -->
+<section class="sec" id="light">
+  <div class="sec-h"><span class="ro">07</span><h2>light</h2>
+    <p>The same window on paper. The raised centre reads even better here, white on a warm grey ground, the terminal follows the theme.</p></div>
+  <div class="frame">
+  <div class="win lt">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn pri wide"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Needs you<span class="ro sig">1</span></div>
+      <div class="row two"><span class="px n"></span><span class="txt"><span>billing-webhook</span><span>2 checks failed</span></span></div>
+      <div class="grp">Repos<span class="ib add" style="width:22px;height:22px"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row proj"><svg class="i chev"><use href="#i-chevd"/></svg><span class="nm">satellite</span></div>
+      <div class="row ws mn"><span class="px"></span><span class="nm">main</span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">fix-login</span><span class="rt"><span class="ro">↑2</span></span></div>
+      <div class="row ws sel"><span class="px r"></span><span class="nm">theme-picker</span><span class="rt"><span class="chip r" style="height:18px;font-size:10.5px">ready</span></span></div>
+      <div class="row ws"><span class="px w"></span><span class="nm">folder-watch-windows</span></div>
+      <div class="row proj" style="margin-top:4px"><svg class="i chev"><use href="#i-chev"/></svg><span class="nm">website</span><span class="rt"><span class="px n"></span><span class="ro">2</span></span></div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="hd">
+        <span class="ttl"><span class="crumb">satellite /</span> theme-picker</span>
+        <span class="br"><svg class="i s"><use href="#i-branch"/></svg><span class="mono">theme-picker</span><span class="ro" style="font-size:11px">↑0 ↓0</span></span>
+        <span class="sp"></span>
+        <span class="chip r"><span class="px r"></span><span class="ro">#52</span> nothing blocks</span>
+        <span class="ib"><svg class="i"><use href="#i-dots"/></svg></span>
+      </div>
+      <div class="tabs"><span class="tab on"><span class="px d"></span>Session 1</span><span class="ib" style="width:24px;height:24px"><svg class="i s"><use href="#i-plus"/></svg></span><span class="sp"></span><span class="ro" style="color:var(--dim);font-size:11px;padding-right:6px">DONE 1H 20</span></div>
+      <div class="term"><div class="lines">
+<div class="l ubox"><span class="dm">&gt;</span> Open the PR for the theme picker and fix whatever the review finds</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Bash</span>(gh pr create --fill)</div>
+<div class="l"><span class="dm">  ⎿  https://github.com/launchsatellite/satellite/pull/52</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> CodeRabbit flagged the focus ring contrast on Dracula. Lifting it to 3 to 1.</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Update</span>(src/shared/themes/theme-look.ts)</div>
+<div class="l"><span class="dm">  ⎿  Updated with 4 additions and 1 removal</span></div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> <span class="bo">Bash</span>(gh pr checks 52 --watch)</div>
+<div class="l"><span class="dm">  ⎿  </span><span class="g">✓</span> 12 checks passed</div>
+<div class="l"> </div>
+<div class="l"><span class="o">⏺</span> All checks pass and the review is approved. Ready for you to merge.</div>
+      </div><div class="prompt"><span class="dm">&gt;</span> <span class="cur"></span></div><div class="hint"><span>  ? for shortcuts</span><span>Opus 5.5</span></div></div>
+    </main>
+    <aside class="rail">
+      <div class="rtop"><span class="ib"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib on"><svg class="i"><use href="#i-pr"/></svg></span><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-rside"/></svg></span></div>
+      <div class="pane">
+        <div class="ready"><div class="st"><span class="px r lg"></span>Nothing blocks the merge</div><div class="sub"><span class="ro">#52</span> · <span class="mono">theme-picker → main</span></div></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Checks passed<small>macOS, Windows, Linux, lint</small></span><span class="ro v">12/12</span></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Approved by alex<small>a maintainer, on the latest commit</small></span></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">No conflicts with main</span></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Every thread resolved</span><span class="ro v">4/4</span></div>
+        <div class="lbl">Changed<span class="ro">5 FILES</span></div>
+        <div class="f"><span class="lt2 M">M</span><span class="p"><bdi><span class="d">src/shared/themes/</span>theme-look.ts</bdi></span><span class="n"><span class="a">+4</span><span class="r">−1</span></span></div>
+        <div class="f"><span class="lt2 A">A</span><span class="p"><bdi><span class="d">src/renderer/settings/</span>theme-select.tsx</bdi></span><span class="n"><span class="a">+86</span></span></div>
+        <div class="f"><span class="lt2 M">M</span><span class="p"><bdi>DESIGN.md</bdi></span><span class="n"><span class="a">+6</span><span class="r">−2</span></span></div>
+        <div class="pfoot" style="flex-direction:column"><span class="btn pri" style="justify-content:center"><svg class="i s"><use href="#i-ext"/></svg>Merge on GitHub</span></div>
+      </div>
+    </aside>
+  </div>
+  </div>
+</section>
+
+<!-- 08 SETTINGS -->
+<section class="sec" id="settings">
+  <div class="sec-h"><span class="ro">08</span><h2>settings is a page</h2>
+    <p>Settings takes the whole window. The sidebar becomes the section list with a way back at its top, the content is one readable column of setting cards, every choice applies at once, so there is no Save and no Done. Sessions keep running behind it, and a needs you still reaches you as a toast. Only the settings Satellite has today, nothing new to learn.</p></div>
+  <div class="frame">
+  <div class="win dk pgw">
+    <aside class="side snav">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span></div>
+      <div class="back"><svg class="i s" style="transform:scaleX(-1)"><use href="#i-chev"/></svg>Back to work<span class="k">esc</span></div>
+      <div class="grp" style="margin-top:0">Settings</div>
+      <div class="row sel"><svg class="i s"><use href="#i-sliders"/></svg>Appearance</div>
+      <div class="row"><svg class="i s"><use href="#i-bell"/></svg>Notifications</div>
+            <div class="row"><svg class="i s"><use href="#i-check"/></svg>Tools</div>
+      <div class="row"><svg class="i s"><use href="#i-run"/></svg>Guide</div>
+      <div class="row"><svg class="i s"><use href="#i-agents"/></svg>Keyboard shortcuts</div>
+      <div class="fill"></div>
+      <div class="row" style="color:var(--dim)"><svg class="i s" style="width:17px"><use href="#mk-twin"/></svg>About Satellite<span class="rt"><span class="ro">0.3.0</span></span></div>
+    </aside>
+    <main class="main">
+      <div class="pg"><div class="in">
+        <h3>appearance</h3>
+        <div class="lead">How Satellite and the terminal look. Changes apply at once.</div>
+        <div class="sgrp">
+          <div class="scard">
+            <div class="srow"><div class="t"><b>Theme</b><span>System, light, dark or a curated theme, credited to its makers</span></div><span class="sel2">System<svg class="i s"><use href="#i-chevd"/></svg></span></div>
+          </div>
+        </div>
+        <div class="sgrp">
+          <h5>notifications</h5>
+          <div class="scard">
+            <div class="srow"><div class="t"><b>When an agent needs you</b><span>A system notification with Satellite's own words, never what the session said</span></div><span class="tg on"></span></div>
+          </div>
+        </div>
+        <div class="sgrp">
+          <h5>tools</h5>
+          <div class="scard">
+            <div class="srow"><div class="tool"><span class="px r"></span><b style="font-weight:500">Claude Code</b><span class="mono">2.4.1</span></div><span class="sp" style="flex:1"></span></div>
+            <div class="srow"><div class="tool"><span class="px r"></span><b style="font-weight:500">git</b><span class="mono">2.51.0</span></div><span style="flex:1"></span></div>
+            <div class="srow"><div class="tool"><span class="px r"></span><b style="font-weight:500">GitHub CLI</b><span class="mono">2.83.0</span></div><span style="flex:1"></span><span class="tool"><span class="mono">signed in</span></span><span class="btn sm">Check again</span></div>
+          </div>
+        </div>
+      </div></div>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- 09 OVERLAYS -->
+<section class="sec" id="overlays">
+  <div class="sec-h"><span class="ro">09</span><h2>the only overlays</h2>
+    <p>Only quick decisions float over the window. The command menu on Cmd+K, a question before something is lost, archive, remove a repo or quit while agents run, and a check before a link or a port leaves the app. Short lists tied to a control, like running processes, are popovers. Anything with sections or forms is a page.</p></div>
+  <div class="frame">
+  <div class="backdrop dk">
+    <div class="pal">
+      <div class="pin"><svg class="i"><use href="#i-search"/></svg>arch<span class="cur"></span><span class="k">esc</span></div>
+      <div class="pg2">
+        <div class="pl">Workspaces</div>
+        <div class="po act"><span class="px r"></span>theme-picker<span class="rr">satellite<span class="chip r" style="height:18px">ready</span></span></div>
+        <div class="po"><span class="px d"></span>hero-copy<span class="rr">website · merged</span></div>
+        <div class="pl">Commands</div>
+        <div class="po"><svg class="i s"><use href="#i-archive"/></svg>Archive this workspace</div>
+        <div class="po"><svg class="i s"><use href="#i-files"/></svg>Remove this repo</div>
+        <div class="po"><svg class="i s"><use href="#i-search"/></svg>Find a file<span class="rr"><span class="k">⌘F</span></span></div>
+      </div>
+      <div class="pf"><span><span class="k">↑↓</span>move</span><span><span class="k">⏎</span>open</span><span style="margin-left:auto">Workspaces and commands in one list</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:28px">
+      <div class="cdlg">
+        <div class="db"><h4>Archive fix-login</h4><p>The worktree goes. The branch and its commits stay, so nothing you pushed is lost.</p>
+          <ul><li><span class="px n"></span>2 commits are not pushed<span class="ro">A1F 7C2</span></li><li><span class="px n"></span>1 file is uncommitted<span class="ro">SESSION.TS</span></li><li><span class="px"></span>Ignored files go with the worktree<span class="ro">.ENV.LOCAL</span></li></ul></div>
+        <div class="df"><small>Claude Code stops in this workspace</small><span class="sp"></span><span class="btn">Cancel</span><span class="btn dan">Archive anyway</span></div>
+      </div>
+      <div class="cdlg">
+        <div class="db"><h4>Open this link</h4><p style="margin-top:8px">github.com</p><p class="mono" style="font-size:12px;color:var(--dim);margin-top:2px">https://github.com/launchsatellite/satellite/actions/runs/1914</p></div>
+        <div class="df"><span class="sp"></span><span class="btn">Cancel</span><span class="btn pri">Open in browser</span></div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- 10 FIRST RUN -->
+<section class="sec" id="first">
+  <div class="sec-h"><span class="ro">10</span><h2>first run</h2>
+    <p>One action in the middle, add a repo, with the mosaic as the one brand moment. Tools are checked quietly and only speak up when something is missing. Once a repo is in, the guide cards walk through the four things nobody guesses beside the real controls, as they do today.</p></div>
+  <div class="frame">
+  <div class="win dk norail">
+    <aside class="side">
+      <div class="tl"><i></i><i></i><i></i><span class="sp"></span><span class="ib"><svg class="i"><use href="#i-side"/></svg></span></div>
+      <div class="brand"><svg style="color:var(--fg)"><use href="#mk-twin"/></svg>satellite</div>
+      <div class="newws"><span class="btn wide dis" style="opacity:.38"><svg class="i s"><use href="#i-plus"/></svg>New workspace<span class="k">⌘N</span></span></div>
+      <div class="search"><svg class="i s"><use href="#i-search"/></svg>Search or run a command<span class="k">⌘K</span></div>
+      <div class="grp">Repos<span class="ib" style="width:22px;height:22px;margin-left:auto"><svg class="i s"><use href="#i-plus"/></svg></span></div>
+      <div class="row" style="color:var(--dim)">No repos yet</div>
+      <div class="fill"></div>
+      <div class="foot"><span class="row"><svg class="i s"><use href="#i-agents"/></svg>Agents<span class="rt"><span class="k">⌘G</span></span></span><span class="ib"><svg class="i"><use href="#i-sliders"/></svg></span></div>
+    </aside>
+    <main class="main">
+      <div class="cmp-wrap">
+        <div class="mos" id="mos"></div>
+        <h3>add your first repo</h3>
+        <div class="lead">Any folder that is a git repository. Satellite writes nothing into it.</div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="btn pri"><svg class="i s"><use href="#i-plus"/></svg>Add a repo<span class="k">⌘O</span></span><span style="color:var(--dim);font-size:12.5px">or drop a folder on the window</span></div>
+        <div style="display:flex;gap:16px;margin-top:18px;font-size:12px;color:var(--dim)"><span class="tool"><span class="px r"></span>Claude Code 2.4.1</span><span class="tool"><span class="px r"></span>git 2.51.0</span><span class="tool"><span class="px r"></span>GitHub CLI signed in</span></div>
+      </div>
+    </main>
+  </div>
+  </div>
+</section>
+
+<!-- 11 COMPONENTS -->
+<section class="sec" id="kit">
+  <div class="sec-h"><span class="ro">11</span><h2>components</h2>
+    <p>Every part the new window uses, in dark and light, with its states. Drawn once and mirrored, so both themes always match. Sizes sit on the 4px grid, controls are 28 and small ones 24.</p></div>
+  <div class="kitwrap">
+  <div class="kitp dk" id="kitd">
+    <div class="kg"><span class="ro">BUTTONS</span>
+      <div class="kr"><span class="btn pri">Create and start<span class="k">⌘⏎</span></span><span class="btn acc"><svg class="i s"><use href="#i-send"/></svg>Ask to merge</span><span class="btn">Secondary</span><span class="btn ghost">Ghost</span><span class="btn dan">Archive anyway</span></div>
+      <div class="kr"><span class="btn hov">Hover</span><span class="btn foc">Focus</span><span class="btn dis">Disabled</span><span class="btn sm">Small 24</span><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span></div>
+      <div class="kn">Primary is the one way forward on a view. Accent fills only an action that hands work to the agent. Danger is text, never a fill.</div>
+    </div>
+    <div class="kg"><span class="ro">ICON BUTTONS AND RAIL TABS</span>
+      <div class="kr"><span class="ib"><svg class="i"><use href="#i-run"/></svg></span><span class="ib hov" style="background:var(--hover);color:var(--fg)"><svg class="i"><use href="#i-dots"/></svg></span><span class="ib on"><svg class="i"><use href="#i-diff"/></svg></span><span class="ib"><svg class="i"><use href="#i-files"/></svg></span><span class="ib"><svg class="i"><use href="#i-pr"/></svg><span style="position:absolute;top:2px;right:1px;width:6px;height:6px;background:var(--signal)"></span></span></div>
+      <div class="kn">26 square, 6 corner, each with its name as tooltip and label. The selected rail tab sits on sel, a signal pixel at its corner means that tab holds what needs you.</div>
+    </div>
+    <div class="kg"><span class="ro">INPUTS</span>
+      <div class="kr" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="inp"><svg class="i s" style="color:var(--dim)"><use href="#i-search"/></svg><span style="color:var(--dim)">Find a file</span></div>
+        <div class="inp on"><span class="mono">settings-shortcut</span></div>
+        <div><div class="inp" style="border-color:var(--sigfg)"><span class="mono">fix login</span></div><div class="err">A branch name has no spaces</div></div>
+        <div><span class="sel2" style="height:32px;width:100%;border-radius:8px">satellite<span style="flex:1"></span><svg class="i s"><use href="#i-chevd"/></svg></span></div>
+      </div>
+    </div>
+    <div class="kg"><span class="ro">CHOICES</span>
+      <div class="kr"><span class="seg inl"><span class="on">Branch</span><span>Uncommitted</span></span><span class="tg on"></span><span class="tg"></span><span class="cb on"><svg class="i s" style="width:12px;height:12px;stroke-width:2"><use href="#i-check"/></svg></span><span class="cb"></span><span class="rb on"></span><span class="rb"></span></div>
+    </div>
+    <div class="kg"><span class="ro">TABS</span>
+      <div class="kr" style="gap:2px"><span class="tab on"><span class="px w"></span>Session 1<span class="x"><svg class="i s" style="width:12px;height:12px"><use href="#i-x"/></svg></span></span><span class="tab"><span class="px n"></span>Session 2</span><span class="tab"><span class="px d"></span>Session 3</span><span class="tab"><svg class="i s"><use href="#i-file"/></svg>session.ts</span></div>
+    </div>
+    <div class="kg"><span class="ro">STATUS</span>
+      <div class="kr" style="gap:14px"><span class="tool"><span class="px w"></span>working</span><span class="tool"><span class="px n"></span>needs you</span><span class="tool"><span class="px r"></span>ready</span><span class="tool"><span class="px d"></span>done</span><span class="tool"><span class="px"></span>idle</span><span class="spin"><i></i><i></i><i></i></span><span class="prog"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+      <div class="kr"><span class="chip"><svg class="i s"><use href="#i-branch"/></svg><span class="mono">fix-login</span></span><span class="chip r"><span class="px r"></span><span class="ro">#52</span> nothing blocks</span><span class="chip n"><span class="ro">#18</span> 2 checks failed</span><span class="chip d"><span class="px d"></span>merged</span><span class="ro" style="color:var(--dim)">↑2 ↓0</span><span class="ro" style="color:var(--dim)">T+04:12</span><span class="k">⌘K</span><span class="av">MF</span><span class="av bot">CR</span></div>
+      <div class="kn">Status is always a square pixel. Readouts speak in Geist Pixel, people speak in sentences.</div>
+    </div>
+    <div class="kg"><span class="ro">ROWS</span>
+      <div style="width:250px;padding:4px;border-radius:8px;background:var(--win)">
+        <div class="row ws" style="padding-left:8px"><span class="px w"></span><span class="nm">fix-login</span><span class="rt"><span class="ro">↑2</span></span></div>
+        <div class="row ws" style="padding-left:8px;background:var(--hover)"><span class="px r"></span><span class="nm">theme-picker</span><span class="rt"><span class="ib" style="width:20px;height:20px"><svg class="i s"><use href="#i-archive"/></svg></span></span></div>
+        <div class="row ws sel" style="padding-left:8px"><span class="px w"></span><span class="nm">folder-watch-windows</span><span class="rt"><span class="ro"><svg class="i s" style="width:10px;height:10px;vertical-align:-1px"><use href="#i-run"/></svg> 1</span></span></div>
+        <div class="row two"><span class="px n"></span><span class="txt"><span>pr-tab</span><span>Claude Code wants to run a command</span></span></div>
+      </div>
+      <div style="width:330px;margin-top:10px">
+        <div class="f"><span class="lt2 M">M</span><span class="p"><bdi><span class="d">src/auth/</span>session.ts</bdi></span><span class="n"><span class="a">+2</span><span class="r">−1</span></span></div>
+        <div class="chk"><svg class="i s" style="color:var(--voltfg)"><use href="#i-check"/></svg><span class="t">Checks passed<small>macOS, Windows, Linux, lint</small></span><span class="ro v">12/12</span></div>
+        <div class="chk bad"><svg class="i s" style="color:var(--sigfg)"><use href="#i-x"/></svg><span class="t">2 checks failed<small>test (ubuntu), test (windows)</small></span><span class="ro v">10/12</span></div>
+      </div>
+    </div>
+    <div class="kg"><span class="ro">MENU AND TOOLTIP</span>
+      <div class="kr" style="align-items:flex-start;gap:18px">
+        <div class="menu"><div class="mi hl"><svg class="i s"><use href="#i-ext"/></svg>Open on GitHub</div><div class="mi"><svg class="i s"><use href="#i-run"/></svg>Show running processes</div><div class="sep"></div><div class="mi dz"><svg class="i s"><use href="#i-archive"/></svg>Archive this workspace</div></div>
+        <span class="tip">Hide the rail<span class="k">⌘I</span></span>
+      </div>
+    </div>
+    <div class="kg"><span class="ro">FEEDBACK</span>
+      <div class="banner"><svg class="i s" style="color:var(--dim)"><use href="#i-branch"/></svg>main moved, 2 files conflict<span class="sp"></span><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span></div>
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:flex-start">
+        <div class="toast" style="position:static;width:300px"><span class="px n"></span><div><b>billing-webhook needs you</b><span>2 checks failed on #18</span><div class="acts"><span class="btn sm">Go there</span><span class="btn sm ghost">Later</span></div></div></div>
+        
+      </div>
+    </div>
+    <div class="kg"><span class="ro">CARDS</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="ready" style="margin:0"><div class="st"><span class="px r lg"></span>Nothing blocks the merge</div><div class="sub"><span class="ro">#52</span> · <span class="mono">theme-picker</span></div></div>
+        <div class="ready" style="margin:0;border-color:color-mix(in srgb,var(--signal) 40%,var(--line))"><div class="st"><span class="px n lg"></span>2 things block the merge</div><div class="sub"><span class="ro">#18</span> · <span class="mono">billing-webhook</span></div></div>
+      </div>
+      <div class="thread" style="margin:10px 0 0"><div class="who"><span class="av bot">CR</span>coderabbitai<span class="mono">webhook.ts:72</span></div>The retry loop swallows the last error.<div class="acts"><span class="btn sm"><svg class="i s"><use href="#i-send"/></svg>Send to Claude Code</span></div></div>
+    </div>
+  </div>
+  <div class="kitp lt" id="kitl"></div>
+  </div>
+  <script>document.getElementById('kitl').innerHTML=document.getElementById('kitd').innerHTML</script>
+</section>
+
+<!-- 08 SYSTEM -->
+<section class="sec" id="system">
+  <div class="sec-h"><span class="ro">12</span><h2>tokens and type</h2>
+    <p>Same brand, same colours, same pixel. What changes is weight and hierarchy. One new ground token, lighter controls, softer key hints, a tighter type scale and two new parts, the rail tab and the ready card.</p></div>
+  <div class="sys">
+    <div>
+      <span class="ro h">GROUNDS · DARK</span>
+      <div class="sw">
+        <div><i style="background:#0C0C0E"></i><b>win</b><span>#0C0C0E new</span></div>
+        <div><i style="background:#08080A"></i><b>bg</b><span>#08080A raised centre</span></div>
+        <div><i style="background:#17171A"></i><b>raised</b><span>#17171A</span></div>
+        <div><i style="background:#1C1C20"></i><b>sel</b><span>#1C1C20</span></div>
+      </div>
+      <span class="ro h" style="margin-top:22px">GROUNDS · LIGHT</span>
+      <div class="sw">
+        <div><i style="background:#F1F1EE"></i><b>win</b><span>#F1F1EE new</span></div>
+        <div><i style="background:#FFFFFF"></i><b>bg</b><span>#FFFFFF</span></div>
+        <div><i style="background:#FFFFFF"></i><b>raised</b><span>#FFFFFF</span></div>
+        <div><i style="background:#E7E7E2"></i><b>sel</b><span>#E7E7E2</span></div>
+      </div>
+      <span class="ro h" style="margin-top:22px">STATE · UNCHANGED</span>
+      <div class="sw">
+        <div><i style="background:#6A4BFF"></i><b>working</b><span>ultraviolet</span></div>
+        <div><i style="background:#FF5A1F"></i><b>needs you</b><span>signal</span></div>
+        <div><i style="background:#DCFF3D"></i><b>ready</b><span>volt</span></div>
+        <div><i style="background:#C7B9FF"></i><b>done</b><span>lilac</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="ro h">TYPE SCALE · APP</span>
+      <div class="ts">
+        <div><span>Display 26 / 700</span><span style="font:700 26px 'Funnel Display'">agents</span></div>
+        <div><span>Title 15 / 600</span><span style="font:600 15px 'Funnel Sans'">Nothing blocks the merge</span></div>
+        <div><span>Header 14 / 600</span><span style="font:600 14px 'Funnel Sans'">satellite / fix-login</span></div>
+        <div><span>Body 13 / 400</span><span style="font:400 13px 'Funnel Sans'">Claude Code wants to run a command</span></div>
+        <div><span>Label 11.5 / 600</span><span style="font:600 11.5px 'Funnel Sans';color:#82828A">Needs you</span></div>
+        <div><span>Readout 11 pixel</span><span class="ro" style="font-size:12px;color:#B4B4B8">↑2 ↓0 · #52 · T+04:12</span></div>
+        <div><span>Code 12.5 mono</span><span class="mono" style="font-size:12.5px">src/auth/session.ts</span></div>
+      </div>
+      <p style="margin-top:14px;font-size:13px;color:#82828A;line-height:1.5">Labels lose their capitals and tracking. Section labels in sentence case read calmer and save width. Capitals stay only in pixel readouts.</p>
+    </div>
+    <div>
+      <span class="ro h">WHAT CHANGES IN DESIGN.MD</span>
+      <table class="cmp">
+        <tr><th>Part</th><th>Now</th><th>Proposed</th></tr>
+        <tr><td>Layout</td><td>Repo centre, agent right 440</td><td>Agent centre on a raised surface, rail right 348</td></tr>
+        <tr><td>Title bar</td><td>40px strip across the window</td><td>Gone, lights share the sidebar row</td></tr>
+        <tr><td>Sidebar head</td><td>22px lockup, three command rows</td><td>17px lockup, New workspace, one search</td></tr>
+        <tr><td>Pull request</td><td>Four sections that mirror GitHub</td><td>Ready, a merge checklist with one send per problem</td></tr>
+        <tr><td>Agents</td><td>A palette mode</td><td>A centre view grouped by next action</td></tr>
+        <tr><td>Key hints</td><td>Boxed caps</td><td>Plain mono text in dim</td></tr>
+        <tr><td>Labels</td><td>Uppercase dim</td><td>Sentence case semibold dim</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 13 BUILD -->
+<section class="sec" id="build">
+  <div class="sec-h"><span class="ro">13</span><h2>the version to build</h2>
+    <p>One feature, Layout, shipped in five pull requests that each leave the app better on their own. Every one keeps the principles. Real Claude Code, real git and gh, no credentials held, nothing written into the repository, nothing read from what a session prints.</p></div>
+
+  <div class="rule">
+    <div><h3>What people need, and the answer here</h3><ul>
+      <li><b>The real agent, rendered well.</b> Claude Code untouched in the centre, the largest surface in the window.</li>
+      <li><b>Every agent of a repo at once.</b> Click the repo, see them all live, answer in place.</li>
+      <li><b>Knowing which agent needs them.</b> Needs you on top of the sidebar, orange for nothing else, Cmd+J to jump there.</li>
+      <li><b>Knowing what still blocks a merge.</b> Ready lists it, honestly, and leaves the merge to you on GitHub.</li>
+      <li><b>Light and calm.</b> Three rail tabs instead of four GitHub sections, no board, no browser, no chat wrapper, no search the agent already does.</li>
+    </ul></div>
+    <div><h3>Overlay rule</h3><ul>
+      <li><b>A page</b> for anything with sections or forms. Settings, Agents, New workspace, a full diff, a file.</li>
+      <li><b>A dialog</b> only for one quick decision. Archive or remove a repo with something to lose, quit while agents run, open a link or a port.</li>
+      <li><b>A popover</b> for a short list tied to its control. Running processes, a picker, a menu.</li>
+      <li><b>The command menu</b> on Cmd+K is the one overlay you summon, workspaces and commands in one list.</li>
+      <li>A page that covers the sidebar still lets a needs you through as a toast.</li>
+    </ul></div>
+  </div>
+
+  <div class="sys" style="grid-template-columns:1fr 1fr;margin-top:24px">
+    <div>
+      <span class="ro h">MEASUREMENTS</span>
+      <table class="cmp spec">
+        <tr><td>Window</td><td>Ground <span class="mono">win</span>. Columns 252, flexible, 348. The rail folds to icons under 1100px of window, the sidebar hides under 860.</td></tr>
+        <tr><td>Centre</td><td><span class="mono">bg</span>, hairline, 10 corner, 8 from the edges. Header 48, tabs 36 holding sessions and opened files or diffs.</td></tr>
+        <tr><td>Sidebar</td><td>Lights row 44, lockup 17, New workspace 28, search 28, sentence-case group labels, rows 28.</td></tr>
+        <tr><td>Rail</td><td>Tab row 44, three 26 icon tabs with names. On Windows and Linux its right end leaves room for the window buttons.</td></tr>
+        <tr><td>Repo view</td><td>Tiles 6 apart, each at least 64 columns and 24 rows. Grid while they fit, Focus otherwise, strip 230.</td></tr>
+        <tr><td>Pages</td><td>Content column 680, title 28 Funnel Display, cards with hairline rows.</td></tr>
+      </table>
+    </div>
+    <div>
+      <span class="ro h">SHORTCUTS · MAC · WINDOWS AND LINUX</span>
+      <table class="cmp spec">
+        <tr><td>Hide the rail</td><td><span class="mono">⌘I · Ctrl+Shift+I</span>, new</td></tr>
+        <tr><td>Go to what needs you</td><td><span class="mono">⌘J · Ctrl+Shift+J</span>, takes over from the next thread</td></tr>
+        <tr><td>Focus tile 1 to 9</td><td><span class="mono">⌘1–9 · Ctrl+Shift+1–9</span>, new</td></tr>
+        <tr><td>Fill the centre, and back</td><td><span class="mono">⌘⏎ · Ctrl+Shift+Enter</span>, new</td></tr>
+        <tr><td>Kept as they are</td><td><span class="mono">⌘K ⌘P ⌘N ⌘T ⌘G ⌘O ⌘B ⌘F ⌘L ⌘,</span></td></tr>
+        <tr><td>Never taken</td><td>Escape, plain Ctrl keys and anything with Alt, they belong to Claude Code.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="cards" style="margin-top:24px">
+    <div class="card"><span class="ro">PR 1</span><h3>Agent in the centre</h3><p>Grounds, centre surface, header, session tabs. Changes and Files move into the rail, a file or diff opens as a centre tab. Repos in the sidebar. Kit controls and key hints.</p></div>
+    <div class="card"><span class="ro">PR 2</span><h3>Ready</h3><p>The Pull request tab becomes Ready, built from what gh already returns. Overview, Conversation and Files go. Cmd+J jumps to what needs you.</p></div>
+    <div class="card"><span class="ro">PR 3</span><h3>Pages</h3><p>Settings as a full window page, Agents and New workspace as centre pages, running processes as a popover.</p></div>
+    <div class="card"><span class="ro">PR 4</span><h3>Repo view</h3><p>Click a repo for every live agent at once, Grid and Focus, focus keys, fill the centre.</p></div>
+    <div class="card"><span class="ro">PR 5</span><h3>Docs and polish</h3><p>DESIGN.md and SATELLITE.md say what shipped, BRAND.html kit redrawn, journeys updated, light and dark proof.</p></div>
+    <div class="card"><span class="ro">WEIGHT</span><h3>Budget</h3><p>Only visible tiles draw a terminal, strip cells are state. Nothing new polls gh. Six live sessions stay as smooth as one.</p></div>
+  </div>
+
+  <div class="cards two" style="margin-top:24px">
+    <div class="card"><span class="ro">ASK FIRST</span><h3>Decisions only you can take</h3><p>The layout itself and the rewrite of SATELLITE.md and DESIGN.md. Ready replacing the Pull request tab. New workspace passing your request to Claude Code as its first message. Cmd+J moving to Go to what needs you. Taking over the title bar from spec 011.</p></div>
+    <div class="card"><span class="ro">LEFT OUT ON PURPOSE</span><h3>What we will not build</h3><p>A chat UI over Claude Code, content search, merge buttons, bot approvals, bulk archive, a board, a browser, automations, cloud runners, other agents for now, an editor, a commit box. Each one is either something the agent already does, a risk to your repository, or weight people told us made them leave.</p></div>
+  </div>
+</section>
+
+<script>
+(function(){var m=document.getElementById('mos');if(!m)return;var c=['#6A4BFF','#C7B9FF','#DCFF3D','#F4F4F1','#2E2E33','#1F1F22','#5C5C63','#161618'];var map='002101300211031000111101201030012200103210311002201301002111220100231011031002130';for(var i=0;i<54;i++){var e=document.createElement('i');var r=Math.floor(i/9),k=i%9;var v=(r*7+k*5+(r*k))%8;e.style.background=(i===8)?'#FF5A1F':c[v];m.appendChild(e)}})();
+</script>
+</div>
+<script>
+if (self !== top) {
+  document.documentElement.classList.add('embedded');
+  const send = () => parent.postMessage({ satelliteLayoutHeight: document.documentElement.scrollHeight }, '*');
+  addEventListener('load', send);
+  new ResizeObserver(send).observe(document.body);
+}
+</script>
+<style>.embedded header.top{display:none}</style>
+</body>
