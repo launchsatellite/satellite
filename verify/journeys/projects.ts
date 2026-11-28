@@ -167,7 +167,7 @@ async function run(session: AppSession): Promise<void> {
   });
   await refocus(session);
   await workspaceReads(session, "beta", "feature");
-  await runCommand(session, "move this project down", "command-project-down");
+  await runCommand(session, "move this repo down", "command-project-down");
   await waitUntil(
     async () => (await topOf(session, "beta")) < (await topOf(session, "alpha")),
     promptTimeoutMs,

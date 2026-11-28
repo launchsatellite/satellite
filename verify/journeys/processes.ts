@@ -113,7 +113,7 @@ async function removeAsks(session: AppSession, claudePid: number): Promise<void>
   const openRemove = async () => {
     await page.keyboard.press(`${commandModifier}+K`);
     await visible(session, "palette", "before removing the project");
-    await page.getByTestId("palette-input").fill("remove this project");
+    await page.getByTestId("palette-input").fill("remove this repo");
     await visible(session, "command-project-remove", "in the command menu for remove");
     await page.keyboard.press("Enter");
     await visible(

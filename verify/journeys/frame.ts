@@ -116,16 +116,16 @@ async function checkSidebar(session: AppSession): Promise<void> {
     "interface.json never recorded the hidden sidebar",
   );
   await session.relaunch();
-  await visible(session, "sidebar-toggle", "after the restart");
+  await visible(session, "sidebar-show", "after the restart");
   assert.ok(!(await sidebarShown(session)), "the sidebar came back after a restart");
   if (process.platform === "darwin") {
-    const box = await session.page.getByTestId("sidebar-toggle").boundingBox();
+    const box = await session.page.getByTestId("sidebar-show").boundingBox();
     assert.ok(
       box !== null && box.x >= 76,
       `the toggle sat at ${String(box?.x)}, under the traffic lights`,
     );
   }
-  await session.page.getByTestId("sidebar-toggle").click();
+  await session.page.getByTestId("sidebar-show").click();
   await waitUntil(() => sidebarShown(session), waitMs, "the button left it hidden");
 }
 

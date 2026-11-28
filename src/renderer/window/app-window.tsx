@@ -758,7 +758,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       firstVisible([
         "[aria-label='Sidebar'] nav button",
         "[aria-label='Sidebar'] button[aria-label='Add a repo']",
-        "[data-testid='sidebar-toggle']",
+        "[data-testid='sidebar-show']",
       ])?.focus();
     });
   }, []);
@@ -952,7 +952,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               );
               if (inside) {
                 requestAnimationFrame(() => {
-                  document.querySelector<HTMLElement>("[data-testid='sidebar-toggle']")?.focus();
+                  document.querySelector<HTMLElement>("[data-testid='sidebar-show']")?.focus();
                 });
               }
             },
@@ -1300,7 +1300,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       tooltip="Show the sidebar"
       expanded={false}
       controls={sidebarId}
-      testId="sidebar-toggle"
+      testId="sidebar-show"
     />
   );
   const centreAlone = () => {

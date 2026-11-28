@@ -8,7 +8,7 @@ With agents in many workspaces, the cost is not knowing which one is blocked. Th
 
 ## Scope
 
-- Inbox at the top of the sidebar, under the command rows and above the projects, with a count. It lists every workspace with a session that needs the user across all projects, newest first by when the workspace started needing them, each with one sentence saying why. Two projects whose names read the same once cleaned show their parent folder. The user's home folder reads your home folder, as a project or as a parent, so no account name shows.
+- Needs you, the inbox, at the top of the sidebar, under the command menu row and above the repos, with a count that always shows. Its rows show only while something waits. It lists every workspace with a session that needs the user across all repos, newest first by when the workspace started needing them, each with one sentence saying why. Two projects whose names read the same once cleaned show their parent folder. The user's home folder reads your home folder, as a project or as a parent, so no account name shows.
 - Selecting an inbox row, or the command Go to the newest workspace that needs you, opens that workspace on the session that has waited longest and puts focus in its terminal without typing anything. The terminal drops a key held from before it took focus until the next fresh press.
 - A workspace leaves the inbox by itself when no session there needs the user. Nothing about the inbox is stored.
 - A system notification when a workspace starts needing the user while the window is hidden, minimised or not focused. One per workspace entering the inbox, at most one every 5 seconds, and the workspaces that enter in between gathered into one that counts every workspace waiting. A notification names one workspace only when no other waits, so it always states everything waiting. Its words are Satellite's own with the cleaned workspace and project names, never anything a session said or ran. Clicking it brings the window forward and opens the workspace a single notification named while it still needs the user, otherwise the newest that does.
@@ -35,11 +35,11 @@ Reasons that come from pull requests arrive with spec 008 and use this inbox.
 
 - [x] A session asking for permission in a workspace that is not selected appears in the inbox with its reason. Proof, the `inbox` journey, which lists alpha asking while beta is selected, and `src/renderer/inbox/inbox.test.ts` on the reason's sentence.
 - [x] Answering the session removes the row. Proof, the same journey.
+- [x] Needs you keeps its header and count at 0 and shows rows only while something waits. Proof, the `inbox` journey, which reads the count at 0 at launch and after the answer with the row gone.
 - [x] With the window unfocused, needing the user raises one notification, and not a second one for the same reason. Proof, the `inbox` journey with the recording notifier, and the controller's unit tests.
 - [x] With notifications off, none is raised and the inbox still fills. Proof, the driver with the recording notifier, and `src/main/inbox/notices.test.ts`.
 
 ## Next
 
-- The inbox becomes the Needs you group at the top of the sidebar, with the same rows, order and rules. Part of [015 Layout](../015-layout/spec.md).
 - Cmd+J, Ctrl+Shift+J on Windows and Linux, is Go to what needs you, opening the next workspace in the inbox order from anywhere.
-- A needs you that arrives while a page covers the sidebar shows as a toast.
+- A needs you that arrives while a page covers the sidebar shows as a toast. Part of [015 Layout](../015-layout/spec.md).
