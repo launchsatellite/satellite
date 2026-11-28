@@ -42,7 +42,7 @@ export function FilesView({
 }: FilesViewProps) {
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
   const { open, setOpen, closeAll } = useFolders(workspace);
-  const { listings, file, error } = useFiles(workspace, open, activePath, finished);
+  const { listings, file, listError, fileError } = useFiles(workspace, open, activePath, finished);
   useEffect(() => {
     const gone = open.filter((path) => path !== "" && listings.get(path)?.state === "missing");
     if (gone.length > 0) closeAll(gone);
@@ -96,13 +96,13 @@ export function FilesView({
         aria-labelledby={railTabId("files")}
         className="flex min-h-0 flex-1 flex-col"
       >
-        {error !== null && (
+        {listError !== null && (
           <p
             data-testid="files-error"
             role="status"
             className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
           >
-            {error}
+            {listError}
           </p>
         )}
         <FileTree
@@ -118,6 +118,15 @@ export function FilesView({
       {paneHost !== null &&
         createPortal(
           <>
+            {fileError !== null && (
+              <p
+                data-testid="file-error"
+                role="status"
+                className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
+              >
+                {fileError}
+              </p>
+            )}
             <div className="min-h-0 flex-1">
               <FilePane file={file} path={activePath} handle={handle} />
             </div>

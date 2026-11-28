@@ -144,7 +144,8 @@ export function useFiles(
 ): {
   listings: Listings;
   file: FileShown | undefined;
-  error: string | null;
+  listError: string | null;
+  fileError: string | null;
 } {
   const [listings, setListings] = useState<Listings>(() =>
     workspace === null ? new Map() : recallTree(workspace).listings,
@@ -254,6 +255,6 @@ export function useFiles(
       : active === undefined || kept === undefined
         ? undefined
         : { path: active, read: kept };
-  const fileText = fileProblem !== null && fileProblem.path === active ? fileProblem.text : null;
-  return { listings, file, error: fileText ?? listProblem };
+  const fileError = fileProblem !== null && fileProblem.path === active ? fileProblem.text : null;
+  return { listings, file, listError: listProblem, fileError };
 }
