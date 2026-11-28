@@ -108,7 +108,7 @@ describe("createInterfaceFile", () => {
     expect(next).toEqual({ state: { ...defaultInterfaceState, guideSeen: true }, notice: null });
   });
 
-  it("reads a version 1, 2 and 3 file as one whose guide was seen, a version 4 and 5 file as it is, each with the sidebar and the rail shown", async () => {
+  it("reads a version 1, 2 and 3 file as one whose guide was seen, a version 4 and 5 file as it is, each with the sidebar kept and the rail shown at its starting width", async () => {
     const layout = '"selected":null,"columns":{"left":300,"right":500},"theme":"dark"';
     const files = [
       [`{"version":1,${layout}}`, true, true],
@@ -127,7 +127,7 @@ describe("createInterfaceFile", () => {
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({
         selected: null,
-        columns: { sidebar: 300, rail: 440 },
+        columns: { sidebar: 300, rail: 348 },
         sidebar: "shown",
         rail: "shown",
         theme: "dark",
@@ -139,13 +139,14 @@ describe("createInterfaceFile", () => {
     }
   });
 
-  it("clamps a version 5 layout's widths into the sidebar and the rail of version 6", async () => {
+  it("keeps a version 5 sidebar width and starts the rail of version 6 at its starting width", async () => {
+    const rail = 348;
     const widths = [
-      [200, 360, 200, 360],
-      [248, 440, 248, 440],
-      [360, 640, 360, 440],
+      [200, 360, 200],
+      [248, 440, 248],
+      [360, 640, 360],
     ] as const;
-    for (const [left, right, sidebar, rail] of widths) {
+    for (const [left, right, sidebar] of widths) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
       await writeFile(
         join(home, "interface.json"),

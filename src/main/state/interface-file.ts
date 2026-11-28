@@ -77,7 +77,7 @@ const legacyFile = z
     version: fileVersion,
     columns: {
       sidebar: clamp(columns.left, interfaceLimits.sidebar),
-      rail: clamp(columns.right, interfaceLimits.rail),
+      rail: interfaceLimits.rail.initial,
     },
     rail: "shown",
   }));
