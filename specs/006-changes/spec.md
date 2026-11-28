@@ -17,6 +17,7 @@ Reviewing what an agent did is the user's main job. Changes shows the work of a 
 - When the base branch has moved and files conflict, a banner says so and offers Send to Claude Code with a request to update from the base branch.
 - Selecting lines in a diff and pressing one key sends a reference to those lines into the Claude Code prompt.
 - Large and binary files show a sentence instead of a diff.
+- Changes sits in the rail with the list above the selected file's diff, drawn inline. Send lines keeps Cmd+L, and the conflict banner sits at the top of the list.
 
 ## Decisions
 
@@ -40,4 +41,4 @@ Review threads on diff lines belong to spec 008. Conflicts show only as the bann
 
 ## Next
 
-- Changes moves into the rail as a compact list with the selected file's hunk under it. Open diff opens the full diff as a centre tab beside the sessions. Send lines keeps Cmd+L, and the conflict banner sits at the top of the list. Part of [015 Layout](../015-layout/spec.md).
+- Open diff opens the full diff as a centre tab beside the sessions. Part of [015 Layout](../015-layout/spec.md).

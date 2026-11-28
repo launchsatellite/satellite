@@ -15,6 +15,7 @@ Sometimes the user needs to read the code as it is, not as it changed. Files is 
 - The tree and open files update when an agent changes them on disk.
 - Selecting lines and pressing one key sends a reference to those lines into the Claude Code prompt.
 - Images are shown. Other binary files and very large files show a sentence instead.
+- Files sits in the rail as the tree with Find a file on Cmd+F, and a file opens as a tab in the centre's strip beside the sessions.
 
 ## Decisions
 
@@ -38,6 +39,3 @@ Diffs belong to spec 006.
 - [x] Selected lines arrive in the prompt as a reference. Proof, the driver.
 - [x] Typing in an open file changes nothing. Proof, the driver.
 
-## Next
-
-- Files moves into the rail as the tree with Find a file on Cmd+F. A file opens as a centre tab beside the sessions. Part of [015 Layout](../015-layout/spec.md).

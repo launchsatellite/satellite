@@ -18,6 +18,7 @@ Developers live in one colour theme all day, in their code editor and their term
 - The mapping holds every pair it makes at 4.5 to 1 for text, 3 to 1 for status pixels and the focus ring, and 1.3 to 1 for control edges, as `DESIGN.md` states.
 - Every surface follows a change at once with no relaunch, the chrome, every dialog and menu, every terminal shown or hidden, every open code viewer and diff, the Markdown view, text selection, focus rings, scrollbars, the window's background, the title bar overlay on Windows and Linux, the system colour scheme the page and native dialogs read, and the first run.
 - Settings credits the selected curated theme in one sentence with a button that opens its site through the link dialog, and the theme's licence ships in `third-party-licenses.md`.
+- The `win` ground takes the theme's `sideBar.background`, so a curated theme colours the sidebar and the rail as one ground around the raised centre.
 
 ## Decisions
 
@@ -28,7 +29,7 @@ Developers live in one colour theme all day, in their code editor and their term
 | Inline custom properties on the root plus `data-theme`, beside `nativeTheme.themeSource` | `themeSource` alone | A curated theme is neither light nor dark, so the page sets its tokens itself, while `themeSource` still takes the theme's type so native parts and `prefers-color-scheme` turn dark or light with it. |
 | The theme's own `colors` as the code viewer's theme, its `tokenColors` as the rules | Satellite's tokens mapped back into the editor | The viewer then looks as the theme's own editor draws it, defaults included, since Monaco carries the same colour registry. |
 | Monaco's tokenizers kept for Satellite's light and dark, and given back when a curated theme is left | Shiki for every theme | Satellite's own look stays exactly as it is, and Satellite themes load no grammar at all. |
-| The interface file stays version 5 and its theme reads any unknown value as System | A version 6 | A new value is not a new shape. An older build still reads every file that does not hold a curated theme, and sets aside one that does, as it does any file it cannot read. |
+| A theme raises no version of the interface file, and its theme reads any unknown value as System | A new version for themes | A new value is not a new shape. An older build still reads every file that does not hold a curated theme, and sets aside one that does, as it does any file it cannot read. |
 | The state colours as keys of the theme's `colors` | Hex values in Satellite's list | Nothing is retyped, and the hue is the theme's own. |
 
 ## Not in scope
@@ -51,6 +52,3 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 - [x] The overlay colours follow the theme and fall back to Satellite's dark. Proof, `src/main/platform/title-bar.test.ts`.
 - [ ] The window frame, the overlay and native dialogs turn dark with a curated theme. Proof, a person on each system, since a quiet window shows no frame.
 
-## Next
-
-- The new `win` ground takes the theme's `sideBar.background`, so a curated theme colours the sidebar and the rail as one ground around the raised centre. Part of [015 Layout](../015-layout/spec.md).
