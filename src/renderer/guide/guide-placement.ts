@@ -16,7 +16,7 @@ interface Size {
   height: number;
 }
 
-const guideGeometry = { ring: 4, gap: 32, aim: 28, margin: 8, tailInset: 16 };
+const guideGeometry = { ring: 4, gap: 32, aim: 28, margin: 8, tailInset: 12 };
 
 function isInside(box: Box, viewport: Size): boolean {
   return (
