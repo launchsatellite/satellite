@@ -84,6 +84,32 @@ describe("readyCard", () => {
     expect(card.rows[0]).toMatchObject({ key: "draft", look: "blocks", title: "Still a draft" });
   });
 
+  it("keeps a draft grey while it fails, conflicts and asks for changes on the latest commit", () => {
+    const card = readyCard(
+      found({
+        state: "draft",
+        needs: [],
+        counts: { failed: 1, pending: 0, passed: 2, total: 3 },
+        mergeable: "conflicting",
+        reviewers: [reviewer({ state: "changes-requested", onHead: true })],
+      }),
+    );
+    expect(card.look).toBe("blocks");
+    expect(Object.fromEntries(card.rows.map(({ key, look }) => [key, look]))).toMatchObject({
+      checks: "blocks",
+      reviews: "blocks",
+      conflicts: "blocks",
+    });
+    expect(card.rows.find(({ key }) => key === "reviews")?.detail).toBe("On the latest commit");
+  });
+
+  it("names the threads past the read when none of the first ones are open", () => {
+    const threads = readyCard(
+      found({ detail: { kind: "read", openThreads: 0, moreThreads: 4 } }),
+    ).rows.find(({ key }) => key === "threads");
+    expect(threads?.title).toBe("4 more threads on GitHub");
+  });
+
   it("never lets an open thread block or a stale request raise signal", () => {
     expect(looks({ detail: { kind: "read", openThreads: 1, moreThreads: 0 } })["threads"]).toBe(
       "open",

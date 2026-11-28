@@ -46,7 +46,7 @@ export function reviewersOf(
     const earlier = newest.get(login);
     if (earlier === undefined || (review.at ?? "") >= (earlier.at ?? "")) newest.set(login, review);
   }
-  return [...newest.values()].flatMap((review): PullRequestReviewer[] => {
+  const reviewers = [...newest.values()].flatMap((review): PullRequestReviewer[] => {
     const state = decided[review.state];
     if (state === undefined) return [];
     return [
@@ -61,6 +61,9 @@ export function reviewersOf(
       },
     ];
   });
+  const first = ({ state, onHead }: PullRequestReviewer) =>
+    state === "changes-requested" && onHead ? 0 : 1;
+  return reviewers.sort((one, other) => first(one) - first(other));
 }
 
 export function needsOf(view: NeedsView): PullRequestNeed[] {

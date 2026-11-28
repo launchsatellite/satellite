@@ -44,9 +44,8 @@ function checksRow(found: PullRequestFound): ReadyRow {
   const count = `${String(passed)}/${String(total)}`;
   if (total === 0) return row("checks", "clear", "No checks ran");
   if (failed > 0) {
-    return row("checks", "signal", plural(failed, "1 check failed", "<n> checks failed"), {
-      count,
-    });
+    const look = found.needs.includes("checks") ? "signal" : "blocks";
+    return row("checks", look, plural(failed, "1 check failed", "<n> checks failed"), { count });
   }
   if (pending > 0) {
     return row(
@@ -65,8 +64,9 @@ function reviewsRow(found: PullRequestFound): ReadyRow {
   const approving = found.reviewers.filter(({ state }) => state === "approved");
   const pointer = (from: readonly PullRequestReviewer[]) =>
     reviewRequest(found.number, from.find(({ id }) => id !== null)?.id ?? null);
-  if (found.needs.includes("review")) {
-    return row("reviews", "signal", `Changes requested by ${namesOf(onHead)}`, {
+  if (onHead.length > 0) {
+    const look = found.needs.includes("review") ? "signal" : "blocks";
+    return row("reviews", look, `Changes requested by ${namesOf(onHead)}`, {
       detail: "On the latest commit",
       request: pointer(onHead),
     });
@@ -92,7 +92,8 @@ function reviewsRow(found: PullRequestFound): ReadyRow {
 function conflictsRow(found: PullRequestFound): ReadyRow {
   const base = baseOf(found);
   if (found.mergeable === "conflicting") {
-    return row("conflicts", "signal", `Conflicts with ${base}`, {
+    const look = found.needs.includes("conflicts") ? "signal" : "blocks";
+    return row("conflicts", look, `Conflicts with ${base}`, {
       request: conflictRequest(found.base),
     });
   }
@@ -112,6 +113,11 @@ function threadsRow(found: PullRequestFound): ReadyRow {
   const { openThreads, moreThreads } = detail;
   if (openThreads === 0 && moreThreads === 0) {
     return row("threads", "clear", "Every thread resolved");
+  }
+  if (openThreads === 0) {
+    return row("threads", "open", `${String(moreThreads)} more threads on GitHub`, {
+      request: threadsRequest(found.number),
+    });
   }
   return row("threads", "open", plural(openThreads, "1 open thread", "<n> open threads"), {
     detail: moreThreads > 0 ? `${String(moreThreads)} more on GitHub` : null,

@@ -28,7 +28,10 @@ const labels: Record<RailView, string> = { changes: "Changes", files: "Files", r
 function NeedsYou({ shown }: { shown: boolean }) {
   if (!shown) return null;
   return (
-    <span data-testid="rail-ready-needs-you" className="pointer-events-none absolute top-1 right-1 flex">
+    <span
+      data-testid="rail-ready-needs-you"
+      className="pointer-events-none absolute top-1 right-1 flex"
+    >
       <StatusPixel state="needs-you" size={6} />
     </span>
   );
@@ -69,7 +72,9 @@ export function Rail({
                 size="small"
                 icon={shown.icon}
                 label={labels[shown.view]}
-                tooltip={labels[shown.view]}
+                tooltip={
+                  needsYouOn(shown.view) ? `${labels[shown.view]}, needs you` : labels[shown.view]
+                }
                 testId={railTabId(shown.view)}
                 data-number={numberOf(shown.view)}
                 onClick={() => {
