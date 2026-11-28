@@ -138,7 +138,7 @@ function storeOf(
     await lookups();
     const found = projects.find((project) => project.id === id);
     if (found === undefined) {
-      throw new BridgeFailure("not-found", "That project is not in Satellite.");
+      throw new BridgeFailure("not-found", "That repo is not in Satellite.");
     }
     return { ...found, workspaces: [] };
   };

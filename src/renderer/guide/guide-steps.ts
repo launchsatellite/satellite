@@ -37,7 +37,7 @@ export const guideSteps: Record<GuideStep, GuideStepDetail> = {
     anchor: "inbox",
     side: "right",
     title: "orange means you",
-    text: "A square pixel shows the state of each session, and signal orange means one cannot go on without you, so it waits in the inbox.",
+    text: "A square pixel shows the state of each session, and signal orange means one cannot go on without you, so it waits under Needs you.",
     band: { height: 28, below: 2 },
   },
 };

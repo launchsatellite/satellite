@@ -226,13 +226,13 @@ export function ToolCheckCard({ firstRun, onClose }: ToolCheckCardProps) {
           </h2>
           <p className="-mt-2 text-[14px] text-fg2">
             {firstRun
-              ? "Three checks, then add your first project."
+              ? "Three checks, then add your first repo."
               : "Satellite runs your own git, gh and Claude Code."}
           </p>
           <ToolChecks>
             {firstRun ? (
               <CommandButton command="project.add" testId="add-first-project">
-                Add your first project
+                Add your first repo
               </CommandButton>
             ) : (
               <Button

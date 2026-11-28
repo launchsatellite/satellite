@@ -5,8 +5,8 @@ import { drivenByVerify } from "../window/verification.ts";
 
 const options: OpenDialogOptions = {
   properties: ["openDirectory"],
-  title: "Add a project",
-  buttonLabel: "Add project",
+  title: "Add a repo",
+  buttonLabel: "Add repo",
 };
 
 async function verifyAnswer(file: string): Promise<string | undefined> {

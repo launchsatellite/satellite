@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { AppSession, RecordedNotice } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
 import {
+  gone,
   hooksAnswered,
   promptTimeoutMs,
   standInInput,
@@ -93,7 +94,7 @@ async function inboxReads(session: AppSession, sentence: string, when: string): 
 }
 
 async function rowGone(session: AppSession, when: string): Promise<void> {
-  await visible(session, "inbox-empty", when);
+  await gone(session, "inbox-repo-alpha", when);
 }
 
 async function showTab(session: AppSession): Promise<void> {

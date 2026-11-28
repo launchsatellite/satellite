@@ -15,6 +15,7 @@ interface CommandButtonProps {
   expanded?: boolean;
   controls?: string;
   testId?: string;
+  className?: string;
 }
 
 const platform = keyboardPlatform();
@@ -69,6 +70,7 @@ export function CommandButton({
   expanded,
   controls,
   testId,
+  className,
 }: CommandButtonProps) {
   const found = useCommands().get(command);
   if (found === undefined) throw new Error(`The command ${command} is not registered.`);
@@ -86,6 +88,7 @@ export function CommandButton({
       tooltip={tooltip}
       expanded={expanded}
       controls={controls}
+      className={className}
     >
       {label === undefined ? (children ?? found.title) : children}
     </Button>

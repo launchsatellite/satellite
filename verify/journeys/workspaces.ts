@@ -118,16 +118,16 @@ async function deleteOutsideSatellite(session: AppSession, folder: string): Prom
   await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
 
-async function metaReads(session: AppSession, name: string, expected: string): Promise<void> {
-  const meta = session.page.getByTestId(`workspace-repo-${name}-meta`);
+async function summaryReads(session: AppSession, name: string, expected: string): Promise<void> {
+  const meta = session.page.getByTestId(`workspace-repo-${name}-summary`);
   let shown = "";
   await waitUntil(
     async () => {
-      shown = (await meta.count()) === 0 ? "nothing" : (await meta.innerText()).trim();
+      shown = (await meta.count()) === 0 ? "nothing" : ((await meta.textContent()) ?? "").trim();
       return shown === expected;
     },
     waitMs,
-    () => `workspace-repo-${name}-meta read "${shown}" instead of "${expected}"`,
+    () => `workspace-repo-${name}-summary read "${shown}" instead of "${expected}"`,
   );
 }
 
@@ -281,7 +281,7 @@ async function run(session: AppSession): Promise<void> {
     "second-look left repo because its folder was deleted outside Satellite. git still counts second-look as checked out there until you run git worktree prune.",
     "after the restart",
   );
-  await metaReads(session, "first-look", "1");
+  await summaryReads(session, "first-look", "1 uncommitted file");
   await visible(session, "workspace-repo-left-behind", "after a worktree with no record was left");
   await session.screenshot("workspaces-restarted");
 

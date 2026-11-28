@@ -6,6 +6,7 @@ import type { Journey } from "../journeys.ts";
 import { terminalText } from "../terminal-screen.ts";
 import {
   claudePids,
+  gone,
   goneTimeoutMs,
   processGone,
   promptTimeoutMs,
@@ -135,7 +136,6 @@ async function prompt(session: AppSession, name: string): Promise<void> {
 }
 
 async function firstNeed(session: AppSession): Promise<void> {
-  await textIs(session, "inbox-empty", "Nothing needs you right now.", "at launch");
   await textIs(session, "inbox-count", "0", "at launch");
   await select(session, "alpha");
   await startClaude(session, 1);
@@ -179,7 +179,8 @@ async function openAndAnswer(session: AppSession): Promise<void> {
   await terminalFocused(session);
   await session.page.keyboard.press("y");
   await terminalShows(session, "Allowed.", "after allowing in alpha");
-  await visible(session, "inbox-empty", "after alpha was answered");
+  await gone(session, "inbox-repo-alpha", "after alpha was answered");
+  await textIs(session, "inbox-count", "0", "after alpha was answered");
   await recorded(session, [alphaNotice, closed], "after alpha was answered,");
 }
 

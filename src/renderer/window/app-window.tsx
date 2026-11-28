@@ -20,7 +20,7 @@ import { useDiffSelection } from "../changes/use-diff-selection.ts";
 import { FilesView } from "../files/files-view.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { createCommandRegistry, type Command } from "../commands/command-registry.ts";
-import { CommandsProvider } from "../commands/commands-context.tsx";
+import { CommandButton, CommandsProvider } from "../commands/commands-context.tsx";
 import { GuideLayer } from "../guide/guide-layer.tsx";
 import {
   guideClosedSentence,
@@ -76,7 +76,7 @@ import { ColumnDivider } from "./column-divider.tsx";
 import { fitColumns, railFoldsBelow, reachableColumns, type RailShape } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
-import { TitleBar } from "./title-bar.tsx";
+import { TopRow, useWindowFrame } from "./top-row.tsx";
 
 type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
 
@@ -89,7 +89,7 @@ interface AppWindowProps {
 const commandFailure = "Satellite couldn't finish that. Try again.";
 const terminalLinkSentence =
   "The text Claude Code showed points to this address. Check it before you open it.";
-const notificationsOff = "Notifications are off. The inbox still shows what needs you.";
+const notificationsOff = "Notifications are off. The sidebar still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 const sidebarId = "sidebar";
 
@@ -143,6 +143,7 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
 }
 
 export function AppWindow({ initial, frame, notice }: AppWindowProps) {
+  const shownFrame = useWindowFrame(frame);
   const [toasts, setToasts] = useState<QueuedToast[]>(() =>
     notice === null ? [] : [{ id: 1, message: notice, tone: "notice", queuedAt: Date.now() }],
   );
@@ -283,6 +284,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     openGuide();
   }, [openGuide]);
   const sidebarShown = state.sidebar === "shown";
+  const [toggleFocus, focusAfterToggle] = useState<{ target: string }>();
+  useEffect(() => {
+    if (toggleFocus === undefined) return;
+    document.querySelector<HTMLElement>(`[data-testid='${toggleFocus.target}']`)?.focus();
+  }, [toggleFocus]);
   const showSidebar = useCallback(() => {
     if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
   }, [sidebarShown, update]);
@@ -358,7 +364,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     removableAt === -1 || projects?.[removableAt + 1] === undefined
       ? undefined
       : (projects[removableAt + 2]?.id ?? null);
-  const newWorkspaceIn = selectedProject?.missing === null ? selectedProject.id : undefined;
+  const newWorkspaceIn = (
+    selectedProject?.missing === null
+      ? selectedProject
+      : projects?.find((project) => project.missing === null)
+  )?.id;
   const archivable =
     selectedProject?.missing === null &&
     selectedWorkspace !== undefined &&
@@ -600,6 +610,15 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => processes.rowsOf(ref).length,
     [processes],
   );
+  const hasSession = useCallback(
+    (ref: WorkspaceRef) =>
+      allSessions.some(
+        (tab) =>
+          tab.workspace.projectId === ref.projectId && tab.workspace.workspace === ref.workspace,
+      ),
+    [allSessions],
+  );
+
   const askRemove = useCallback(
     (project: ProjectView) => {
       const parent = shownParent(project, repeatedNames(projects ?? []));
@@ -731,8 +750,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       if (active !== null && active !== document.body && active.isConnected) return;
       firstVisible([
         "[aria-label='Sidebar'] nav button",
-        "[aria-label='Sidebar'] button[aria-label='Add a project']",
-        "[data-testid='title-sidebar']",
+        "[aria-label='Sidebar'] button[aria-label='Add a repo']",
+        "[data-testid='sidebar-show']",
       ])?.focus();
     });
   }, []);
@@ -796,7 +815,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           {
             id: "project.add",
-            title: "Add a project",
+            title: "Add a repo",
             shortcut: { key: "o" },
             available: true,
             run: async () => {
@@ -807,7 +826,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           {
             id: "project.remove",
-            title: "Remove this project",
+            title: "Remove this repo",
             available: removable !== undefined,
             run: () => {
               if (removable !== undefined) askRemove(removable);
@@ -815,7 +834,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           {
             id: "project.up",
-            title: "Move this project up",
+            title: "Move this repo up",
             available: above !== undefined,
             run: () => {
               if (removable !== undefined && above !== undefined) move(removable.id, above);
@@ -823,7 +842,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           {
             id: "project.down",
-            title: "Move this project down",
+            title: "Move this repo down",
             available: twoBelow !== undefined,
             run: () => {
               if (removable !== undefined && twoBelow !== undefined) move(removable.id, twoBelow);
@@ -926,6 +945,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               const inside = document.activeElement?.closest(`#${sidebarId}`) != null;
+              const showing =
+                document.activeElement?.closest("[data-testid='sidebar-show']") != null;
               update(
                 (current) => ({
                   ...current,
@@ -933,11 +954,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
                 }),
                 true,
               );
-              if (inside) {
-                requestAnimationFrame(() => {
-                  document.querySelector<HTMLElement>("[data-testid='title-sidebar']")?.focus();
-                });
-              }
+              if (inside || showing)
+                focusAfterToggle({ target: inside ? "sidebar-show" : "sidebar-toggle" });
             },
           },
           {
@@ -1252,12 +1270,53 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   };
   const sessionsShown =
     !checking && sessionHere !== undefined && (folderHere || tabsHere.length > 0);
-  const centre = () => {
+  const centreEdges = {
+    left: sidebarShown ? columns.sidebar + 1 : 9,
+    right: railShape === "hidden" ? 9 : columns.rail + 1,
+  };
+  const frameLook = { shown: shownFrame, covered: modal || palette !== null };
+  const sidebarLead = sidebarShown ? null : (
+    <CommandButton
+      command="sidebar.toggle"
+      variant="ghost"
+      size="small"
+      icon="sidebar"
+      label="Show the sidebar"
+      tooltip="Show the sidebar"
+      expanded={false}
+      controls={sidebarId}
+      testId="sidebar-show"
+    />
+  );
+  const centreAlone = () => {
     if (checking) return <ToolCheckCard key="revisit" firstRun={false} onClose={closeCheck} />;
     if (projects === undefined) return null;
     if (projects.length === 0) return <ToolCheckCard key="first-run" firstRun />;
-    if (selectedProject === undefined || selectedWorkspace === undefined) {
-      return <NothingSelected />;
+    return <NothingSelected />;
+  };
+  const centre = () => {
+    if (
+      checking ||
+      projects === undefined ||
+      selectedProject === undefined ||
+      selectedWorkspace === undefined
+    ) {
+      return (
+        <>
+          {sidebarLead !== null && (
+            <TopRow
+              frame={frameLook}
+              left={centreEdges.left}
+              right={centreEdges.right}
+              pad={[16, 10]}
+              className="h-12"
+            >
+              {sidebarLead}
+            </TopRow>
+          )}
+          <div className="min-h-0 flex-1">{centreAlone()}</div>
+        </>
+      );
     }
     return (
       <>
@@ -1276,6 +1335,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             openRail("ready");
           }}
           railHidden={railShape === "hidden"}
+          frame={frameLook}
+          edges={centreEdges}
+          lead={sidebarLead}
         />
         {selectedProject.missing !== null && !sessionsShown && (
           <FolderMissing
@@ -1347,21 +1409,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         data-testid="app-window"
         className="relative flex h-full flex-col bg-win text-fg"
       >
-        <TitleBar
-          initial={frame}
-          covered={modal || palette !== null}
-          place={
-            selectedProject === undefined || selectedWorkspace === undefined
-              ? null
-              : {
-                  project: selectedProject.name,
-                  workspace: selectedWorkspace.name,
-                }
-          }
-          waiting={inbox.length}
-          sidebarShown={sidebarShown}
-          sidebarId={sidebarId}
-        />
         <div
           data-testid="columns"
           className="grid min-h-0 flex-1"
@@ -1402,6 +1449,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               pixelFor={pixelFor}
               pullRequestFor={pullRequestFor}
               processesFor={processesFor}
+              hasSession={hasSession}
+              frame={frameLook}
+              frameRight={width - columns.sidebar}
               inbox={
                 projects === undefined ? null : (
                   <InboxList
@@ -1450,6 +1500,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             className="relative flex min-h-0 flex-col bg-win"
           >
             <Rail
+              frame={frameLook}
+              frameLeft={width - columns.rail}
               view={railView}
               folded={railShape === "folded"}
               pullRequest={shownPullRequest?.number ?? null}
@@ -1551,6 +1603,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
             onLink={askAboutLink}
             onClose={closeSettings}
+            returnFocusTo={sidebarShown ? "sidebar-settings" : "sidebar-show"}
           />
         )}
         {asking !== null && (

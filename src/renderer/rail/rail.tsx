@@ -4,10 +4,13 @@ import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { Tab, Tabs } from "../ui/tabs.tsx";
+import { TopRow, type Frame } from "../window/top-row.tsx";
 
 export type RailView = "changes" | "files" | "ready";
 
 interface RailProps {
+  frameLeft: number;
+  frame: Frame;
   view: RailView;
   folded: boolean;
   shown: boolean;
@@ -46,6 +49,8 @@ export function railPanelId(view: RailView): string {
 }
 
 export function Rail({
+  frame,
+  frameLeft,
   view,
   folded,
   shown,
@@ -59,11 +64,14 @@ export function Rail({
   const needsYouOn = (of: RailView) => of === "ready" && readyNeedsYou;
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {!shown || folded ? (
+        <TopRow frame={frame} left={frameLeft} right={0} className="h-11" />
+      ) : null}
       {!shown ? null : folded ? (
         <nav
           aria-label="Workspace views"
           data-guide="views"
-          className="flex flex-col items-center gap-1 pt-2"
+          className="flex flex-col items-center gap-1"
         >
           {views.map((shown) => (
             <span key={shown.view} className="relative flex">
@@ -86,7 +94,7 @@ export function Rail({
           ))}
         </nav>
       ) : (
-        <div className="flex h-11 flex-none items-center gap-1 px-2">
+        <TopRow frame={frame} left={frameLeft} right={0} className="h-11 gap-1">
           <Tabs
             label="Workspace views"
             value={view}
@@ -126,7 +134,7 @@ export function Rail({
             tooltip="Hide the rail"
             testId="rail-hide"
           />
-        </div>
+        </TopRow>
       )}
       <div hidden={folded} className="flex min-h-0 flex-1 flex-col">
         {children}

@@ -7,10 +7,10 @@ import { samePath } from "../platform/paths.ts";
 import { createProjectsFile } from "./projects-file.ts";
 
 const setAsideNotice =
-  "Satellite couldn't read its saved projects, so it set that file aside and started with an empty list.";
+  "Satellite couldn't read its saved repos, so it set that file aside and started with an empty list.";
 
 const newerNotice =
-  "Your projects were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.";
+  "Your repos were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.";
 
 async function homeWith(content: unknown): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), "satellite-projects-file-"));

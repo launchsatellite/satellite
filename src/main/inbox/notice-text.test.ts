@@ -65,11 +65,11 @@ describe("noticeText", () => {
       ),
     ).toEqual({
       title: "5 workspaces need you",
-      body: "Open Satellite to answer them from the inbox.",
+      body: "Open Satellite to answer them under Needs you.",
     });
     expect(noticeText([{ project: "repo", parent: null, workspace: "alpha" }], 2)).toEqual({
       title: "2 workspaces need you",
-      body: "Open Satellite to answer them from the inbox.",
+      body: "Open Satellite to answer them under Needs you.",
     });
   });
 
@@ -80,7 +80,7 @@ describe("noticeText", () => {
     }
     expect(
       noticeText([{ project: '<>&"\n\u202e\u0007', parent: null, workspace: null }], 1).title,
-    ).toBe("a project needs you");
+    ).toBe("a repo needs you");
     expect(
       noticeText([{ project: "repo", parent: null, workspace: "\u2066\u0000" }], 1).title,
     ).toBe("a workspace needs you");
@@ -88,14 +88,14 @@ describe("noticeText", () => {
 
   it("keeps invisible and line breaking characters out of a name", () => {
     const hidden = "a\u200bb\u2060c\ufeffd\u3164e\u034ff\ufe0fg\u{e0041}h\u2028i\u00a0j\tk\r\nl";
-    expect(noticeName(hidden, "a project")).toBe("a b c d e f g h i j k l");
-    expect(noticeName("\u3164\u115f\u200d", "a project")).toBe("a project");
+    expect(noticeName(hidden, "a repo")).toBe("a b c d e f g h i j k l");
+    expect(noticeName("\u3164\u115f\u200d", "a repo")).toBe("a repo");
   });
 
   it("cuts a long name and stays inside 256 bytes", () => {
     const long = "\u{10348}".repeat(200);
-    expect(Array.from(noticeName(long, "a project"))).toHaveLength(noticeNameLimit);
-    expect(noticeName(`${"a".repeat(31)}  b`, "a project")).toBe("a".repeat(31));
+    expect(Array.from(noticeName(long, "a repo"))).toHaveLength(noticeNameLimit);
+    expect(noticeName(`${"a".repeat(31)}  b`, "a repo")).toBe("a".repeat(31));
     for (const subject of [
       { project: long, parent: long, workspace: long },
       { project: long, parent: long, workspace: null },
@@ -108,21 +108,21 @@ describe("noticeText", () => {
 
   it("falls back when a name holds no letter or digit, and drops marks that lead it", () => {
     for (const raw of [".", "_", "+()", "- . -", "\u20dd", "\u0301\u0301"]) {
-      expect(noticeName(raw, "a project")).toBe("a project");
+      expect(noticeName(raw, "a repo")).toBe("a repo");
     }
-    expect(noticeName("\u0301app", "a project")).toBe("app");
+    expect(noticeName("\u0301app", "a repo")).toBe("app");
     expect(noticeText([{ project: "...", parent: null, workspace: "()" }], 1)).toEqual({
       title: "a workspace needs you",
-      body: "Claude Code is waiting for you in a project.",
+      body: "Claude Code is waiting for you in a repo.",
     });
   });
 
   it("never splits a letter cluster when it cuts, however long the name", () => {
     const syllable = "\u1100\u1161\u11a8";
-    expect(noticeName(syllable.repeat(12), "a project")).toBe(syllable.repeat(10));
+    expect(noticeName(syllable.repeat(12), "a repo")).toBe(syllable.repeat(10));
     const cluster = "\u0915\u093f";
-    expect(noticeName(cluster.repeat(20), "a project")).toBe(cluster.repeat(16));
-    expect(noticeName("a".repeat(1_000_000), "a project")).toBe("a".repeat(noticeNameLimit));
+    expect(noticeName(cluster.repeat(20), "a repo")).toBe(cluster.repeat(16));
+    expect(noticeName("a".repeat(1_000_000), "a repo")).toBe("a".repeat(noticeNameLimit));
   });
 
   it("names the parent folder when two projects share a name", () => {
