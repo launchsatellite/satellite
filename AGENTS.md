@@ -57,7 +57,7 @@ npm run build && npm run package                 # installers for this machine i
 
 ## Autonomy
 
-**Do without asking.** Read anything in the repo, edit code, specs and docs, add dev dependencies, run builds and local servers, create branches and worktrees, commit, push your own branch, open and update your own pull request, comment on it and its issue, write or update a skill.
+**Do without asking.** Read anything in the repo, edit code, specs and docs, add dev dependencies, run builds and local servers, create branches and worktrees, commit, push your own branch, open and update your own pull request, comment on it and its issue, fix your own failing CI and review comments, write or update a skill.
 
 **Ask first**, and keep doing the other authorized work while you wait.
 
@@ -66,9 +66,9 @@ npm run build && npm run package                 # installers for this machine i
 - Anything destructive or hard to undo, or outward-facing like publishing a release or posting outside this repo.
 - Anything you don't know. Say what you would pick and why, never guess on the maintainer's behalf.
 
-**Never** approve a pull request, enable auto-merge, merge one without the maintainer's grant, push to `main`, force-push, skip or rewire Git hooks, edit a guard file, change repository settings, read `.env` files or `.secrets/`, or credit an AI tool as an author anywhere.
+**Never** approve a pull request, enable auto-merge, merge one without the maintainer's grant and request, push to `main`, force-push, skip or rewire Git hooks, edit a guard file, change repository settings, read `.env` files or `.secrets/`, or credit an AI tool as an author anywhere.
 
-Merging is the maintainer's. Where the maintainer granted it, the guard lets `gh pr merge` through, and you squash-merge your own pull request once CI is fully green, CodeRabbit has approved the latest commit and the independent review is addressed. You never merge anyone else's.
+Merging is the maintainer's. Where the maintainer granted it on this machine and asked you to merge, the guard lets `gh pr merge` through, and you squash-merge your own pull request with `--admin` once CI is fully green, CodeRabbit has approved the latest commit and the independent review is addressed. Then you carry on with the next step of the task without waiting. You never merge anyone else's.
 
 Approval covers the scoped work it was given for. Silence never authorizes a gated action. Routine, reversible choices are yours, stated in the pull request.
 
@@ -80,7 +80,7 @@ Approval covers the scoped work it was given for. Silence never authorizes a gat
 4. Prove it in the real app, then simplify your own diff until every hunk serves the task.
 5. Fix every doc and spec the change made wrong, in the same change.
 6. `./scripts/check` green, then an independent review from a fresh context.
-7. Push, open the pull request from the template, report the link **and stop**. Follow up on CI and comments until a human merges it, or merge it yourself once it is green where merging is granted.
+7. Push, open the pull request from the template and report the link. Follow up on CI and comments until it is merged. Asked to merge, you merge it once green and move to the next step, otherwise you **stop** there.
 
 ## Proof
 
