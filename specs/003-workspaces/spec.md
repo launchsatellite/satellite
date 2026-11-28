@@ -8,7 +8,7 @@ Two agents in one folder overwrite each other. A workspace gives each piece of w
 
 ## Scope
 
-- New workspace from a project in one action. The name is generated and can be changed before creating. The branch takes the same name.
+- New workspace is a page in the centre, never a dialog. One request box for Claude Code, then the repo, the starting point and the generated name, which can be changed before creating. The branch takes the same name. Create and start, on Cmd+Enter or Ctrl+Enter, makes the workspace and starts Claude Code in it with the request as its first message (spec 004), or a blank session when the box is empty. Escape goes back.
 - The branch starts from the latest default branch on the remote, or as a new branch at an existing branch chosen from a list.
 - The worktree is created under `~/.satellite/worktrees/<project>/<workspace>`, never inside the repo.
 - Ignored files matching the project's `.worktreeinclude` are copied into the new worktree.
@@ -37,6 +37,7 @@ Starting sessions in the workspace belongs to spec 004.
 
 ## Acceptance
 
+- [x] New workspace is a page in the centre with the request box, the repo, the starting point and the name, Create and start on Cmd+Enter, Escape going back, and each step under the box while it runs. Claude Code starts in the new workspace with the request as its first message, or blank when the box is empty. Proof, the `workspaces` journey, which makes second-look with a two line request holding quotes, `&`, `%` and `|` and finds the stand-in started with exactly that request, and scenario `fresh-repo` in light and dark.
 - [x] Creating a workspace makes the worktree and branch from the remote default branch and selects it. Proof, scenario `fresh-repo` and the `workspaces` journey, which makes first-look from the dialog, sees it selected and announced, and finds `second commit` from the fetched main in its worktree, and `create-steps.test.ts` with real git.
 - [x] Files listed by `.worktreeinclude` are present in the new worktree and other ignored files are not. Proof, `worktree-include.test.ts` on the matcher, `include-copy.test.ts` on the copy, and the `workspaces` journey, which finds `.env` and `config/dev.local.json` in first-look and no `notes.log`, `node_modules` or `scratch.txt`.
 - [x] A name that is not a valid branch or that escapes the worktrees folder is refused. Proof, `workspace-name.test.ts`, `worktree-folders.test.ts` and `registry.test.ts`, and the `boundary` journey, where `workspaces.create` refuses `../../outside` and `-x` and no worktrees folder appears.
@@ -45,8 +46,3 @@ Starting sessions in the workspace belongs to spec 004.
 - [x] A worktree an agent makes in the project shows up as a workspace with no Archive, and leaves quietly once the agent removes it. Proof, the `projects` journey, which adds one in `.claude/worktrees` and removes it, and `project-list.test.ts`.
 - [x] A worktree deleted outside the app disappears from the sidebar on the next start. Proof, the `workspaces` journey, which deletes second-look while the app is closed and finds it gone after the restart with its sentence, and `project-list.test.ts`.
 - [x] Two workspaces of one project hold different files at the same time. Proof, the `workspaces` journey, where a file written in first-look is absent from second-look and the repo, and each holds the files of its own start.
-
-## Next
-
-- New workspace opens as a centre page instead of a dialog, with one request box, the repo, the starting point and the generated name on it, and Create and start on Cmd+Enter. Each step shows under the box while it runs. Part of [015 Layout](../015-layout/spec.md).
-- A typed request becomes Claude Code's first message in the new workspace, see 004. An empty request starts a blank session.

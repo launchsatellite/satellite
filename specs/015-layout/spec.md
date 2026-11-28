@@ -57,6 +57,7 @@ Layout owns the frame of the window, the rail, the repo view and the kit. Each f
 | Strip cells that show state | Shrunken live terminals | A terminal that resizes makes Claude Code redraw, and state is all a glance needs. |
 | Pages for anything with sections or forms | Dialogs for Settings and New workspace | A page keeps the sidebar and needs you in view and gives the content room. |
 | The request as Claude Code's first message | Typing it into the prompt for the person to send | They pressed Create and start with their own words, so sending it is what they asked for. Nothing from GitHub is ever added to it. |
+| The request as Claude Code's positional prompt after `--` | Typing it through the terminal once Claude Code is ready | Claude Code documents `claude "<prompt>"` as starting an interactive session with it. Satellite finds only `claude.exe` or `claude.com` on Windows, never a `.cmd` shim, spawns with no shell anywhere and quotes the Windows command line itself, so no character is read as syntax. No hook says the prompt is drawn before the first request, so typing would race the trust question. A request of one word could name a subcommand such as `purge`, so a request needs two. |
 | Go to what needs you on Cmd+J | Next review thread | Threads now live on GitHub, and one key to whatever waits on you serves every workspace. |
 | Cmd+E for the rail | Cmd+I | Ctrl+Shift+I opens the developer tools in an unpacked build on Windows and Linux, which is what the journeys run. |
 | No search tab | Content search in the rail | The agent already searches, and the command menu finds workspaces and files. |
@@ -80,4 +81,3 @@ A Satellite feature is accepted on macOS, Windows and Linux, in light, dark and 
 ## Open questions
 
 - Specs 004, 011, 012 and 013 are In progress, each waiting on a check by a person on Windows, Linux or a framed window. Those checks close before 011 and 012 change.
-- Claude Code receives the first message through its terminal once it is ready, never as a launch argument, since a `.cmd` shim on Windows could misread free text. Confirm against Claude Code's current docs while building.

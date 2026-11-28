@@ -12,6 +12,7 @@ The agent pane is the reason Satellite exists. It runs the user's real Claude Co
 - Several sessions per workspace as tabs, with a button and a command to start one and to close one.
 - Sessions keep running when another workspace is selected, and switching back shows them exactly as they were.
 - Each session is launched with a session id Satellite chooses and with status hooks for that process only, in a short-lived settings file in the Satellite home passed with `--settings`. The hooks post to a listener on the loopback address with a secret made for that launch. Nothing is written to the user's Claude Code settings or the repo.
+- A session started from the New workspace page gets the typed request as its first message, passed as Claude Code's documented positional prompt after `--` and every flag, so Claude Code starts interactive and sends it. The request holds two words or more, at most 8000 characters and no NUL, because Claude Code runs one of its own commands when the only argument is exactly that command's name. Nothing but the typed words goes in, and a restart or a resume never sends it again.
 - Status per session, idle until its first request, then working, needs you or done, and stopped once Claude Code ends. A workspace shows the most urgent status of its sessions as one pixel in the sidebar.
 - After a restart Satellite picks up where it was. Opening a workspace, by the sidebar, an inbox row or a notification, resumes the conversation it was last prompted in by itself, following the id Claude Code's hooks carry. The workspace selected at launch counts as opened, so it resumes at once, and every other workspace waits until it is opened. Each start runs the session start hooks of a repository the user trusted.
 - A workspace resumes by itself at most once per load of the window, when it has a recorded conversation no terminal of Satellite's holds and has had no session tab in this load. Never while the first-run guide or the tool check is open, never once Claude Code was found missing or too old, and never in a workspace whose folder is missing. At the terminal limit it shows the limit sentence and keeps its try for the next time it is opened with room. It leaves keyboard focus where it was and raises no needs you and no notification.
@@ -36,6 +37,7 @@ The agent pane is the reason Satellite exists. It runs the user's real Claude Co
 | A once per load rule kept in the interface, on top of the background process's start checks | A separate automatic start request | An automatic start is the same request as the button, which the background process already bounds to a recorded conversation none of its terminals holds, so a second request would only widen the bridge. |
 | Asking at quit only while work would be lost, a session mid-task, a session whose status can't be seen or a process Claude Code started | Asking for every running session | With idle sessions resuming by themselves, a question on every quit would be noise, while unfinished work and background processes still deserve one. |
 | Counting processes from what Running processes already lists, within 2 seconds, and asking when that runs out | A second way to find a session's processes, or waiting on a slow process table | One source of truth, and a quit never hangs while a doubt still asks. |
+| The request as Claude Code's positional prompt after `--` | Typing it into the terminal with Enter once Claude Code draws its prompt | The argument is Claude Code's documented way to start with a first message, needs no signal that its prompt is ready, which no hook gives before the first request, and cannot land in the trust question. No shell parses it on any system, and two words keep it from naming a subcommand. |
 
 ## Not in scope
 
@@ -55,10 +57,10 @@ The inbox and notifications belong to spec 005.
 - [x] Quitting with only idle sessions asks nothing, with a working session asks and counts it, and with a done session whose dev server runs asks and counts the process. Proof, journey `quit` on macOS and Linux, since it quits through `SIGTERM`, and unit tests on the rule.
 - [ ] The same quit rule reaches the question through the window's close button on Windows. Proof, a run on Windows.
 - [x] Send to Claude Code places the text in the prompt and does not submit it. Proof, the driver.
+- [x] A session started from the New workspace page gets the typed request as its first message, as Claude Code's positional prompt after `--`, and a request Claude Code could read as one of its commands is refused. Proof, the `workspaces` journey, `claude-launch.test.ts`, `registry.test.ts` and, for the Windows command line, `pty.test.ts`.
 - [x] With `claude` missing the pane says so and names the fix. Proof, scenario `claude-missing`.
 - [x] The user's Claude Code settings files are byte for byte unchanged after a session. Proof, a journey that compares them.
 
 ## Next
 
-- A session started from the New workspace page receives the typed request as its first message, sent through its terminal once Claude Code is ready, never as a launch argument.
 - In the repo view a workspace's selected session shows as a tile, and only tiles on screen draw a terminal.
