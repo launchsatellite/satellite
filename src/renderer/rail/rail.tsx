@@ -1,17 +1,18 @@
 import type { ReactNode } from "react";
 import { CommandButton } from "../commands/commands-context.tsx";
-import { tabLabel } from "../pull-request/pull-request-words.ts";
 import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
+import { StatusPixel } from "../ui/status-pixel.tsx";
 import { Tab, Tabs } from "../ui/tabs.tsx";
 
-export type RailView = "changes" | "files" | "pull-request";
+export type RailView = "changes" | "files" | "ready";
 
 interface RailProps {
   view: RailView;
   folded: boolean;
   shown: boolean;
   pullRequest: number | null;
+  readyNeedsYou: boolean;
   onView: (view: RailView) => void;
   onUnfold: (view: RailView) => void;
   children: ReactNode;
@@ -20,12 +21,17 @@ interface RailProps {
 const views: readonly { view: RailView; icon: IconName }[] = [
   { view: "changes", icon: "diff" },
   { view: "files", icon: "folder" },
-  { view: "pull-request", icon: "pull-request" },
+  { view: "ready", icon: "pull-request" },
 ];
+const labels: Record<RailView, string> = { changes: "Changes", files: "Files", ready: "Ready" };
 
-function labelOf(view: RailView, pullRequest: number | null): string {
-  if (view === "pull-request") return tabLabel(pullRequest);
-  return view === "changes" ? "Changes" : "Files";
+function NeedsYou({ shown }: { shown: boolean }) {
+  if (!shown) return null;
+  return (
+    <span data-testid="rail-ready-needs-you" className="pointer-events-none absolute top-1 right-1">
+      <StatusPixel state="needs-you" size={6} />
+    </span>
+  );
 }
 
 export function railTabId(view: RailView): string {
@@ -36,24 +42,38 @@ export function railPanelId(view: RailView): string {
   return `rail-panel-${view}`;
 }
 
-export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, children }: RailProps) {
+export function Rail({
+  view,
+  folded,
+  shown,
+  pullRequest,
+  readyNeedsYou,
+  onView,
+  onUnfold,
+  children,
+}: RailProps) {
+  const numberOf = (of: RailView) => (of === "ready" ? (pullRequest ?? undefined) : undefined);
+  const needsYouOn = (of: RailView) => of === "ready" && readyNeedsYou;
   return (
     <div className="flex h-full min-h-0 flex-col">
       {!shown ? null : folded ? (
         <nav aria-label="Workspace views" className="flex flex-col items-center gap-1 pt-2">
           {views.map((shown) => (
-            <Button
-              key={shown.view}
-              variant="ghost"
-              size="small"
-              icon={shown.icon}
-              label={labelOf(shown.view, pullRequest)}
-              tooltip={labelOf(shown.view, pullRequest)}
-              testId={railTabId(shown.view)}
-              onClick={() => {
-                onUnfold(shown.view);
-              }}
-            />
+            <span key={shown.view} className="relative flex">
+              <Button
+                variant="ghost"
+                size="small"
+                icon={shown.icon}
+                label={labels[shown.view]}
+                tooltip={labels[shown.view]}
+                testId={railTabId(shown.view)}
+                data-number={numberOf(shown.view)}
+                onClick={() => {
+                  onUnfold(shown.view);
+                }}
+              />
+              <NeedsYou shown={needsYouOn(shown.view)} />
+            </span>
           ))}
         </nav>
       ) : (
@@ -76,11 +96,14 @@ export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, child
                 id={railTabId(shown.view)}
                 panel={railPanelId(shown.view)}
                 testId={railTabId(shown.view)}
-                label={labelOf(shown.view, pullRequest)}
-                tooltip={labelOf(shown.view, pullRequest)}
-                data-number={shown.view === "pull-request" ? (pullRequest ?? undefined) : undefined}
+                label={labels[shown.view]}
+                tooltip={labels[shown.view]}
+                description={needsYouOn(shown.view) ? "Needs you" : undefined}
+                data-number={numberOf(shown.view)}
+                className="relative"
               >
                 <Icon name={shown.icon} />
+                <NeedsYou shown={needsYouOn(shown.view)} />
               </Tab>
             ))}
           </Tabs>

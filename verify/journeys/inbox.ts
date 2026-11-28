@@ -27,6 +27,7 @@ const alphaNotice: Shown = {
   body: "Claude Code is waiting for you in repo.",
 };
 const closed: Shown = { kind: "close" };
+const nextNeedKeys = process.platform === "darwin" ? "Meta+J" : "Control+Shift+J";
 const cleared: RecordedNotice = { kind: "badge", count: 0 };
 
 function shownOf(lines: readonly RecordedNotice[]): Shown[] {
@@ -163,6 +164,14 @@ async function openFromAgents(session: AppSession): Promise<void> {
   await select(session, "beta");
 }
 
+async function goToWhatNeedsYou(session: AppSession): Promise<void> {
+  await session.page.keyboard.press(nextNeedKeys);
+  await attributeIs(session, "workspace-repo-alpha", "aria-current", "after Go to what needs you");
+  await terminalShows(session, "Allow Bash for both", "on the tab Go to what needs you opened");
+  await terminalFocused(session);
+  await select(session, "beta");
+}
+
 async function openAndAnswer(session: AppSession): Promise<void> {
   await session.page.getByTestId("inbox-repo-alpha").click();
   await attributeIs(session, "workspace-repo-alpha", "aria-current", "after opening alpha");
@@ -215,6 +224,7 @@ export const inboxJourney: Journey = {
     await recorderAnswers(session, 0, [cleared], "at launch");
     await firstNeed(session);
     await openFromAgents(session);
+    await goToWhatNeedsYou(session);
     await openAndAnswer(session);
     await keptAfterRestart(session);
   },

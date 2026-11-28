@@ -127,6 +127,15 @@ export function noticeTarget(
   return rows.find((row) => placeOf(row.workspace) === placeOf(workspace))?.reasons[0];
 }
 
+export function nextInboxTarget(
+  rows: readonly InboxRow[],
+  current: WorkspaceRef | null,
+): InboxTarget | undefined {
+  const at =
+    current === null ? -1 : rows.findIndex((row) => placeOf(row.workspace) === placeOf(current));
+  return rows[(at + 1) % rows.length]?.reasons[0];
+}
+
 export function rowName(label: string, project: string, sentence: string): string {
   return `${visibleText(label)}, ${project}. ${sentence}`;
 }

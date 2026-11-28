@@ -9,24 +9,17 @@ import { revealLines } from "../../shared/visible-text.ts";
 import { invoke } from "../bridge/bridge-client.ts";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
 import { Button } from "../ui/button.tsx";
-import { StatusPixel } from "../ui/status-pixel.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { checkRequest } from "./pull-request-requests.ts";
 import {
   emptyLogSentence,
   largeLogSentence,
   logCutSentence,
-  moreSentence,
-  noChecksSentence,
   noLogSentence,
   openLabel,
   readingLogSentence,
-  resultPixel,
-  resultWord,
-  runningChecksSentence,
   sendLabel,
   troubleSentence,
-  unnamedCheck,
 } from "./pull-request-words.ts";
 
 type LogAnswer = BridgeResponse<"pullRequest.log">;
@@ -39,6 +32,7 @@ interface Logs {
   byJob: ReadonlyMap<string, LogState>;
 }
 
+const unnamedCheck = "Unnamed check";
 const unreadable: LogAnswer = { kind: "unavailable", reason: "failed" };
 
 function headOf(found: PullRequestFound): string {
@@ -94,18 +88,12 @@ function CheckRow({
   onLink: (address: string) => void;
 }) {
   const id = `pull-request-check-${String(index)}`;
-  const failed = check.result === "failed";
   const job = check.job;
   const open = state?.open === true;
   return (
-    <li
-      data-testid={id}
-      data-result={check.result}
-      className="flex flex-col gap-2 border-b border-line px-4 py-2 last:border-b-0"
-    >
-      <div className="flex min-h-6 flex-wrap items-center gap-x-[9px] gap-y-1 text-[13px]">
-        <StatusPixel state={resultPixel(check.result)} size={6} />
-        <span dir="ltr" className="min-w-0 break-words text-fg [unicode-bidi:isolate]">
+    <li data-testid={id} data-result={check.result} className="flex flex-col gap-[6px]">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-[9px] text-[12px]">
+        <span dir="ltr" className="min-w-0 break-words text-fg2 [unicode-bidi:isolate]">
           {check.name === "" ? unnamedCheck : <VisibleName text={check.name} />}
         </span>
         {check.workflow !== null && check.workflow !== "" && (
@@ -113,52 +101,47 @@ function CheckRow({
             <VisibleName text={check.workflow} />
           </span>
         )}
-        <span className="font-pixel text-[11px] text-fg2 uppercase">
-          {resultWord(check.result)}
-        </span>
-        <span className="ml-auto flex flex-wrap items-center justify-end gap-[6px]">
-          {failed && job !== null && (
-            <Button
-              variant="secondary"
-              size="small"
-              testId={`${id}-toggle`}
-              expanded={open}
-              controls={`${id}-lines`}
-              onClick={() => {
-                onToggle(job);
-              }}
-            >
-              {open ? "Hide failing lines" : "Show failing lines"}
-            </Button>
-          )}
-          {failed && (
-            <Button
-              variant="secondary"
-              size="small"
-              testId={`${id}-send`}
-              onClick={() => {
-                sendToClaudeCode(checkRequest(found.number, check.run, check.job));
-              }}
-            >
-              {sendLabel}
-            </Button>
-          )}
-          {check.url !== null && (
-            <Button
-              variant="ghost"
-              size="small"
-              testId={`${id}-open`}
-              onClick={() => {
-                if (check.url !== null) onLink(check.url);
-              }}
-            >
-              {openLabel(found.host, check.url, "Open check details")}
-            </Button>
-          )}
-        </span>
       </div>
-      {failed && job === null && <p className="text-[12px] text-dim">{noLogSentence}</p>}
-      {failed && job !== null && open && (
+      <div className="flex flex-wrap items-center gap-[6px]">
+        {job !== null && (
+          <Button
+            variant="secondary"
+            size="small"
+            testId={`${id}-toggle`}
+            expanded={open}
+            controls={`${id}-lines`}
+            onClick={() => {
+              onToggle(job);
+            }}
+          >
+            {open ? "Hide failing lines" : "Show failing lines"}
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          size="small"
+          testId={`${id}-send`}
+          onClick={() => {
+            sendToClaudeCode(checkRequest(found.number, check.run, check.job));
+          }}
+        >
+          {sendLabel}
+        </Button>
+        {check.url !== null && (
+          <Button
+            variant="ghost"
+            size="small"
+            testId={`${id}-open`}
+            onClick={() => {
+              if (check.url !== null) onLink(check.url);
+            }}
+          >
+            {openLabel(found.host, check.url, "Open check details")}
+          </Button>
+        )}
+      </div>
+      {job === null && <p className="text-[12px] text-dim">{noLogSentence}</p>}
+      {job !== null && open && (
         <div
           id={`${id}-lines`}
           data-testid={state.answer === null ? undefined : `${id}-lines`}
@@ -171,7 +154,7 @@ function CheckRow({
   );
 }
 
-export function ChecksList({
+export function FailedChecks({
   workspace,
   found,
   onLink,
@@ -207,17 +190,10 @@ export function ChecksList({
         change(job, { open: true, answer: result.ok ? result.value : unreadable });
     });
   };
-  if (found.checks.length === 0) {
-    return (
-      <p data-testid="pull-request-checks" className="px-4 py-3 text-[13px] text-dim">
-        {noChecksSentence}
-      </p>
-    );
-  }
   return (
-    <div data-testid="pull-request-checks" className="flex flex-col">
-      <ul className="flex flex-col">
-        {found.checks.map((check, index) => (
+    <ul data-testid="ready-failed-checks" className="flex flex-col gap-3 pt-1 pr-1 pb-2 pl-[30px]">
+      {found.checks.map((check, index) =>
+        check.result === "failed" ? (
           <CheckRow
             key={`${check.job ?? check.url ?? check.name}-${String(index)}`}
             index={index}
@@ -227,14 +203,8 @@ export function ChecksList({
             onToggle={toggle}
             onLink={onLink}
           />
-        ))}
-      </ul>
-      {found.moreChecks > 0 && (
-        <p className="px-4 py-2 text-[12px] text-dim">{moreSentence(found.moreChecks)}</p>
+        ) : null,
       )}
-      {found.counts.pending > 0 && (
-        <p className="px-4 py-2 text-[12px] text-dim">{runningChecksSentence}</p>
-      )}
-    </div>
+    </ul>
   );
 }

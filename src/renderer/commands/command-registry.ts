@@ -35,6 +35,7 @@ export type CommandId =
   | "notifications.off"
   | "notifications.on"
   | "inbox.newest"
+  | "inbox.next"
   | "files.show"
   | "files.open"
   | "changes.show"
@@ -46,7 +47,6 @@ export type CommandId =
   | "changes.send-lines"
   | "pull-request.show"
   | "pull-request.open"
-  | "pull-request.next-thread"
   | "processes.show";
 
 export interface Command {

@@ -8,11 +8,11 @@ export interface PullRequestPlace {
 }
 
 export const viewFields =
-  "number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews,statusCheckRollup,commits";
+  "number,url,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus,reviewDecision,reviews,statusCheckRollup,commits";
 export const viewProjection =
-  "{number,url,title,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,body,mergeable,mergeStateStatus,reviewDecision,changedFiles,reviews:[.reviews[]?|{state,commit:.commit.oid,login:.author.login,association:.authorAssociation,at:.submittedAt}],checks:[.statusCheckRollup[]?|{name,workflow:.workflowName,status,conclusion,context,state,url:(.detailsUrl//.targetUrl),startedAt}],commits:[.commits[]?|{oid,headline:.messageHeadline}]}";
+  "{number,url,state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus,reviewDecision,reviews:[.reviews[]?|{id,state,commit:.commit.oid,login:.author.login,association:.authorAssociation,at:.submittedAt}],checks:[.statusCheckRollup[]?|{name,workflow:.workflowName,status,conclusion,context,state,url:(.detailsUrl//.targetUrl),startedAt}],commits:[.commits[]?|{oid,headline:.messageHeadline}]}";
 export const threadsQuery =
-  "query($owner:String!,$repo:String!,$head:String!,$number:Int!,$detail:Boolean!){viewer{login}repository(owner:$owner,name:$repo){pullRequests(headRefName:$head,first:100,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number state authorAssociation author{login}isCrossRepository}}pullRequest(number:$number){commits(last:100){totalCount nodes{commit{oid messageHeadline}}}...@include(if:$detail){reviews(last:100){totalCount nodes{url state submittedAt body isMinimized minimizedReason author{login}authorAssociation}}comments(last:50){totalCount nodes{url createdAt body isMinimized minimizedReason author{login}authorAssociation}}reviewThreads(first:100){totalCount nodes{isResolved isOutdated path line diffSide comments(first:20){totalCount nodes{url body createdAt isMinimized minimizedReason author{login}authorAssociation}}}}}}}}";
+  "query($owner:String!,$repo:String!,$head:String!,$number:Int!,$detail:Boolean!){viewer{login}repository(owner:$owner,name:$repo){pullRequests(headRefName:$head,first:100,orderBy:{field:CREATED_AT,direction:DESC}){nodes{number state authorAssociation author{login}isCrossRepository}}pullRequest(number:$number){commits(last:100){totalCount nodes{commit{oid messageHeadline}}}reviewThreads(first:100)@include(if:$detail){totalCount nodes{isResolved}}}}}";
 
 const ownerPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,38}$/;
 const repoPattern = /^[A-Za-z0-9._-]{1,100}$/;

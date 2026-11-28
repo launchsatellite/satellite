@@ -1,24 +1,23 @@
 import { z } from "zod";
 import {
-  hiddenReason,
   pullRequestLimits,
   type PullRequestDetail,
   type PullRequestFound,
 } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { isBranchName } from "../../shared/workspace-name.ts";
-import { isChangePath } from "../changes/file-sides.ts";
-import { checkedAddress } from "./checked-address.ts";
 import { checksOf, countsOf } from "./check-result.ts";
 import { cutText } from "./cut-text.ts";
 import { placeOf, type PullRequestPlace } from "./gh-arguments.ts";
-import { isOwnerMemberOrCollaborator, needsOf, type ReviewFact } from "./pull-request-needs.ts";
+import {
+  isOwnerMemberOrCollaborator,
+  needsOf,
+  reviewersOf,
+  type ReviewFact,
+} from "./pull-request-needs.ts";
 
 type Found = Omit<PullRequestFound, "detail">;
 type ReadDetail = Extract<PullRequestDetail, { kind: "read" }>;
-type Comment = ReadDetail["comments"][number];
-type Review = ReadDetail["reviews"][number];
-type Thread = ReadDetail["threads"][number];
 type Commit = Found["commits"][number];
 
 const looseText = z.string().nullish().catch(undefined);
@@ -29,23 +28,21 @@ const looseNode = <T extends z.ZodType>(shape: T) => shape.nullish().catch(undef
 const viewShape = z.object({
   number: looseCount,
   url: looseText,
-  title: looseText,
   state: looseText,
   isDraft: looseFlag,
   baseRefName: looseText,
   headRefName: looseText,
   headRefOid: looseText,
   isCrossRepository: looseFlag,
-  body: looseText,
   mergeable: looseText,
   mergeStateStatus: looseText,
   reviewDecision: looseText,
-  changedFiles: looseCount,
   reviews: looseList,
   checks: looseList,
   commits: looseList,
 });
 const reviewFactShape = z.object({
+  id: looseText,
   state: looseText,
   commit: looseText,
   login: looseText,
@@ -57,29 +54,11 @@ const pullRequestCommit = z.object({
   commit: looseNode(z.object({ oid: looseText, messageHeadline: looseText })),
 });
 const author = looseNode(z.object({ login: looseText }));
-const commentNode = z.object({
-  url: looseText,
-  state: looseText,
-  body: looseText,
-  createdAt: looseText,
-  submittedAt: looseText,
-  isMinimized: looseFlag,
-  minimizedReason: looseText,
-  author,
-  authorAssociation: looseText,
-});
 const connection = z.object({
   totalCount: looseCount,
   nodes: looseList,
 });
-const threadNode = z.object({
-  isResolved: looseFlag,
-  isOutdated: looseFlag,
-  path: looseText,
-  line: looseCount,
-  diffSide: looseText,
-  comments: looseNode(connection),
-});
+const threadNode = z.object({ isResolved: looseFlag });
 const candidateNode = z.object({
   number: looseCount,
   state: looseText,
@@ -97,8 +76,6 @@ const threadsShape = z.object({
           pullRequest: looseNode(
             z.object({
               commits: looseNode(connection),
-              reviews: looseNode(connection),
-              comments: looseNode(connection),
               reviewThreads: looseNode(connection),
             }),
           ),
@@ -116,13 +93,6 @@ const mergeStateOf = z
 const decisionOf = z
   .enum(["approved", "changes-requested", "review-required", "none"])
   .catch("none");
-const reviewStateOf = z.enum([
-  "approved",
-  "changes-requested",
-  "commented",
-  "dismissed",
-  "pending",
-]);
 const escape = String.fromCharCode(0x1b);
 const bell = String.fromCharCode(0x07);
 const terminalEscape = new RegExp(
@@ -170,128 +140,13 @@ function restOf(total: number | null | undefined, kept: number): number {
   return Math.max(0, Math.min(wholeCount(total) ?? 0, 1_000_000) - kept);
 }
 
-function momentOf(text: string | null | undefined): string | null {
-  return text !== undefined && text !== null && text.length <= 40 ? text : null;
-}
-
-function addressOf(text: string | null | undefined, host: string): string | null {
-  return checkedAddress(text, host)?.href ?? null;
-}
-
-function loginOf(node: z.output<typeof commentNode>): string | null {
-  const login = node.author?.login;
-  return login === undefined || login === null || login === ""
-    ? null
-    : cutText(login, pullRequestLimits.nameChars).text;
-}
-
-function commentOf(
-  node: z.output<typeof commentNode>,
-  at: string | null | undefined,
-  host: string,
-  viewer: string | null,
-): Comment {
-  const association = node.authorAssociation;
-  const hidden = node.isMinimized === true;
-  const body = hidden
-    ? { text: "", cut: false }
-    : cutText(node.body ?? "", pullRequestLimits.bodyChars);
-  return {
-    author: loginOf(node),
-    outside:
-      typeof association === "string" &&
-      !isOwnerMemberOrCollaborator(association) &&
-      (viewer === null || node.author?.login !== viewer),
-    at: momentOf(at),
-    body: body.text,
-    bodyCut: body.cut,
-    hidden,
-    hiddenReason: hidden
-      ? (hiddenReason.safeParse(dashed(node.minimizedReason)).data ?? null)
-      : null,
-    url: addressOf(node.url, host),
-  };
-}
-
 function lastOf<T>(items: T[], limit: number): T[] {
   return items.slice(-limit);
 }
 
-interface Budget {
-  left: number;
-}
-
-function withinBudget(comment: Comment, budget: Budget): Comment | null {
-  if (budget.left <= 0) return null;
-  const fits = comment.body.length <= budget.left;
-  const body = fits ? comment.body : cutText(comment.body, budget.left).text;
-  budget.left -= body.length;
-  return { ...comment, body, bodyCut: comment.bodyCut || !fits };
-}
-
-function reviewsOf(
-  list: z.output<typeof connection> | null | undefined,
-  budget: Budget,
-  host: string,
-  viewer: string | null,
-): { reviews: Review[]; more: number } {
-  const nodes = each(list?.nodes, commentNode);
-  const real = nodes.flatMap((node): { node: typeof node; state: Review["state"] }[] => {
-    const state = reviewStateOf.safeParse(dashed(node.state));
-    if (!state.success) return [];
-    if (state.data === "commented" && (node.body ?? "").trim() === "") return [];
-    return [{ node, state: state.data }];
-  });
-  const newest = lastOf(real, pullRequestLimits.reviews);
-  const reviews = newest.flatMap(({ node, state }): Review[] => {
-    const comment = withinBudget(commentOf(node, node.submittedAt, host, viewer), budget);
-    return comment === null ? [] : [{ ...comment, state }];
-  });
-  const unseen = restOf(list?.totalCount, nodes.length);
-  return { reviews, more: unseen + real.length - reviews.length };
-}
-
-function isDiscussion(address: string, prefix: string): boolean {
-  return address.startsWith(prefix) && /^[0-9]+$/.test(address.slice(prefix.length));
-}
-
-function threadOf(
-  node: z.output<typeof threadNode>,
-  place: PullRequestPlace,
-  budget: Budget,
-  viewer: string | null,
-): Thread {
-  const nodes = each(node.comments?.nodes, commentNode).slice(0, pullRequestLimits.threadComments);
-  const line = node.line;
-  const side = (node.diffSide ?? "").toLowerCase();
-  const discussion = `https://${place.host}/${place.owner}/${place.repo}/pull/${String(place.number)}#discussion_r`;
-  const first = nodes[0]?.url;
-  const comments = nodes.flatMap((comment) => {
-    const kept = withinBudget(commentOf(comment, comment.createdAt, place.host, viewer), budget);
-    return kept === null ? [] : [kept];
-  });
-  return {
-    resolved: node.isResolved === true,
-    outdated: node.isOutdated === true,
-    path:
-      node.path !== undefined && node.path !== null && isChangePath(node.path) ? node.path : null,
-    line:
-      line !== undefined &&
-      line !== null &&
-      Number.isInteger(line) &&
-      line >= 1 &&
-      line <= 1_000_000
-        ? line
-        : null,
-    side: side === "left" || side === "right" ? side : null,
-    url: first !== undefined && first !== null && isDiscussion(first, discussion) ? first : null,
-    comments,
-    moreComments: restOf(node.comments?.totalCount, nodes.length) + nodes.length - comments.length,
-  };
-}
-
 function reviewFactsOf(list: readonly unknown[] | null | undefined): ReviewFact[] {
   return each(list, reviewFactShape).map((review) => ({
+    id: review.id ?? null,
     login: review.login ?? null,
     state: review.state ?? "",
     commit: review.commit ?? null,
@@ -315,10 +170,7 @@ function stateOf(
   return state === "OPEN" && draft === true ? "draft" : "open";
 }
 
-export function parseView(
-  stdout: string,
-  localHead: string | null,
-): {
+export function parseView(stdout: string): {
   place: PullRequestPlace;
   found: Found;
   headOid: string | null;
@@ -339,7 +191,8 @@ export function parseView(
   const state = stateOf(view.state, view.isDraft);
   const checks = checksOf(view.checks, place);
   const counts = countsOf(checks);
-  const body = cutText(view.body ?? "", pullRequestLimits.bodyChars);
+  const mergeable = mergeableOf.parse(dashed(view.mergeable));
+  const reviewers = reviewersOf(reviewFactsOf(view.reviews), headOid);
   const listed = each(view.commits, commitShape);
   const commits = listed.flatMap((commit) => commitOf(commit.oid, commit.headline));
   const commitsCut =
@@ -349,32 +202,21 @@ export function parseView(
     number,
     url: view.url ?? "",
     host: place.host,
-    title: cutText(view.title ?? "", pullRequestLimits.titleChars).text,
     state,
     base: branchOf(view.baseRefName),
     head: branchOf(view.headRefName),
     crossRepository: view.isCrossRepository === true,
-    mergeable: mergeableOf.parse(dashed(view.mergeable)),
+    mergeable,
     mergeState: mergeStateOf.parse(dashed(view.mergeStateStatus)),
     review: decisionOf.parse(dashed(view.reviewDecision)),
+    reviewers: reviewers.slice(0, pullRequestLimits.reviewers),
     counts,
-    needs: [],
-    atHead: localHead === null || headOid === null ? null : localHead === headOid,
-    body: body.text,
-    bodyCut: body.cut,
-    changedFiles: wholeCount(view.changedFiles),
+    needs: needsOf({ state, counts, mergeable, reviewers }),
     commits: commits.slice(0, pullRequestLimits.commits),
     moreCommits: restOf(commits.length, pullRequestLimits.commits),
     checks: checks.slice(0, pullRequestLimits.checks),
     moreChecks: restOf(checks.length, pullRequestLimits.checks),
   };
-  found.needs = needsOf({
-    state,
-    counts,
-    mergeable: found.mergeable,
-    reviews: reviewFactsOf(view.reviews),
-    headOid,
-  });
   return { place, found, headOid, commitsCut };
 }
 
@@ -425,42 +267,16 @@ function candidatesOf(
   );
 }
 
-function detailOf(
-  pullRequest: NonNullable<
-    NonNullable<NonNullable<z.output<typeof threadsShape>["data"]>["repository"]>["pullRequest"]
-  >,
-  place: PullRequestPlace,
-  viewer: string | null,
-): ReadDetail {
-  const budget = { left: pullRequestLimits.detailChars };
-  const threadNodes = each(pullRequest.reviewThreads?.nodes, threadNode).slice(
-    0,
-    pullRequestLimits.threads,
-  );
-  const threads = threadNodes.map((thread) => threadOf(thread, place, budget, viewer));
-  const reviews = reviewsOf(pullRequest.reviews, budget, place.host, viewer);
-  const nodes = lastOf(each(pullRequest.comments?.nodes, commentNode), pullRequestLimits.comments);
-  const comments = nodes.flatMap((node) => {
-    const kept = withinBudget(commentOf(node, node.createdAt, place.host, viewer), budget);
-    return kept === null ? [] : [kept];
-  });
+function detailOf(list: z.output<typeof connection> | null | undefined): ReadDetail {
+  const threads = each(list?.nodes, threadNode).slice(0, pullRequestLimits.threads);
   return {
     kind: "read",
-    reviews: reviews.reviews,
-    moreReviews: reviews.more,
-    comments,
-    moreComments:
-      restOf(pullRequest.comments?.totalCount, nodes.length) + nodes.length - comments.length,
-    threads,
-    moreThreads: restOf(pullRequest.reviewThreads?.totalCount, threadNodes.length),
+    openThreads: threads.filter((thread) => thread.isResolved !== true).length,
+    moreThreads: restOf(list?.totalCount, threads.length),
   };
 }
 
-export function parseConversation(
-  stdout: string,
-  place: PullRequestPlace,
-  detail: boolean,
-): Conversation | null {
+export function parseConversation(stdout: string, detail: boolean): Conversation | null {
   const parsed = threadsShape.safeParse(parseJson(stdout));
   const data = parsed.success ? parsed.data.data : undefined;
   const repository = data?.repository;
@@ -471,7 +287,7 @@ export function parseConversation(
     commits: newestCommits(pullRequest?.commits),
     detail:
       detail && pullRequest !== undefined && pullRequest !== null
-        ? detailOf(pullRequest, place, viewerOf(data?.viewer?.login))
+        ? detailOf(pullRequest.reviewThreads)
         : null,
   };
 }

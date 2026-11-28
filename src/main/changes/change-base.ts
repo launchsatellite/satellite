@@ -1,7 +1,7 @@
 import { isBranchName } from "../../shared/workspace-name.ts";
 import type { ToolRun } from "../platform/tools.ts";
 import { samePath } from "../platform/paths.ts";
-import { defaultStart, pickRemote } from "../workspaces/create-steps.ts";
+import { defaultStart } from "../workspaces/create-steps.ts";
 import { gitReadMs, storedObjects, runGit } from "../workspaces/git-command.ts";
 import { isObjectName } from "./file-sides.ts";
 
@@ -35,28 +35,12 @@ async function commitOid(folder: string, spec: string, signal?: AbortSignal) {
   return run.exitCode === 0 && (await isObjectName(folder, oid, signal)) ? oid : undefined;
 }
 
-async function namedRef(
-  projectRoot: string,
-  remotes: Promise<ToolRun | undefined> | undefined,
-  named: string,
-): Promise<BaseLookup | Omit<ChangeBase, "oid">> {
-  const listed = await (remotes ??
-    runGit(projectRoot, ["remote"], gitReadMs, undefined, { gitVariables: storedObjects }));
-  if (listed?.exitCode !== 0) return failed;
-  const remote = pickRemote(listed.stdout);
-  if (remote === null || !isBranchName(named)) return { kind: "none", why: "gone" };
-  const name = `${remote}/${named}`;
-  return { ref: `refs/remotes/${name}`, name };
-}
-
 async function baseRef(
   projectRoot: string,
   folder: string,
   signal?: AbortSignal,
   remotes?: Promise<ToolRun | undefined>,
-  named?: string,
 ): Promise<BaseLookup | Omit<ChangeBase, "oid">> {
-  if (named !== undefined) return namedRef(projectRoot, remotes, named);
   const start = await defaultStart(projectRoot, remotes, signal);
   if (start === undefined) return failed;
   if (start.remote !== null && start.unread === true) return failed;
@@ -95,9 +79,8 @@ export async function resolveBase(
   folder: string,
   signal?: AbortSignal,
   remotes?: Promise<ToolRun | undefined>,
-  named?: string,
 ): Promise<BaseLookup> {
-  const found = await baseRef(projectRoot, folder, signal, remotes, named);
+  const found = await baseRef(projectRoot, folder, signal, remotes);
   if ("kind" in found) return found;
   const oid = await commitOid(folder, `${found.ref}^{commit}`, signal);
   if (oid === undefined) return failed;
