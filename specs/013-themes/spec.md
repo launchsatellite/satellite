@@ -16,7 +16,7 @@ Developers live in one colour theme all day, in their code editor and their term
 - Colouring never holds the window. Each grammar takes lines up to a measured length, the worker works in 25 ms slices with a second per file, and anything past those shows as plain text. Opening a file colours only that file and leaves every open diff's scroll, expanded regions and selection where they are.
 - Every grammar's own copyright and licence ship in `third-party-licenses.md`.
 - The mapping holds every pair it makes at 4.5 to 1 for text, 3 to 1 for status pixels and the focus ring, and 1.3 to 1 for control edges, as `DESIGN.md` states.
-- Every surface follows a change at once with no relaunch, the chrome, every dialog and menu, every terminal shown or hidden, every open code viewer and diff, the Markdown view, text selection, focus rings, scrollbars, the window's background, the title bar overlay on Windows and Linux, the system colour scheme the page and native dialogs read, and the first run.
+- Every surface follows a change at once with no relaunch, the chrome, every dialog and menu, every terminal shown or hidden, every open code viewer and diff, text selection, focus rings, scrollbars, the window's background, the title bar overlay on Windows and Linux, the system colour scheme the page and native dialogs read, and the first run.
 - Settings credits the selected curated theme in one sentence with a button that opens its site through the link dialog, and the theme's licence ships in `third-party-licenses.md`.
 - The `win` ground takes the theme's `sideBar.background`, so a curated theme colours the sidebar and the rail as one ground around the raised centre.
 

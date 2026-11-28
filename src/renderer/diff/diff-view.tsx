@@ -10,18 +10,14 @@ import { applyMonacoTheme } from "./monaco-environment.ts";
 import {
   CutShort,
   lineMarks,
-  markClick,
   plainModel,
-  revealLine,
   selectedLines,
-  threadDecorations,
   type DiffHandle,
   type DiffSide,
-  type MarkProps,
 } from "./read-only-editor.tsx";
 import { drawnColumns, readOnlyOptions } from "./read-only-options.ts";
 
-interface DiffViewProps extends MarkProps {
+interface DiffViewProps {
   original: string;
   modified: string;
   path: string;
@@ -41,16 +37,7 @@ function changedLines(created: editor.IStandaloneDiffEditor, side: DiffSide): nu
   return lines;
 }
 
-export function DiffView({
-  original,
-  modified,
-  path,
-  inline,
-  labels,
-  handle,
-  marks: threadMarks,
-  onMark,
-}: DiffViewProps) {
+export function DiffView({ original, modified, path, inline, labels, handle }: DiffViewProps) {
   const host = useRef<HTMLDivElement>(null);
   const diffEditor = useRef<editor.IStandaloneDiffEditor>(null);
   const shownPath = useRef<string>(null);
@@ -58,15 +45,6 @@ export function DiffView({
   const pendingView = useRef<editor.IDiffEditorViewState>(null);
   const revealed = useRef<Record<DiffSide, RevealedRange[]>>({ original: [], modified: [] });
   const [cutShort, setCutShort] = useState(false);
-  const threadLine = useRef<editor.IEditorDecorationsCollection>(null);
-  const threadMarksNow = useRef(threadMarks);
-  const onMarkNow = useRef(onMark);
-  const marked = threadMarks !== undefined;
-
-  useEffect(() => {
-    threadMarksNow.current = threadMarks;
-    onMarkNow.current = onMark;
-  }, [threadMarks, onMark]);
 
   useImperativeHandle(
     handle,
@@ -79,10 +57,6 @@ export function DiffView({
           side === "original" ? created.getOriginalEditor() : created.getModifiedEditor(),
           side,
         );
-      },
-      reveal: (line) => {
-        const created = diffEditor.current;
-        return created !== null && revealLine(created.getModifiedEditor(), line);
       },
     }),
     [inline],
@@ -100,7 +74,7 @@ export function DiffView({
       renderOverviewRuler: false,
       renderIndicators: true,
       hideUnchangedRegions: {
-        enabled: threadMarksNow.current === undefined,
+        enabled: true,
         contextLineCount: 3,
         minimumLineCount: 3,
         revealLineCount: 20,
@@ -110,13 +84,6 @@ export function DiffView({
       ignoreTrimWhitespace: false,
     });
     diffEditor.current = created;
-    created
-      .getModifiedEditor()
-      .updateOptions({ glyphMargin: threadMarksNow.current !== undefined });
-    threadLine.current = created.getModifiedEditor().createDecorationsCollection();
-    const unclick = markClick(created.getModifiedEditor(), (line) => {
-      onMarkNow.current?.(line);
-    });
     created.getOriginalEditor().onDidFocusEditorText(() => {
       focusedSide.current = "original";
     });
@@ -149,8 +116,6 @@ export function DiffView({
     const stopTheme = onThemeChange(applyMonacoTheme);
 
     return () => {
-      unclick.dispose();
-      threadLine.current = null;
       stopTheme();
       const model = created.getModel();
       created.dispose();
@@ -164,19 +129,10 @@ export function DiffView({
   useEffect(() => {
     const created = diffEditor.current;
     if (created === null) return;
-    created.updateOptions({
-      renderSideBySide: !inline,
-      hideUnchangedRegions: {
-        enabled: !marked,
-        contextLineCount: 3,
-        minimumLineCount: 3,
-        revealLineCount: 20,
-      },
-    });
-    created.getModifiedEditor().updateOptions({ glyphMargin: marked });
+    created.updateOptions({ renderSideBySide: !inline });
     created.getOriginalEditor().updateOptions({ ariaLabel: labels.original });
     created.getModifiedEditor().updateOptions({ ariaLabel: labels.modified });
-  }, [inline, marked, labels.original, labels.modified]);
+  }, [inline, labels.original, labels.modified]);
 
   useEffect(() => {
     const created = diffEditor.current;
@@ -193,15 +149,7 @@ export function DiffView({
     shownPath.current = path;
     previous?.original.dispose();
     previous?.modified.dispose();
-    threadLine.current?.set(
-      threadDecorations(threadMarksNow.current ?? [], shown.modified.model.getLineCount()),
-    );
   }, [original, modified, path]);
-
-  useEffect(() => {
-    const lines = diffEditor.current?.getModifiedEditor().getModel()?.getLineCount() ?? 0;
-    threadLine.current?.set(threadDecorations(threadMarks ?? [], lines));
-  }, [threadMarks]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

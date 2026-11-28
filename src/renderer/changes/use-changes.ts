@@ -59,8 +59,8 @@ function sameHeader(current: Header | null, next: Header): boolean {
   );
 }
 
-export function changesPlace(workspace: WorkspaceRef, view: ChangesView, base?: string): string {
-  return `${workspace.projectId}/${workspace.workspace}/${view}/${view === "branch" ? (base ?? "") : ""}`;
+export function changesPlace(workspace: WorkspaceRef, view: ChangesView): string {
+  return `${workspace.projectId}/${workspace.workspace}/${view}`;
 }
 
 export function useChanges(
@@ -68,7 +68,6 @@ export function useChanges(
   view: ChangesView,
   finished: string,
   selected: string | undefined,
-  base?: string,
 ): { list: ChangesList | undefined; error: string | null; header: Header | undefined } {
   const [listed, setListed] = useState<ListedPlace | null>(null);
   const [header, setHeader] = useState<Header | null>(null);
@@ -77,7 +76,7 @@ export function useChanges(
   const seen = useRef<{ place: string | null; finished: string }>({ place: null, finished });
   const projectId = workspace?.projectId;
   const key = workspace?.workspace;
-  const place = workspace === null ? null : changesPlace(workspace, view, base);
+  const place = workspace === null ? null : changesPlace(workspace, view);
   const here = workspace === null ? null : `${workspace.projectId}/${workspace.workspace}`;
   const [askedPlace, setAskedPlace] = useState(place);
   if (askedPlace !== place) {
@@ -103,7 +102,6 @@ export function useChanges(
         const result = await invoke("changes.list", {
           workspace: { projectId, workspace: key },
           view,
-          ...(base === undefined ? {} : { base }),
         });
         if (!stopped) {
           setListed((current) => settled(current, answered(current, place, result)));
@@ -140,7 +138,7 @@ export function useChanges(
       window.removeEventListener("focus", schedule.refresh);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [projectId, key, view, base, place]);
+  }, [projectId, key, view, place]);
 
   useEffect(() => {
     const before = seen.current;

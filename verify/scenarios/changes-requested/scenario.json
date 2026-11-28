@@ -1,5 +1,5 @@
 {
-  "description": "A clone of a local upstream with one pushed workspace, alpha, and a stand-in gh that answers open pull request 12 with a review that requests changes on the head commit, two unresolved threads on src/app.ts (one on a changed line, one outdated) and one resolved thread, plus a comment from ada-example, who has no standing in the repository. After the mark answered a newer approving review from the same login replaces the request. Satellite is set to the light theme.",
+  "description": "A clone of a local upstream with one pushed workspace, alpha, and a stand-in gh that answers open pull request 12 with a review that requests changes on the head commit, two unresolved threads and one resolved thread. After the mark answered a newer approving review from the same login replaces the request. Satellite is set to the light theme.",
   "folders": [
     {
       "name": "upstream",
@@ -111,20 +111,18 @@
       "json": {
         "number": 12,
         "url": "https://github.com/example-org/verify-repo/pull/12",
-        "title": "Greet people by name",
         "state": "OPEN",
         "isDraft": false,
         "baseRefName": "main",
         "headRefName": "alpha",
         "headRefOid": "@head",
         "isCrossRepository": false,
-        "body": "## What changed\n\nThe greeting now names the person and ends with an exclamation mark.\n\n- Adds a `greeting` constant\n- Keeps the old export working\n- Updates the guide\n\n### Checklist\n\n- [x] Tests pass\n- [ ] Docs reviewed\n\n| File | Change |\n| --- | --- |\n| src/app.ts | Reworded |\n| docs/guide.md | New |\n\n```ts\nexport function greet(name: string) {\n  return `Hello, ${name}!`;\n}\n```\n\nSee the [contributing guide](https://github.com/example-org/verify-repo/blob/main/CONTRIBUTING.md) for the review rules.\n",
         "mergeable": "MERGEABLE",
         "mergeStateStatus": "CLEAN",
         "reviewDecision": "CHANGES_REQUESTED",
-        "changedFiles": 2,
         "reviews": [
           {
+            "id": "PRR_kwDOverify4001",
             "state": "CHANGES_REQUESTED",
             "commit": "@head",
             "login": "grace-example",
@@ -205,20 +203,18 @@
       "json": {
         "number": 12,
         "url": "https://github.com/example-org/verify-repo/pull/12",
-        "title": "Greet people by name",
         "state": "OPEN",
         "isDraft": false,
         "baseRefName": "main",
         "headRefName": "alpha",
         "headRefOid": "@head",
         "isCrossRepository": false,
-        "body": "## What changed\n\nThe greeting now names the person and ends with an exclamation mark.\n\n- Adds a `greeting` constant\n- Keeps the old export working\n- Updates the guide\n\n### Checklist\n\n- [x] Tests pass\n- [ ] Docs reviewed\n\n| File | Change |\n| --- | --- |\n| src/app.ts | Reworded |\n| docs/guide.md | New |\n\n```ts\nexport function greet(name: string) {\n  return `Hello, ${name}!`;\n}\n```\n\nSee the [contributing guide](https://github.com/example-org/verify-repo/blob/main/CONTRIBUTING.md) for the review rules.\n",
         "mergeable": "MERGEABLE",
         "mergeStateStatus": "CLEAN",
         "reviewDecision": "APPROVED",
-        "changedFiles": 2,
         "reviews": [
           {
+            "id": "PRR_kwDOverify4002",
             "state": "CHANGES_REQUESTED",
             "commit": "@head",
             "login": "grace-example",
@@ -226,6 +222,7 @@
             "at": "2025-01-02T09:00:00Z"
           },
           {
+            "id": "PRR_kwDOverify4003",
             "state": "APPROVED",
             "commit": "@head",
             "login": "grace-example",
@@ -317,101 +314,17 @@
               ]
             },
             "pullRequest": {
-              "reviews": {
-                "totalCount": 1,
-                "nodes": [
-                  {
-                    "url": "https://github.com/example-org/verify-repo/pull/12#pullrequestreview-4001",
-                    "state": "CHANGES_REQUESTED",
-                    "submittedAt": "2025-01-02T09:00:00Z",
-                    "body": "Two things to **fix** before this lands. See the threads on `src/app.ts`.",
-                    "author": {
-                      "login": "grace-example"
-                    },
-                    "authorAssociation": "MEMBER"
-                  }
-                ]
-              },
-              "comments": {
-                "totalCount": 1,
-                "nodes": [
-                  {
-                    "url": "https://github.com/example-org/verify-repo/pull/12#issuecomment-5001",
-                    "createdAt": "2025-01-01T12:00:00Z",
-                    "body": "Thanks for the quick turnaround.",
-                    "isMinimized": false,
-                    "author": {
-                      "login": "ada-example"
-                    },
-                    "authorAssociation": "CONTRIBUTOR"
-                  }
-                ]
-              },
               "reviewThreads": {
                 "totalCount": 3,
                 "nodes": [
                   {
-                    "isResolved": true,
-                    "isOutdated": false,
-                    "path": "src/app.ts",
-                    "line": 2,
-                    "diffSide": "RIGHT",
-                    "comments": {
-                      "totalCount": 1,
-                      "nodes": [
-                        {
-                          "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3003",
-                          "body": "Could this use a template string?",
-                          "createdAt": "2025-01-01T13:00:00Z",
-                          "author": {
-                            "login": "review-bot"
-                          },
-                          "authorAssociation": "NONE"
-                        }
-                      ]
-                    }
+                    "isResolved": true
                   },
                   {
-                    "isResolved": false,
-                    "isOutdated": false,
-                    "path": "src/app.ts",
-                    "line": 2,
-                    "diffSide": "RIGHT",
-                    "comments": {
-                      "totalCount": 1,
-                      "nodes": [
-                        {
-                          "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3001",
-                          "body": "What happens when `name` is empty?",
-                          "createdAt": "2025-01-02T08:00:00Z",
-                          "author": {
-                            "login": "grace-example"
-                          },
-                          "authorAssociation": "MEMBER"
-                        }
-                      ]
-                    }
+                    "isResolved": false
                   },
                   {
-                    "isResolved": false,
-                    "isOutdated": true,
-                    "path": "src/app.ts",
-                    "line": null,
-                    "diffSide": "RIGHT",
-                    "comments": {
-                      "totalCount": 1,
-                      "nodes": [
-                        {
-                          "url": "https://github.com/example-org/verify-repo/pull/12#discussion_r3002",
-                          "body": "This line was reworded, is the old greeting still needed?",
-                          "createdAt": "2025-01-02T08:30:00Z",
-                          "author": {
-                            "login": "grace-example"
-                          },
-                          "authorAssociation": "MEMBER"
-                        }
-                      ]
-                    }
+                    "isResolved": false
                   }
                 ]
               }
