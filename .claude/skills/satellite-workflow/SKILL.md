@@ -55,7 +55,15 @@ gh pr create --base main --title "feat(workspaces): create a workspace in one st
 
 CodeRabbit then reviews the pull request against `AGENTS.md`, `CLAUDE.md` and these skills, with the settings in `.coderabbit.yaml`, which apply once merged into `main`. Below ten stars it never starts on its own, so request it with `gh pr comment <n> --body "@coderabbitai review"`. It only reviews. Its approval of the latest commit is required before an agent merges, never enough on its own, and a pending or skipped review is never treated as done. Never post a `@coderabbitai` command that writes code, such as `autofix`, `fix comments`, `fix-ci`, `local commit`, `resolve merge conflict`, `generate unit tests`, `simplify`, `run`, `generate configuration` or `emit path instructions`, and never tick its Finishing Touches boxes. Its commits would land as the maintainer and skip the local guards.
 
-Fill every section of `.github/pull_request_template.md`, report the link and what is left for the human, **then stop**. You never approve or enable auto-merge, and you merge only where the maintainer granted it. With the grant, squash-merge your own pull request once CI is fully green, CodeRabbit has finished and approved the latest commit, and every review is addressed, then bring any branch stacked on it up to date.
+Fill every section of `.github/pull_request_template.md` and report the link and what is left for the human. You never approve or enable auto-merge. Unless the maintainer asked you to merge, **stop** here and follow up as in step 9.
+
+You merge only where the maintainer granted it on this machine and asked you to in the task. Once CI is fully green, CodeRabbit has finished and approved the latest commit, and every review is addressed, squash-merge your own pull request. The ruleset on `main` lets only an admin update it, so the merge needs `--admin`.
+
+```sh
+gh pr merge <n> --squash --admin --match-head-commit <sha>
+```
+
+`<sha>` is the commit CodeRabbit approved and CI passed, so a commit pushed after them is never merged unreviewed. If the head moved, review and checks start again. GitHub deletes the merged branch itself, so leave out `--delete-branch`, which fails in a worktree once `main` is checked out elsewhere. If the command errors anyway, read `gh pr view <n> --json state` before trying again, since `MERGED` means the merge landed and only the steps after it remain. Then bring any branch stacked on it up to date, check `main` as in step 9 and start the next step of the task, the next pull request of a plan included, without waiting for a word.
 
 ## 9. Follow up until merged
 
