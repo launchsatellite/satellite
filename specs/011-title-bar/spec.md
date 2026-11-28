@@ -47,4 +47,4 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 
 ## Next
 
-- The 40px title bar strip goes. On macOS the traffic lights sit in the sidebar's top row. On Windows and Linux whichever top row the window buttons overlap keeps clear the area the system reports for them, on the right or the left, and the drag areas move into those top rows. With the sidebar hidden, the centre header takes the traffic lights and the drag area,, as 015 states. The workspace name moves to the centre header and Settings to the sidebar footer. Part of [015 Layout](../015-layout/spec.md).
+- The 40px title bar strip goes. On macOS the traffic lights sit in the sidebar's top row. On Windows and Linux whichever top row the window buttons overlap keeps its content inside the free area the system reports through `env(titlebar-area-*)`, with the buttons on the right or the left, and the drag areas move into those top rows. With the sidebar hidden, the centre header takes the traffic lights and the drag area,, as 015 states. The workspace name moves to the centre header and Settings to the sidebar footer. Part of [015 Layout](../015-layout/spec.md).
