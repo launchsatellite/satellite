@@ -40,7 +40,11 @@ export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, child
   return (
     <div className="flex h-full min-h-0 flex-col">
       {!shown ? null : folded ? (
-        <nav aria-label="Workspace views" className="flex flex-col items-center gap-1 pt-2">
+        <nav
+          aria-label="Workspace views"
+          data-guide="views"
+          className="flex flex-col items-center gap-1 pt-2"
+        >
           {views.map((shown) => (
             <Button
               key={shown.view}
@@ -50,6 +54,7 @@ export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, child
               label={labelOf(shown.view, pullRequest)}
               tooltip={labelOf(shown.view, pullRequest)}
               testId={railTabId(shown.view)}
+              data-number={shown.view === "pull-request" ? (pullRequest ?? undefined) : undefined}
               onClick={() => {
                 onUnfold(shown.view);
               }}
