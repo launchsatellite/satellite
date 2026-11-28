@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   defaultInterfaceState,
   filesLimits,
+  interfaceLimits,
   interfaceState,
   themeChoice,
   type FileTabs,
@@ -23,15 +24,23 @@ interface LoadedInterface {
   writable: boolean;
 }
 
+const fileVersion = 6;
 const storedState = interfaceState.extend({
   theme: z.string().max(100).pipe(themeChoice).catch("system"),
 });
-const version5 = storedState.extend({ version: z.literal(5) });
-const version4 = storedState
+const version6 = storedState.extend({ version: z.literal(fileVersion) });
+const legacyState = storedState.omit({ rail: true }).extend({
+  columns: z.strictObject({
+    left: z.int().min(200).max(360),
+    right: z.int().min(360).max(640),
+  }),
+});
+const version5 = legacyState.extend({ version: z.literal(5) });
+const version4 = legacyState
   .omit({ sidebar: true })
   .extend({ version: z.literal(4) })
   .transform((file): z.output<typeof version5> => ({ ...file, version: 5, sidebar: "shown" }));
-const version3 = storedState
+const version3 = legacyState
   .omit({ sidebar: true, guideSeen: true })
   .extend({ version: z.literal(3) })
   .transform((file): z.output<typeof version5> => ({
@@ -40,7 +49,7 @@ const version3 = storedState
     sidebar: "shown",
     guideSeen: true,
   }));
-const version2 = storedState
+const version2 = legacyState
   .omit({ sidebar: true, files: true, guideSeen: true })
   .extend({ version: z.literal(2) })
   .transform((file): z.output<typeof version5> => ({
@@ -50,7 +59,7 @@ const version2 = storedState
     files: [],
     guideSeen: true,
   }));
-const version1 = storedState
+const version1 = legacyState
   .omit({ sidebar: true, notifications: true, files: true, guideSeen: true })
   .extend({ version: z.literal(1) })
   .transform((file): z.output<typeof version5> => ({
@@ -61,7 +70,18 @@ const version1 = storedState
     files: [],
     guideSeen: true,
   }));
-const fileSchema = z.union([version1, version2, version3, version4, version5]);
+const legacyFile = z
+  .union([version1, version2, version3, version4, version5])
+  .transform(({ columns, ...file }): z.output<typeof version6> => ({
+    ...file,
+    version: fileVersion,
+    columns: {
+      sidebar: clamp(columns.left, interfaceLimits.sidebar),
+      rail: interfaceLimits.rail.initial,
+    },
+    rail: "shown",
+  }));
+const fileSchema = z.union([version6, legacyFile]);
 const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
@@ -76,16 +96,21 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
 const saveFailure =
   "Satellite couldn't save the layout. It keeps working and saves again on the next change.";
 
+function clamp(value: number, { min, max }: { min: number; max: number }): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 async function readInterfaceFile(file: string): Promise<LoadedInterface> {
   const { value, outcome } = await readJsonFile(file, fileSchema, {
     ...defaultInterfaceState,
-    version: 5,
+    version: fileVersion,
   });
   return {
     state: {
       selected: value.selected,
       columns: value.columns,
       sidebar: value.sidebar,
+      rail: value.rail,
       theme: value.theme,
       notifications: value.notifications,
       files: value.files,
@@ -104,7 +129,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
   const load = () => {
     cached ??= readInterfaceFile(file).then(async (loaded) => {
       if (loaded.notice !== null && loaded.writable) {
-        await writer.write({ version: 5, ...loaded.state }).catch(() => undefined);
+        await writer.write({ version: fileVersion, ...loaded.state }).catch(() => undefined);
       }
       return loaded;
     });
@@ -120,7 +145,7 @@ export function createInterfaceFile(home: string): InterfaceFile {
         const state = typeof next === "function" ? await next() : next;
         const loaded = await load();
         cached = Promise.resolve({ ...loaded, state });
-        if (loaded.writable) await writer.write({ version: 5, ...state });
+        if (loaded.writable) await writer.write({ version: fileVersion, ...state });
       });
       saving = run.catch(() => undefined);
       return run;

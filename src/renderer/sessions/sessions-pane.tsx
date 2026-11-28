@@ -13,13 +13,16 @@ import {
   sentText,
   type PromptTarget,
 } from "./send-to-claude-code.ts";
-import { SessionTabs, sessionPanelId, sessionTabId } from "./session-tabs.tsx";
+import { fileTabId, fileTabPanelId } from "../files/file-tabs.tsx";
+import { SessionTabs, sessionPanelId, sessionTabId, type CentreFiles } from "./session-tabs.tsx";
 import { tabLimit, tabLimitSentence, type Sessions } from "./use-sessions.ts";
 
 interface SessionsPaneProps {
   sessions: Sessions;
   selected: WorkspaceRef | null;
-  hasProjects: boolean;
+  files: CentreFiles;
+  fileHost: (host: HTMLDivElement | null) => void;
+  onSessionsFront: () => void;
   resumeAllowed: boolean;
   onAskLink: (address: string) => void;
   notify: Notify;
@@ -175,28 +178,31 @@ function EmptyWorkspace({
 export function SessionsPane({
   sessions,
   selected,
-  hasProjects,
+  files,
+  fileHost,
+  onSessionsFront,
   resumeAllowed,
   onAskLink,
   notify,
 }: SessionsPaneProps) {
+  const fileFront = files.front && files.active !== null;
   const tabs = selected === null ? [] : sessions.tabsOf(selected);
   const active = selected === null ? undefined : sessions.activeOf(selected);
   const shownTab = tabs.find((tab) => tab.key === active);
   const targets = useRef(new Map<string, PromptTarget>());
   const [missing, setMissing] = useState<string>();
   const pane = useRef<HTMLDivElement>(null);
-  const latest = useRef({ shownTab, notify });
+  const latest = useRef({ shownTab, notify, onSessionsFront });
   useEffect(() => {
-    latest.current = { shownTab, notify };
-  }, [shownTab, notify]);
+    latest.current = { shownTab, notify, onSessionsFront };
+  }, [shownTab, notify, onSessionsFront]);
   useEffect(() => {
     const receive = (event: Event) => {
       const raw = sentText(event);
       if (raw === undefined) return;
       const text = promptText(raw);
       if (text === "") return;
-      const { shownTab: tab, notify: tell } = latest.current;
+      const { shownTab: tab, notify: tell, onSessionsFront: front } = latest.current;
       const target = tab === undefined ? undefined : targets.current.get(tab.terminalId);
       if (tab === undefined || target === undefined) {
         tell(noSession, "error");
@@ -211,6 +217,7 @@ export function SessionsPane({
         return;
       }
       target.paste(text);
+      front();
       setTimeout(() => {
         if (leavesFocusAlone(document.activeElement, pane.current)) return;
         targets.current.get(tab.terminalId)?.focus();
@@ -225,6 +232,7 @@ export function SessionsPane({
     const receive = (event: Event) => {
       const terminalId = focusedTerminal(event);
       if (terminalId === undefined) return;
+      latest.current.onSessionsFront();
       setTimeout(() => {
         targets.current.get(terminalId)?.focus();
       });
@@ -258,20 +266,22 @@ export function SessionsPane({
       if (targets.current.get(id) === target) targets.current.delete(id);
     };
   }, []);
-  const top = () => {
-    if (selected === null) {
-      return (
-        <div className="flex flex-1 items-center justify-center p-6 text-center">
-          <p data-testid="sessions-empty" className="text-[13px] text-fg2">
-            {hasProjects
-              ? "Pick a workspace to start Claude Code there."
-              : "Add a project to start Claude Code in it."}
-          </p>
-        </div>
-      );
-    }
-    if (tabs.length === 0) {
-      return (
+  const stripShown = tabs.length > 0 || files.paths.length > 0;
+  return (
+    <div ref={pane} className="flex h-full min-h-0 flex-col">
+      {selected !== null && stripShown && (
+        <SessionTabs
+          tabs={tabs}
+          active={active}
+          files={files}
+          onActivate={(key) => {
+            onSessionsFront();
+            sessions.activate(key);
+          }}
+          onClose={sessions.close}
+        />
+      )}
+      {selected !== null && tabs.length === 0 && !fileFront && (
         <EmptyWorkspace
           key={`${selected.projectId}/${selected.workspace}`}
           workspace={selected}
@@ -284,23 +294,18 @@ export function SessionsPane({
               : undefined
           }
         />
-      );
-    }
-    return (
-      <SessionTabs
-        tabs={tabs}
-        active={active}
-        onActivate={sessions.activate}
-        onClose={sessions.close}
+      )}
+      <div
+        ref={fileHost}
+        role="tabpanel"
+        id={fileTabPanelId}
+        aria-labelledby={files.active === null ? undefined : fileTabId(files.active)}
+        hidden={!fileFront}
+        className="flex min-h-0 flex-1 flex-col"
       />
-    );
-  };
-  return (
-    <div ref={pane} className="flex h-full min-h-0 flex-col">
-      {top()}
-      <div hidden={tabs.length === 0} className="min-h-0 flex-1">
+      <div hidden={tabs.length === 0 || fileFront} className="min-h-0 flex-1">
         {sessions.all.map((tab) => {
-          const shown = tab.key === active;
+          const shown = tab.key === active && !fileFront;
           return (
             <div
               key={tab.key}

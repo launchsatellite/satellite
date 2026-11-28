@@ -18,8 +18,8 @@ interface Drag {
 
 const keyStep = 8;
 const labels = {
-  left: "Resize the projects column",
-  right: "Resize the sessions column",
+  left: "Resize the sidebar",
+  right: "Resize the rail",
 };
 const restingLine =
   "w-px group-hover:bg-ctl group-focus-visible:w-0.5 group-focus-visible:bg-accent";
@@ -83,7 +83,7 @@ export function ColumnDivider({
       aria-label={labels[side]}
       tabIndex={0}
       data-testid={testId}
-      className="group absolute inset-y-0 -right-[3px] z-20 w-[6px] cursor-col-resize touch-none outline-none select-none"
+      className={`group absolute inset-y-0 ${side === "left" ? "-right-[3px]" : "-left-[3px]"} z-20 w-[6px] cursor-col-resize touch-none outline-none select-none`}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={end}

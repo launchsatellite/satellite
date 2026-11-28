@@ -136,6 +136,7 @@ describe("themeLook", () => {
     const look = curatedLook("dracula");
     expect(look?.tokens).toMatchObject({
       bg: "#282a36",
+      win: "#21222c",
       side: "#21222c",
       fg: "#f8f8f2",
       dim: "#6272a4",

@@ -1,6 +1,4 @@
-import type { ReactNode } from "react";
 import type { ProjectView, PullRequestFound, WorkspaceView } from "../../shared/bridge-contract.ts";
-import { visibleText } from "../../shared/visible-text.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
@@ -26,7 +24,7 @@ interface WorkspaceHeaderProps {
   processes: number;
   onShowProcesses: () => void;
   onShowPullRequest: () => void;
-  tabs: ReactNode;
+  railHidden: boolean;
 }
 
 const readoutButton = "min-w-0 flex-none px-[7px] font-pixel font-normal text-dim uppercase";
@@ -41,24 +39,27 @@ export function WorkspaceHeader({
   processes,
   onShowProcesses,
   onShowPullRequest,
-  tabs,
+  railHidden,
 }: WorkspaceHeaderProps) {
   const tracking = trackingWords(ahead, behind);
   return (
     <header
       data-testid="workspace-header"
       tabIndex={-1}
-      className={`@container focus:outline-none flex h-10 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] whitespace-nowrap ${tabs === false ? "pl-4" : "pl-[7px]"}`}
+      className="@container flex h-12 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap focus:outline-none"
     >
-      <h1 className="sr-only">
-        {workspace.name === null
-          ? visibleText(project.name)
-          : `${visibleText(project.name)} / ${workspace.name}`}
+      <h1
+        dir="ltr"
+        className="min-w-[8ch] shrink truncate text-[14px] font-semibold [unicode-bidi:isolate]"
+      >
+        <span className={workspace.name === null ? "" : "font-normal text-dim"}>
+          <VisibleName text={project.name} />
+          {workspace.name !== null && " / "}
+        </span>
+        {workspace.name !== null && <VisibleName text={workspace.name} />}
       </h1>
-      {tabs}
-      <span className="flex-1" />
       {project.missing === null && (
-        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @md:flex">
+        <span className="hidden min-w-[6ch] items-center gap-[10px] text-dim @lg:flex">
           <span className="flex-none">
             <Icon name="branch" size={13} />
           </span>
@@ -72,7 +73,7 @@ export function WorkspaceHeader({
             <span
               data-testid="workspace-base"
               dir="ltr"
-              className="hidden min-w-0 shrink-[1000] truncate font-mono text-[12px] [unicode-bidi:isolate] @lg:block"
+              className="hidden min-w-0 shrink-[1000] truncate font-mono text-[12px] [unicode-bidi:isolate] @3xl:block"
             >
               from <VisibleName text={base} />
             </span>
@@ -91,6 +92,7 @@ export function WorkspaceHeader({
           )}
         </span>
       )}
+      <span className="flex-1" />
       <span className="flex min-w-0 flex-none items-center gap-1">
         {project.missing === null && processes > 0 && (
           <Button
@@ -146,6 +148,17 @@ export function WorkspaceHeader({
             testId="remove-project"
           />
         </span>
+        {railHidden && (
+          <CommandButton
+            command="rail.toggle"
+            variant="ghost"
+            size="small"
+            icon="rail"
+            label="Show the rail"
+            tooltip="Show the rail"
+            testId="rail-show"
+          />
+        )}
       </span>
     </header>
   );

@@ -674,7 +674,7 @@ export async function launchApp(options: LaunchOptions): Promise<AppSession> {
       return join(temp, "folders", ...segments);
     },
     answerFolderDialog: (path) => writeFile(dialog, path ?? ""),
-    dropFolder: (path) => dropOn(page, "column-repository", [path]),
+    dropFolder: (path) => dropOn(page, "column-centre", [path]),
     async selectDiffLines(side, start, end) {
       const number = (line: number) =>
         page

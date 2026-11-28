@@ -1,6 +1,6 @@
 # 015 Layout
 
-Status **Draft** · Depends on **002 to 014**
+Status **In progress** · Depends on **002 to 014**
 
 ## Why
 

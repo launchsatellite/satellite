@@ -1,4 +1,5 @@
 import { useEffect, useMemo, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import type {
   ChangedFile,
   ChangesList,
@@ -6,10 +7,9 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
-import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
+import { railPanelId, railTabId } from "../rail/rail.tsx";
 import type { DiffHandle } from "../diff/read-only-editor.tsx";
 import { FilePane } from "./file-pane.tsx";
-import { fileTabId, fileTabPanelId, FileTabs } from "./file-tabs.tsx";
 import { FileTree } from "./file-tree.tsx";
 import type { useFileTabs } from "./use-file-tabs.ts";
 import { useFiles } from "./use-files.ts";
@@ -22,6 +22,7 @@ interface FilesViewProps {
   list: ChangesList | undefined;
   finished: string;
   handle: RefObject<DiffHandle | null>;
+  paneHost: HTMLElement | null;
   onShown: (shown: ShownFile | null) => void;
 }
 
@@ -30,10 +31,18 @@ export interface ShownFile {
   kind: FileRead["kind"];
 }
 
-export function FilesView({ workspace, tabs, list, finished, handle, onShown }: FilesViewProps) {
+export function FilesView({
+  workspace,
+  tabs,
+  list,
+  finished,
+  handle,
+  paneHost,
+  onShown,
+}: FilesViewProps) {
   const activePath = tabs.active === null ? undefined : tabs.paths[tabs.active];
   const { open, setOpen, closeAll } = useFolders(workspace);
-  const { listings, file, error } = useFiles(workspace, open, activePath, finished);
+  const { listings, file, listError, fileError } = useFiles(workspace, open, activePath, finished);
   useEffect(() => {
     const gone = open.filter((path) => path !== "" && listings.get(path)?.state === "missing");
     if (gone.length > 0) closeAll(gone);
@@ -60,7 +69,7 @@ export function FilesView({ workspace, tabs, list, finished, handle, onShown }: 
   }, [changes]);
   return (
     <div data-testid="files" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side pr-2 pl-4">
+      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line pr-2 pl-4">
         <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
           <CommandButton
             command="changes.send-lines"
@@ -83,55 +92,47 @@ export function FilesView({ workspace, tabs, list, finished, handle, onShown }: 
       </div>
       <div
         role="tabpanel"
-        id={centrePanelId("files")}
-        aria-labelledby={centreTabId("files")}
-        className="@container min-h-0 flex-1"
+        id={railPanelId("files")}
+        aria-labelledby={railTabId("files")}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="flex h-full min-h-0 w-full flex-col @min-[640px]:flex-row">
-          <div
-            className={`flex min-h-0 flex-col border-b border-line @min-[640px]:max-h-none @min-[640px]:w-[260px] @min-[640px]:flex-none @min-[640px]:border-r @min-[640px]:border-b-0 ${tabs.paths.length > 0 ? "max-h-[40%] flex-none" : "flex-1"}`}
+        {listError !== null && (
+          <p
+            data-testid="files-error"
+            role="status"
+            className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
           >
-            <FileTree
-              workspace={workspace}
-              open={open}
-              listings={listings}
-              changed={changed}
-              selected={activePath}
-              onToggle={setOpen}
-              onOpenFile={tabs.open}
-            />
-          </div>
-          <div
-            className={`min-h-0 min-w-0 flex-1 flex-col ${tabs.paths.length > 0 ? "flex" : "hidden @min-[640px]:flex"}`}
-          >
-            {tabs.paths.length > 0 && (
-              <FileTabs
-                paths={tabs.paths}
-                active={tabs.active}
-                onActivate={tabs.activate}
-                onClose={tabs.close}
-              />
-            )}
-            {error !== null && (
+            {listError}
+          </p>
+        )}
+        <FileTree
+          workspace={workspace}
+          open={open}
+          listings={listings}
+          changed={changed}
+          selected={activePath}
+          onToggle={setOpen}
+          onOpenFile={tabs.open}
+        />
+      </div>
+      {paneHost !== null &&
+        createPortal(
+          <>
+            {fileError !== null && (
               <p
-                data-testid="files-error"
+                data-testid="file-error"
                 role="status"
                 className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
               >
-                {error}
+                {fileError}
               </p>
             )}
-            <div
-              role={tabs.active === null ? undefined : "tabpanel"}
-              id={tabs.active === null ? undefined : fileTabPanelId}
-              aria-labelledby={tabs.active === null ? undefined : fileTabId(tabs.active)}
-              className="min-h-0 flex-1"
-            >
+            <div className="min-h-0 flex-1">
               <FilePane file={file} path={activePath} handle={handle} />
             </div>
-          </div>
-        </div>
-      </div>
+          </>,
+          paneHost,
+        )}
     </div>
   );
 }

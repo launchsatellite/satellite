@@ -97,7 +97,7 @@ async function rowGone(session: AppSession, when: string): Promise<void> {
 }
 
 async function showTab(session: AppSession): Promise<void> {
-  await session.page.getByTestId("centre-tab-pull-request").click();
+  await session.page.getByTestId("rail-tab-pull-request").click();
 }
 
 async function openTab(session: AppSession): Promise<void> {
@@ -130,7 +130,7 @@ async function noticesAre(session: AppSession, expected: unknown[], when: string
 
 async function opened(session: AppSession): Promise<void> {
   await select(session, "alpha");
-  await attributeIs(session, "centre-tab-pull-request", "data-number", "12", "without a click");
+  await attributeIs(session, "rail-tab-pull-request", "data-number", "12", "without a click");
   await openTab(session);
   await waitUntil(
     async () => (await session.page.getByTestId("pull-request-body").locator("table").count()) > 0,
@@ -163,7 +163,7 @@ async function appears(session: AppSession): Promise<void> {
   await startClaude(session, 1);
   await session.mark("opened");
   await endTurn(session, true);
-  await attributeIs(session, "centre-tab-pull-request", "data-number", "12", "after the turn");
+  await attributeIs(session, "rail-tab-pull-request", "data-number", "12", "after the turn");
   const asked = (await ghEvents(session)).map((event) => event.args.join(" "));
   assert.ok(
     asked.some((line) => line.startsWith("pr view 12 ")),

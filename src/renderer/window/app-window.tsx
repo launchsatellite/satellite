@@ -69,9 +69,10 @@ import { Toast, type Notify } from "../ui/toast.tsx";
 import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
 import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
-import { CentreTabs, type CentreView } from "./centre-tabs.tsx";
+import { Rail, type RailView } from "../rail/rail.tsx";
+import type { CentreFiles } from "../sessions/session-tabs.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
-import { fitColumns, reachableColumns } from "./columns.ts";
+import { fitColumns, railFoldsBelow, reachableColumns, type RailShape } from "./columns.ts";
 import { FolderMissing, NothingSelected } from "./empty-states.tsx";
 import { useInterfaceState } from "./interface-state.ts";
 import { TitleBar } from "./title-bar.tsx";
@@ -198,9 +199,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     setAsking({ address, description });
   }, []);
   const windowRef = useRef<HTMLDivElement>(null);
-  const projectsRef = useRef<HTMLElement>(null);
-  const repositoryRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const centreRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
+  const [railUnfolded, setRailUnfolded] = useState(false);
   useLayoutEffect(() => {
     showTheme(state.theme);
   }, [state.theme]);
@@ -208,7 +210,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     const element = windowRef.current;
     if (element === null) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry !== undefined) setWidth(entry.contentRect.width);
+      if (entry === undefined) return;
+      setWidth(entry.contentRect.width);
+      if (entry.contentRect.width >= railFoldsBelow) setRailUnfolded(false);
     });
     observer.observe(element);
     return () => {
@@ -281,8 +285,25 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const showSidebar = useCallback(() => {
     if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
   }, [sidebarShown, update]);
-  const { left, right } = fitColumns(state.columns, width, sidebarShown);
-  const reachable = reachableColumns({ left, right }, width);
+  const railShape: RailShape =
+    state.rail === "hidden"
+      ? "hidden"
+      : width < railFoldsBelow && !railUnfolded
+        ? "folded"
+        : "open";
+  const railOpen = railShape === "open";
+  const narrow = width < railFoldsBelow;
+  const columns = fitColumns(state.columns, width, sidebarShown, railShape);
+  const reachable = reachableColumns(columns, width, railShape);
+  const [railView, setRailView] = useState<RailView>("changes");
+  const openRail = useCallback(
+    (view: RailView) => {
+      setRailView(view);
+      if (railShape !== "open" && narrow) setRailUnfolded(true);
+      if (railShape === "hidden") update((current) => ({ ...current, rail: "shown" }), true);
+    },
+    [railShape, narrow, update],
+  );
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
   const guideUnplaced = useCallback(() => {
@@ -310,7 +331,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const acceptsDrop = useCallback(
     (target: EventTarget | null) =>
       target instanceof Node &&
-      [projectsRef, repositoryRef].some((column) => column.current?.contains(target) === true),
+      [sidebarRef, centreRef].some((column) => column.current?.contains(target) === true) &&
+      (target instanceof Element ? target : target.parentElement)?.closest(
+        "[id^='session-panel-']",
+      ) == null,
     [],
   );
   const dropFolder = useCallback(
@@ -352,7 +376,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     [hereId, hereKey],
   );
   const folderHere = selectedProject?.missing === null;
-  const [centreView, setCentreView] = useState<CentreView>("files");
   const [pickedView, setPickedView] = useState<ChangesShown>("branch");
   const [noBase, setNoBase] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -360,6 +383,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const [diffNarrow, setDiffNarrow] = useState(true);
   const [shownText, setShownText] = useState<ShownText | null>(null);
   const { handle: diffHandle, read: diffSelection } = useDiffSelection();
+  const { handle: fileHandle, read: fileSelection } = useDiffSelection();
+  const [fileHost, setFileHost] = useState<HTMLDivElement | null>(null);
+  const [fileFrontIn, setFileFrontIn] = useState<string | null>(null);
   const [fileShown, setFileShown] = useState<ShownFile | null>(null);
   const changesHere = folderHere && !checking ? (sessionHere ?? null) : null;
   const shownHere = changesHere !== null;
@@ -381,9 +407,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     [hereText],
   );
   const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
-  const changesShown = shownHere && centreView === "changes";
-  const filesShown = shownHere && centreView === "files";
-  const pullRequestShown = shownHere && centreView === "pull-request";
+  const changesShown = shownHere && railOpen && railView === "changes";
+  const filesShown = shownHere && railOpen && railView === "files";
+  const pullRequestShown = shownHere && railOpen && railView === "pull-request";
   const layoutShown =
     changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
@@ -483,14 +509,41 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const fileSearch = useFileSearch(changesHere, palette === "files");
   const fileTabs = useFileTabs(state, update, changesHere, listedWorkspace);
   const openFileTab = fileTabs.open;
+  const activateFileTab = fileTabs.activate;
+  const fileFront = hereText !== null && fileFrontIn === hereText && fileTabs.active !== null;
+  const sessionMark = `${hereText ?? ""}/${activeSession ?? ""}/${String(tabsHere.length)}`;
+  const [seenSessionMark, setSeenSessionMark] = useState(sessionMark);
+  if (seenSessionMark !== sessionMark) {
+    setSeenSessionMark(sessionMark);
+    setFileFrontIn(null);
+  }
+  const openFile = useCallback(
+    (path: string) => {
+      openFileTab(path);
+      setFileFrontIn(hereText);
+    },
+    [openFileTab, hereText],
+  );
+  const showSessions = useCallback(() => {
+    setFileFrontIn(null);
+  }, []);
+  const centreFiles: CentreFiles = {
+    paths: fileTabs.paths,
+    active: fileTabs.active,
+    front: fileFront,
+    onActivate: (index) => {
+      activateFileTab(index);
+      setFileFrontIn(hereText);
+    },
+    onClose: fileTabs.close,
+  };
   const openedByName = useRef<string | null>(null);
   const openFound = useCallback(
     (path: string) => {
       openedByName.current = path;
-      openFileTab(path);
-      setCentreView("files");
+      openFile(path);
     },
-    [openFileTab],
+    [openFile],
   );
   useEffect(() => {
     if (fileShown === null) return;
@@ -510,7 +563,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         return;
       }
       document
-        .querySelector<HTMLElement>("[data-testid='file-tabs'] [aria-selected='true']")
+        .querySelector<HTMLElement>("[data-testid^='file-tab-'][aria-selected='true']")
         ?.focus();
     };
     frame = requestAnimationFrame(focusOpened);
@@ -640,13 +693,13 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       if (modal) return;
       select(target.workspace);
       if (target.kind === "pull-request") {
-        setCentreView("pull-request");
+        openRail("pull-request");
         return;
       }
       activateSession(target.tab);
       focusSession(target.terminalId);
     },
-    [modal, select, activateSession],
+    [modal, select, activateSession, openRail],
   );
   const fromNotice = useRef({ inbox, openFromInbox });
   useEffect(() => {
@@ -891,6 +944,26 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             },
           },
           {
+            id: "rail.toggle",
+            title: railOpen ? "Hide the rail" : "Show the rail",
+            shortcut: { key: "e" },
+            available: true,
+            run: () => {
+              if (railShape === "folded") setRailUnfolded(true);
+              else if (railShape === "hidden") openRail(railView);
+              else {
+                const inside =
+                  document.activeElement?.closest("[data-testid='column-rail']") != null;
+                update((current) => ({ ...current, rail: "hidden" }), true);
+                if (inside) {
+                  requestAnimationFrame(() => {
+                    document.querySelector<HTMLElement>("[data-testid='rail-show']")?.focus();
+                  });
+                }
+              }
+            },
+          },
+          {
             id: "focus.sidebar",
             title: "Focus the sidebar",
             available: true,
@@ -900,7 +973,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
                   update((current) => ({ ...current, sidebar: "shown" }), true);
                 });
               }
-              focusColumn("column-projects", '[aria-current="true"]');
+              focusColumn("column-sidebar", '[aria-current="true"]');
             },
           },
           {
@@ -908,7 +981,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             title: "Focus the repository",
             available: true,
             run: () => {
-              focusColumn("column-repository", '[role="tab"][aria-selected="true"]');
+              if (!railOpen)
+                flushSync(() => {
+                  openRail(railView);
+                });
+              focusColumn("column-rail", '[role="tab"][aria-selected="true"]');
             },
           },
           {
@@ -916,7 +993,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             title: "Focus the terminal",
             available: true,
             run: () => {
-              focusColumn("column-sessions", '[data-testid="terminal"] textarea');
+              flushSync(() => {
+                setFileFrontIn(null);
+              });
+              focusColumn("column-centre", '[data-testid="terminal"] textarea');
             },
           },
           {
@@ -975,25 +1055,25 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           {
             id: "files.show",
             title: "Show the files",
-            available: shownHere && centreView !== "files",
+            available: shownHere && !(railOpen && railView === "files"),
             run: () => {
-              setCentreView("files");
+              openRail("files");
             },
           },
           {
             id: "changes.show",
             title: "Show the changes",
-            available: shownHere && centreView !== "changes",
+            available: shownHere && !(railOpen && railView === "changes"),
             run: () => {
-              setCentreView("changes");
+              openRail("changes");
             },
           },
           {
             id: "pull-request.show",
             title: "Show the pull request",
-            available: shownHere && centreView !== "pull-request",
+            available: shownHere && !(railOpen && railView === "pull-request"),
             run: () => {
-              setCentreView("pull-request");
+              openRail("pull-request");
             },
           },
           {
@@ -1019,7 +1099,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             shortcut: { key: "j" },
             available: shownHere && pullRequestFound,
             run: () => {
-              setCentreView("pull-request");
+              openRail("pull-request");
               setPullRequestSection("files");
               jumpToThread();
             },
@@ -1072,15 +1152,19 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             whenFocusIn: "[data-testid='diff'], [data-testid='file-text']",
             available:
               (changesShown && shownText !== null) ||
-              (filesShown && fileShown !== null && fileShown.kind !== "link"),
+              (fileFront && fileShown !== null && fileShown.kind !== "link"),
             run: () => {
-              if (filesShown) {
-                if (fileShown === null) return;
+              if (document.activeElement?.closest("[data-testid='pull-request']") != null) {
+                notify(noLinesSentence, "error");
+                return;
+              }
+              const inChanges = document.activeElement?.closest("[data-testid='changes']") != null;
+              if (fileFront && fileShown !== null && !inChanges) {
                 if (fileShown.kind !== "text") {
                   notify(notTextSentence, "error");
                   return;
                 }
-                const request = fileLinesRequest(fileShown.path, diffSelection());
+                const request = fileLinesRequest(fileShown.path, fileSelection());
                 if (request.ok) sendToClaudeCode(request.text);
                 else {
                   notify(request.sentence, "error");
@@ -1145,9 +1229,13 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     newest,
     openFromInbox,
     changesShown,
-    filesShown,
+    fileFront,
+    fileSelection,
     shownHere,
-    centreView,
+    railView,
+    railOpen,
+    railShape,
+    openRail,
     changesView,
     setChangesView,
     layoutShown,
@@ -1178,9 +1266,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       }),
     [],
   );
-  const setColumn = (side: "left" | "right", persist: boolean) => (value: number) => {
+  const setColumn = (side: "sidebar" | "rail", persist: boolean) => (value: number) => {
     update((current) => ({ ...current, columns: { ...current.columns, [side]: value } }), persist);
   };
+  const sessionsShown =
+    !checking && sessionHere !== undefined && (folderHere || tabsHere.length > 0);
   const centre = () => {
     if (checking) return <ToolCheckCard key="revisit" firstRun={false} onClose={closeCheck} />;
     if (projects === undefined) return null;
@@ -1202,19 +1292,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             setProcessesOpen(true);
           }}
           onShowPullRequest={() => {
-            setCentreView("pull-request");
+            openRail("pull-request");
           }}
-          tabs={
-            changesHere !== null && (
-              <CentreTabs
-                value={centreView}
-                pullRequest={shownPullRequest?.number ?? null}
-                onChange={setCentreView}
-              />
-            )
-          }
+          railHidden={railShape === "hidden"}
         />
-        {selectedProject.missing !== null ? (
+        {selectedProject.missing !== null && !sessionsShown && (
           <FolderMissing
             name={visibleText(selectedProject.name)}
             parent={visibleText(selectedProject.parent)}
@@ -1226,74 +1308,85 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               ).length
             }
           />
-        ) : (
-          changesHere !== null &&
-          (centreView === "pull-request" ? (
-            <PullRequestView
-              entry={shownEntry}
-              section={pullRequestSection}
-              onSection={setPullRequestSection}
-              onLink={askPullRequestLink}
-            >
-              {shownPullRequest !== null && (
-                <>
-                  {pullRequestSection === "overview" && (
-                    <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
-                  )}
-                  <div hidden={pullRequestSection !== "checks"}>
-                    <ChecksList
-                      key={`${changesHere.projectId}/${changesHere.workspace}`}
-                      workspace={changesHere}
-                      found={shownPullRequest}
-                      onLink={askPullRequestLink}
-                    />
-                  </div>
-                  {pullRequestSection === "conversation" && (
-                    <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
-                  )}
-                  {pullRequestSection === "files" && (
-                    <PullRequestFiles
-                      key={`${changesHere.projectId}/${changesHere.workspace}`}
-                      workspace={changesHere}
-                      found={shownPullRequest}
-                      list={changes.list}
-                      uncommitted={uncommitted.list}
-                      error={changes.error}
-                      handle={diffHandle}
-                      current={thread.target}
-                      onCurrent={thread.select}
-                      onLink={askPullRequestLink}
-                    />
-                  )}
-                </>
-              )}
-            </PullRequestView>
-          ) : centreView === "files" ? (
+        )}
+      </>
+    );
+  };
+  const railBody = () => {
+    if (changesHere === null) return null;
+    const place = `${changesHere.projectId}/${changesHere.workspace}`;
+    return (
+      <>
+        {changesShown && (
+          <ChangesView
+            workspace={changesHere}
+            view={changesView}
+            onView={setChangesView}
+            inline={diffInline}
+            onInline={setDiffInline}
+            list={changes.list}
+            error={changes.error}
+            diffHandle={diffHandle}
+            onShown={setShownText}
+            onNarrow={setDiffNarrow}
+            picked={picked}
+            onPick={setPicked}
+          />
+        )}
+        {pullRequestShown && (
+          <PullRequestView
+            entry={shownEntry}
+            section={pullRequestSection}
+            onSection={setPullRequestSection}
+            onLink={askPullRequestLink}
+          >
+            {shownPullRequest !== null && (
+              <>
+                {pullRequestSection === "overview" && (
+                  <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
+                )}
+                <div hidden={pullRequestSection !== "checks"}>
+                  <ChecksList
+                    key={place}
+                    workspace={changesHere}
+                    found={shownPullRequest}
+                    onLink={askPullRequestLink}
+                  />
+                </div>
+                {pullRequestSection === "conversation" && (
+                  <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
+                )}
+                {pullRequestSection === "files" && (
+                  <PullRequestFiles
+                    key={place}
+                    workspace={changesHere}
+                    found={shownPullRequest}
+                    list={changes.list}
+                    uncommitted={uncommitted.list}
+                    error={changes.error}
+                    handle={diffHandle}
+                    current={thread.target}
+                    onCurrent={thread.select}
+                    onLink={askPullRequestLink}
+                  />
+                )}
+              </>
+            )}
+          </PullRequestView>
+        )}
+        {(filesShown || fileFront) && (
+          <div hidden={!filesShown} className="flex min-h-0 flex-1 flex-col">
             <FilesView
-              key={`${changesHere.projectId}/${changesHere.workspace}`}
+              key={place}
               workspace={changesHere}
-              tabs={fileTabs}
-              list={changes.list}
+              tabs={{ ...fileTabs, open: openFile }}
+              list={filesShown ? changes.list : undefined}
               finished={finishedHere}
-              handle={diffHandle}
+              handle={fileHandle}
+              paneHost={fileHost}
               onShown={setFileShown}
             />
-          ) : (
-            <ChangesView
-              workspace={changesHere}
-              view={changesView}
-              onView={setChangesView}
-              inline={diffInline}
-              onInline={setDiffInline}
-              list={changes.list}
-              error={changes.error}
-              diffHandle={diffHandle}
-              onShown={setShownText}
-              onNarrow={setDiffNarrow}
-              picked={picked}
-              onPick={setPicked}
-            />
-          ))
+          </div>
         )}
       </>
     );
@@ -1304,7 +1397,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       <div
         ref={windowRef}
         data-testid="app-window"
-        className="relative flex h-full flex-col bg-bg text-fg"
+        className="relative flex h-full flex-col bg-win text-fg"
       >
         <TitleBar
           initial={frame}
@@ -1325,9 +1418,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           data-testid="columns"
           className="grid min-h-0 flex-1"
           style={{
-            gridTemplateColumns: sidebarShown
-              ? `${String(left)}px minmax(0,1fr) ${String(right)}px`
-              : `minmax(0,1fr) ${String(right)}px`,
+            gridTemplateColumns: [
+              sidebarShown ? `${String(columns.sidebar)}px` : "",
+              "minmax(0,1fr)",
+              railShape === "hidden" ? "" : `${String(columns.rail)}px`,
+            ].join(" "),
           }}
         >
           <GuideLayer
@@ -1340,12 +1435,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             onUnplaced={guideUnplaced}
           />
           <section
-            ref={projectsRef}
+            ref={sidebarRef}
             id={sidebarId}
             hidden={!sidebarShown}
-            data-testid="column-projects"
+            data-testid="column-sidebar"
             aria-label="Sidebar"
-            className="relative flex min-h-0 flex-col border-r border-line bg-side"
+            className="relative flex min-h-0 flex-col bg-win"
           >
             <Sidebar
               projects={projects}
@@ -1372,44 +1467,61 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             />
             <ColumnDivider
               side="left"
-              value={left}
-              min={interfaceLimits.left.min}
-              max={reachable.left}
-              onChange={setColumn("left", false)}
-              onCommit={setColumn("left", true)}
-              testId="divider-left"
+              value={columns.sidebar}
+              min={interfaceLimits.sidebar.min}
+              max={reachable.sidebar}
+              onChange={setColumn("sidebar", false)}
+              onCommit={setColumn("sidebar", true)}
+              testId="divider-sidebar"
             />
           </section>
           <main
-            ref={repositoryRef}
-            data-testid="column-repository"
-            aria-label="Repository"
-            className="relative flex min-h-0 min-w-0 flex-col border-r border-line"
+            ref={centreRef}
+            data-testid="column-centre"
+            aria-label="Workspace"
+            className={`my-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-line bg-bg ${sidebarShown ? "" : "ml-2"} ${railShape === "hidden" ? "mr-2" : ""}`}
           >
             {centre()}
-            <ColumnDivider
-              side="right"
-              value={right}
-              min={interfaceLimits.right.min}
-              max={reachable.right}
-              onChange={setColumn("right", false)}
-              onCommit={setColumn("right", true)}
-              testId="divider-right"
-            />
+            <div hidden={!sessionsShown} className="flex min-h-0 flex-1 flex-col">
+              <SessionsPane
+                sessions={sessions}
+                selected={sessionsShown ? sessionHere : null}
+                files={centreFiles}
+                fileHost={setFileHost}
+                onSessionsFront={showSessions}
+                resumeAllowed={guide.step === null && !checking}
+                onAskLink={askTerminalLink}
+                notify={notify}
+              />
+            </div>
           </main>
           <section
-            data-testid="column-sessions"
-            aria-label="Sessions"
-            className="relative min-h-0 bg-bg"
+            data-testid="column-rail"
+            aria-label="Rail"
+            hidden={railShape === "hidden"}
+            className="relative flex min-h-0 flex-col bg-win"
           >
-            <SessionsPane
-              sessions={sessions}
-              selected={sessionHere ?? null}
-              hasProjects={projects === undefined || projects.length > 0}
-              resumeAllowed={guide.step === null && !checking}
-              onAskLink={askTerminalLink}
-              notify={notify}
-            />
+            <Rail
+              view={railView}
+              folded={railShape === "folded"}
+              pullRequest={shownPullRequest?.number ?? null}
+              shown={changesHere !== null}
+              onView={setRailView}
+              onUnfold={openRail}
+            >
+              {railBody()}
+            </Rail>
+            {railOpen && (
+              <ColumnDivider
+                side="right"
+                value={columns.rail}
+                min={interfaceLimits.rail.min}
+                max={reachable.rail}
+                onChange={setColumn("rail", false)}
+                onCommit={setColumn("rail", true)}
+                testId="divider-rail"
+              />
+            )}
           </section>
         </div>
         {dragging && <DropOverlay />}

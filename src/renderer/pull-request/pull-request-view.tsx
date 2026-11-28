@@ -6,7 +6,7 @@ import { StatusPixel } from "../ui/status-pixel.tsx";
 import { Tab, Tabs } from "../ui/tabs.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { sendToClaudeCode } from "../sessions/send-to-claude-code.ts";
-import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
+import { railPanelId, railTabId } from "../rail/rail.tsx";
 import { foundOf, type PullRequestEntry } from "./use-pull-requests.ts";
 import { Sentence } from "./pull-request-sentence.tsx";
 import { openRequest } from "./pull-request-requests.ts";
@@ -176,7 +176,7 @@ export function PullRequestView({
   return (
     <div data-testid="pull-request" data-state={state} className="flex min-h-0 flex-1 flex-col">
       {found !== null && isHttps(found.url) && (
-        <div className="flex min-h-10 flex-none items-center justify-end border-b border-line bg-side pr-2 pl-4">
+        <div className="flex min-h-10 flex-none items-center justify-end border-b border-line pr-2 pl-4">
           <Button
             variant="secondary"
             size="small"
@@ -200,8 +200,8 @@ export function PullRequestView({
       )}
       <div
         role="tabpanel"
-        id={centrePanelId("pull-request")}
-        aria-labelledby={centreTabId("pull-request")}
+        id={railPanelId("pull-request")}
+        aria-labelledby={railTabId("pull-request")}
         className="flex min-h-0 flex-1 flex-col"
       >
         {body()}

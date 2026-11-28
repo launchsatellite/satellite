@@ -8,7 +8,7 @@ The agent pane is the reason Satellite exists. It runs the user's real Claude Co
 
 ## Scope
 
-- The right column runs the user's installed `claude` in the selected workspace's folder, in a terminal Satellite owns. Sign-in, settings, hooks, skills and MCP servers are the user's own, untouched.
+- The centre runs the user's installed `claude` in the selected workspace's folder, in a terminal Satellite owns. Sign-in, settings, hooks, skills and MCP servers are the user's own, untouched.
 - Several sessions per workspace as tabs, with a button and a command to start one and to close one.
 - Sessions keep running when another workspace is selected, and switching back shows them exactly as they were.
 - Each session is launched with a session id Satellite chooses and with status hooks for that process only, in a short-lived settings file in the Satellite home passed with `--settings`. The hooks post to a listener on the loopback address with a secret made for that launch. Nothing is written to the user's Claude Code settings or the repo.
@@ -21,6 +21,7 @@ The agent pane is the reason Satellite exists. It runs the user's real Claude Co
 - Send to Claude Code. A command that types a prepared request into the selected session's prompt as one line of plain text and never submits it. Line breaks become spaces, control and hidden characters are stripped, and the request holds at most 800 characters, the most Claude Code shows before folding a paste into a placeholder. It works once Claude Code has reported the user's first request in that session, and never while the session needs the user.
 - Terminal behaviour matches what Claude Code expects. Shift+Enter, image paste, dropped files as paths, links that always ask before they open in the system browser, colours that follow the theme, and scrollback with a limit.
 - The moments around Claude Code are drawn by Satellite. Not installed, session ended, stopped unexpectedly.
+- Sessions sit in the centre of the window, in one tab strip that also holds the files opened from the rail, and a file in front hides the terminal without ending its session.
 
 ## Decisions
 
@@ -59,6 +60,5 @@ The inbox and notifications belong to spec 005.
 
 ## Next
 
-- Sessions move to the centre of the window, in one tab strip that also holds files and diffs opened from the rail. Part of [015 Layout](../015-layout/spec.md).
 - A session started from the New workspace page receives the typed request as its first message, sent through its terminal once Claude Code is ready, never as a launch argument.
 - In the repo view a workspace's selected session shows as a tile, and only tiles on screen draw a terminal.

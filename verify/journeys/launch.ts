@@ -12,7 +12,7 @@ import {
   waitUntil,
 } from "./conditions.ts";
 
-const columns = ["column-projects", "column-repository", "column-sessions"];
+const columns = ["column-sidebar", "column-centre", "column-rail"];
 const pasteSize = 100_000;
 const newlineSequence = "\u001b\r";
 const box = "│ ok │";
@@ -92,7 +92,7 @@ async function run(session: AppSession): Promise<void> {
   await checkWindow(page);
   await session.answerFolderDialog(session.repo);
   await page.getByTestId("add-first-project").click();
-  await page.getByTestId("files").waitFor({ timeout: promptTimeoutMs });
+  await page.getByTestId("start-claude").waitFor({ timeout: promptTimeoutMs });
   const firstPid = await startClaude(session, 1);
   await checkDrawn(session);
   await checkInput(session);
