@@ -283,6 +283,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     openGuide();
   }, [openGuide]);
   const sidebarShown = state.sidebar === "shown";
+  const [toggleFocus, focusAfterToggle] = useState<{ target: string }>();
+  useEffect(() => {
+    if (toggleFocus === undefined) return;
+    document.querySelector<HTMLElement>(`[data-testid='${toggleFocus.target}']`)?.focus();
+  }, [toggleFocus]);
   const showSidebar = useCallback(() => {
     if (!sidebarShown) update((current) => ({ ...current, sidebar: "shown" }), true);
   }, [sidebarShown, update]);
@@ -943,6 +948,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               const inside = document.activeElement?.closest(`#${sidebarId}`) != null;
+              const showing =
+                document.activeElement?.closest("[data-testid='sidebar-show']") != null;
               update(
                 (current) => ({
                   ...current,
@@ -950,11 +957,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
                 }),
                 true,
               );
-              if (inside) {
-                requestAnimationFrame(() => {
-                  document.querySelector<HTMLElement>("[data-testid='sidebar-show']")?.focus();
-                });
-              }
+              if (inside || showing)
+                focusAfterToggle({ target: inside ? "sidebar-show" : "sidebar-toggle" });
             },
           },
           {

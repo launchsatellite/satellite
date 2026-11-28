@@ -8,7 +8,7 @@ A plain system title bar says only Satellite and spends a row that tells nobody 
 
 ## Scope
 
-- No strip runs across the window. Each column starts with a 44px top row on its own ground, and those rows are the title bar.
+- No strip runs across the window. The sidebar and the rail start with a 44px top row on their own ground, the centre with its 48px header, and those rows are the title bar.
 - The sidebar's top row keeps room for the traffic lights on macOS, given back in full screen, and ends with Hide the sidebar, an icon button on Cmd+B, or Ctrl+Shift+B on Windows and Linux, and a command in the command menu. Hidden gives its width to the centre, the choice comes back after a restart like the column widths, and focus that was in the sidebar moves to Show the sidebar. Focus the sidebar, Add a repo, a dropped folder and Show the guide show it first.
 - With the sidebar hidden the workspace header is the top row. It starts with Show the sidebar and keeps 76px of the window clear for the traffic lights on macOS, and with nothing selected a bare row holds that button.
 - The workspace header names the selected repo and workspace, `satellite / fix-login`, or the repo alone for its main workspace, drawn with the visible name rules. The switcher stays on Cmd+P and in the command menu.

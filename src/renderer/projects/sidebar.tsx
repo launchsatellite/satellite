@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useId, useState, type DragEvent, type ReactNode } from "react";
 import type {
   ProjectView,
   PullRequestFound,
@@ -195,7 +195,8 @@ function FoldedReadout({ pixel, sessions }: { pixel: PixelState; sessions: numbe
     <Tooltip text={label}>
       <span className="flex items-center gap-[6px] font-pixel text-[11px] font-normal text-dim">
         <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
-        <span aria-label={label}>{sessions}</span>
+        <span aria-hidden="true">{sessions}</span>
+        <span className="sr-only">{label}</span>
       </span>
     </Tooltip>
   );
@@ -231,7 +232,7 @@ function ProjectRows({
   hasSession: SidebarProps["hasSession"];
 }) {
   const name = visibleText(project.name);
-  const listId = `${testId}-workspaces`;
+  const listId = useId();
   const refs = project.workspaces.map((workspace) => ({
     projectId: project.id,
     workspace: workspace.key,
@@ -269,7 +270,7 @@ function ProjectRows({
             </span>
           )}
           {folded && (
-            <span className="ml-auto flex flex-none group-hover:hidden group-has-[:focus-visible]:hidden">
+            <span className="ml-auto flex flex-none">
               <FoldedReadout
                 pixel={mostUrgentPixel(refs.map((ref) => pixelFor(ref.projectId, ref.workspace)))}
                 sessions={refs.filter(hasSession).length}
