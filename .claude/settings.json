@@ -63,9 +63,7 @@
       "Bash(gh pr ready *)",
       "Bash(gh run rerun *)",
       "Bash(gh run watch *)",
-      "Bash(gh run download *)",
-      "Bash(npm ci)",
-      "Bash(npm run *)"
+      "Bash(gh run download *)"
     ],
     "deny": [
       "Edit(./guards/**)",
