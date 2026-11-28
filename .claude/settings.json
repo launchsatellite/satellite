@@ -58,7 +58,14 @@
       "Bash(gh issue view *)",
       "Bash(gh issue list *)",
       "Bash(gh run view *)",
-      "Bash(gh run list *)"
+      "Bash(gh run list *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr ready *)",
+      "Bash(gh run rerun *)",
+      "Bash(gh run watch *)",
+      "Bash(gh run download *)",
+      "Bash(npm ci)",
+      "Bash(npm run *)"
     ],
     "deny": [
       "Edit(./guards/**)",
