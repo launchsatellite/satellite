@@ -28,12 +28,22 @@ export function windowsPty(
   return { backend: buildNumber >= conptyBuild ? "conpty" : "winpty", buildNumber };
 }
 
+export function windowsCommandLine(args: readonly string[]): string {
+  return args
+    .map(
+      (arg) =>
+        `"${arg.replace(/(\\*)("|$)/g, (_, slashes: string, end: string) => `${slashes}${slashes}${end === '"' ? '\\"' : ""}`)}"`,
+    )
+    .join(" ");
+}
+
 export function spawnPty(
   command: ResolvedCommand,
   args: readonly string[],
   options: { cwd: string; cols: number; rows: number; env: Record<string, string> },
 ): PtyProcess {
-  const pty = spawn(command.file, [...command.args, ...args], {
+  const argv = [...command.args, ...args];
+  const pty = spawn(command.file, process.platform === "win32" ? windowsCommandLine(argv) : argv, {
     name: "xterm-256color",
     cwd: options.cwd,
     cols: options.cols,

@@ -25,6 +25,7 @@ interface WorkspaceHeaderProps {
   behind: number | null;
   pullRequest: PullRequestFound | null;
   processes: number;
+  processesOpen: boolean;
   onShowProcesses: () => void;
   onShowPullRequest: () => void;
   railHidden: boolean;
@@ -43,6 +44,7 @@ export function WorkspaceHeader({
   behind,
   pullRequest,
   processes,
+  processesOpen,
   onShowProcesses,
   onShowPullRequest,
   railHidden,
@@ -110,10 +112,11 @@ export function WorkspaceHeader({
       )}
       <span className="flex-1" />
       <span className="flex min-w-0 flex-none items-center gap-1">
-        {project.missing === null && processes > 0 && (
+        {project.missing === null && (processes > 0 || processesOpen) && (
           <Button
             variant="ghost"
             size="small"
+            expanded={processesOpen}
             testId="header-processes"
             data-count={processes}
             label={countLabel(processes)}

@@ -69,6 +69,7 @@ interface Session {
   readonly owner: BridgeOwner;
   readonly workspace: WorkspaceRef;
   readonly resumed: boolean;
+  readonly firstMessage: string | undefined;
   readonly finished: PromiseWithResolvers<void>;
   cwd?: string;
   sessionId?: string;
@@ -336,7 +337,7 @@ export function createTerminalSessions({
   const startOf = async (session: Session): Promise<ClaudeStart> => {
     if (!session.resumed) {
       session.sessionId = randomUUID();
-      return { kind: "new", sessionId: session.sessionId };
+      return { kind: "new", sessionId: session.sessionId, firstMessage: session.firstMessage };
     }
     const recorded = await last.get(session.workspace);
     if (recorded === undefined) {
@@ -447,7 +448,10 @@ export function createTerminalSessions({
   };
 
   const start = async (request: StartRequest, owner: BridgeOwner) => {
-    const { id, workspace, resume, cols, rows } = request;
+    const { id, workspace, resume, firstMessage, cols, rows } = request;
+    if (resume && firstMessage !== undefined) {
+      throw new BridgeFailure("invalid-request", "A resumed session takes no first message.");
+    }
     if (unsettled.size >= bridgeLimits.terminals) await settled([...unsettled].filter(isEnded));
     if (closed) throw new BridgeFailure("failed", "Satellite is quitting.");
     if (goneOwners.has(owner)) throw new BridgeFailure("failed", "That window is gone.");
@@ -465,6 +469,7 @@ export function createTerminalSessions({
       owner,
       workspace,
       resumed: resume,
+      firstMessage,
       finished: Promise.withResolvers(),
       state: { status: "idle", askers: [] },
       shown: "idle",

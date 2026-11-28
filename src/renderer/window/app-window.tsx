@@ -35,7 +35,7 @@ import { notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
 import { useFileSearch } from "../files/use-file-search.ts";
 import { useFileTabs } from "../files/use-file-tabs.ts";
-import { ProcessesDialog } from "../processes/processes-dialog.tsx";
+import { ProcessesPopover } from "../processes/processes-popover.tsx";
 import { portLinkSentence } from "../processes/process-words.ts";
 import { useProcesses } from "../processes/use-processes.ts";
 import { Palette, type PaletteMode, type SwitcherItem } from "../palette/palette.tsx";
@@ -58,17 +58,18 @@ import { RemoveProjectDialog } from "../projects/remove-project-dialog.tsx";
 import { runningHere } from "../projects/running-here.ts";
 import { WorkspaceHeader } from "../projects/workspace-header.tsx";
 import { agentList, type AgentItem } from "../sessions/agent-list.ts";
+import { AgentsPage } from "../sessions/agents-page.tsx";
 import { focusSession } from "../sessions/focus-session.ts";
 import { LinkDialog } from "../sessions/link-dialog.tsx";
 import { SessionsPane } from "../sessions/sessions-pane.tsx";
 import { tabLimitSentence, useSessions } from "../sessions/use-sessions.ts";
-import { SettingsDialog } from "../settings/settings-dialog.tsx";
+import { SettingsPage } from "../settings/settings-page.tsx";
 import { ToolCheckCard } from "../setup/tool-check.tsx";
 import { showTheme } from "../ui/shown-theme.ts";
 import { Toast, type Notify } from "../ui/toast.tsx";
 import { afterDismiss, withToast, type QueuedToast } from "./toast-queue.ts";
 import { ArchiveDialog } from "../workspaces/archive-dialog.tsx";
-import { NewWorkspaceDialog } from "../workspaces/new-workspace-dialog.tsx";
+import { NewWorkspacePage } from "../workspaces/new-workspace-page.tsx";
 import { Rail, type RailView } from "../rail/rail.tsx";
 import type { CentreFiles } from "../sessions/session-tabs.tsx";
 import { ColumnDivider } from "./column-divider.tsx";
@@ -78,6 +79,8 @@ import { useInterfaceState } from "./interface-state.ts";
 import { TopRow, useWindowFrame } from "./top-row.tsx";
 
 type CommandSpec = Omit<Command, "run"> & { run: () => void | Promise<void> };
+type Shown =
+  { kind: "settings" } | { kind: "agents" } | { kind: "new-workspace"; projectId: string };
 
 interface AppWindowProps {
   initial: InterfaceState;
@@ -91,6 +94,7 @@ const terminalLinkSentence =
 const notificationsOff = "Notifications are off. The sidebar still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 const sidebarId = "sidebar";
+const needsYouBehind = "A workspace needs you. Back to work shows it under Needs you.";
 
 function firstVisible(selectors: readonly string[]): HTMLElement | undefined {
   for (const selector of selectors) {
@@ -165,7 +169,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     forgetGone,
     forgetProject,
   } = sessions;
-  const [creatingIn, setCreatingIn] = useState<string | null>(null);
+  const [page, setPage] = useState<Shown | null>(null);
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
     workspace: WorkspaceView;
@@ -179,7 +183,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   } | null>(null);
   const [added, setAdded] = useState<string>();
   const [processesOpen, setProcessesOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [asking, setAsking] = useState<{ address: string; description: string } | null>(null);
   const askTerminalLink = useCallback((address: string) => {
     setAsking({ address, description: terminalLinkSentence });
@@ -193,8 +196,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const closeLink = useCallback(() => {
     setAsking(null);
   }, []);
-  const closeSettings = useCallback(() => {
-    setSettingsOpen(false);
+  const closePage = useCallback(() => {
+    setPage(null);
   }, []);
   const askAboutLink = useCallback((address: string, description: string) => {
     setAsking({ address, description });
@@ -322,6 +325,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => {
       setChecking(false);
       setProcessesOpen(false);
+      setPage(null);
       update((current) => ({ ...current, selected: ref }), true);
     },
     [update],
@@ -600,15 +604,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     tabsHere.length < 2 ? undefined : tabsHere.at((activeAt + step) % tabsHere.length)?.key;
   const nextSession = neighbour(1);
   const previousSession = neighbour(-1);
-  const dialogProject = projects?.find((project) => project.id === creatingIn);
-  const showingProcesses = processesOpen && changesHere !== null;
-  const modal =
-    dialogProject !== undefined ||
-    archiving !== null ||
-    removing !== null ||
-    asking !== null ||
-    settingsOpen ||
-    showingProcesses;
+  const showingProcesses = processesOpen && changesHere !== null && page === null;
+  const settingsShown = page?.kind === "settings";
+  const modal = archiving !== null || removing !== null || asking !== null;
   const liveTerminals = allSessions
     .filter((tab) => tab.status !== "stopped")
     .map((tab) => tab.terminalId)
@@ -673,6 +671,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     [allSessions, pullRequests.needing, projects],
   );
   const newest = inbox[0]?.reasons[0];
+  const needing = inbox.length;
+  const seenNeeding = useRef(needing);
+  useEffect(() => {
+    if (settingsShown && needing > seenNeeding.current) notify(needsYouBehind, "info");
+    seenNeeding.current = needing;
+  }, [needing, settingsShown, notify]);
   const pixelFor = useCallback(
     (projectId: string, workspace: WorkspaceKey) =>
       pullRequests.needing.some(
@@ -698,7 +702,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         })),
       );
   }, [pixelFor, projects]);
-  const agents = useMemo(() => agentList(allSessions, projects ?? []), [allSessions, projects]);
+  const agents = useMemo(
+    () => agentList(allSessions, projects ?? [], pullRequestFor, pullRequests.needing),
+    [allSessions, projects, pullRequestFor, pullRequests.needing],
+  );
   const openAgent = useCallback(
     (agent: AgentItem) => {
       select(agent.ref);
@@ -733,25 +740,17 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       }),
     [],
   );
-  const closeNewWorkspace = useCallback(() => {
-    setCreatingIn(null);
+  const newWorkspace = useCallback((projectId: string) => {
+    setPalette(null);
+    setPage({ kind: "new-workspace", projectId });
   }, []);
-  const focusCreated = useRef(false);
-  useEffect(() => {
-    if (creatingIn !== null || !focusCreated.current) return;
-    focusCreated.current = false;
-    document
-      .querySelector<HTMLElement>("[aria-label='Sidebar'] nav button[aria-current='true']")
-      ?.focus();
-  }, [creatingIn]);
-  const created = (workspace: WorkspaceView) => {
-    if (dialogProject === undefined) return;
-    upsertWorkspace(dialogProject.id, workspace);
-    select({ projectId: dialogProject.id, workspace: workspace.key });
-    if (workspace.name !== null)
-      notify(`${workspace.name} is ready in ${dialogProject.name}.`, "info");
-    focusCreated.current = true;
-    setCreatingIn(null);
+  const created = (project: ProjectView, workspace: WorkspaceView, request: string | undefined) => {
+    const ref = { projectId: project.id, workspace: workspace.key };
+    upsertWorkspace(project.id, workspace);
+    select(ref);
+    if (!openSession(ref, false, request)) notify(tabLimitSentence, "error");
+    else if (workspace.name !== null)
+      notify(`${workspace.name} is ready in ${project.name}.`, "info");
   };
   const closeArchive = useCallback(() => {
     setArchiving(null);
@@ -866,9 +865,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             shortcut: { key: "n" },
             available: newWorkspaceIn !== undefined,
             run: () => {
-              if (newWorkspaceIn === undefined) return;
-              setPalette(null);
-              setCreatingIn(newWorkspaceIn);
+              if (newWorkspaceIn !== undefined) newWorkspace(newWorkspaceIn);
             },
           },
           {
@@ -924,12 +921,13 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             },
           },
           {
-            id: "palette.agents",
+            id: "agents.show",
             title: "Show every agent",
             shortcut: { key: "g" },
             available: true,
             run: () => {
-              setPalette((open) => (open === "agents" ? null : "agents"));
+              setPalette(null);
+              setPage((shown) => (shown?.kind === "agents" ? null : { kind: "agents" }));
             },
           },
           {
@@ -1024,7 +1022,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               setPalette(null);
-              setSettingsOpen(true);
+              setPage((shown) => (shown?.kind === "settings" ? null : { kind: "settings" }));
             },
           },
           {
@@ -1100,6 +1098,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: shownHere,
             run: () => {
               setPalette(null);
+              setPage(null);
               setProcessesOpen(true);
             },
           },
@@ -1271,6 +1270,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     showGuide,
     sidebarShown,
     showSidebar,
+    newWorkspace,
   ]);
   const latestRegistry = useRef(registry);
   useEffect(() => {
@@ -1279,8 +1279,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   useEffect(
     () =>
       subscribe("window.settings", () => {
-        const command = latestRegistry.current.get("settings.show");
-        if (command?.available === true) command.run();
+        if (latestRegistry.current.get("settings.show")?.available === true) {
+          setPalette(null);
+          setPage({ kind: "settings" });
+        }
       }),
     [],
   );
@@ -1293,7 +1295,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     left: sidebarShown ? columns.sidebar + 1 : 9,
     right: railShape === "hidden" ? 9 : columns.rail + 1,
   };
-  const frameLook = { shown: shownFrame, covered: modal || palette !== null };
+  const pageLook = { shown: shownFrame, covered: modal || palette !== null };
+  const frameLook = { ...pageLook, covered: pageLook.covered || settingsShown };
   const sidebarLead = sidebarShown ? null : (
     <CommandButton
       command="sidebar.toggle"
@@ -1347,8 +1350,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           behind={changes.header === undefined ? selectedWorkspace.behind : changes.header.behind}
           pullRequest={shownPullRequest}
           processes={processesHere.length}
+          processesOpen={showingProcesses}
           onShowProcesses={() => {
-            setProcessesOpen(true);
+            setProcessesOpen((open) => !open);
           }}
           onShowPullRequest={() => {
             openRail("pull-request");
@@ -1463,6 +1467,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       >
         <div
           data-testid="columns"
+          inert={settingsShown}
           className="grid min-h-0 flex-1"
           style={{
             gridTemplateColumns: [
@@ -1474,7 +1479,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         >
           <GuideLayer
             step={guide.step}
-            covered={modal || palette !== null}
+            covered={frameLook.covered}
             focusAsk={guide.focusAsk}
             onNext={guide.next}
             onDone={guide.done}
@@ -1493,7 +1498,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               projects={projects}
               selected={state.selected}
               onSelect={select}
-              onNewWorkspace={setCreatingIn}
+              onNewWorkspace={newWorkspace}
               onRemoveProject={askRemove}
               onArchive={askArchive}
               onMove={move}
@@ -1531,8 +1536,30 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             aria-label="Workspace"
             className={`my-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-line bg-bg ${sidebarShown ? "" : "ml-2"} ${railShape === "hidden" ? "mr-2" : ""}`}
           >
-            {centre()}
-            <div hidden={!sessionsShown} className="flex min-h-0 flex-1 flex-col">
+            {page?.kind === "agents" ? (
+              <AgentsPage
+                agents={agents}
+                onOpen={openAgent}
+                onBack={closePage}
+                frame={frameLook}
+                edges={centreEdges}
+              />
+            ) : page?.kind === "new-workspace" ? (
+              <NewWorkspacePage
+                projects={(projects ?? []).filter((project) => project.missing === null)}
+                first={page.projectId}
+                onBack={closePage}
+                onCreated={created}
+                frame={frameLook}
+                edges={centreEdges}
+              />
+            ) : (
+              centre()
+            )}
+            <div
+              hidden={!sessionsShown || (page !== null && !settingsShown)}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <SessionsPane
                 sessions={sessions}
                 selected={sessionsShown ? sessionHere : null}
@@ -1544,6 +1571,22 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
                 notify={notify}
               />
             </div>
+            {showingProcesses &&
+              selectedProject !== undefined &&
+              selectedWorkspace !== undefined && (
+                <ProcessesPopover
+                  key={`${changesHere.projectId}/${changesHere.workspace}`}
+                  label={workspaceLabel(selectedProject, selectedWorkspace)}
+                  rows={processesHere}
+                  more={processes.moreOf(changesHere)}
+                  sessionNumber={sessionNumber}
+                  stopping={processes.stopping}
+                  problem={processes.problem}
+                  onStop={processes.stop}
+                  onPort={askProcessPort}
+                  onClose={closeProcesses}
+                />
+              )}
           </main>
           <section
             data-testid="column-rail"
@@ -1585,19 +1628,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
             switcher={switcher}
             onOpenWorkspace={select}
-            agents={agents}
-            onOpenAgent={openAgent}
             files={fileSearch.search}
             onOpenFile={openFound}
             onQuery={fileSearch.ask}
-          />
-        )}
-        {dialogProject !== undefined && (
-          <NewWorkspaceDialog
-            key={dialogProject.id}
-            project={dialogProject}
-            onClose={closeNewWorkspace}
-            onCreated={created}
           />
         )}
         {archiving !== null && (
@@ -1607,20 +1640,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             workspace={archiving.workspace}
             onClose={closeArchive}
             onArchived={archived}
-          />
-        )}
-        {showingProcesses && selectedProject !== undefined && selectedWorkspace !== undefined && (
-          <ProcessesDialog
-            key={`${changesHere.projectId}/${changesHere.workspace}`}
-            label={workspaceLabel(selectedProject, selectedWorkspace)}
-            rows={processesHere}
-            more={processes.moreOf(changesHere)}
-            sessionNumber={sessionNumber}
-            stopping={processes.stopping}
-            problem={processes.problem}
-            onStop={processes.stop}
-            onPort={askProcessPort}
-            onClose={closeProcesses}
           />
         )}
         {removing !== null && (
@@ -1636,8 +1655,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
           />
         )}
-        {settingsOpen && (
-          <SettingsDialog
+        {settingsShown && (
+          <SettingsPage
             theme={state.theme}
             onTheme={(theme) => {
               update((current) => ({ ...current, theme }), true);
@@ -1648,13 +1667,14 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             }}
             guideReady={guideListed}
             onShowGuide={() => {
-              setSettingsOpen(false);
+              setPage(null);
               showSidebar();
               showGuide();
             }}
             onLink={askAboutLink}
-            onClose={closeSettings}
-            returnFocusTo={sidebarShown ? "sidebar-settings" : "sidebar-show"}
+            onClose={closePage}
+            frame={pageLook}
+            sidebar={sidebarShown ? columns.sidebar : interfaceLimits.sidebar.initial}
           />
         )}
         {asking !== null && (

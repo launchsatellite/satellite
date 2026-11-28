@@ -14,6 +14,7 @@ export type IconName =
   | "running"
   | "agents"
   | "chevron-right"
+  | "chevron-left"
   | "chevron-down"
   | "sidebar"
   | "rail"
@@ -66,6 +67,7 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   "chevron-right": <path d="m6 3.5 4.5 4.5L6 12.5" />,
+  "chevron-left": <path d="M10 3.5 5.5 8l4.5 4.5" />,
   "chevron-down": <path d="M3.5 6 8 10.5 12.5 6" />,
   sidebar: (
     <>

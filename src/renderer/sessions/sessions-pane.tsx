@@ -320,6 +320,7 @@ export function SessionsPane({
                 terminalId={tab.terminalId}
                 workspace={tab.workspace}
                 resume={tab.resume}
+                firstMessage={tab.firstMessage}
                 shown={shown}
                 onRestart={() => {
                   sessions.restart(tab.key);

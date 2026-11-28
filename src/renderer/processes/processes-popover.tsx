@@ -1,8 +1,7 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ProcessRow } from "../../shared/bridge-contract.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { Button } from "../ui/button.tsx";
-import { Dialog } from "../ui/dialog.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { stopKey } from "./use-processes.ts";
 import {
@@ -14,7 +13,7 @@ import {
   portLabel,
 } from "./process-words.ts";
 
-interface ProcessesDialogProps {
+interface ProcessesPopoverProps {
   label: string;
   rows: readonly ProcessRow[];
   more: number;
@@ -27,6 +26,7 @@ interface ProcessesDialogProps {
 }
 
 const note = "text-[12px] text-dim";
+const keptOpenBy = "[role='dialog'], [role='status'], [data-testid='header-processes']";
 const separatorEnd = /(?<=[^\s/\\][/\\])(?=[^/\\])/;
 function sessionName(number: number | undefined): string {
   return number === undefined ? "A session" : `Session ${String(number)}`;
@@ -132,7 +132,7 @@ function Row({
   );
 }
 
-export function ProcessesDialog({
+export function ProcessesPopover({
   label,
   rows,
   more,
@@ -142,8 +142,8 @@ export function ProcessesDialog({
   onStop,
   onPort,
   onClose,
-}: ProcessesDialogProps) {
-  const body = useRef<HTMLDivElement>(null);
+}: ProcessesPopoverProps) {
+  const panel = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => {
@@ -153,66 +153,86 @@ export function ProcessesDialog({
       clearInterval(timer);
     };
   }, []);
-  const count = rows.length;
-  useEffect(() => {
-    if (document.activeElement !== document.body) return;
-    body.current
-      ?.closest("[role='dialog']")
-      ?.querySelector<HTMLElement>("[data-testid='processes-close']")
-      ?.focus();
-  }, [count]);
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (element === null) return;
+    const opener = document.activeElement;
+    element.querySelector<HTMLElement>("button")?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (element.contains(event.target) || event.target.closest(keptOpenBy) !== null) return;
+      onClose();
+    };
+    const press = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !element.contains(document.activeElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("pointerdown", outside, { capture: true });
+    element.addEventListener("keydown", press);
+    return () => {
+      window.removeEventListener("pointerdown", outside, { capture: true });
+      element.removeEventListener("keydown", press);
+      requestAnimationFrame(() => {
+        if (document.activeElement !== document.body) return;
+        if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+        else document.querySelector<HTMLElement>("[data-testid='workspace-header']")?.focus();
+      });
+    };
+  }, [onClose]);
   return (
-    <Dialog
-      title="Running processes"
-      description={`What the agents in ${visibleText(label)} started and left running.`}
-      testId="processes-dialog"
-      onClose={onClose}
-      closable
-      returnFocusTo="workspace-header"
-      footer={
-        <Button onClick={onClose} testId="processes-close" autoFocus>
+    <div
+      ref={panel}
+      role="dialog"
+      aria-modal="false"
+      aria-label="Running processes"
+      aria-description={`What the agents in ${visibleText(label)} started and left running.`}
+      data-testid="processes-popover"
+      className="absolute top-12 right-2 z-30 flex max-h-[calc(100%-56px)] w-[min(420px,calc(100%-16px))] flex-col gap-3 overflow-y-auto rounded-[10px] border border-line bg-raised p-3 shadow-raised"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold">Running processes</h2>
+        <Button variant="ghost" size="small" onClick={onClose} testId="processes-close">
           Done
         </Button>
-      }
-    >
-      <div ref={body} className="flex flex-col gap-3">
-        {rows.length === 0 ? (
-          <p data-testid="processes-empty" role="status" className={note}>
-            {nothingRunning}
-          </p>
-        ) : (
-          <ul aria-label="Running processes" className="flex flex-col">
-            {rows.map((row, index) => (
-              <Row
-                key={stopKey(row)}
-                row={row}
-                index={index}
-                now={now}
-                number={sessionNumber(row.session)}
-                stopping={stopping.has(stopKey(row))}
-                busy={stopping.size > 0}
-                onStop={() => {
-                  onStop(row);
-                }}
-                onPort={onPort}
-              />
-            ))}
-          </ul>
-        )}
-        {problem !== null && (
-          <p data-testid="processes-problem" role="alert" className={note}>
-            {problem}
-          </p>
-        )}
-        {more > 0 && (
-          <p data-testid="processes-more" className={note}>
-            {moreSentence(more)}
-          </p>
-        )}
-        <p data-testid="processes-note" className={note}>
-          {detachedSentence}
-        </p>
       </div>
-    </Dialog>
+      {rows.length === 0 ? (
+        <p data-testid="processes-empty" role="status" className={note}>
+          {nothingRunning}
+        </p>
+      ) : (
+        <ul aria-label="Running processes" className="flex flex-col">
+          {rows.map((row, index) => (
+            <Row
+              key={stopKey(row)}
+              row={row}
+              index={index}
+              now={now}
+              number={sessionNumber(row.session)}
+              stopping={stopping.has(stopKey(row))}
+              busy={stopping.size > 0}
+              onStop={() => {
+                onStop(row);
+              }}
+              onPort={onPort}
+            />
+          ))}
+        </ul>
+      )}
+      {problem !== null && (
+        <p data-testid="processes-problem" role="alert" className={note}>
+          {problem}
+        </p>
+      )}
+      {more > 0 && (
+        <p data-testid="processes-more" className={note}>
+          {moreSentence(more)}
+        </p>
+      )}
+      <p data-testid="processes-note" className={note}>
+        {detachedSentence}
+      </p>
+    </div>
   );
 }

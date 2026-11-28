@@ -59,9 +59,9 @@ async function journey(session: AppSession): Promise<void> {
   const violations = await page.evaluate((): unknown => Reflect.get(window, "policyViolations"));
   assert.deepEqual(violations, [], "the highlighter broke the content security policy");
   await page.keyboard.press(settingsKeys);
-  await visible(session, "settings-dialog", "after the settings shortcut on a hostile file");
+  await visible(session, "settings-page", "after the settings shortcut on a hostile file");
   await page.keyboard.press("Escape");
-  await gone(session, "settings-dialog", "after Escape");
+  await gone(session, "settings-page", "after Escape");
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }
 

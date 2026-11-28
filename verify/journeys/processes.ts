@@ -57,7 +57,7 @@ async function startOf(pid: number): Promise<number> {
 
 async function openList(session: AppSession): Promise<void> {
   await session.page.getByTestId("header-processes").click();
-  await visible(session, "processes-dialog", "after the header count was pressed");
+  await visible(session, "processes-popover", "after the header count was pressed");
 }
 
 async function forged(
