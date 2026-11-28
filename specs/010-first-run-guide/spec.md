@@ -40,3 +40,7 @@ Tips for later features, a help centre, videos, and any tracking of what the use
 - [x] The card takes no focus by itself, and Escape closes it only while focus is inside it. Proof, the same scenario with a running session.
 - [x] An early close shows the toast, Done shows none, and neither shows the guide again after a restart. Proof, the same scenario.
 - [x] Show the guide in the command menu starts it again. Proof, the same scenario.
+
+## Next
+
+- The four guide cards point at the controls in their new places, New workspace in the sidebar, Claude Code in the centre, Changes in the rail and the Needs you group. Part of [015 Layout](../015-layout/spec.md).

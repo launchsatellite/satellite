@@ -44,3 +44,7 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 - [x] The workspace header no longer names the project, and keeps its heading for screen readers.
 - [x] The title bar options per system, and overlay colours equal to the tokens in `app.css`. Proof, `src/main/platform/title-bar.test.ts`.
 - [ ] The traffic lights, the overlay and a double click on the strip behave as the system's own title bar. Proof, a person on each system, since a quiet window shows no frame.
+
+## Next
+
+- The 40px title bar strip goes. On macOS the traffic lights sit in the sidebar's top row. On Windows and Linux whichever top row the window buttons overlap keeps its content inside the free area the system reports through `env(titlebar-area-*)`, with the buttons on the right or the left, and the drag areas move into those top rows. With the sidebar hidden, the centre header takes the traffic lights and the drag area,, as 015 states. The workspace name moves to the centre header and Settings to the sidebar footer. Part of [015 Layout](../015-layout/spec.md).

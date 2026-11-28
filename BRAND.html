@@ -32,9 +32,10 @@ body{background:var(--void);color:var(--paper);font:400 15px/1.55 var(--sans);-w
 .top{position:sticky;top:0;z-index:50;display:grid;grid-template-columns:200px 1fr;gap:1px;background:var(--g2);border-bottom:1px solid var(--g2)}
 .lock{display:flex;align-items:center;gap:10px;font:700 22px/1 var(--display);letter-spacing:-.04em;color:var(--paper);text-decoration:none}
 .top .lock{background:var(--void);padding:0 22px;height:52px}
-.top nav{display:grid;grid-template-columns:repeat(13,1fr);gap:1px}
-.top nav a{background:var(--void);color:var(--g6);text-decoration:none;font:600 13px var(--sans);display:flex;align-items:center;gap:8px;padding:0 12px;height:52px;white-space:nowrap;overflow:hidden}
+.top nav{display:flex;gap:1px;min-width:0}
+.top nav a{flex:1 0 auto;background:var(--void);color:var(--g6);text-decoration:none;font:600 13px var(--sans);display:flex;align-items:center;gap:6px;padding:0 10px;height:52px;white-space:nowrap;overflow:hidden}
 .top nav a .ro{font-size:13px;color:var(--g4)}
+@media (max-width:1360px){.top nav a{padding:0 7px;gap:4px}}
 .top nav a:hover{background:var(--g1);color:var(--paper)}
 .top nav a.on{background:var(--uv);color:var(--white)}.top nav a.on .ro{color:var(--white)}
 
@@ -1052,6 +1053,7 @@ footer .wrap{display:flex;align-items:center;gap:16px}
 .s-gmap b{font-weight:600}.s-gmap p{color:var(--fg2);font-size:12px}.s-gmap .k-ro{font-size:12px}
 .s-gwhy{color:var(--g5);font-size:14px;max-width:56ch}
 .s-pv{border:1px solid var(--line);border-radius:8px;padding:12px}.s-pv b{font-weight:600}.s-pv p{color:var(--fg2);margin-top:4px;font-size:12.5px}.k-dlg-h h4{display:flex;align-items:center;gap:9px}
+.lay-frame{display:block;width:100%;height:2400px;border:0;background:#08080A}
 </style>
 </head>
 <body>
@@ -1106,7 +1108,7 @@ footer .wrap{display:flex;align-items:center;gap:16px}
   <symbol id="mk-twin" viewBox="-1 0 11 9"><path fill="currentColor" d="M3 0h3v1h-3zM1 1h7v1h-7zM3 2h7v1h-7zM0 3h9v1h-9zM0 4h9v1h-9zM0 5h9v1h-9zM-1 6h7v1h-7zM1 7h7v1h-7zM3 8h3v1h-3z"/></symbol>
 </defs></svg>
 
-<header class="top"><a class="lock" href="#"><svg height="18" width="22" style="color:var(--paper)"><use href="#mk-twin"/></svg>satellite</a><nav><a href="#heroes"><span class="ro">↓</span>Hero</a><a href="#principles"><span class="ro">00</span>Principles</a><a href="#logo"><span class="ro">01</span>Logo</a><a href="#mosaic"><span class="ro">02</span>Mosaic</a><a href="#surfaces"><span class="ro">03</span>Surfaces</a><a href="#website"><span class="ro">04</span>Website</a><a href="#colour"><span class="ro">05</span>Colour</a><a href="#type"><span class="ro">06</span>Type</a><a href="#system"><span class="ro">07</span>System</a><a href="#kit"><span class="ro">08</span>Kit</a><a href="#product"><span class="ro">09</span>Product</a><a href="#posters"><span class="ro">10</span>Posters</a><a href="#voice"><span class="ro">11</span>Voice</a></nav></header>
+<header class="top"><a class="lock" href="#"><svg height="18" width="22" style="color:var(--paper)"><use href="#mk-twin"/></svg>satellite</a><nav><a href="#heroes"><span class="ro">↓</span>Hero</a><a href="#principles"><span class="ro">00</span>Principles</a><a href="#logo"><span class="ro">01</span>Logo</a><a href="#mosaic"><span class="ro">02</span>Mosaic</a><a href="#surfaces"><span class="ro">03</span>Surfaces</a><a href="#website"><span class="ro">04</span>Website</a><a href="#colour"><span class="ro">05</span>Colour</a><a href="#type"><span class="ro">06</span>Type</a><a href="#system"><span class="ro">07</span>System</a><a href="#kit"><span class="ro">08</span>Kit</a><a href="#product"><span class="ro">09</span>Product</a><a href="#posters"><span class="ro">10</span>Posters</a><a href="#voice"><span class="ro">11</span>Voice</a><a href="#layout"><span class="ro">12</span>Layout</a></nav></header>
 
 <section class="cover"><canvas id="cover"></canvas>
   <div class="cv-top mz-clear"><span class="ro">Brand and design guidelines</span><span class="ro" style="color:var(--uv)">Draft 04</span><span class="ro" id="clock">T+00:14:32</span></div>
@@ -1783,6 +1785,18 @@ certs/localhost.pem</pre>
     <div><b>Archive</b><p>Remove the worktree and stop its servers. The branch stays unless it is safe to delete.</p></div>
   </div>
 </div></section>
+<section class="s" id="layout"><div class="wrap">
+  <div class="s-head"><span class="lbl">12 · Layout</span><div><h2>the agent<br>at the centre</h2><p>The layout spec 015 proposes, drawn screen by screen in dark and light. Claude Code takes a raised centre, a slim rail answers what still blocks the merge, and one click on a repo shows every live agent at once. Spec 015 decides what ships. The same drawing opens on its own as <a href="specs/015-layout/mockup.html">specs/015-layout/mockup.html</a>.</p></div></div>
+</div>
+<iframe class="lay-frame" src="specs/015-layout/mockup.html" title="The layout spec 015 proposes" loading="lazy"></iframe>
+<script>
+addEventListener('message', (e) => {
+  const h = e.data && e.data.satelliteLayoutHeight;
+  const frame = document.querySelector('.lay-frame');
+  if (frame && e.source === frame.contentWindow && Number.isFinite(h)) frame.style.height = h + 'px';
+});
+</script>
+</section>
 
 <footer><div class="wrap"><svg width="18" height="18" style="color:var(--g4)"><use href="#mk-twin"/></svg><span>satellite brand</span></div></footer>
 

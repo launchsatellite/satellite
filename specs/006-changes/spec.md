@@ -37,3 +37,7 @@ Review threads on diff lines belong to spec 008. Conflicts show only as the bann
 - [x] Selected lines arrive in the prompt as a reference to the file and lines. Proof, the driver.
 - [x] A file name with spaces, quotes or unicode is listed and opened correctly. Proof, unit tests.
 - [x] A binary file and a very large file show a sentence and never freeze the window. Proof, `src/main/changes/file-sides.test.ts` for telling them apart, large past the byte or the line limit and binary for a NUL in the first 8000 bytes. The `files` journey shows the too large and binary sentences in the Files viewer, not in the diff.
+
+## Next
+
+- Changes moves into the rail as a compact list with the selected file's hunk under it. Open diff opens the full diff as a centre tab beside the sessions. Send lines keeps Cmd+L, and the conflict banner sits at the top of the list. Part of [015 Layout](../015-layout/spec.md).

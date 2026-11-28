@@ -46,3 +46,7 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 - [x] Settings holds inside the window at 960 by 600 in light and dark, and its button stays inside the title bar area.
 - [x] Ctrl+Comma without Shift and the comma's physical key on another layout match on Windows and Linux. Proof, `src/renderer/commands/shortcuts.test.ts`.
 - [ ] The macOS app menu's Settings… item opens Settings, and the button sits clear of the window controls on Windows and Linux. Proof, a person on each system, since a quiet window shows no menu or frame.
+
+## Next
+
+- Settings opens as a full window page instead of a dialog, its sections in the sidebar under Back to work, every choice applying at once. Theme becomes one select that includes the curated themes with their credits. Part of [015 Layout](../015-layout/spec.md).
