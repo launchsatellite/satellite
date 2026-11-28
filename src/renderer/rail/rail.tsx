@@ -4,10 +4,13 @@ import { tabLabel } from "../pull-request/pull-request-words.ts";
 import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { Tab, Tabs } from "../ui/tabs.tsx";
+import { TopRow, type Frame } from "../window/top-row.tsx";
 
 export type RailView = "changes" | "files" | "pull-request";
 
 interface RailProps {
+  frameLeft: number;
+  frame: Frame;
   view: RailView;
   folded: boolean;
   shown: boolean;
@@ -36,11 +39,24 @@ export function railPanelId(view: RailView): string {
   return `rail-panel-${view}`;
 }
 
-export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, children }: RailProps) {
+export function Rail({
+  frame,
+  frameLeft,
+  view,
+  folded,
+  shown,
+  pullRequest,
+  onView,
+  onUnfold,
+  children,
+}: RailProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {!shown || folded ? (
+        <TopRow frame={frame} left={frameLeft} right={0} className="h-11" />
+      ) : null}
       {!shown ? null : folded ? (
-        <nav aria-label="Workspace views" className="flex flex-col items-center gap-1 pt-2">
+        <nav aria-label="Workspace views" className="flex flex-col items-center gap-1">
           {views.map((shown) => (
             <Button
               key={shown.view}
@@ -57,7 +73,7 @@ export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, child
           ))}
         </nav>
       ) : (
-        <div className="flex h-11 flex-none items-center gap-1 px-2">
+        <TopRow frame={frame} left={frameLeft} right={0} className="h-11 gap-1">
           <Tabs
             label="Workspace views"
             value={view}
@@ -94,7 +110,7 @@ export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, child
             tooltip="Hide the rail"
             testId="rail-hide"
           />
-        </div>
+        </TopRow>
       )}
       <div hidden={folded} className="flex min-h-0 flex-1 flex-col">
         {children}

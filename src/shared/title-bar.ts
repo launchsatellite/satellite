@@ -1,5 +1,5 @@
 export const titleBar = {
-  height: 40,
-  trafficLights: { x: 16, y: 13 },
-  trafficLightRoom: 80,
+  height: 44,
+  trafficLights: { x: 16, y: 15 },
+  trafficLightRoom: 76,
 };
