@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { promptText } from "../../shared/prompt-text.ts";
-import { cleanBase, conflictRequest, lineReference } from "./prompt-requests.ts";
+import { conflictRequest, lineReference } from "./prompt-requests.ts";
+
+const fallback = "Update this branch from the base branch and resolve the conflicts.";
 
 describe("conflictRequest", () => {
   it("asks to update from a base named by Satellite's words only", () => {
@@ -18,7 +20,7 @@ describe("conflictRequest", () => {
       "main\u{3164}",
       "a\u{fe00}b",
     ]) {
-      expect(cleanBase(base)).toBe("the base branch");
+      expect(conflictRequest(base)).toBe(fallback);
     }
   });
 });
@@ -195,9 +197,9 @@ describe("file mentions", () => {
     });
     expect(scoped.ok).toBe(true);
     for (const name of ["@/etc/passwd", "@~", "@x"]) {
-      expect(cleanBase(name)).toBe("the base branch");
+      expect(conflictRequest(name)).toBe(fallback);
     }
-    expect(cleanBase("origin/@scope")).toBe("origin/@scope");
+    expect(conflictRequest("origin/@scope")).toContain("from origin/@scope and");
     for (const path of ["icon@2x.png", "user@host/a.txt"]) {
       expect(
         lineReference({ path, side: "modified", view: "branch", base, start: 1, end: 2 }).ok,

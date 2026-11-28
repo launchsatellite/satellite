@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
@@ -30,13 +29,6 @@ export default defineConfig({
   },
   renderer: {
     define: { satelliteVersion: JSON.stringify(version) },
-    resolve: {
-      alias: {
-        "decode-named-character-reference": fileURLToPath(
-          new URL("./node_modules/decode-named-character-reference/index.js", import.meta.url),
-        ),
-      },
-    },
     plugins: [react(), tailwindcss(), licences.page],
     worker: { format: "es", plugins: () => [licences.worker] },
     build: {

@@ -9,7 +9,7 @@ import type {
   WorkspaceRef,
 } from "../../shared/bridge-contract.ts";
 import { BridgeFailure, type BridgeHandlers, type BridgeOwner } from "../bridge/registry.ts";
-import { currentBranch, headOid } from "../changes/change-base.ts";
+import { currentBranch } from "../changes/change-base.ts";
 import { waitForReads, type ActiveRead } from "../changes/changes-handlers.ts";
 import type { Needing } from "../inbox/notices.ts";
 import { isInsidePath } from "../platform/paths.ts";
@@ -273,12 +273,11 @@ export function createPullRequests({
       if (reason === "rate-limited") pace.pause();
       return { failure: reason };
     }
-    return parseConversation(result.run.stdout, place, detail) ?? { failure: "failed" };
+    return parseConversation(result.run.stdout, detail) ?? { failure: "failed" };
   };
 
   const readNumber = async (
     number: number,
-    local: string | null,
     folder: string,
     signal: AbortSignal,
     asked: boolean,
@@ -295,7 +294,7 @@ export function createPullRequests({
       if (reason === "rate-limited") pace.pause();
       return { failure: reason };
     }
-    return parseView(result.run.stdout, local);
+    return parseView(result.run.stdout);
   };
 
   const readView = async (
@@ -330,7 +329,7 @@ export function createPullRequests({
         if (facts.isDefault) return { failure: "target" as const };
         const result = await runGh(viewArguments(), folder, viewMs, signal);
         if ("failure" in result) return result;
-        return { run: result.run, head: (await headOid(folder, signal)) ?? null, branch, facts };
+        return { run: result.run, branch, facts };
       },
       { signal, asked: detail },
     );
@@ -345,7 +344,7 @@ export function createPullRequests({
       }
       return nothing(unavailable(viewed.failure));
     }
-    let parsed = parseView(viewed.run.stdout, viewed.head);
+    let parsed = parseView(viewed.run.stdout);
     if (parsed === null) return nothing(unavailable("failed"));
     if (parsed.found.base !== null && parsed.found.base === viewed.branch) {
       return nothing({ kind: "absent", reason: "target" });
@@ -371,7 +370,7 @@ export function createPullRequests({
           trusted.find((candidate) => candidate.open) ??
           trusted[0];
         if (better === undefined) return nothing({ kind: "absent", reason: "none" });
-        const again = await readNumber(better.number, viewed.head, folder, signal, detail);
+        const again = await readNumber(better.number, folder, signal, detail);
         if (again === null) return nothing(unavailable("failed"));
         if ("failure" in again) return nothing(unavailable(again.failure));
         if (

@@ -29,7 +29,13 @@ import {
 } from "../guide/guide-steps.ts";
 import { useGuide } from "../guide/use-guide.ts";
 import { InboxList } from "../inbox/inbox-list.tsx";
-import { inboxReasons, inboxRows, noticeTarget, type InboxTarget } from "../inbox/inbox.ts";
+import {
+  inboxReasons,
+  inboxRows,
+  nextInboxTarget,
+  noticeTarget,
+  type InboxTarget,
+} from "../inbox/inbox.ts";
 import { fileLinesRequest } from "../files/file-lines.ts";
 import { notTextSentence } from "../files/file-words.ts";
 import type { ShownFile } from "../files/files-view.tsx";
@@ -42,13 +48,8 @@ import { Palette, type PaletteMode, type SwitcherItem } from "../palette/palette
 import { focusColumn } from "./focus-column.ts";
 import { DropOverlay, useFolderDrop } from "../projects/drop-overlay.tsx";
 import { Sidebar } from "../projects/sidebar.tsx";
-import { ChecksList } from "../pull-request/checks-list.tsx";
-import { ConversationList } from "../pull-request/conversation-list.tsx";
-import { PullRequestOverview } from "../pull-request/pull-request-overview.tsx";
-import { PullRequestFiles } from "../pull-request/pull-request-files.tsx";
-import { PullRequestView, type PullRequestSection } from "../pull-request/pull-request-view.tsx";
 import { linkSentence } from "../pull-request/pull-request-words.ts";
-import { useThreadJump } from "../pull-request/use-thread-jump.ts";
+import { ReadyView } from "../pull-request/ready-view.tsx";
 import { foundOf, usePullRequests } from "../pull-request/use-pull-requests.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { curatedThemes } from "../../shared/themes/curated-themes.ts";
@@ -420,10 +421,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     },
     [hereText],
   );
-  const [pullRequestSection, setPullRequestSection] = useState<PullRequestSection>("overview");
   const changesShown = shownHere && railOpen && railView === "changes";
   const filesShown = shownHere && railOpen && railView === "files";
-  const pullRequestShown = shownHere && railOpen && railView === "pull-request";
+  const pullRequestShown = shownHere && railOpen && railView === "ready";
   const layoutShown =
     changesShown && !diffNarrow && shownText !== null && sideOnly(shownText.letter) === null;
   const activeSession = sessionHere === undefined ? undefined : sessions.activeOf(sessionHere);
@@ -479,14 +479,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => foundOf(pullRequests.of(ref)),
     [pullRequests],
   );
-  const pullRequestFilesShown = pullRequestShown && pullRequestSection === "files";
-  const pullRequestBase = pullRequestFilesShown ? (shownPullRequest?.base ?? undefined) : undefined;
   const changes = useChanges(
     changesHere,
-    filesShown ? "uncommitted" : pullRequestFilesShown ? "branch" : changesView,
+    filesShown ? "uncommitted" : changesView,
     finishedHere,
     shownText?.path,
-    pullRequestBase,
   );
   const listedReason =
     changes.list?.changes.kind === "unavailable" ? changes.list.changes.reason : undefined;
@@ -506,12 +503,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       setNoBase(next);
     }
   }
-  const uncommitted = useChanges(
-    pullRequestFilesShown && shownPullRequest?.atHead === true ? changesHere : null,
-    "uncommitted",
-    finishedHere,
-    undefined,
-  );
   const listedWorkspace = useCallback(
     ({ projectId, workspace }: WorkspaceRef) =>
       (projects ?? []).some(
@@ -586,17 +577,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     };
   }, [fileShown]);
   const shownPullRequestUrl = shownPullRequest?.url ?? null;
-  const pullRequestFound = shownPullRequest !== null;
-  const placeHere =
-    changesHere === null ? null : `${changesHere.projectId}/${changesHere.workspace}`;
-  const thread = useThreadJump({
-    place: placeHere,
-    shown: pullRequestShown,
-    found: shownPullRequest,
-    notify,
-    onSection: setPullRequestSection,
-  });
-  const jumpToThread = thread.jump;
   const conflicting = changes.list?.conflict?.kind === "files";
   const conflictBase = changes.list?.base ?? null;
   const activeAt = tabsHere.findIndex((tab) => tab.key === activeSession);
@@ -677,6 +657,14 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     if (settingsShown && needing > seenNeeding.current) notify(needsYouBehind, "info");
     seenNeeding.current = needing;
   }, [needing, settingsShown, notify]);
+  const nextNeed = nextInboxTarget(inbox, state.selected);
+  const readyNeedsYou =
+    changesHere !== null &&
+    pullRequests.needing.some(
+      ({ workspace }) =>
+        workspace.projectId === changesHere.projectId &&
+        workspace.workspace === changesHere.workspace,
+    );
   const pixelFor = useCallback(
     (projectId: string, workspace: WorkspaceKey) =>
       pullRequests.needing.some(
@@ -719,7 +707,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       if (modal) return;
       select(target.workspace);
       if (target.kind === "pull-request") {
-        openRail("pull-request");
+        openRail("ready");
         return;
       }
       activateSession(target.tab);
@@ -913,6 +901,15 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             },
           },
           {
+            id: "inbox.next",
+            title: "Go to what needs you",
+            shortcut: { key: "j" },
+            available: nextNeed !== undefined,
+            run: () => {
+              if (nextNeed !== undefined) openFromInbox(nextNeed);
+            },
+          },
+          {
             id: "inbox.newest",
             title: "Go to the newest workspace that needs you",
             available: newest !== undefined,
@@ -1086,10 +1083,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           },
           {
             id: "pull-request.show",
-            title: "Show the pull request",
-            available: shownHere && !(railOpen && railView === "pull-request"),
+            title: "Show what blocks the merge",
+            available: shownHere && !(railOpen && railView === "ready"),
             run: () => {
-              openRail("pull-request");
+              openRail("ready");
             },
           },
           {
@@ -1108,17 +1105,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: shownHere && shownPullRequestUrl !== null,
             run: () => {
               if (shownPullRequestUrl !== null) askPullRequestLink(shownPullRequestUrl);
-            },
-          },
-          {
-            id: "pull-request.next-thread",
-            title: "Go to the next unresolved thread",
-            shortcut: { key: "j" },
-            available: shownHere && pullRequestFound,
-            run: () => {
-              openRail("pull-request");
-              setPullRequestSection("files");
-              jumpToThread();
             },
           },
           {
@@ -1171,10 +1157,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               (changesShown && shownText !== null) ||
               (fileFront && fileShown !== null && fileShown.kind !== "link"),
             run: () => {
-              if (document.activeElement?.closest("[data-testid='pull-request']") != null) {
-                notify(noLinesSentence, "error");
-                return;
-              }
               const inChanges = document.activeElement?.closest("[data-testid='changes']") != null;
               if (fileFront && fileShown !== null && !inChanges) {
                 if (fileShown.kind !== "text") {
@@ -1244,6 +1226,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     closeSession,
     activateSession,
     newest,
+    nextNeed,
     openFromInbox,
     changesShown,
     fileFront,
@@ -1263,8 +1246,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     fileShown,
     diffSelection,
     shownPullRequestUrl,
-    pullRequestFound,
-    jumpToThread,
     askPullRequestLink,
     guideListed,
     showGuide,
@@ -1355,7 +1336,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             setProcessesOpen((open) => !open);
           }}
           onShowPullRequest={() => {
-            openRail("pull-request");
+            openRail("ready");
           }}
           railHidden={railShape === "hidden"}
           frame={frameLook}
@@ -1400,45 +1381,12 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
           />
         )}
         {pullRequestShown && (
-          <PullRequestView
+          <ReadyView
+            key={place}
             entry={shownEntry}
-            section={pullRequestSection}
-            onSection={setPullRequestSection}
+            workspace={changesHere}
             onLink={askPullRequestLink}
-          >
-            {shownPullRequest !== null && (
-              <>
-                {pullRequestSection === "overview" && (
-                  <PullRequestOverview found={shownPullRequest} onLink={askPullRequestLink} />
-                )}
-                <div hidden={pullRequestSection !== "checks"}>
-                  <ChecksList
-                    key={place}
-                    workspace={changesHere}
-                    found={shownPullRequest}
-                    onLink={askPullRequestLink}
-                  />
-                </div>
-                {pullRequestSection === "conversation" && (
-                  <ConversationList found={shownPullRequest} onLink={askPullRequestLink} />
-                )}
-                {pullRequestSection === "files" && (
-                  <PullRequestFiles
-                    key={place}
-                    workspace={changesHere}
-                    found={shownPullRequest}
-                    list={changes.list}
-                    uncommitted={uncommitted.list}
-                    error={changes.error}
-                    handle={diffHandle}
-                    current={thread.target}
-                    onCurrent={thread.select}
-                    onLink={askPullRequestLink}
-                  />
-                )}
-              </>
-            )}
-          </PullRequestView>
+          />
         )}
         {(filesShown || fileFront) && (
           <div hidden={!filesShown} className="flex min-h-0 flex-1 flex-col">
@@ -1600,6 +1548,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               view={railView}
               folded={railShape === "folded"}
               pullRequest={shownPullRequest?.number ?? null}
+              readyNeedsYou={readyNeedsYou}
               shown={changesHere !== null}
               onView={setRailView}
               onUnfold={openRail}

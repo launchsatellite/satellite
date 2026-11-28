@@ -13,17 +13,6 @@ export interface DiffSelection {
 
 export interface DiffHandle {
   selection(): DiffSelection | null;
-  reveal(line: number): boolean;
-}
-
-export interface LineMark {
-  line: number;
-  unresolved: boolean;
-}
-
-export interface MarkProps {
-  marks?: readonly LineMark[];
-  onMark?: (line: number) => void;
 }
 
 export type DiffSide = DiffSelection["side"];
@@ -74,32 +63,6 @@ export function lineMarks(
     markedColumns(model.getLineContent(line)).map((range) => columnMark(line, range, "look-alike")),
   );
   return [...shownRevealed, ...lookAlikes];
-}
-
-export function threadDecorations(marks: readonly LineMark[], lineCount: number) {
-  return marks
-    .filter(({ line }) => line >= 1 && line <= lineCount)
-    .map(({ line, unresolved }) => ({
-      range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-      options: {
-        glyphMarginClassName: unresolved ? "thread-mark thread-mark-open" : "thread-mark",
-      },
-    }));
-}
-
-export function revealLine(sideEditor: editor.ICodeEditor, line: number): boolean {
-  const model = sideEditor.getModel();
-  if (model === null || line < 1 || line > model.getLineCount()) return false;
-  sideEditor.revealLineInCenter(line);
-  return true;
-}
-
-export function markClick(sideEditor: editor.ICodeEditor, onMark: (line: number) => void) {
-  return sideEditor.onMouseDown((event) => {
-    const { target } = event;
-    if (target.type !== editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
-    onMark(target.position.lineNumber);
-  });
 }
 
 export function gitLineCount(model: editor.ITextModel): number {

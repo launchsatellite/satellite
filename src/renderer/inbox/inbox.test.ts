@@ -5,6 +5,7 @@ import {
   inboxReasons,
   inboxRows,
   needsSince,
+  nextInboxTarget,
   noticeTarget,
   reasonSentence,
   rowName,
@@ -209,6 +210,31 @@ describe("inbox", () => {
 
   it("a pull request reason leaves when its needs clear", () => {
     expect(inboxReasons([], [{ workspace: alpha, needs: [], since: 1 }])).toEqual([]);
+  });
+});
+
+describe("nextInboxTarget", () => {
+  const gamma: WorkspaceRef = { projectId, workspace: "gamma" };
+  const rows = inboxRows(
+    inboxReasons(
+      [tab(alpha, 1, "needs-you", 3), tab(beta, 1, "needs-you", 2)],
+      [{ workspace: gamma, needs: ["checks"], since: 1 }],
+    ),
+    everywhere,
+  );
+  const next = (current: WorkspaceRef | null) => nextInboxTarget(rows, current)?.workspace;
+
+  it("goes to the next workspace in the inbox order and wraps", () => {
+    expect(rows.map(({ workspace }) => workspace.workspace)).toEqual(["alpha", "beta", "gamma"]);
+    expect(next(alpha)).toEqual(beta);
+    expect(next(beta)).toEqual(gamma);
+    expect(next(gamma)).toEqual(alpha);
+  });
+
+  it("starts at the top from a workspace that is not in the inbox, and has nothing when it is empty", () => {
+    expect(next({ projectId, workspace: "delta" })).toEqual(alpha);
+    expect(next(null)).toEqual(alpha);
+    expect(nextInboxTarget([], alpha)).toBeUndefined();
   });
 });
 

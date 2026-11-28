@@ -94,8 +94,8 @@ export async function waitForReads(stopping: readonly ActiveRead[]): Promise<voi
   }
 }
 
-function keyOf(ref: WorkspaceRef, view: ChangesView, base: string | undefined): string {
-  return `${ref.projectId}/${ref.workspace}/${view}/${view === "branch" ? (base ?? "") : ""}`;
+function keyOf(ref: WorkspaceRef, view: ChangesView): string {
+  return `${ref.projectId}/${ref.workspace}/${view}`;
 }
 
 function shortName(name: string | null | undefined): string | null {
@@ -263,7 +263,6 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
   const readList = async (
     ref: WorkspaceRef,
     view: ChangesView,
-    named: string | undefined,
     signal: AbortSignal,
     read: ActiveRead,
   ): Promise<{ answer: ChangesList; cached?: CachedList; trial?: Trial }> => {
@@ -278,7 +277,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
     const [head, branch, lookup] = await Promise.all([
       headOid(folder, signal),
       currentBranch(folder, signal),
-      resolveBase(project.path, folder, signal, remotes, view === "branch" ? named : undefined),
+      resolveBase(project.path, folder, signal, remotes),
     ]);
     signal.throwIfAborted();
     const base = lookup.kind === "base" ? lookup.base : null;
@@ -330,9 +329,9 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
 
   return {
     handlers: {
-      "changes.list": ({ workspace, view, base: named }, owner) => {
+      "changes.list": ({ workspace, view }, owner) => {
         const page = pageOf(owner);
-        const key = keyOf(workspace, view, named);
+        const key = keyOf(workspace, view);
         const running = page.lists.get(key);
         if (running !== undefined) return running.answer;
         for (const [other, read] of page.lists) {
@@ -346,7 +345,7 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
             answer: listed,
             cached,
             trial,
-          } = await readList(workspace, view, named, controller.signal, read);
+          } = await readList(workspace, view, controller.signal, read);
           controller.signal.throwIfAborted();
           if (cached === undefined) page.cache.delete(key);
           else remember(page, key, cached);
@@ -364,13 +363,13 @@ export function createChanges({ home, store }: { home: string; store: ProjectSto
         page.lists.set(key, { view, controller, answer });
         return answer;
       },
-      "changes.file": async ({ workspace, view, path, base }, owner) => {
+      "changes.file": async ({ workspace, view, path }, owner) => {
         const page = pageOf(owner);
         page.file?.abort(movedOn());
         const controller = new AbortController();
         page.file = controller;
         try {
-          const cached = page.cache.get(keyOf(workspace, view, base));
+          const cached = page.cache.get(keyOf(workspace, view));
           const record = cached?.records.get(path);
           if (cached === undefined || record === undefined) throw notListed();
           return await owned(controller, cached.folder, async () => {

@@ -27,7 +27,7 @@ Reviewing what an agent did is the user's main job. Changes shows the work of a 
 
 ## Not in scope
 
-Review threads on diff lines belong to spec 008. Conflicts show only as the banner in Changes, and the inbox does not list them.
+Review threads on diff lines, which GitHub shows. Conflicts show only as the banner in Changes, and the inbox does not list them.
 
 ## Acceptance
 

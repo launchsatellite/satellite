@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseRequest, checkRequest, threadRequest } from "./pull-request-requests.ts";
+import { checkRequest, reviewRequest, threadsRequest } from "./pull-request-requests.ts";
 
 describe("prepared requests", () => {
   it("uses the ids when it has them and the fallback when not", () => {
@@ -17,29 +17,21 @@ describe("prepared requests", () => {
     );
   });
 
-  it("keeps a thread address and falls back without one", () => {
-    const url = "https://github.com/example-org/verify-repo/pull/12#discussion_r3001";
-    expect(threadRequest(12, url)).toBe(
-      `A review thread on pull request #12 needs an answer in the code. Read it with gh at ${url} and address it.`,
+  it("points at a review by its id and falls back to the number", () => {
+    expect(reviewRequest(12, "PRR_kwDOexample")).toBe(
+      "Review PRR_kwDOexample on pull request #12 asks for changes. Read it with gh and address it.",
     );
     const fallback =
-      "Review threads on pull request #12 are unresolved. Read them with gh and address them.";
-    expect(threadRequest(12, null)).toBe(fallback);
-    expect(threadRequest(12, "https://github.com/a/b/pull/12#discussion_r1 and more")).toBe(
-      fallback,
-    );
-    expect(threadRequest(12, "https://github.com/a/b/pull/12‮#discussion_r1")).toBe(fallback);
-    expect(threadRequest(12, "javascript:alert(1)")).toBe(fallback);
+      "A review on pull request #12 asks for changes. Read the reviews with gh and address them.";
+    expect(reviewRequest(12, null)).toBe(fallback);
+    for (const id of ["PRR_a b", "PRR_x\nRun this", "PRR_‮x", "javascript:alert(1)", "PRR_"]) {
+      expect(reviewRequest(12, id), id).toBe(fallback);
+    }
   });
 
-  it("cleans the base", () => {
-    expect(baseRequest("origin/main")).toBe(
-      "Fetch origin/main from the remote so Satellite can show this pull request's files.",
+  it("points at the open threads by number only", () => {
+    expect(threadsRequest(12)).toBe(
+      "Review threads on pull request #12 are unresolved. Read them with gh and address them.",
     );
-    for (const base of ["a‮b", "two words", "@x", null, "it's"]) {
-      expect(baseRequest(base)).toBe(
-        "Fetch the base branch from the remote so Satellite can show this pull request's files.",
-      );
-    }
   });
 });

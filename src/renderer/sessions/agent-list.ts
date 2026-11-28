@@ -7,7 +7,7 @@ import type {
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import type { PullRequestNeeding } from "../inbox/inbox.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
-import { blocks } from "../pull-request/pull-request-words.ts";
+import { readyCard } from "../pull-request/ready-rows.ts";
 import type { PixelState } from "../ui/status-pixel.tsx";
 import { pixelOf } from "./session-pixel.ts";
 import type { SessionTab } from "./use-sessions.ts";
@@ -65,7 +65,7 @@ function placed(
       since: needing.since,
     };
   }
-  const clear = found?.state === "open" && blocks(found).every((block) => block.key === "clear");
+  const clear = found?.state === "open" && readyCard(found).look === "clear";
   if (clear && tab.status !== "needs-you" && tab.status !== "working") {
     return {
       group: "nothing-blocks",

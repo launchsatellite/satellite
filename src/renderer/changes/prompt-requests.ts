@@ -25,7 +25,7 @@ const plainName = /^[^\s"'`]+$/;
 const mention = /(?<![\p{L}\p{N}/])@/u;
 const fallbackName = "the base branch";
 
-export function cleanBase(base: string | null): string {
+function cleanBase(base: string | null): string {
   if (base === null || holdsRevealedText(base) || !plainName.test(base) || mention.test(base)) {
     return fallbackName;
   }
