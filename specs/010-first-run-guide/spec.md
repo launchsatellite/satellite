@@ -14,7 +14,7 @@ A new user sees three columns and no agent, and has to guess that a workspace is
   - 01 make a workspace. "A workspace is a git worktree and a branch made in one step, so agents work side by side and never in each other's files."
   - 02 start Claude Code. "This is your own Claude Code in a real terminal, with your settings and skills, and its prompt is the only place you type."
   - 03 read what it did. "Files, Changes and Pull request show the work in this workspace, read only, because your agent does the writing."
-  - 04 orange means you. "A square pixel shows the state of each session, and signal orange means one cannot go on without you, so it waits in the inbox." With a legend of idle, working, needs you and done.
+  - 04 orange means you. "A square pixel shows the state of each session, and signal orange means one cannot go on without you, so it waits under Needs you." With a legend of idle, working, needs you and done.
 - A step leaves when the user does what it describes, or on Next. Step 02 leaves as soon as a session starts. The last step ends on Done. Next is a secondary button, so the real control stays the main action, and Done is primary.
 - The close control ends the guide at any step. Escape ends it only while focus is inside the card, so Escape in the terminal still reaches Claude Code.
 - After an early close a toast says "The guide is closed. Show the guide in the command menu opens it again." After Done nothing remains.

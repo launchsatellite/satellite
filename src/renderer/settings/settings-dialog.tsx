@@ -141,7 +141,7 @@ export function SettingsDialog({
       testId="settings-dialog"
       onClose={onClose}
       closable
-      returnFocusTo="title-settings"
+      returnFocusTo="sidebar-settings"
       footer={
         <Button onClick={onClose} testId="settings-done">
           Done
@@ -173,7 +173,7 @@ export function SettingsDialog({
       <Section title="notifications" testId="settings-notifications">
         <Setting
           name="System notifications"
-          detail="Only when a workspace needs you and the window is out of sight. The inbox fills either way, and your system's settings for Satellite still decide whether they show."
+          detail="Only when a workspace needs you and the window is out of sight. Needs you fills either way, and your system's settings for Satellite still decide whether they show."
         >
           <Segmented
             label="System notifications"
@@ -195,7 +195,7 @@ export function SettingsDialog({
           detail={
             guideReady
               ? "Four cards beside the controls nobody guesses, from the first step that still applies."
-              : "It starts once you add a project."
+              : "It starts once you add a repo."
           }
         >
           <Button

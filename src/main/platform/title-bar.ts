@@ -23,7 +23,7 @@ export function overlayStyle(
 ): TitleBarOverlayOptions {
   const curated = curatedTheme(theme) !== undefined;
   const colours = lookOf(theme)?.overlay ?? overlayColours[dark || curated ? "dark" : "light"];
-  return { ...colours, height: titleBar.height - 1 };
+  return { ...colours, height: titleBar.height };
 }
 
 export function titleBarFor(

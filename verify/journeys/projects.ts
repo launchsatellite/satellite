@@ -171,7 +171,7 @@ async function run(session: AppSession): Promise<void> {
   await waitUntil(
     async () => (await topOf(session, "beta")) < (await topOf(session, "alpha")),
     promptTimeoutMs,
-    "beta never rose above alpha after Move this project down",
+    "beta never rose above alpha after Move this repo down",
   );
 
   await session.relaunch();
@@ -184,7 +184,7 @@ async function run(session: AppSession): Promise<void> {
   );
 
   await runCommand(session, "remove", "command-project-remove");
-  await visible(session, "remove-project-dialog", "after Remove this project");
+  await visible(session, "remove-project-dialog", "after Remove this repo");
   await session.page.getByTestId("remove-project-confirm").click();
   await toastReads(
     session,

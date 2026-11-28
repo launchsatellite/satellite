@@ -119,7 +119,7 @@ async function removeAsks(session: AppSession, claudePid: number): Promise<void>
     await visible(
       session,
       "remove-project-dialog",
-      "after Remove this project with a session running",
+      "after Remove this repo with a session running",
     );
   };
   await openRemove();

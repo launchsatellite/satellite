@@ -81,13 +81,13 @@ const notices: Record<JsonReadOutcome["kind"], string | null> = {
   read: null,
   missing: null,
   "set-aside":
-    "Satellite couldn't read its saved projects, so it set that file aside and started with an empty list.",
+    "Satellite couldn't read its saved repos, so it set that file aside and started with an empty list.",
   "not-moved":
-    "Satellite couldn't read its saved projects or move them aside, so it started with an empty list and won't save project changes for now.",
+    "Satellite couldn't read its saved repos or move them aside, so it started with an empty list and won't save repo changes for now.",
   "not-read":
-    "Satellite couldn't open its saved projects, so it started with an empty list, left the file as it is and won't save project changes for now.",
+    "Satellite couldn't open its saved repos, so it started with an empty list, left the file as it is and won't save repo changes for now.",
   newer:
-    "Your projects were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.",
+    "Your repos were saved by a newer Satellite, so this one leaves them untouched and shows none until you open that newer version.",
 };
 
 function allDifferent(values: readonly string[]): boolean {

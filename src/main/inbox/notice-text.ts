@@ -21,11 +21,11 @@ export function noticeText(
   if (subjects.length > 1 || waiting > 1) {
     return {
       title: `${String(Math.max(waiting, subjects.length))} workspaces need you`,
-      body: "Open Satellite to answer them from the inbox.",
+      body: "Open Satellite to answer them under Needs you.",
     };
   }
   const { workspace, parent } = subjects[0];
-  const name = noticeName(subjects[0].project, "a project");
+  const name = noticeName(subjects[0].project, "a repo");
   const project =
     parent === null ? name : `${name} in ${noticeName(parent, "a folder", noticeParentLimit)}`;
   if (workspace === null) {
