@@ -32,3 +32,7 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 
 - [x] The Agents row and Show every agent open the list, with each open session in every workspace and its state. Proof, the agent in the real window with scenario `needs-permission`, sessions in alpha and beta read as Working and Idle in light and dark, and the `inbox` journey, which finds alpha as Needs you in Agents.
 - [x] Choosing a row opens its workspace on that session with focus in its terminal. Proof, the `inbox` journey, where Enter on alpha in Agents selects alpha with the keys in its terminal.
+
+## Next
+
+- Agents opens as a centre page instead of a palette mode, sessions grouped by needs you, nothing blocks, working, done and idle, each row with its state word, pull request and how long it has been in that state. Part of [015 Layout](../015-layout/spec.md).

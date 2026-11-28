@@ -42,3 +42,10 @@ Creating pull requests, replying, reviewing and merging. Agents and GitHub own t
 - [x] Every shape of `gh` answer the view depends on parses, and a missing field degrades to a sentence. Proof, unit tests on the parsers.
 - [x] With `gh` signed out the tab says so and names the fix. Proof, scenario `not-signed-in`.
 - [x] A new pull request opened by the agent appears without any action. Proof, journey `pull-request`.
+
+## Next
+
+- The Pull request tab becomes Ready, a rail tab that answers what still blocks the merge. Part of [015 Layout](../015-layout/spec.md).
+- A card says Nothing blocks the merge, or how many things block it, then one row each for checks, reviews from owners, members and collaborators, conflicts with the base and unresolved threads, then the commits.
+- Signal marks only failed checks, changes requested and conflicts. Each blocker keeps Send to Claude Code with a pointer, and a failed check its failing lines. Bots and outside reviewers never block or approve.
+- Merge on GitHub once nothing blocks, Open on GitHub otherwise. Overview, Conversation, Files and the next thread key go, since GitHub draws them better.

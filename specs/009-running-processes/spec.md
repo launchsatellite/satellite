@@ -33,3 +33,7 @@ Starting processes. Agents start them.
 - [x] Stop ends the process and its children. Proof, the same scenario.
 - [x] A process id that does not descend from a session is refused. Proof, unit tests.
 - [x] The process table parses on macOS, Windows and Linux. Proof, unit tests on recorded output.
+
+## Next
+
+- Running processes open as a popover from the header readout instead of a dialog. Part of [015 Layout](../015-layout/spec.md).

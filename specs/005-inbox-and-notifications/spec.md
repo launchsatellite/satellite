@@ -37,3 +37,9 @@ Reasons that come from pull requests arrive with spec 008 and use this inbox.
 - [x] Answering the session removes the row. Proof, the same journey.
 - [x] With the window unfocused, needing the user raises one notification, and not a second one for the same reason. Proof, the `inbox` journey with the recording notifier, and the controller's unit tests.
 - [x] With notifications off, none is raised and the inbox still fills. Proof, the driver with the recording notifier, and `src/main/inbox/notices.test.ts`.
+
+## Next
+
+- The inbox becomes the Needs you group at the top of the sidebar, with the same rows, order and rules. Part of [015 Layout](../015-layout/spec.md).
+- Cmd+J, Ctrl+Shift+J on Windows and Linux, is Go to what needs you, opening the next workspace in the inbox order from anywhere.
+- A needs you that arrives while a page covers the sidebar shows as a toast.

@@ -56,3 +56,9 @@ The inbox and notifications belong to spec 005.
 - [x] Send to Claude Code places the text in the prompt and does not submit it. Proof, the driver.
 - [x] With `claude` missing the pane says so and names the fix. Proof, scenario `claude-missing`.
 - [x] The user's Claude Code settings files are byte for byte unchanged after a session. Proof, a journey that compares them.
+
+## Next
+
+- Sessions move to the centre of the window, in one tab strip that also holds files and diffs opened from the rail. Part of [015 Layout](../015-layout/spec.md).
+- A session started from the New workspace page receives the typed request as its first message, sent through its terminal once Claude Code is ready, never as a launch argument.
+- In the repo view a workspace's selected session shows as a tile, and only tiles on screen draw a terminal.

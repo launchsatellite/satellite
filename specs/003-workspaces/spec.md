@@ -45,3 +45,8 @@ Starting sessions in the workspace belongs to spec 004.
 - [x] A worktree an agent makes in the project shows up as a workspace with no Archive, and leaves quietly once the agent removes it. Proof, the `projects` journey, which adds one in `.claude/worktrees` and removes it, and `project-list.test.ts`.
 - [x] A worktree deleted outside the app disappears from the sidebar on the next start. Proof, the `workspaces` journey, which deletes second-look while the app is closed and finds it gone after the restart with its sentence, and `project-list.test.ts`.
 - [x] Two workspaces of one project hold different files at the same time. Proof, the `workspaces` journey, where a file written in first-look is absent from second-look and the repo, and each holds the files of its own start.
+
+## Next
+
+- New workspace opens as a centre page instead of a dialog, with one request box, the repo, the starting point and the generated name on it, and Create and start on Cmd+Enter. Each step shows under the box while it runs. Part of [015 Layout](../015-layout/spec.md).
+- A typed request becomes Claude Code's first message in the new workspace, see 004. An empty request starts a blank session.

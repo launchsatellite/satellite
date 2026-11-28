@@ -46,3 +46,10 @@ Worktree workspaces belong to spec 003. The agent pane belongs to spec 004.
 - [x] The quick switcher reaches a workspace in another project. Proof, the driver, and the `projects` journey selecting alpha from the switcher after beta was added.
 - [x] With `claude` missing or `gh` signed out, the first run check names the problem and the next step that fixes it. Proof, scenarios `claude-missing` and `not-signed-in`, and `gh-auth.test.ts`.
 - [x] A corrupt state file never stops the app from starting. Proof, `json-file.test.ts` and `interface-file.test.ts` on the reader, and scenario `corrupt-state`, which starts with both files cut off and sets each aside.
+
+## Next
+
+- Projects are called Repos in every word the interface shows, the sidebar group, Add a repo, Remove this repo, the first-run sentence and accessible names. Code names stay. Part of [015 Layout](../015-layout/spec.md).
+- The sidebar takes the layout in 015, the lockup at 17px, New workspace as the primary button, one row for the command menu, Needs you on top, sentence-case labels and Agents and Settings in the footer.
+- A workspace row shows one readout, ahead count, pull request number, Ready, Merged or running processes, with the rest in its tooltip. A folded repo shows its most urgent pixel and how many of its workspaces have a session.
+- Clicking a repo row opens the repo view from 015.

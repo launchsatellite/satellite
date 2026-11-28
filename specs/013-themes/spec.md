@@ -50,3 +50,7 @@ A Satellite feature is accepted on macOS, Windows and Linux.
 - [x] Every bundled grammar's licence ships in the notices. Proof, `npm run build` and `out/renderer/third-party-licenses.md`.
 - [x] The overlay colours follow the theme and fall back to Satellite's dark. Proof, `src/main/platform/title-bar.test.ts`.
 - [ ] The window frame, the overlay and native dialogs turn dark with a curated theme. Proof, a person on each system, since a quiet window shows no frame.
+
+## Next
+
+- The new `win` ground takes the theme's `sideBar.background`, so a curated theme colours the sidebar and the rail as one ground around the raised centre. Part of [015 Layout](../015-layout/spec.md).
