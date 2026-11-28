@@ -17,7 +17,7 @@ type GuideStep = 1 | 2 | 3 | 4;
 
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const closedSentence = "The guide is closed. Show the guide in the command menu opens it again.";
-const savedFile = z.object({ version: z.literal(5), guideSeen: z.literal(true) });
+const savedFile = z.object({ version: z.literal(6), guideSeen: z.literal(true) });
 const titles: Record<GuideStep, string> = {
   1: "make a workspace",
   2: "start Claude Code",
@@ -46,7 +46,7 @@ async function savedAsSeen(session: AppSession): Promise<void> {
       }
     },
     promptTimeoutMs,
-    () => `interface.json did not hold version 5 with guideSeen true, it read ${read.slice(0, 80)}`,
+    () => `interface.json did not hold version 6 with guideSeen true, it read ${read.slice(0, 80)}`,
   );
 }
 

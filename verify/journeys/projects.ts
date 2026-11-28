@@ -223,6 +223,7 @@ async function run(session: AppSession): Promise<void> {
     "the worktree an agent made offered Archive",
   );
   await session.page.getByTestId("workspace-beta-agent-one").click();
+  await session.page.getByTestId("rail-tab-files").click();
   await waitUntil(
     async () =>
       (await session.page.getByTestId("files-tree").locator('[data-path="README.md"]').count()) > 0,
