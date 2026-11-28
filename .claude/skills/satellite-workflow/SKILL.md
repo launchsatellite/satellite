@@ -60,10 +60,10 @@ Fill every section of `.github/pull_request_template.md` and report the link and
 You merge only where the maintainer granted it on this machine and asked you to in the task. Once CI is fully green, CodeRabbit has finished and approved the latest commit, and every review is addressed, squash-merge your own pull request. The ruleset on `main` lets only an admin update it, so the merge needs `--admin`.
 
 ```sh
-gh pr merge <n> --squash --admin
+gh pr merge <n> --squash --admin --match-head-commit <sha>
 ```
 
-GitHub deletes the merged branch itself, so leave out `--delete-branch`, which fails in a worktree once `main` is checked out elsewhere. If the command errors anyway, read `gh pr view <n> --json state` before trying again, since `MERGED` means the merge landed and only the steps after it remain. Then bring any branch stacked on it up to date, check `main` as in step 9 and start the next step of the task, the next pull request of a plan included, without waiting for a word.
+`<sha>` is the commit CodeRabbit approved and CI passed, so a commit pushed after them is never merged unreviewed. If the head moved, review and checks start again. GitHub deletes the merged branch itself, so leave out `--delete-branch`, which fails in a worktree once `main` is checked out elsewhere. If the command errors anyway, read `gh pr view <n> --json state` before trying again, since `MERGED` means the merge landed and only the steps after it remain. Then bring any branch stacked on it up to date, check `main` as in step 9 and start the next step of the task, the next pull request of a plan included, without waiting for a word.
 
 ## 9. Follow up until merged
 

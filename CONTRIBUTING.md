@@ -20,7 +20,7 @@ npm ci
 3. `./scripts/check` passes locally and in CI, and CI runs it and the smoke journeys on macOS, Windows and Linux for every pull request that changes more than docs. Every journey runs on `main` after the merge.
 4. The change fixes every doc, spec and skill it made wrong, in the same pull request.
 5. A finished branch gets an independent review, then a pull request with the template filled in and a conventional-commit title.
-6. **A human merges it.** Pull requests are squash-merged, so the title becomes the one commit on `main`. A maintainer who wants agents to merge their own green pull requests on a machine creates the empty file `~/.config/satellite/merge-granted` there, then asks for the merge in the task. It lives outside the repo, and deleting it takes the grant back. The ruleset on `main` lets only an admin update it, so those merges use `gh pr merge --squash --admin`.
+6. **A human merges it.** Pull requests are squash-merged, so the title becomes the one commit on `main`. A maintainer who wants agents to merge their own green pull requests on a machine creates the empty file `~/.config/satellite/merge-granted` there, then asks for the merge in the task. It lives outside the repo, and deleting it takes the grant back. The ruleset on `main` lets only an admin update it, so those merges use `gh pr merge --squash --admin --match-head-commit` with the approved commit.
 
 Tests are written only where they catch a real, likely failure. Most proof comes from running the real app.
 
