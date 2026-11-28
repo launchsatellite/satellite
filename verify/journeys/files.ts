@@ -142,7 +142,7 @@ async function tabPaths(page: Page): Promise<{ titles: string[]; active: number 
 async function listsTheDisk(session: AppSession): Promise<void> {
   const { page } = session;
   await page.getByTestId("workspace-repo-alpha").click();
-  await page.getByTestId("centre-tab-files").click();
+  await page.getByTestId("rail-tab-files").click();
   await rowOf(session, "README.md", "after opening Files");
   const listed = await rows(page);
   const root = listed.filter((row) => !row.path.includes("/"));
@@ -222,7 +222,7 @@ async function remembersTabs(session: AppSession): Promise<void> {
   const before = await tabPaths(session.page);
   await session.relaunch();
   await session.page.getByTestId("workspace-repo-alpha").click();
-  await session.page.getByTestId("centre-tab-files").click();
+  await session.page.getByTestId(`file-tab-${String(before.active)}`).click();
   let found = before;
   await waitUntil(
     async () => {
@@ -271,16 +271,15 @@ async function findsByName(session: AppSession): Promise<void> {
   while ((await page.getByTestId("file-tab-0-close").count()) > 0) {
     await page.getByTestId("file-tab-0-close").click({ force: true });
   }
-  await page.getByTestId("file-empty").waitFor({ state: "attached", timeout: waitMs });
-  await page.getByTestId("centre-tab-changes").click();
+  await page.getByTestId("rail-tab-changes").click();
   await page.getByTestId("changes").waitFor({ timeout: waitMs });
   await openByName(session, "needle", deepFile);
-  await page.getByTestId("files").waitFor({ timeout: waitMs });
   await editorShows(session, "needle", "after opening it by name");
 }
 
 async function sendsLines(session: AppSession): Promise<void> {
   const { page } = session;
+  await page.getByTestId("session-tab-start").click();
   await startClaude(session, 1);
   await page.keyboard.type("look at the files");
   await page.keyboard.press("Enter");
@@ -302,6 +301,7 @@ async function sendsLines(session: AppSession): Promise<void> {
   );
   assert.equal(typed, expected, `the prompt received ${JSON.stringify(typed)}`);
 
+  await page.getByTestId("rail-tab-files").click();
   const hostile = (await rows(page)).find((row) => row.path.includes("report"));
   assert.ok(hostile !== undefined, "the hostile name was not listed");
   from = (await session.standInEvents()).length;

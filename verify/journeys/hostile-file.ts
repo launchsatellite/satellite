@@ -31,7 +31,7 @@ async function journey(session: AppSession): Promise<void> {
     });
   });
   await page.getByTestId("workspace-repo-feature").click();
-  await page.getByTestId("centre-tab-changes").click();
+  await page.getByTestId("rail-tab-changes").click();
   await page.getByTestId("changes-list").getByText("hostile.ts").click();
   await waitUntil(
     () =>

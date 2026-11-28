@@ -96,7 +96,7 @@ async function checkHostileProject(session: AppSession): Promise<void> {
 }
 
 async function sidebarShown(session: AppSession): Promise<boolean> {
-  return session.page.getByTestId("column-projects").isVisible();
+  return session.page.getByTestId("column-sidebar").isVisible();
 }
 
 async function checkSidebar(session: AppSession): Promise<void> {
