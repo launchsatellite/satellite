@@ -1,5 +1,5 @@
 {
-  "description": "A clone of a local upstream with one pushed workspace, alpha, holding a commit, and a stand-in gh that answers an open pull request 12 with a Markdown description, three commits, four passed checks, one skipped, one approving review, one comment and one resolved thread. Satellite is set to the light theme.",
+  "description": "A clone of a local upstream with one pushed workspace, alpha, holding a commit, and a stand-in gh that answers an open pull request 12 with three commits, four passed checks, one skipped, one approving review and one resolved thread, so nothing blocks the merge. Satellite is set to the light theme.",
   "folders": [
     {
       "name": "upstream",

@@ -1,5 +1,5 @@
 {
-  "description": "A clone of a local upstream with one pushed workspace, alpha, and a stand-in gh that answers open pull request 12 with a review that requests changes on the head commit, two unresolved threads on src/app.ts (one on a changed line, one outdated) and one resolved thread, plus a comment from ada-example, who has no standing in the repository. After the mark answered a newer approving review from the same login replaces the request. Satellite is set to the light theme.",
+  "description": "A clone of a local upstream with one pushed workspace, alpha, and a stand-in gh that answers open pull request 12 with a review that requests changes on the head commit, two unresolved threads and one resolved thread. After the mark answered a newer approving review from the same login replaces the request. Satellite is set to the light theme.",
   "folders": [
     {
       "name": "upstream",
