@@ -92,7 +92,7 @@ async function run(session: AppSession): Promise<void> {
   await checkWindow(page);
   await session.answerFolderDialog(session.repo);
   await page.getByTestId("add-first-project").click();
-  await page.getByTestId("changes").waitFor({ timeout: promptTimeoutMs });
+  await page.getByTestId("start-claude").waitFor({ timeout: promptTimeoutMs });
   const firstPid = await startClaude(session, 1);
   await checkDrawn(session);
   await checkInput(session);

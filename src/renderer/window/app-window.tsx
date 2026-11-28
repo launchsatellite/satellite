@@ -1154,6 +1154,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               (changesShown && shownText !== null) ||
               (fileFront && fileShown !== null && fileShown.kind !== "link"),
             run: () => {
+              if (document.activeElement?.closest("[data-testid='pull-request']") != null) {
+                notify(noLinesSentence, "error");
+                return;
+              }
               const inChanges = document.activeElement?.closest("[data-testid='changes']") != null;
               if (fileFront && fileShown !== null && !inChanges) {
                 if (fileShown.kind !== "text") {

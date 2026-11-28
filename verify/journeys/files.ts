@@ -222,7 +222,15 @@ async function remembersTabs(session: AppSession): Promise<void> {
   const before = await tabPaths(session.page);
   await session.relaunch();
   await session.page.getByTestId("workspace-repo-alpha").click();
-  await session.page.getByTestId(`file-tab-${String(before.active)}`).click();
+  const restored = session.page.locator(
+    `[data-testid="file-tab-${String(before.active)}"][aria-controls="file-tab-panel"]`,
+  );
+  await waitUntil(
+    async () => (await restored.count()) === 1,
+    waitMs,
+    "the remembered active tab was not restored",
+  );
+  await restored.click();
   let found = before;
   await waitUntil(
     async () => {

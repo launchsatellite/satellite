@@ -96,6 +96,15 @@ export function FilesView({
         aria-labelledby={railTabId("files")}
         className="flex min-h-0 flex-1 flex-col"
       >
+        {error !== null && (
+          <p
+            data-testid="files-error"
+            role="status"
+            className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
+          >
+            {error}
+          </p>
+        )}
         <FileTree
           workspace={workspace}
           open={open}
@@ -109,15 +118,6 @@ export function FilesView({
       {paneHost !== null &&
         createPortal(
           <>
-            {error !== null && (
-              <p
-                data-testid="files-error"
-                role="status"
-                className="flex-none border-b border-line px-3 py-2 text-[12px] text-fg2"
-              >
-                {error}
-              </p>
-            )}
             <div className="min-h-0 flex-1">
               <FilePane file={file} path={activePath} handle={handle} />
             </div>
