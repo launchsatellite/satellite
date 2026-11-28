@@ -24,7 +24,7 @@ interface GuideLayerProps {
 }
 
 const fallbackFocus =
-  "[aria-label='Sidebar'] nav button, [aria-label='Sidebar'] button[aria-label='Add a project']";
+  "[aria-label='Sidebar'] nav button, [aria-label='Sidebar'] button[aria-label='Add a repo']";
 const tailStyles: Record<GuideSide, (tail: number) => CSSProperties> = {
   right: (tail) => ({ left: -25, top: tail - 3 }),
   left: (tail) => ({ right: -25, top: tail - 3 }),

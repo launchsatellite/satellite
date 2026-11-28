@@ -63,7 +63,7 @@ function fakeStore(projects: StoredProject[]): ProjectStore {
     project(projectId) {
       const found = projects.find((project) => project.id === projectId);
       if (found === undefined) {
-        return Promise.reject(new BridgeFailure("not-found", "That project is not in Satellite."));
+        return Promise.reject(new BridgeFailure("not-found", "That repo is not in Satellite."));
       }
       return Promise.resolve(found);
     },
@@ -371,7 +371,7 @@ describe("workspaceHandlers", { timeout: 30_000 }, () => {
     ).rejects.toMatchObject({
       code: "failed",
       message:
-        "Satellite can't save its project list right now, so it won't make a workspace. Restart Satellite, then try again.",
+        "Satellite can't save its repo list right now, so it won't make a workspace. Restart Satellite, then try again.",
     });
     expect(events).toEqual([]);
     expect(store.creating.size).toBe(0);

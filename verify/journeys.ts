@@ -12,6 +12,7 @@ import { changesJourney } from "./journeys/changes.ts";
 import { claudeSettingsJourney } from "./journeys/claude-settings.ts";
 import { conflictsJourney } from "./journeys/conflicts.ts";
 import { filesJourney } from "./journeys/files.ts";
+import { frameJourney } from "./journeys/frame.ts";
 import { guideJourney } from "./journeys/guide.ts";
 import { hostileFileJourney } from "./journeys/hostile-file.ts";
 import { inboxJourney } from "./journeys/inbox.ts";
@@ -23,7 +24,6 @@ import { pullRequestJourney } from "./journeys/pull-request.ts";
 import { quitJourney } from "./journeys/quit.ts";
 import { sessionsJourney } from "./journeys/sessions.ts";
 import { settingsJourney } from "./journeys/settings.ts";
-import { titleBarJourney } from "./journeys/title-bar.ts";
 import { workspacesJourney } from "./journeys/workspaces.ts";
 
 export interface Journey {
@@ -48,7 +48,7 @@ const journeys: Journey[] = [
   filesJourney,
   guideJourney,
   settingsJourney,
-  titleBarJourney,
+  frameJourney,
   workspacesJourney,
   hostileFileJourney,
   changesJourney,

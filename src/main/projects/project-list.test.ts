@@ -230,7 +230,7 @@ describe("createProjects", () => {
     await writeFile(join(home, "projects.json"), saved);
     const { handlers } = projectsIn(home);
     await expect(handlers["projects.drop"]({ path: other }, owner)).rejects.toThrow(
-      "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.",
+      "Your repos were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a repo.",
     );
     expect(await readFile(join(home, "projects.json"), "utf8")).toBe(saved);
   });
@@ -270,7 +270,7 @@ describe("createProjects", () => {
     try {
       for (const project of projects) {
         await expect(handlers["projects.remove"]({ projectId: project.id }, owner)).rejects.toThrow(
-          "Satellite couldn't save the project list. Nothing changed.",
+          "Satellite couldn't save the repo list. Nothing changed.",
         );
       }
     } finally {
@@ -516,7 +516,7 @@ describe("createProjects", () => {
     const [project] = (await projects.handlers["projects.list"]({}, owner)).projects;
     await expect(
       projects.handlers["projects.remove"]({ projectId: project?.id ?? "" }, owner),
-    ).rejects.toThrow("repo still has 1 workspace. Archive it first, then remove the project.");
+    ).rejects.toThrow("repo still has 1 workspace. Archive it first, then remove the repo.");
     expect(await storedWorkspaceIds(home)).toHaveLength(1);
   });
 

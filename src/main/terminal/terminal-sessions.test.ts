@@ -790,7 +790,7 @@ describe("createTerminalSessions", () => {
     const id = terminalId(1);
     const failed = handlers["terminal.start"]({ id, ...size }, mine);
     await expect(failed).rejects.toMatchObject({ code: "failed" });
-    await expect(failed).rejects.toThrow("Claude Code couldn't start. Nothing in your project");
+    await expect(failed).rejects.toThrow("Claude Code couldn't start. Nothing in your repo");
     logged.mockRestore();
     const launchId = listener.open.mock.calls[0]?.[0] ?? "";
     expect(listener.close).toHaveBeenCalledWith(launchId);

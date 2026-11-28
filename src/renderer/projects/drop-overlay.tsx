@@ -8,7 +8,7 @@ interface FolderDropOptions {
 }
 
 const oneAtATime = "Drop one folder at a time.";
-const unreadable = "Satellite couldn't read where that came from. Use Add a project instead.";
+const unreadable = "Satellite couldn't read where that came from. Use Add a repo instead.";
 
 function carriesFiles(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes("Files") === true;
@@ -72,7 +72,7 @@ export function DropOverlay() {
       data-testid="drop-overlay"
       className="pointer-events-none absolute inset-0 z-30 m-2 grid place-items-center rounded-[10px] border-2 border-dashed border-accent bg-bg/80"
     >
-      <p className="text-[15px] font-semibold text-fg">Drop a folder to add it as a project</p>
+      <p className="text-[15px] font-semibold text-fg">Drop a folder to add it as a repo</p>
     </div>
   );
 }

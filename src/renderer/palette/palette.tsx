@@ -62,13 +62,13 @@ const copy = {
   },
   switcher: {
     label: "Go to a workspace",
-    placeholder: "Type part of a workspace or project name",
+    placeholder: "Type part of a workspace or repo name",
     group: "Workspaces",
     action: "Open",
   },
   agents: {
     label: "Agents",
-    placeholder: "Type part of a workspace or project name",
+    placeholder: "Type part of a workspace or repo name",
     group: "Every Claude Code session",
     action: "Open",
   },
@@ -173,7 +173,7 @@ function emptyNote(
   files: FileSearch,
 ): { testId: string; text: string } | undefined {
   if (mode === "agents" && query === "") {
-    return { testId: "palette-empty", text: "No Claude Code session is open in any project." };
+    return { testId: "palette-empty", text: "No Claude Code session is open in any repo." };
   }
   if (mode !== "files") return { testId: "palette-empty", text: "Nothing matches that." };
   if (query === "" || files.state === "idle") {
@@ -198,7 +198,7 @@ function OptionIcon({ icons, path }: { icons: LoadedIcons | undefined; path: str
 function FooterHint({ keys, action }: { keys: string; action: string }) {
   return (
     <span className="inline-flex items-center gap-[5px]">
-      <KeyHint keys={keys} plain />
+      <KeyHint keys={keys} />
       {action}
     </span>
   );
@@ -386,7 +386,7 @@ export function Palette({
                     )}
                     {option.hint !== undefined && (
                       <span className="ml-auto flex-none">
-                        <KeyHint keys={option.hint} plain />
+                        <KeyHint keys={option.hint} />
                       </span>
                     )}
                   </div>

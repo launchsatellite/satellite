@@ -197,39 +197,35 @@ export function ChangesView({
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) inside.current = false;
       }}
     >
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line pr-2 pl-4">
-        {list?.base != null && (
-          <Tooltip text={`from ${visibleText(list.base)}`}>
-            <span
-              data-testid="changes-base"
-              dir="ltr"
-              className={`min-w-[14ch] flex-1 truncate font-mono text-[12px] text-dim [unicode-bidi:isolate] ${view === "branch" ? "" : "invisible"}`}
-            >
-              from <VisibleName text={list.base} />
-            </span>
-          </Tooltip>
+      <div className="flex flex-none flex-col gap-[6px] border-b border-line px-2 pb-2">
+        <Segmented label="Changes to show" value={view} options={views} onChange={onView} wide />
+        {(list?.base != null || (layoutShown && !narrow)) && (
+          <div className="flex min-h-6 items-center gap-2 px-1">
+            {list?.base != null && (
+              <Tooltip text={`from ${visibleText(list.base)}`}>
+                <span
+                  data-testid="changes-base"
+                  dir="ltr"
+                  className={`min-w-0 flex-1 truncate font-mono text-[11.5px] text-dim [unicode-bidi:isolate] ${view === "branch" ? "" : "invisible"}`}
+                >
+                  from <VisibleName text={list.base} />
+                </span>
+              </Tooltip>
+            )}
+            {layoutShown && !narrow && (
+              <span className="ml-auto flex">
+                <Segmented
+                  label="Diff layout"
+                  value={inline ? "inline" : "side-by-side"}
+                  options={layouts}
+                  onChange={(layout) => {
+                    onInline(layout === "inline");
+                  }}
+                />
+              </span>
+            )}
+          </div>
         )}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 py-[5px]">
-          <CommandButton
-            command="changes.send-lines"
-            variant="ghost"
-            size="small"
-            testId="diff-send-lines"
-          >
-            Send lines
-          </CommandButton>
-          <Segmented label="Changes to show" value={view} options={views} onChange={onView} />
-          {layoutShown && !narrow && (
-            <Segmented
-              label="Diff layout"
-              value={inline ? "inline" : "side-by-side"}
-              options={layouts}
-              onChange={(layout) => {
-                onInline(layout === "inline");
-              }}
-            />
-          )}
-        </div>
       </div>
       {list !== undefined && <ConflictBanner base={list.base} conflict={list.conflict} />}
       <div
@@ -241,6 +237,16 @@ export function ChangesView({
         className="min-h-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >
         {body()}
+      </div>
+      <div className="flex flex-none items-center border-t border-line p-2">
+        <CommandButton
+          command="changes.send-lines"
+          variant="secondary"
+          size="small"
+          testId="diff-send-lines"
+        >
+          Send lines
+        </CommandButton>
       </div>
     </div>
   );

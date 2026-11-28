@@ -99,7 +99,7 @@ interface Session {
 }
 
 const spawnFailed =
-  "Claude Code couldn't start. Nothing in your project changed. Start it again, and reinstall Claude Code if it keeps failing.";
+  "Claude Code couldn't start. Nothing in your repo changed. Start it again, and reinstall Claude Code if it keeps failing.";
 const statusGapMs = 100;
 const pasteStart = "\u001b[200~";
 export const interruptQuietMs = 3000;

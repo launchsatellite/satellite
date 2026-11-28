@@ -45,7 +45,7 @@ export function RemoveProjectDialog({
   return (
     <Dialog
       title={`Remove ${visibleText(name)}`}
-      description="Satellite forgets this project. Its folder stays where it is."
+      description="Satellite forgets this repo. Its folder stays where it is."
       testId="remove-project-dialog"
       onClose={onClose}
       closable
@@ -55,7 +55,7 @@ export function RemoveProjectDialog({
             Cancel
           </Button>
           <Button onClick={onRemove} testId="remove-project-confirm">
-            Remove project
+            Remove repo
           </Button>
         </>
       }

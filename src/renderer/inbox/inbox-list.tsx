@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef } from "react";
 import type { ProjectView, WorkspaceRef } from "../../shared/bridge-contract.ts";
 import { repeatedNames, shownProject } from "../../shared/project-names.ts";
 import { workspaceLabel } from "../projects/use-projects.ts";
-import { Icon } from "../ui/icon.tsx";
 import { StatusPixel } from "../ui/status-pixel.tsx";
 import { rowLook, rowRing } from "../ui/row-look.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
@@ -80,22 +79,19 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
     <section
       ref={section}
       tabIndex={-1}
-      aria-label="Inbox"
+      aria-label="Needs you"
       data-testid="inbox"
       className={`flex flex-none flex-col gap-px rounded-[6px] ${focusRing}`}
     >
       <div
         data-guide="inbox"
-        className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase"
+        className="flex h-[26px] flex-none items-center justify-between px-2 text-[11.5px] font-semibold text-dim"
       >
-        <span aria-hidden="true" className="flex items-center gap-[6px]">
-          <Icon name="bell" size={12} />
-          Inbox
-        </span>
+        <span aria-hidden="true">Needs you</span>
         <span
           data-testid="inbox-count"
           aria-hidden="true"
-          className={`font-pixel text-[12px] tracking-normal ${shown.length > 0 ? "text-sigfg" : "text-dim"}`}
+          className={`font-pixel text-[11px] font-normal ${shown.length > 0 ? "text-sigfg" : "text-dim"}`}
         >
           {shown.length}
         </span>
@@ -103,11 +99,7 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
       <span role="status" className="sr-only">
         {countSentence(shown.length)}
       </span>
-      {shown.length === 0 ? (
-        <p data-testid="inbox-empty" className="px-2 py-1 text-[13px] text-dim">
-          Nothing needs you right now.
-        </p>
-      ) : (
+      {shown.length > 0 && (
         <ul
           ref={list}
           className="-m-1 flex max-h-[33vh] scroll-py-1 flex-col gap-px overflow-y-auto p-1"
@@ -134,26 +126,28 @@ export function InboxList({ rows, projects, selected, onOpen }: InboxListProps) 
                       const [oldest] = row.reasons;
                       if (oldest !== undefined) onOpen(oldest);
                     }}
-                    className={`flex w-full items-start gap-[9px] px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${rowLook(current)} ${rowRing}`}
+                    className={`flex w-full items-start gap-2 px-2 py-[6px] text-left text-[13px] whitespace-nowrap ${rowLook(current)} ${rowRing}`}
                   >
                     <span className="mt-[6px] flex flex-none">
                       <StatusPixel state="needs-you" size={6} />
                     </span>
-                    <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
-                      <span
-                        data-testid={`${testId}-name`}
-                        className="min-w-0 font-medium whitespace-normal text-fg wrap-anywhere"
-                      >
-                        <VisibleName text={label} />
-                      </span>
-                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px] text-[12px]">
-                        <span className="max-w-full min-w-0 truncate text-dim">{project}</span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-[6px]">
                         <span
-                          data-testid={`${testId}-reason`}
-                          className="max-w-full min-w-0 whitespace-normal text-fg2"
+                          data-testid={`${testId}-name`}
+                          className="min-w-0 whitespace-normal text-fg wrap-anywhere"
                         >
-                          {sentence}
+                          <VisibleName text={label} />
                         </span>
+                        <span className="max-w-full min-w-0 truncate text-[12px] text-dim">
+                          {project}
+                        </span>
+                      </span>
+                      <span
+                        data-testid={`${testId}-reason`}
+                        className="min-w-0 text-[12px] whitespace-normal text-dim"
+                      >
+                        {sentence}
                       </span>
                     </span>
                   </button>

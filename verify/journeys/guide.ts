@@ -74,7 +74,7 @@ async function run(session: AppSession): Promise<void> {
 
   await session.relaunch();
   await stepShows(session, 1, "after a restart in the middle");
-  await session.page.getByTestId("new-workspace-repo").click();
+  await session.page.getByTestId("sidebar-new-workspace").click();
   await visible(session, "create-workspace", "after New workspace was pressed");
   await session.page.getByTestId("create-workspace").click();
   await stepShows(session, 2, "after making a workspace");

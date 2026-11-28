@@ -74,18 +74,18 @@ const workspaceReadMs = 15_000;
 const saveBoundMs = 10_000;
 const nameLimit = 255;
 const droppedLimit = 20;
-const saveFailure = "Satellite couldn't save the project list. Nothing changed.";
+const saveFailure = "Satellite couldn't save the repo list. Nothing changed.";
 const workspaceSaveFailure = "Satellite couldn't save the workspace list. Nothing changed.";
-const notInSatellite = "That project is not in Satellite.";
+const notInSatellite = "That repo is not in Satellite.";
 const newerFile =
-  "Your projects were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a project.";
+  "Your repos were saved by a newer Satellite, so this one won't change them. Open that newer version to add or remove a repo.";
 const homeFolderWords = "your home folder";
 
 let realHome: { home: string; forms: readonly string[] } | undefined;
 const deviceDrop =
   "That's a Windows device path, not a folder. Drop the repository's folder instead.";
 const networkDrop =
-  "Network folders can't be dropped on Satellite. Use Add a project to choose this one.";
+  "Network folders can't be dropped on Satellite. Use Add a repo to choose this one.";
 
 async function isFolder(path: string, inSlot: Slot): Promise<boolean> {
   return inSlot(() => stat(path)).then(
@@ -138,8 +138,8 @@ async function inBatches<T, R>(items: readonly T[], size: number, map: (item: T)
 
 function stillHas(name: string, count: number): string {
   return count === 1
-    ? `${name} still has 1 workspace. Archive it first, then remove the project.`
-    : `${name} still has ${String(count)} workspaces. Archive them first, then remove the project.`;
+    ? `${name} still has 1 workspace. Archive it first, then remove the repo.`
+    : `${name} still has ${String(count)} workspaces. Archive them first, then remove the repo.`;
 }
 
 async function liveWorkspaces(project: StoredProject, home: string): Promise<number> {
@@ -441,7 +441,7 @@ export function createProjects({
     if (list.length >= projectLimit) {
       throw new BridgeFailure(
         "limit",
-        "Satellite holds up to 200 projects. Remove one, then add this one.",
+        "Satellite holds up to 200 repos. Remove one, then add this one.",
       );
     }
     const project = { id: randomUUID(), path: checked.root, workspaces: [] };

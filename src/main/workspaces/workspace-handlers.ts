@@ -53,7 +53,7 @@ const detailLimit = 300;
 const canceledSentence = "You stopped making the workspace.";
 const busyReading = "Satellite is busy with other workspaces. Try again in a moment.";
 const notSavable =
-  "Satellite can't save its project list right now, so it won't make a workspace. Restart Satellite, then try again.";
+  "Satellite can't save its repo list right now, so it won't make a workspace. Restart Satellite, then try again.";
 
 function unavailable(name: string): BridgeFailure {
   return new BridgeFailure(

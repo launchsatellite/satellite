@@ -6,7 +6,7 @@ import { invoke } from "../bridge/bridge-client.ts";
 import { createSchedule, type ScheduleAnswer } from "../ui/refresh-schedule.ts";
 import type { Notify } from "../ui/toast.tsx";
 
-const listFailure = "Satellite couldn't read the project list. It keeps trying.";
+const listFailure = "Satellite couldn't read the repo list. It keeps trying.";
 
 function isVisible(): boolean {
   return document.visibilityState === "visible";

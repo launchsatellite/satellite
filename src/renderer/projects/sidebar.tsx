@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useId, useState, type DragEvent, type ReactNode } from "react";
 import type {
   ProjectView,
   PullRequestFound,
@@ -8,6 +8,7 @@ import type {
 } from "../../shared/bridge-contract.ts";
 import type { CommandId } from "../commands/command-registry.ts";
 import { CommandButton, commandShortcut, useCommands } from "../commands/commands-context.tsx";
+import { TopRow, type Frame } from "../window/top-row.tsx";
 import { Button } from "../ui/button.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { KeyHint } from "../ui/key-hint.tsx";
@@ -17,7 +18,7 @@ import { Tooltip } from "../ui/tooltip.tsx";
 import { withUniqueTestIds } from "../ui/unique-test-ids.ts";
 import { StatusPixel, type PixelState } from "../ui/status-pixel.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { pixelLabel } from "../sessions/session-pixel.ts";
+import { mostUrgentPixel, pixelLabel } from "../sessions/session-pixel.ts";
 import { repeatedNames, shownParent } from "../../shared/project-names.ts";
 import { visibleText } from "../../shared/visible-text.ts";
 import { checksState, readoutLabel, readoutPixel } from "../pull-request/pull-request-words.ts";
@@ -36,7 +37,10 @@ interface SidebarProps {
   pixelFor: (projectId: string, workspace: WorkspaceKey) => PixelState;
   pullRequestFor: (ref: WorkspaceRef) => PullRequestFound | null;
   processesFor: (ref: WorkspaceRef) => number;
+  hasSession: (ref: WorkspaceRef) => boolean;
   inbox: ReactNode;
+  frameRight: number;
+  frame: Frame;
 }
 interface ProjectRow {
   project: ProjectView;
@@ -55,11 +59,13 @@ function CommandRow({
   icon,
   text,
   testId,
+  className,
 }: {
   command: CommandId;
   icon: IconName;
   text: string;
   testId: string;
+  className: string;
 }) {
   const found = useCommands().get(command);
   const shortcut = found === undefined ? undefined : commandShortcut(found);
@@ -68,10 +74,10 @@ function CommandRow({
       type="button"
       data-testid={testId}
       onClick={found?.run}
-      className={`flex h-7 w-full flex-none items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap text-fg2 ${rowLook(false)} ${rowRing}`}
+      className={`flex h-7 min-w-0 items-center gap-2 rounded-[6px] px-2 text-[12.5px] whitespace-nowrap text-fg2 ${rowRing} ${className}`}
     >
       <span className="flex-none text-dim">
-        <Icon name={icon} size={15} />
+        <Icon name={icon} size={14} />
       </span>
       <span className="min-w-0 truncate">{text}</span>
       {shortcut !== undefined && (
@@ -92,7 +98,24 @@ function uncommittedLabel(count: string): string {
   return count === "1" ? "1 uncommitted file" : `${count} uncommitted files`;
 }
 
-function Readouts({
+function readoutParts(
+  workspace: WorkspaceView,
+  pullRequest: PullRequestFound | null,
+  processes: number,
+): string[] {
+  const ahead = counted(workspace.ahead);
+  const behind = counted(workspace.behind);
+  const changed = counted(workspace.changed);
+  return [
+    ahead === undefined ? undefined : `${ahead} ahead`,
+    behind === undefined ? undefined : `${behind} behind`,
+    changed === undefined ? undefined : uncommittedLabel(changed),
+    pullRequest === null ? undefined : readoutLabel(pullRequest),
+    processes > 0 ? countLabel(processes) : undefined,
+  ].filter((part) => part !== undefined);
+}
+
+function Readout({
   workspace,
   pullRequest,
   processes,
@@ -106,59 +129,38 @@ function Readouts({
   givesWay: boolean;
 }) {
   const ahead = counted(workspace.ahead);
-  const behind = counted(workspace.behind);
-  const changed = counted(workspace.changed);
-  const parts = [
-    ahead === undefined ? undefined : `${ahead} ahead`,
-    behind === undefined ? undefined : `${behind} behind`,
-    changed === undefined ? undefined : uncommittedLabel(changed),
-    pullRequest === null ? undefined : readoutLabel(pullRequest),
-    processes > 0 ? countLabel(processes) : undefined,
-  ].filter((part) => part !== undefined);
-  if (parts.length === 0) return null;
-  return (
-    <>
-      <span className="sr-only">{parts.join(", ")}</span>
+  const shown =
+    pullRequest?.state === "merged" ? (
+      <span data-testid={testId === undefined ? undefined : `${testId}-pull-request`}>merged</span>
+    ) : pullRequest !== null ? (
       <span
-        data-testid={testId === undefined ? undefined : `${testId}-meta`}
-        aria-hidden="true"
-        className={`ml-auto flex flex-none items-center gap-[7px] font-pixel text-[12px] text-dim uppercase ${givesWay ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
+        data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
+        data-number={pullRequest.number}
+        data-checks={checksState(pullRequest.counts)}
+        className="flex items-center gap-[5px]"
       >
-        {ahead !== undefined && <span>↑{ahead}</span>}
-        {behind !== undefined && <span>↓{behind}</span>}
-        {changed !== undefined && (
-          <Tooltip text={uncommittedLabel(changed)}>
-            <span className="flex items-center gap-[3px]">
-              <Icon name="folder" size={12} />
-              {changed}
-            </span>
-          </Tooltip>
-        )}
-        {pullRequest !== null && (
-          <Tooltip text={readoutLabel(pullRequest)}>
-            <span
-              data-testid={testId === undefined ? undefined : `${testId}-pull-request`}
-              data-number={pullRequest.number}
-              data-checks={checksState(pullRequest.counts)}
-              className="flex items-center gap-[5px]"
-            >
-              <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
-            </span>
-          </Tooltip>
-        )}
-        {processes > 0 && (
-          <Tooltip text={countLabel(processes)}>
-            <span
-              data-testid={testId === undefined ? undefined : `${testId}-processes`}
-              className="flex items-center gap-[3px]"
-            >
-              <Icon name="running" size={12} />
-              {processes}
-            </span>
-          </Tooltip>
-        )}
+        <StatusPixel state={readoutPixel(pullRequest)} size={6} />#{pullRequest.number}
       </span>
-    </>
+    ) : processes > 0 ? (
+      <span
+        data-testid={testId === undefined ? undefined : `${testId}-processes`}
+        className="flex items-center gap-[3px]"
+      >
+        <Icon name="running" size={11} />
+        {processes}
+      </span>
+    ) : ahead === undefined ? null : (
+      <span>↑{ahead}</span>
+    );
+  if (shown === null) return null;
+  return (
+    <span
+      data-testid={testId === undefined ? undefined : `${testId}-meta`}
+      aria-hidden="true"
+      className={`ml-auto flex flex-none items-center font-pixel text-[11px] text-dim uppercase ${givesWay ? "group-hover:invisible group-has-[:focus-visible]:invisible" : ""}`}
+    >
+      {shown}
+    </span>
   );
 }
 
@@ -185,9 +187,29 @@ function projectRows(projects: readonly ProjectView[]): ProjectRow[] {
   }));
 }
 
+function FoldedReadout({ pixel, sessions }: { pixel: PixelState; sessions: number }) {
+  if (sessions === 0 && pixel === "idle") return null;
+  const label =
+    sessions === 1 ? "1 workspace has a session" : `${String(sessions)} workspaces have a session`;
+  return (
+    <Tooltip text={sessions === 0 ? undefined : label}>
+      <span className="flex items-center gap-[6px] font-pixel text-[11px] font-normal text-dim">
+        <StatusPixel state={pixel} size={6} label={pixelLabel(pixel)} />
+        {sessions > 0 && (
+          <>
+            <span aria-hidden="true">{sessions}</span>
+            <span className="sr-only">{label}</span>
+          </>
+        )}
+      </span>
+    </Tooltip>
+  );
+}
+
 function ProjectRows({
   row: { project, testId, newWorkspaceTestId, workspaceTestIds, showParent },
-  guided,
+  folded,
+  onFold,
   selected,
   onSelect,
   onNewWorkspace,
@@ -197,9 +219,11 @@ function ProjectRows({
   pixelFor,
   pullRequestFor,
   processesFor,
+  hasSession,
 }: {
   row: ProjectRow;
-  guided: boolean;
+  folded: boolean;
+  onFold: (folded: boolean) => void;
   selected: WorkspaceRef | null;
   onSelect: (ref: WorkspaceRef) => void;
   onNewWorkspace: (projectId: string) => void;
@@ -209,8 +233,14 @@ function ProjectRows({
   pixelFor: SidebarProps["pixelFor"];
   pullRequestFor: SidebarProps["pullRequestFor"];
   processesFor: SidebarProps["processesFor"];
+  hasSession: SidebarProps["hasSession"];
 }) {
   const name = visibleText(project.name);
+  const listId = useId();
+  const refs = project.workspaces.map((workspace) => ({
+    projectId: project.id,
+    workspace: workspace.key,
+  }));
   return (
     <>
       <div
@@ -220,17 +250,39 @@ function ProjectRows({
           event.dataTransfer.setData(projectDrag, project.id);
           event.dataTransfer.effectAllowed = "move";
         }}
-        className="group flex h-7 flex-none cursor-grab items-center gap-[9px] px-2 text-[13px] font-semibold whitespace-nowrap text-fg active:cursor-grabbing"
+        className="group flex h-7 flex-none cursor-grab items-center gap-[6px] pr-[2px] text-[13px] font-semibold whitespace-nowrap text-fg active:cursor-grabbing"
       >
-        <span className="min-w-0 truncate">
-          <VisibleName text={project.name} />
-        </span>
-        {showParent && (
-          <span className="min-w-0 flex-[1_1_0%] truncate font-medium text-dim">
-            <VisibleName text={project.parent} />
+        <button
+          type="button"
+          data-testid={`fold-${testId}`}
+          aria-expanded={!folded}
+          aria-controls={listId}
+          onClick={() => {
+            onFold(!folded);
+          }}
+          className={`flex h-7 min-w-0 flex-1 items-center gap-[6px] pl-2 text-left ${rowLook(false)} ${rowRing}`}
+        >
+          <span className="flex-none text-dim">
+            <Icon name={folded ? "chevron-right" : "chevron-down"} size={12} />
           </span>
-        )}
-        <span className="ml-auto flex flex-none items-center">
+          <span className="min-w-0 truncate">
+            <VisibleName text={project.name} />
+          </span>
+          {showParent && (
+            <span className="min-w-0 flex-[1_1_0%] truncate font-medium text-dim">
+              <VisibleName text={project.parent} />
+            </span>
+          )}
+          {folded && (
+            <span className="ml-auto flex flex-none">
+              <FoldedReadout
+                pixel={mostUrgentPixel(refs.map((ref) => pixelFor(ref.projectId, ref.workspace)))}
+                sessions={refs.filter(hasSession).length}
+              />
+            </span>
+          )}
+        </button>
+        <span className="flex flex-none items-center">
           <span className={`flex ${hoverAction}`}>
             <Button
               variant="ghost"
@@ -245,14 +297,17 @@ function ProjectRows({
             />
           </span>
           {project.missing !== null ? (
-            <span className="pl-1 font-pixel text-[12px] text-dim uppercase">Missing</span>
+            <span className="pl-1 font-pixel text-[11px] font-normal text-dim uppercase">
+              Missing
+            </span>
           ) : (
-            <span className="flex" data-guide={guided ? "workspace" : undefined}>
+            <span className={`flex ${hoverAction}`}>
               <Button
                 variant="ghost"
                 size="small"
                 icon="plus"
                 label={`New workspace in ${name}`}
+                tooltip={`New workspace in ${name}`}
                 testId={newWorkspaceTestId}
                 onClick={() => {
                   onNewWorkspace(project.id);
@@ -262,46 +317,60 @@ function ProjectRows({
           )}
         </span>
       </div>
-      <ul aria-label={name} className="flex flex-col gap-px">
+      <ul id={listId} hidden={folded} aria-label={name} className="flex flex-col gap-px">
         {project.workspaces.map((workspace, index) => {
+          const ref = { projectId: project.id, workspace: workspace.key };
           const current =
             selected?.projectId === project.id && selected.workspace === workspace.key;
           const pixel = pixelFor(project.id, workspace.key);
           const testId = workspaceTestIds[index];
           const archivable =
             workspace.key !== "main" && !workspace.outside && project.missing === null;
+          const pullRequest = pullRequestFor(ref);
+          const processes = processesFor(ref);
+          const summary = readoutParts(workspace, pullRequest, processes).join(", ");
           return (
             <li key={workspace.key} className="group relative">
-              <button
-                type="button"
-                data-testid={testId}
-                autoFocus={focus}
-                aria-current={current ? "true" : undefined}
-                onClick={() => {
-                  onSelect({ projectId: project.id, workspace: workspace.key });
-                }}
-                className={`flex h-7 w-full items-center gap-[9px] px-2 text-[13px] font-medium whitespace-nowrap ${archivable ? "group-hover:pr-8 group-has-[:focus-visible]:pr-8" : ""} ${current ? "text-fg" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
-              >
-                <StatusPixel
-                  state={pixel}
-                  size={6}
-                  testId={testId === undefined ? undefined : `${testId}-status`}
-                  label={pixelLabel(pixel)}
-                />
-                <span
-                  dir="ltr"
-                  className={`min-w-0 truncate [unicode-bidi:isolate] ${current ? "font-semibold" : ""}`}
+              <Tooltip text={summary === "" ? undefined : summary}>
+                <button
+                  type="button"
+                  data-testid={testId}
+                  autoFocus={focus}
+                  aria-current={current ? "true" : undefined}
+                  onClick={() => {
+                    onSelect(ref);
+                  }}
+                  className={`flex h-7 w-full items-center gap-2 pr-2 pl-[26px] text-[13px] whitespace-nowrap ${archivable ? "group-hover:pr-8 group-has-[:focus-visible]:pr-8" : ""} ${current ? "text-fg" : workspace.key === "main" ? "text-dim" : "text-fg2"} ${rowLook(current)} ${rowRing}`}
                 >
-                  <VisibleName text={workspaceLabel(project, workspace)} />
-                </span>
-                <Readouts
-                  workspace={workspace}
-                  pullRequest={pullRequestFor({ projectId: project.id, workspace: workspace.key })}
-                  processes={processesFor({ projectId: project.id, workspace: workspace.key })}
-                  testId={testId}
-                  givesWay={archivable}
-                />
-              </button>
+                  <StatusPixel
+                    state={pixel}
+                    size={6}
+                    testId={testId === undefined ? undefined : `${testId}-status`}
+                    label={pixelLabel(pixel)}
+                  />
+                  <span
+                    dir="ltr"
+                    className={`min-w-0 truncate [unicode-bidi:isolate] ${current ? "font-medium" : ""}`}
+                  >
+                    <VisibleName text={workspaceLabel(project, workspace)} />
+                  </span>
+                  {summary !== "" && (
+                    <span
+                      data-testid={testId === undefined ? undefined : `${testId}-summary`}
+                      className="sr-only"
+                    >
+                      {summary}
+                    </span>
+                  )}
+                  <Readout
+                    workspace={workspace}
+                    pullRequest={pullRequest}
+                    processes={processes}
+                    testId={testId}
+                    givesWay={archivable}
+                  />
+                </button>
+              </Tooltip>
               {archivable && (
                 <span className={`absolute inset-y-0 right-[2px] flex items-center ${hoverAction}`}>
                   <Button
@@ -339,15 +408,6 @@ function dropBefore(
   return at === -1 || stays ? undefined : before;
 }
 
-function guidedProject(
-  projects: readonly ProjectView[],
-  selected: WorkspaceRef | null,
-): string | undefined {
-  const present = projects.filter((project) => project.missing === null);
-  const own = present.find((project) => project.id === selected?.projectId);
-  return (own ?? present[0])?.id;
-}
-
 export function Sidebar({
   projects,
   selected,
@@ -360,101 +420,162 @@ export function Sidebar({
   pixelFor,
   pullRequestFor,
   processesFor,
+  hasSession,
   inbox,
+  frame,
+  frameRight,
 }: SidebarProps) {
-  const guided = guidedProject(projects ?? [], selected);
   const [dropAt, setDropAt] = useState<string | null>();
   const [dragged, setDragged] = useState<string>();
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const fold = (projectId: string, shut: boolean) => {
+    setFolded((current) => {
+      const next = new Set(current);
+      if (shut) next.add(projectId);
+      else next.delete(projectId);
+      return next;
+    });
+  };
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pt-1 pb-2">
-      <Lockup testId="sidebar-lockup" />
-      <CommandRow
-        command="palette.commands"
-        icon="keys"
-        text="Commands"
-        testId="open-command-menu"
-      />
-      <CommandRow command="palette.agents" icon="agents" text="Agents" testId="open-agents" />
-      <CommandRow
-        command="palette.switcher"
-        icon="search"
-        text="Go to a workspace"
-        testId="open-switcher"
-      />
-      {inbox}
-      <div className="flex flex-none items-center justify-between px-2 pt-[14px] pb-1 text-[10px] font-semibold tracking-[0.12em] text-dim uppercase">
-        Projects
+    <>
+      <TopRow
+        frame={frame}
+        left={0}
+        right={frameRight}
+        pad={[10, 8]}
+        testId="sidebar-top"
+        className="h-11"
+      >
+        <span className="flex-1" />
         <CommandButton
-          command="project.add"
+          command="sidebar.toggle"
           variant="ghost"
           size="small"
-          icon="plus"
-          label="Add a project"
-          testId="add-project"
+          icon="sidebar"
+          label="Hide the sidebar"
+          tooltip="Hide the sidebar"
+          expanded
+          controls="sidebar"
+          testId="sidebar-toggle"
+        />
+      </TopRow>
+      <div className="flex flex-none flex-col px-2">
+        <Lockup testId="sidebar-lockup" />
+        <span data-guide="workspace" className="flex pb-[10px]">
+          <CommandButton
+            command="workspace.new"
+            icon="plus"
+            testId="sidebar-new-workspace"
+            className="w-full justify-start gap-[7px] px-[10px] text-[12.5px] [&>kbd]:ml-auto"
+          />
+        </span>
+        <CommandRow
+          command="palette.commands"
+          icon="search"
+          text="Search or run a command"
+          testId="open-command-menu"
+          className="mb-[14px] w-full bg-hover text-dim hover:text-fg2"
         />
       </div>
-      {projects?.length === 0 && (
-        <p data-testid="no-projects" className="px-2 py-1 text-[13px] text-dim">
-          No projects yet.
-        </p>
-      )}
-      {projects !== undefined && projects.length > 0 && (
-        <nav
-          aria-label="Projects"
-          className="flex flex-col"
-          onDragLeave={(event) => {
-            const into = event.relatedTarget;
-            if (!(into instanceof Node && event.currentTarget.contains(into))) setDropAt(undefined);
-          }}
-          onDragStart={(event) => {
-            setDragged(event.dataTransfer.getData(projectDrag));
-          }}
-          onDragEnd={() => {
-            setDropAt(undefined);
-            setDragged(undefined);
-          }}
-        >
-          {projectRows(projects).map((row, index) => (
-            <div
-              key={row.project.id}
-              data-testid={`${row.testId}-group`}
-              className={`flex flex-col gap-px border-t-2 ${dropAt === row.project.id ? "border-accent" : "border-transparent"}`}
-              onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes(projectDrag)) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                setDropAt(dropBefore(event, projects, index, dragged));
-              }}
-              onDrop={(event) => {
-                const moved = event.dataTransfer.getData(projectDrag);
-                if (moved === "") return;
-                event.preventDefault();
-                setDropAt(undefined);
-                const before = dropBefore(event, projects, index, moved);
-                if (before !== undefined) onMove(moved, before);
-              }}
-            >
-              <ProjectRows
-                row={row}
-                guided={row.project.id === guided}
-                selected={selected}
-                onSelect={onSelect}
-                onNewWorkspace={onNewWorkspace}
-                onRemoveProject={onRemoveProject}
-                onArchive={onArchive}
-                focus={row.project.id === focusProjectId}
-                pixelFor={pixelFor}
-                pullRequestFor={pullRequestFor}
-                processesFor={processesFor}
-              />
-            </div>
-          ))}
-          <div
-            aria-hidden="true"
-            className={`h-0 border-t-2 ${dropAt === null ? "border-accent" : "border-transparent"}`}
+      <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">
+        {inbox}
+        <div className="mt-[6px] flex h-[26px] flex-none items-center justify-between pl-2 text-[11.5px] font-semibold text-dim">
+          Repos
+          <CommandButton
+            command="project.add"
+            variant="ghost"
+            size="small"
+            icon="plus"
+            label="Add a repo"
+            tooltip="Add a repo"
+            testId="add-project"
           />
-        </nav>
-      )}
-    </div>
+        </div>
+        {projects?.length === 0 && (
+          <p data-testid="no-projects" className="px-2 py-1 text-[13px] text-dim">
+            No repos yet
+          </p>
+        )}
+        {projects !== undefined && projects.length > 0 && (
+          <nav
+            aria-label="Repos"
+            className="flex flex-col"
+            onDragLeave={(event) => {
+              const into = event.relatedTarget;
+              if (!(into instanceof Node && event.currentTarget.contains(into)))
+                setDropAt(undefined);
+            }}
+            onDragStart={(event) => {
+              setDragged(event.dataTransfer.getData(projectDrag));
+            }}
+            onDragEnd={() => {
+              setDropAt(undefined);
+              setDragged(undefined);
+            }}
+          >
+            {projectRows(projects).map((row, index) => (
+              <div
+                key={row.project.id}
+                data-testid={`${row.testId}-group`}
+                className={`flex flex-col gap-px border-t-2 ${dropAt === row.project.id ? "border-accent" : "border-transparent"}`}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes(projectDrag)) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropAt(dropBefore(event, projects, index, dragged));
+                }}
+                onDrop={(event) => {
+                  const moved = event.dataTransfer.getData(projectDrag);
+                  if (moved === "") return;
+                  event.preventDefault();
+                  setDropAt(undefined);
+                  const before = dropBefore(event, projects, index, moved);
+                  if (before !== undefined) onMove(moved, before);
+                }}
+              >
+                <ProjectRows
+                  row={row}
+                  folded={folded.has(row.project.id)}
+                  onFold={(shut) => {
+                    fold(row.project.id, shut);
+                  }}
+                  selected={selected}
+                  onSelect={onSelect}
+                  onNewWorkspace={onNewWorkspace}
+                  onRemoveProject={onRemoveProject}
+                  onArchive={onArchive}
+                  focus={row.project.id === focusProjectId}
+                  pixelFor={pixelFor}
+                  pullRequestFor={pullRequestFor}
+                  processesFor={processesFor}
+                  hasSession={hasSession}
+                />
+              </div>
+            ))}
+            <div
+              aria-hidden="true"
+              className={`h-0 border-t-2 ${dropAt === null ? "border-accent" : "border-transparent"}`}
+            />
+          </nav>
+        )}
+      </div>
+      <div className="mx-2 mb-2 flex flex-none items-center gap-[2px] border-t border-line pt-[6px]">
+        <CommandRow
+          command="palette.agents"
+          icon="agents"
+          text="Agents"
+          testId="open-agents"
+          className={`flex-1 ${rowLook(false)}`}
+        />
+        <CommandButton
+          command="settings.show"
+          variant="ghost"
+          icon="settings"
+          label="Open settings"
+          tooltip="Open settings"
+          testId="sidebar-settings"
+        />
+      </div>
+    </>
   );
 }

@@ -16,7 +16,10 @@ export function pixelOf(status: SessionStatus): PixelState {
   return status === "stopped" ? "idle" : status;
 }
 
+export function mostUrgentPixel(pixels: readonly PixelState[]): PixelState {
+  return urgency.find((state) => pixels.includes(state)) ?? "idle";
+}
+
 export function mostUrgent(statuses: readonly SessionStatus[]): PixelState {
-  const shown = new Set(statuses.map(pixelOf));
-  return urgency.find((state) => shown.has(state)) ?? "idle";
+  return mostUrgentPixel(statuses.map(pixelOf));
 }

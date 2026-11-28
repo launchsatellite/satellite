@@ -11,47 +11,56 @@ import { gone, startClaude, terminalFocused, visible, waitUntil } from "./condit
 const waitMs = 15_000;
 const commandModifier = process.platform === "darwin" ? "Meta" : "Control+Shift";
 const execute = promisify(execFile);
-const hostileProject = "beta\u202elonrev";
+const hostileProject = "beta‮lonrev";
 const shownHostileProject = "beta[U+202E]lonrev";
+const longName = "a-long-workspace-name-that-meets-the-strip-edge";
 
-async function unavailable(session: AppSession, testId: string): Promise<boolean> {
-  return (await session.page.getByTestId(testId).getAttribute("aria-disabled")) === "true";
-}
-
-async function placeReads(session: AppSession, expected: string, when: string): Promise<void> {
+async function textIs(
+  session: AppSession,
+  testId: string,
+  expected: string,
+  when: string,
+): Promise<void> {
   let shown = "";
   await waitUntil(
     async () => {
-      shown = (await session.page.getByTestId("title-place").innerText()).replace(/\s+/g, " ");
+      const found = session.page.getByTestId(testId);
+      shown = (await found.count()) === 0 ? "nothing" : (await found.innerText()).trim();
+      shown = shown.replace(/\s+/g, " ");
       return shown === expected;
     },
     waitMs,
-    () => `the centre title read "${shown}" instead of "${expected}" ${when}`,
+    () => `${testId} read "${shown}" instead of "${expected}" ${when}`,
   );
 }
 
+async function dragsIn(session: AppSession, testId: string): Promise<void> {
+  const drag = await session.page.getByTestId(testId).getAttribute("data-drag");
+  assert.equal(drag, "true", `${testId} is not a drag area`);
+}
+
 async function checkCommands(session: AppSession): Promise<void> {
-  await placeReads(session, "Satellite", "with nothing selected");
+  await visible(session, "nothing-selected", "with nothing selected");
+  await dragsIn(session, "sidebar-top");
   await session.page.getByTestId("workspace-repo-hostile").click();
-  await placeReads(session, "repo / hostile", "on the hostile workspace");
-  await session.page.getByTestId("title-new-workspace").click();
+  await textIs(session, "workspace-title", "repo / hostile", "on the hostile workspace");
+  await dragsIn(session, "workspace-header");
+  await session.page.getByTestId("sidebar-new-workspace").click();
   await visible(session, "new-workspace-dialog", "after the New workspace button");
   await session.page.keyboard.press("Escape");
   await gone(session, "new-workspace-dialog", "after closing it");
-  await session.page.getByTestId("title-commands").click();
-  await visible(session, "palette", "after the command menu button");
+  await session.page.getByTestId("open-command-menu").click();
+  await visible(session, "palette", "after the command menu row");
+  assert.equal(
+    await session.page.getByTestId("sidebar-top").getAttribute("data-drag"),
+    "false",
+    "the sidebar's top row stayed a drag area under the command menu",
+  );
   await session.page.keyboard.press("Escape");
   await gone(session, "palette", "after closing it");
-  await session.page.getByTestId("title-place").click();
-  await visible(session, "switch-repo-main", "after a click on the centre title");
-  await session.page
-    .getByTestId("switch-repo-a-long-workspace-name-that-meets-the-strip-edge")
-    .click();
-  await placeReads(
-    session,
-    "repo / a-long-workspace-name-that-meets-the-strip-edge",
-    "after the switcher",
-  );
+  await session.page.keyboard.press(`${commandModifier}+P`);
+  await session.page.getByTestId(`switch-repo-${longName}`).click();
+  await textIs(session, "workspace-title", `repo / ${longName}`, "after the switcher");
 }
 
 async function checkInbox(session: AppSession): Promise<void> {
@@ -59,21 +68,13 @@ async function checkInbox(session: AppSession): Promise<void> {
   await startClaude(session, 1);
   await session.page.keyboard.press("Enter");
   await session.page.getByTestId("workspace-repo-hostile").click();
-  await waitUntil(
-    async () => !(await unavailable(session, "title-inbox")),
-    waitMs,
-    "the inbox button stayed unavailable once main needed you",
-  );
-  await session.screenshot("strip-needs-you");
-  await session.page.getByTestId("title-inbox").click();
-  await placeReads(session, "repo", "after the inbox button");
+  await textIs(session, "inbox-count", "1", "once main needed you");
+  await session.screenshot("sidebar-needs-you");
+  await session.page.getByTestId("inbox-repo-main").click();
+  await textIs(session, "workspace-title", "repo", "after the Needs you row");
   await terminalFocused(session);
   await session.page.keyboard.type("y");
-  await waitUntil(
-    () => unavailable(session, "title-inbox"),
-    waitMs,
-    "the inbox button stayed available once answered",
-  );
+  await textIs(session, "inbox-count", "0", "once answered");
 }
 
 async function checkHostileProject(session: AppSession): Promise<void> {
@@ -90,9 +91,9 @@ async function checkHostileProject(session: AppSession): Promise<void> {
   }
   await session.answerFolderDialog(folder);
   await session.page.keyboard.press(`${commandModifier}+O`);
-  await visible(session, `workspace-${hostileProject}-main`, "after adding the hostile project");
+  await visible(session, `workspace-${hostileProject}-main`, "after adding the hostile repo");
   await session.page.getByTestId(`workspace-${hostileProject}-main`).click();
-  await placeReads(session, shownHostileProject, "on the hostile project");
+  await textIs(session, "workspace-title", shownHostileProject, "on the hostile repo");
 }
 
 async function sidebarShown(session: AppSession): Promise<boolean> {
@@ -100,7 +101,7 @@ async function sidebarShown(session: AppSession): Promise<boolean> {
 }
 
 async function checkSidebar(session: AppSession): Promise<void> {
-  await session.page.getByTestId("title-sidebar").click();
+  await session.page.getByTestId("sidebar-toggle").click();
   await waitUntil(async () => !(await sidebarShown(session)), waitMs, "the sidebar stayed");
   await waitUntil(
     async () => {
@@ -115,17 +116,24 @@ async function checkSidebar(session: AppSession): Promise<void> {
     "interface.json never recorded the hidden sidebar",
   );
   await session.relaunch();
-  await visible(session, "title-bar", "after the restart");
+  await visible(session, "sidebar-show", "after the restart");
   assert.ok(!(await sidebarShown(session)), "the sidebar came back after a restart");
-  await session.page.getByTestId("title-sidebar").click();
+  if (process.platform === "darwin") {
+    const box = await session.page.getByTestId("sidebar-show").boundingBox();
+    assert.ok(
+      box !== null && box.x >= 76,
+      `the toggle sat at ${String(box?.x)}, under the traffic lights`,
+    );
+  }
+  await session.page.getByTestId("sidebar-show").click();
   await waitUntil(() => sidebarShown(session), waitMs, "the button left it hidden");
 }
 
-export const titleBarJourney: Journey = {
-  name: "title-bar",
+export const frameJourney: Journey = {
+  name: "frame",
   scenario: "title-bar",
   async run(session) {
-    await visible(session, "title-bar", "at launch");
+    await visible(session, "sidebar-top", "at launch");
     await checkCommands(session);
     await checkInbox(session);
     await checkHostileProject(session);

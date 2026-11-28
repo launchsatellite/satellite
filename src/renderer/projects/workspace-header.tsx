@@ -1,10 +1,13 @@
+import type { ReactNode } from "react";
 import type { ProjectView, PullRequestFound, WorkspaceView } from "../../shared/bridge-contract.ts";
 import { VisibleName } from "../ui/visible-name.tsx";
 import { trackingWords } from "../changes/change-words.ts";
 import { CommandButton } from "../commands/commands-context.tsx";
 import { Button } from "../ui/button.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { chipLook } from "../ui/chip.ts";
 import { StatusPixel } from "../ui/status-pixel.tsx";
+import { TopRow, type Frame } from "../window/top-row.tsx";
 import {
   checksState,
   readoutLabel,
@@ -25,6 +28,9 @@ interface WorkspaceHeaderProps {
   onShowProcesses: () => void;
   onShowPullRequest: () => void;
   railHidden: boolean;
+  frame: Frame;
+  edges: { left: number; right: number };
+  lead: ReactNode;
 }
 
 const readoutButton = "min-w-0 flex-none px-[7px] font-pixel font-normal text-dim uppercase";
@@ -40,15 +46,25 @@ export function WorkspaceHeader({
   onShowProcesses,
   onShowPullRequest,
   railHidden,
+  frame,
+  edges,
+  lead,
 }: WorkspaceHeaderProps) {
   const tracking = trackingWords(ahead, behind);
   return (
-    <header
-      data-testid="workspace-header"
-      tabIndex={-1}
-      className="@container flex h-12 min-w-0 flex-none items-center gap-[10px] border-b border-line pr-[10px] pl-4 whitespace-nowrap focus:outline-none"
+    <TopRow
+      as="header"
+      frame={frame}
+      left={edges.left}
+      right={edges.right}
+      pad={[16, 10]}
+      testId="workspace-header"
+      focusable
+      className="@container h-12 min-w-0 gap-[10px] border-b border-line whitespace-nowrap focus:outline-none"
     >
+      {lead}
       <h1
+        data-testid="workspace-title"
         dir="ltr"
         className="min-w-[8ch] shrink truncate text-[14px] font-semibold [unicode-bidi:isolate]"
       >
@@ -119,10 +135,10 @@ export function WorkspaceHeader({
             label={readoutLabel(pullRequest)}
             tooltip={readoutLabel(pullRequest)}
             onClick={onShowPullRequest}
-            className={`${readoutButton} gap-[7px]`}
+            className={`${chipLook(readoutPixel(pullRequest))} min-w-0 font-normal hover:bg-hover`}
           >
             <StatusPixel state={readoutPixel(pullRequest)} size={6} />
-            <span aria-hidden="true" className="truncate">
+            <span aria-hidden="true" className="truncate font-pixel uppercase">
               #{pullRequest.number}
               <span className="hidden @2xl:inline">{readoutRest(pullRequest)}</span>
             </span>
@@ -160,6 +176,6 @@ export function WorkspaceHeader({
           />
         )}
       </span>
-    </header>
+    </TopRow>
   );
 }

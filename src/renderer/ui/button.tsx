@@ -34,8 +34,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary:
-          "border-transparent bg-pri-bg text-pri-fg [&>kbd]:border-current [&>kbd]:text-current [&>kbd]:opacity-55",
+        primary: "border-transparent bg-pri-bg text-pri-fg [&>kbd]:text-current [&>kbd]:opacity-55",
         secondary: "border-ctl bg-bg text-fg",
         ghost: "border-transparent text-fg2",
         danger: "border-ctl bg-bg text-danger",

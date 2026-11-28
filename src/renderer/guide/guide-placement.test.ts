@@ -50,6 +50,12 @@ describe("placeGuide", () => {
     expect(placed?.tail).toBe(178);
   });
 
+  it("reaches a control in a 44 pixel top row from a card 8 under the window's edge", () => {
+    const placed = placeGuide({ left: 1000, top: 9, width: 90, height: 26 }, card, wide, "left");
+    expect(placed?.card.top).toBe(8);
+    expect(placed?.tail).toBe(14);
+  });
+
   it("shows no card when the tail could not reach the control", () => {
     expect(
       placeGuide({ left: 160, top: 572, width: 24, height: 24 }, card, narrow, "right"),

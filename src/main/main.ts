@@ -172,7 +172,7 @@ function prepareHome(): string | undefined {
     if (!underVerification()) {
       dialog.showErrorBox(
         "Satellite couldn't prepare its home",
-        `Satellite keeps your projects and workspaces in ${folder} and couldn't make that folder ready, so it is quitting.\n\n${error instanceof Error ? error.message : String(error)}`,
+        `Satellite keeps your repos and workspaces in ${folder} and couldn't make that folder ready, so it is quitting.\n\n${error instanceof Error ? error.message : String(error)}`,
       );
     }
     failStart(error);
