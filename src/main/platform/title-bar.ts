@@ -12,7 +12,7 @@ export interface TitleBarSetup {
 }
 
 export const overlayColours = {
-  light: { color: "#f6f6f3", symbolColor: "#45454b" },
+  light: { color: "#f1f1ee", symbolColor: "#45454b" },
   dark: { color: "#0c0c0e", symbolColor: "#b4b4b8" },
 };
 

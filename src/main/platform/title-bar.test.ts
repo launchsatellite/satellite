@@ -17,12 +17,12 @@ describe("titleBarFor", () => {
     }
   });
 
-  it("colours the overlay with the side and fg2 tokens of app.css in both themes", () => {
+  it("colours the overlay with the win and fg2 tokens of app.css in both themes", () => {
     const darkAt = css.indexOf("@media (prefers-color-scheme: dark)");
     const blocks = { light: css.slice(css.indexOf(":root"), darkAt), dark: css.slice(darkAt) };
     for (const theme of ["light", "dark"] as const) {
       expect(overlayColours[theme]).toEqual({
-        color: token(blocks[theme], "side"),
+        color: token(blocks[theme], "win"),
         symbolColor: token(blocks[theme], "fg2"),
       });
     }
@@ -30,12 +30,12 @@ describe("titleBarFor", () => {
 });
 
 describe("overlayStyle", () => {
-  it("colours the overlay with a curated theme's side and fg2 whatever the system says", () => {
+  it("colours the overlay with a curated theme's win and fg2 whatever the system says", () => {
     for (const { id } of curatedThemes) {
       const tokens = curatedLook(id)?.tokens;
       for (const dark of [false, true]) {
         expect(overlayStyle(id, dark)).toMatchObject({
-          color: tokens?.side,
+          color: tokens?.win,
           symbolColor: tokens?.fg2,
         });
       }

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const appTokens = [
   "bg",
+  "win",
   "side",
   "raised",
   "sel",
@@ -288,6 +289,7 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
     type === "dark" ? hexOf(fill) : hexOf(reach(fill, fg, [bg, side], contrastFloors.edge));
   const tokens: Record<AppToken, string> = {
     bg: hexOf(bg),
+    win: hexOf(side),
     side: hexOf(side),
     raised: hexOf(raisedFill),
     sel: flat(pick("list.activeSelectionBackground"), side, faded(0.16)),
@@ -396,7 +398,7 @@ export function themeLook(published: unknown, states: StateKeys): ThemeLook | un
       colors: Object.fromEntries([...colours].map(([key, colour]) => [key, raw(colour)])),
       tokenColors: cleanTokenColours(parsed.data.tokenColors),
     },
-    overlay: { color: tokens.side, symbolColor: tokens.fg2 },
+    overlay: { color: tokens.win, symbolColor: tokens.fg2 },
     paired,
   };
 }
