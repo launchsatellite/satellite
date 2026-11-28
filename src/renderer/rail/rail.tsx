@@ -28,7 +28,7 @@ const labels: Record<RailView, string> = { changes: "Changes", files: "Files", r
 function NeedsYou({ shown }: { shown: boolean }) {
   if (!shown) return null;
   return (
-    <span data-testid="rail-ready-needs-you" className="pointer-events-none absolute top-1 right-1">
+    <span data-testid="rail-ready-needs-you" className="pointer-events-none absolute top-1 right-1 flex">
       <StatusPixel state="needs-you" size={6} />
     </span>
   );

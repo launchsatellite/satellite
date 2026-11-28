@@ -52,11 +52,11 @@ export function absentSentence(reason: Absence): string {
   return absences[reason];
 }
 
-export function stateWord(state: PullRequestFound["state"]): string {
+function stateWord(state: PullRequestFound["state"]): string {
   return states[state];
 }
 
-export function checksSummary({ failed, pending, total }: Counts): string {
+function checksSummary({ failed, pending, total }: Counts): string {
   if (total === 0) return "No checks";
   if (failed > 0) return `${String(failed)} failed`;
   if (pending > 0) return `${String(pending)} running`;
