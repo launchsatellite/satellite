@@ -100,8 +100,8 @@ export const filesLimits = {
 };
 
 export const interfaceLimits = {
-  left: { min: 200, max: 360, initial: 248 },
-  right: { min: 360, max: 640, initial: 440 },
+  sidebar: { min: 200, max: 360, initial: 252 },
+  rail: { min: 300, max: 440, initial: 348 },
   centreMin: 400,
 };
 
@@ -166,10 +166,11 @@ export const fileTabs = z
 export const interfaceState = z.strictObject({
   selected: workspaceRef.nullable(),
   columns: z.strictObject({
-    left: z.int().min(interfaceLimits.left.min).max(interfaceLimits.left.max),
-    right: z.int().min(interfaceLimits.right.min).max(interfaceLimits.right.max),
+    sidebar: z.int().min(interfaceLimits.sidebar.min).max(interfaceLimits.sidebar.max),
+    rail: z.int().min(interfaceLimits.rail.min).max(interfaceLimits.rail.max),
   }),
   sidebar: z.enum(["shown", "hidden"]),
+  rail: z.enum(["shown", "hidden"]),
   theme: themeChoice,
   notifications: z.boolean(),
   guideSeen: z.boolean(),
@@ -421,8 +422,9 @@ export const claudeState = z.discriminatedUnion("state", [
 export const toolCheck = z.strictObject({ git: toolState, gh: ghState, claude: claudeState });
 export const defaultInterfaceState: InterfaceState = {
   selected: null,
-  columns: { left: interfaceLimits.left.initial, right: interfaceLimits.right.initial },
+  columns: { sidebar: interfaceLimits.sidebar.initial, rail: interfaceLimits.rail.initial },
   sidebar: "shown",
+  rail: "shown",
   theme: "system",
   notifications: true,
   guideSeen: false,

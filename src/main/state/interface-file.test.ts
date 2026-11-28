@@ -9,7 +9,7 @@ import { createInterfaceFile, interfaceHandlers, keptTabs } from "./interface-fi
 const permissionsApply = process.platform !== "win32" && process.getuid?.() !== 0;
 const projectId = "0b9d6c1e-2f3a-4b5c-8d7e-9f0a1b2c3d4e";
 const owner = { id: 1, emit: () => undefined, onGone: () => undefined };
-const saved = { ...defaultInterfaceState, columns: { left: 300, right: 500 } };
+const saved = { ...defaultInterfaceState, columns: { sidebar: 300, rail: 400 } };
 
 describe("createInterfaceFile", () => {
   it.skipIf(!permissionsApply)("never writes over a layout file it could not open", async () => {
@@ -57,15 +57,16 @@ describe("createInterfaceFile", () => {
     expect(notice).toMatch(/set that file aside and started fresh\.$/);
   });
 
-  it("writes the layout as version 5 with whether the guide was seen and the sidebar", async () => {
+  it("writes the layout as version 6 with whether the guide was seen, the sidebar and the rail", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
     const interfaceFile = createInterfaceFile(home);
-    await interfaceFile.save({ ...saved, notifications: false, sidebar: "hidden" });
+    await interfaceFile.save({ ...saved, notifications: false, sidebar: "hidden", rail: "hidden" });
     await interfaceFile.flush();
     const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
     expect(written).toMatchObject({
-      version: 5,
+      version: 6,
       sidebar: "hidden",
+      rail: "hidden",
       notifications: false,
       files: [],
       guideSeen: false,
@@ -101,19 +102,24 @@ describe("createInterfaceFile", () => {
     const next = await createInterfaceFile(home).load();
     expect(JSON.parse(await readFile(file, "utf8"))).toEqual({
       ...defaultInterfaceState,
-      version: 5,
+      version: 6,
       guideSeen: true,
     });
     expect(next).toEqual({ state: { ...defaultInterfaceState, guideSeen: true }, notice: null });
   });
 
-  it("reads a version 1, 2 and 3 file as one whose guide was seen, a version 4 file as it is, each with the sidebar shown", async () => {
+  it("reads a version 1, 2 and 3 file as one whose guide was seen, a version 4 and 5 file as it is, each with the sidebar and the rail shown", async () => {
     const layout = '"selected":null,"columns":{"left":300,"right":500},"theme":"dark"';
     const files = [
       [`{"version":1,${layout}}`, true, true],
       [`{"version":2,${layout},"notifications":false}`, false, true],
       [`{"version":3,${layout},"notifications":false,"files":[]}`, false, true],
       [`{"version":4,${layout},"notifications":false,"files":[],"guideSeen":false}`, false, false],
+      [
+        `{"version":5,${layout},"sidebar":"shown","notifications":false,"files":[],"guideSeen":false}`,
+        false,
+        false,
+      ],
     ] as const;
     for (const [text, notifications, guideSeen] of files) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
@@ -121,13 +127,33 @@ describe("createInterfaceFile", () => {
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({
         selected: null,
-        columns: { left: 300, right: 500 },
+        columns: { sidebar: 300, rail: 440 },
         sidebar: "shown",
+        rail: "shown",
         theme: "dark",
         notifications,
         files: [],
         guideSeen,
       });
+      expect(notice).toBeNull();
+    }
+  });
+
+  it("clamps a version 5 layout's widths into the sidebar and the rail of version 6", async () => {
+    const widths = [
+      [200, 360, 200, 360],
+      [248, 440, 248, 440],
+      [360, 640, 360, 440],
+    ] as const;
+    for (const [left, right, sidebar, rail] of widths) {
+      const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
+      await writeFile(
+        join(home, "interface.json"),
+        `{"version":5,"selected":null,"columns":{"left":${String(left)},"right":${String(right)}},"sidebar":"hidden","theme":"dark","notifications":true,"files":[],"guideSeen":true}`,
+      );
+      const { state, notice } = await createInterfaceFile(home).load();
+      expect(state.columns).toEqual({ sidebar, rail });
+      expect(state).toMatchObject({ sidebar: "hidden", rail: "shown" });
       expect(notice).toBeNull();
     }
   });
@@ -143,7 +169,7 @@ describe("createInterfaceFile", () => {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
       await writeFile(
         join(home, "interface.json"),
-        JSON.stringify({ version: 5, ...saved, theme }),
+        JSON.stringify({ version: 6, ...saved, theme }),
       );
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({ ...saved, theme: read });
@@ -182,7 +208,7 @@ describe("createInterfaceFile", () => {
     ];
     for (const files of damaged) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
-      const text = JSON.stringify({ version: 5, ...saved, files });
+      const text = JSON.stringify({ version: 6, ...saved, files });
       await writeFile(join(home, "interface.json"), text);
       const { state, notice } = await createInterfaceFile(home).load();
       expect(state).toEqual({ ...defaultInterfaceState, guideSeen: true });
@@ -190,11 +216,11 @@ describe("createInterfaceFile", () => {
     }
   });
 
-  it("sets aside a version 5 file with a field it does not know, a version 4 file with a sidebar and a version 6 file", async () => {
+  it("sets aside a version 6 file with a field it does not know, a version 5 file with a rail and a version 7 file", async () => {
     const files = [
-      { version: 6, ...saved },
-      { version: 5, ...saved, extra: true },
-      { version: 4, ...saved },
+      { version: 7, ...saved },
+      { version: 6, ...saved, extra: true },
+      { version: 5, ...saved },
     ];
     for (const content of files) {
       const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
@@ -281,7 +307,7 @@ describe("saved tabs hold only what could be loaded again", () => {
     const tabs = [{ projectId, workspace: "main" as const, paths: ["ok.ts"], active: 0 }];
     await handlers["interface.save"]({ state: { ...saved, files: tabs } }, owner);
     await handlers["interface.save"](
-      { state: { ...saved, files: tabs, columns: { left: 300, right: 500 } } },
+      { state: { ...saved, files: tabs, columns: { sidebar: 300, rail: 400 } } },
       owner,
     );
     expect(listed).toBe(1);
@@ -316,11 +342,11 @@ describe("saved tabs hold only what could be loaded again", () => {
       },
     );
     const first = handlers["interface.save"](
-      { state: { ...saved, columns: { left: 300, right: 500 } } },
+      { state: { ...saved, columns: { sidebar: 300, rail: 400 } } },
       owner,
     );
     const second = handlers["interface.save"](
-      { state: { ...saved, columns: { left: 310, right: 510 } } },
+      { state: { ...saved, columns: { sidebar: 310, rail: 410 } } },
       owner,
     );
     await new Promise((settle) => setTimeout(settle, 20));
@@ -328,7 +354,7 @@ describe("saved tabs hold only what could be loaded again", () => {
     await Promise.all([first, second]);
     await file.flush();
     const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
-    expect(written).toMatchObject({ columns: { left: 310, right: 510 } });
+    expect(written).toMatchObject({ columns: { sidebar: 310, rail: 410 } });
   });
 
   it("lets a flush wait for every save that arrived, even one queued behind a write", async () => {
@@ -339,20 +365,20 @@ describe("saved tabs hold only what could be loaded again", () => {
       () => undefined,
       () => Promise.resolve(known),
     );
-    for (const left of [300, 310, 320]) {
+    for (const sidebar of [300, 310, 320]) {
       void handlers["interface.save"](
-        { state: { ...saved, columns: { left, right: 500 } } },
+        { state: { ...saved, columns: { sidebar, rail: 400 } } },
         owner,
       );
     }
     await file.flush();
     const written: unknown = JSON.parse(await readFile(join(home, "interface.json"), "utf8"));
-    expect(written).toMatchObject({ columns: { left: 320, right: 500 } });
+    expect(written).toMatchObject({ columns: { sidebar: 320, rail: 400 } });
   });
 
   it("keeps the saved tabs, path checked, when the project list fails, and writes nothing on load", async () => {
     const home = await mkdtemp(join(tmpdir(), "satellite-interface-file-"));
-    const text = JSON.stringify({ version: 5, ...hostile });
+    const text = JSON.stringify({ version: 6, ...hostile });
     await writeFile(join(home, "interface.json"), text);
     const file = createInterfaceFile(home);
     const handlers = interfaceHandlers(
