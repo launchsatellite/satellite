@@ -10,7 +10,7 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { Segmented } from "../ui/segmented.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { VisibleName } from "../ui/visible-name.tsx";
-import { centrePanelId, centreTabId } from "../window/centre-tabs.tsx";
+import { railPanelId, railTabId } from "../rail/rail.tsx";
 import { ChangeList } from "./change-list.tsx";
 import { ConflictBanner } from "./conflict-banner.tsx";
 import { emptySentence, unavailableSentence } from "./change-words.ts";
@@ -197,7 +197,7 @@ export function ChangesView({
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) inside.current = false;
       }}
     >
-      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line bg-side pr-2 pl-4">
+      <div className="flex min-h-10 flex-none flex-wrap items-center gap-x-2 border-b border-line pr-2 pl-4">
         {list?.base != null && (
           <Tooltip text={`from ${visibleText(list.base)}`}>
             <span
@@ -235,8 +235,8 @@ export function ChangesView({
       <div
         ref={panel}
         role="tabpanel"
-        id={centrePanelId("changes")}
-        aria-labelledby={centreTabId("changes")}
+        id={railPanelId("changes")}
+        aria-labelledby={railTabId("changes")}
         tabIndex={selectedPath === undefined ? 0 : undefined}
         className="min-h-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >

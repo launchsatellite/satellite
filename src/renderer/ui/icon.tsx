@@ -16,6 +16,9 @@ export type IconName =
   | "chevron-right"
   | "chevron-down"
   | "sidebar"
+  | "rail"
+  | "diff"
+  | "pull-request"
   | "settings";
 
 const shapes: Record<IconName, ReactNode> = {
@@ -68,6 +71,26 @@ const shapes: Record<IconName, ReactNode> = {
     <>
       <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
       <path d="M6.25 2.75v10.5" />
+    </>
+  ),
+  rail: (
+    <>
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+      <path d="M9.75 2.75v10.5" />
+    </>
+  ),
+  diff: (
+    <>
+      <rect x="2.75" y="1.75" width="10.5" height="12.5" rx="2" />
+      <path d="M8 4.5v4M6 6.5h4M6 11h4" />
+    </>
+  ),
+  "pull-request": (
+    <>
+      <circle cx="4.5" cy="3.75" r="1.5" />
+      <circle cx="4.5" cy="12.25" r="1.5" />
+      <circle cx="11.5" cy="12.25" r="1.5" />
+      <path d="M4.5 5.25v5.5M11.5 10.75V7a2 2 0 0 0-2-2H7M8.5 3.5 7 5l1.5 1.5" />
     </>
   ),
   settings: (
