@@ -26,7 +26,7 @@ interface ProcessesPopoverProps {
 }
 
 const note = "text-[12px] text-dim";
-const keptOpenBy = "[role='dialog'], [role='status'], [data-testid='header-processes']";
+const keptOpenBy = "[role='dialog'], [data-stays-live], [data-testid='header-processes']";
 const separatorEnd = /(?<=[^\s/\\][/\\])(?=[^/\\])/;
 function sessionName(number: number | undefined): string {
   return number === undefined ? "A session" : `Session ${String(number)}`;

@@ -35,6 +35,7 @@ interface NewWorkspacePageProps {
   projects: readonly ProjectView[];
   first: string;
   onBack: () => void;
+  onBusy: (busy: boolean) => void;
   onCreated: (project: ProjectView, workspace: WorkspaceView, request: string | undefined) => void;
   frame: Frame;
   edges: { left: number; right: number };
@@ -157,6 +158,7 @@ export function NewWorkspacePage({
   projects,
   first,
   onBack,
+  onBusy,
   onCreated,
   frame,
   edges,
@@ -197,8 +199,9 @@ export function NewWorkspacePage({
   useEffect(
     () => () => {
       unsubscribe.current?.();
+      onBusy(false);
     },
-    [],
+    [onBusy],
   );
 
   const failedDetail =
@@ -227,6 +230,7 @@ export function NewWorkspacePage({
     setRefusal(null);
     setSteps(pendingSteps());
     setPhase({ kind: "running", prepared: phase.prepared, operationId, stopping: false });
+    onBusy(true);
     unsubscribe.current = subscribe("workspaces.step", (event) => {
       if (event.operationId !== operationId) return;
       reported = true;
@@ -252,6 +256,7 @@ export function NewWorkspacePage({
     }).then((result) => {
       unsubscribe.current?.();
       unsubscribe.current = undefined;
+      onBusy(false);
       if (result.ok) {
         onCreated(chosen, result.value.workspace, trimmed === "" ? undefined : trimmed);
         return;

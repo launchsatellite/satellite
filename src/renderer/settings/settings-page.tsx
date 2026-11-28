@@ -23,6 +23,7 @@ interface SettingsPageProps {
   onClose: () => void;
   frame: Frame;
   sidebar: number;
+  fallback: string;
 }
 
 const repositoryAddress = "https://github.com/launchsatellite/satellite";
@@ -154,12 +155,13 @@ export function SettingsPage({
   onClose,
   frame,
   sidebar,
+  fallback,
 }: SettingsPageProps) {
   const credited = curatedTheme(theme);
   const [current, setCurrent] = useState<string>(sections[0].testId);
   const back = useRef<HTMLDivElement>(null);
   usePageEscape(onClose);
-  useReturnFocus(back, "button", "sidebar-settings");
+  useReturnFocus(back, "button", fallback);
   return (
     <div
       data-testid="settings-page"

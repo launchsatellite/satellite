@@ -95,6 +95,24 @@ const terminalLinkSentence =
 const notificationsOff = "Notifications are off. The sidebar still shows what needs you.";
 const notificationsOn = "Notifications are on for every workspace that needs you.";
 const sidebarId = "sidebar";
+const keepPage = new Set<string>([
+  "palette.commands",
+  "palette.switcher",
+  "agents.show",
+  "settings.show",
+  "workspace.new",
+  "project.add",
+  "tools.check",
+  "focus.sidebar",
+  "sidebar.toggle",
+  "rail.toggle",
+  "notifications.on",
+  "notifications.off",
+  "theme.system",
+  "theme.light",
+  "theme.dark",
+  ...curatedThemes.map(({ id }) => `theme.${id}`),
+]);
 const needsYouBehind = "A workspace needs you. Back to work shows it under Needs you.";
 
 function firstVisible(selectors: readonly string[]): HTMLElement | undefined {
@@ -128,7 +146,12 @@ function archivedSentence(name: string, branch: string | null, leftover: string 
     : `Satellite archived ${name}. The branch ${branch} stays.`;
 }
 
-function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean): Command[] {
+function guarded(
+  specs: readonly CommandSpec[],
+  notify: Notify,
+  modal: boolean,
+  leavePage: () => void,
+): Command[] {
   const fail = (error: unknown) => {
     console.error("A command failed", error);
     notify(commandFailure, "error");
@@ -137,6 +160,7 @@ function guarded(specs: readonly CommandSpec[], notify: Notify, modal: boolean):
     ...spec,
     available: spec.available && !modal,
     run: () => {
+      if (!keepPage.has(spec.id)) leavePage();
       try {
         void Promise.resolve(spec.run()).catch(fail);
       } catch (error) {
@@ -171,6 +195,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     forgetProject,
   } = sessions;
   const [page, setPage] = useState<Shown | null>(null);
+  const [creating, setCreating] = useState(false);
   const [archiving, setArchiving] = useState<{
     project: ProjectView;
     workspace: WorkspaceView;
@@ -326,10 +351,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     (ref: WorkspaceRef) => {
       setChecking(false);
       setProcessesOpen(false);
-      setPage(null);
+      setPage((shown) => (creating ? shown : null));
       update((current) => ({ ...current, selected: ref }), true);
     },
-    [update],
+    [update, creating],
   );
   const open = useCallback(
     (ref: WorkspaceRef | undefined) => {
@@ -586,7 +611,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const previousSession = neighbour(-1);
   const showingProcesses = processesOpen && changesHere !== null && page === null;
   const settingsShown = page?.kind === "settings";
-  const modal = archiving !== null || removing !== null || asking !== null;
+  const modal = archiving !== null || removing !== null || asking !== null || creating;
   const liveTerminals = allSessions
     .filter((tab) => tab.status !== "stopped")
     .map((tab) => tab.terminalId)
@@ -730,6 +755,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   );
   const newWorkspace = useCallback((projectId: string) => {
     setPalette(null);
+    setProcessesOpen(false);
     setPage({ kind: "new-workspace", projectId });
   }, []);
   const created = (project: ProjectView, workspace: WorkspaceView, request: string | undefined) => {
@@ -924,6 +950,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               setPalette(null);
+              setProcessesOpen(false);
               setPage((shown) => (shown?.kind === "agents" ? null : { kind: "agents" }));
             },
           },
@@ -1019,6 +1046,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               setPalette(null);
+              setProcessesOpen(false);
               setPage((shown) => (shown?.kind === "settings" ? null : { kind: "settings" }));
             },
           },
@@ -1199,9 +1227,11 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         ],
         notify,
         modal,
+        closePage,
       ),
     );
   }, [
+    closePage,
     modal,
     state.notifications,
     newWorkspaceIn,
@@ -1262,6 +1292,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
       subscribe("window.settings", () => {
         if (latestRegistry.current.get("settings.show")?.available === true) {
           setPalette(null);
+          setProcessesOpen(false);
           setPage({ kind: "settings" });
         }
       }),
@@ -1482,7 +1513,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             ref={centreRef}
             data-testid="column-centre"
             aria-label="Workspace"
-            className={`my-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-line bg-bg ${sidebarShown ? "" : "ml-2"} ${railShape === "hidden" ? "mr-2" : ""}`}
+            className={`relative my-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-line bg-bg ${sidebarShown ? "" : "ml-2"} ${railShape === "hidden" ? "mr-2" : ""}`}
           >
             {page?.kind === "agents" ? (
               <AgentsPage
@@ -1494,6 +1525,8 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               />
             ) : page?.kind === "new-workspace" ? (
               <NewWorkspacePage
+                key={page.projectId}
+                onBusy={setCreating}
                 projects={(projects ?? []).filter((project) => project.missing === null)}
                 first={page.projectId}
                 onBack={closePage}
@@ -1624,6 +1657,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             onClose={closePage}
             frame={pageLook}
             sidebar={sidebarShown ? columns.sidebar : interfaceLimits.sidebar.initial}
+            fallback={sidebarShown ? "sidebar-settings" : "sidebar-show"}
           />
         )}
         {asking !== null && (

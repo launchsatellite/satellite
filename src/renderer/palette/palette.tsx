@@ -109,18 +109,13 @@ function switcherOptions(
         item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       ),
       pixel: item.pixel,
+      match: `${item.label} ${item.project} ${item.parent ?? ""}`,
       run: () => {
         onOpenWorkspace(item.ref);
       },
     })),
   );
-  return options.map((option, index) => {
-    const item = switcher[index];
-    return {
-      match: item === undefined ? "" : `${item.label} ${item.project} ${item.parent ?? ""}`,
-      option,
-    };
-  });
+  return options.map(({ match, ...option }) => ({ match, option }));
 }
 
 function fileOptions(
