@@ -12,6 +12,7 @@ interface SegmentedProps<T extends string> {
   value: T;
   options: readonly SegmentedOption<T>[];
   onChange: (value: T) => void;
+  wide?: boolean;
 }
 
 export function Segmented<T extends string>({
@@ -19,13 +20,14 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  wide = false,
 }: SegmentedProps<T>) {
   return (
     <RadioGroup<T>
       aria-label={label}
       value={value}
       onValueChange={onChange}
-      className="flex h-7 items-center rounded-[6px] border border-ctl bg-side p-px"
+      className={`h-7 items-center gap-[2px] rounded-[7px] bg-hover p-[2px] ${wide ? "flex" : "inline-flex"}`}
     >
       {options.map((option) => {
         const checked = option.value === value;
@@ -36,7 +38,7 @@ export function Segmented<T extends string>({
             nativeButton
             render={<button type="button" />}
             data-testid={option.testId}
-            className={`h-6 rounded-[5px] px-2 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${checked ? "bg-sel text-fg" : "text-fg2 hover:bg-hover"}`}
+            className={`h-6 rounded-[5px] px-[10px] text-[12px] font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${wide ? "flex-1" : ""} ${checked ? "bg-bg text-fg shadow-[0_0_0_1px_var(--ctl)]" : "text-dim hover:text-fg2"}`}
           >
             {option.label}
           </Radio.Root>

@@ -1,10 +1,6 @@
-const framed = "rounded-[4px] border border-ctl px-[5px] py-px";
-
-export function KeyHint({ keys, plain = false }: { keys: string; plain?: boolean }) {
+export function KeyHint({ keys }: { keys: string }) {
   return (
-    <kbd
-      className={`inline-flex items-center font-mono text-[11px] leading-[14px] font-medium text-dim ${plain ? "" : framed}`}
-    >
+    <kbd className="inline-flex items-center font-mono text-[10.5px] leading-[14px] font-medium tracking-[0.02em] text-dim">
       {keys}
     </kbd>
   );
