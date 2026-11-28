@@ -292,16 +292,17 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
         ? "folded"
         : "open";
   const railOpen = railShape === "open";
+  const narrow = width < railFoldsBelow;
   const columns = fitColumns(state.columns, width, sidebarShown, railShape);
   const reachable = reachableColumns(columns, width, railShape);
   const [railView, setRailView] = useState<RailView>("changes");
   const openRail = useCallback(
     (view: RailView) => {
       setRailView(view);
-      if (railShape === "folded") setRailUnfolded(true);
+      if (railShape !== "open" && narrow) setRailUnfolded(true);
       if (railShape === "hidden") update((current) => ({ ...current, rail: "shown" }), true);
     },
-    [railShape, update],
+    [railShape, narrow, update],
   );
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [checking, setChecking] = useState(false);
@@ -330,7 +331,10 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
   const acceptsDrop = useCallback(
     (target: EventTarget | null) =>
       target instanceof Node &&
-      [sidebarRef, centreRef].some((column) => column.current?.contains(target) === true),
+      [sidebarRef, centreRef].some((column) => column.current?.contains(target) === true) &&
+      (target instanceof Element ? target : target.parentElement)?.closest(
+        "[id^='session-panel-']",
+      ) == null,
     [],
   );
   const dropFolder = useCallback(
@@ -946,9 +950,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             available: true,
             run: () => {
               if (railShape === "folded") setRailUnfolded(true);
-              else if (railShape === "hidden") {
-                update((current) => ({ ...current, rail: "shown" }), true);
-              } else if (width < railFoldsBelow) setRailUnfolded(false);
+              else if (railShape === "hidden") openRail(railView);
               else {
                 const inside =
                   document.activeElement?.closest("[data-testid='column-rail']") != null;
@@ -991,7 +993,9 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
             title: "Focus the terminal",
             available: true,
             run: () => {
-              setFileFrontIn(null);
+              flushSync(() => {
+                setFileFrontIn(null);
+              });
               focusColumn("column-centre", '[data-testid="terminal"] textarea');
             },
           },
@@ -1228,7 +1232,6 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     railOpen,
     railShape,
     openRail,
-    width,
     changesView,
     setChangesView,
     layoutShown,
@@ -1498,6 +1501,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
               view={railView}
               folded={railShape === "folded"}
               pullRequest={shownPullRequest?.number ?? null}
+              shown={changesHere !== null}
               onView={setRailView}
               onUnfold={openRail}
             >

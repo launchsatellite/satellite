@@ -10,6 +10,7 @@ export type RailView = "changes" | "files" | "pull-request";
 interface RailProps {
   view: RailView;
   folded: boolean;
+  shown: boolean;
   pullRequest: number | null;
   onView: (view: RailView) => void;
   onUnfold: (view: RailView) => void;
@@ -35,10 +36,10 @@ export function railPanelId(view: RailView): string {
   return `rail-panel-${view}`;
 }
 
-export function Rail({ view, folded, pullRequest, onView, onUnfold, children }: RailProps) {
+export function Rail({ view, folded, shown, pullRequest, onView, onUnfold, children }: RailProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {folded ? (
+      {!shown ? null : folded ? (
         <nav aria-label="Workspace views" className="flex flex-col items-center gap-1 pt-2">
           {views.map((shown) => (
             <Button
