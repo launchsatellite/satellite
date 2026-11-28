@@ -55,6 +55,17 @@ function checksRow(found: PullRequestFound): ReadyRow {
       { count },
     );
   }
+  if (passed < total) {
+    const stopped = total - passed;
+    return row(
+      "checks",
+      "open",
+      plural(stopped, "1 check did not pass", "<n> checks did not pass"),
+      {
+        count,
+      },
+    );
+  }
   return row("checks", "clear", "Checks passed", { count });
 }
 

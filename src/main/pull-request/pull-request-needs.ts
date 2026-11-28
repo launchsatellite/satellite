@@ -62,7 +62,7 @@ export function reviewersOf(
     ];
   });
   const first = ({ state, onHead }: PullRequestReviewer) =>
-    state === "changes-requested" && onHead ? 0 : 1;
+    state !== "changes-requested" ? 2 : onHead ? 0 : 1;
   return reviewers.sort((one, other) => first(one) - first(other));
 }
 

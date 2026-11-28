@@ -103,6 +103,13 @@ describe("readyCard", () => {
     expect(card.rows.find(({ key }) => key === "reviews")?.detail).toBe("On the latest commit");
   });
 
+  it("never calls a cancelled check passed", () => {
+    const checks = readyCard(
+      found({ counts: { failed: 0, pending: 0, passed: 1, total: 2 } }),
+    ).rows.find(({ key }) => key === "checks");
+    expect(checks).toMatchObject({ look: "open", title: "1 check did not pass", count: "1/2" });
+  });
+
   it("names the threads past the read when none of the first ones are open", () => {
     const threads = readyCard(
       found({ detail: { kind: "read", openThreads: 0, moreThreads: 4 } }),

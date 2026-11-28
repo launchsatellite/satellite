@@ -117,7 +117,7 @@ function Row({
           <span className="flex-none font-pixel text-[11px] text-dim">{count}</span>
         )}
       </div>
-      {key === "checks" && look === "signal" && (
+      {key === "checks" && found.counts.failed > 0 && (
         <FailedChecks workspace={workspace} found={found} onLink={onLink} />
       )}
       {request !== null && (

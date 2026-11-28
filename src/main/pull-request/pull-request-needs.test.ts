@@ -142,15 +142,20 @@ describe("reviewersOf", () => {
     ).toEqual([{ login: "ada-example", state: "approved", onHead: true, id: "PRR_kwDOexample" }]);
   });
 
-  it("puts changes asked on the latest commit first, so the cap never drops them", () => {
+  it("puts changes asked before approvals, the latest commit first, so the cap never drops them", () => {
     const approvals = Array.from({ length: 25 }, (_, at) =>
       review("APPROVED", "2026-01-01", head, `writer-${String(at)}`),
     );
-    const [first] = reviewersOf(
-      [...approvals, review("CHANGES_REQUESTED", "2026-01-01", head, "ada-example")],
+    const [first, second] = reviewersOf(
+      [
+        ...approvals,
+        review("CHANGES_REQUESTED", "2026-01-01", older, "grace-example"),
+        review("CHANGES_REQUESTED", "2026-01-01", head, "ada-example"),
+      ],
       head,
     );
-    expect(first).toMatchObject({ login: "ada-example", state: "changes-requested" });
+    expect(first).toMatchObject({ login: "ada-example", onHead: true });
+    expect(second).toMatchObject({ login: "grace-example", onHead: false });
   });
 
   it("drops a review id that could carry anything but an id", () => {

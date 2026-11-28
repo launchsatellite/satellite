@@ -634,7 +634,7 @@ export function AppWindow({ initial, frame, notice }: AppWindowProps) {
     [allSessions, pullRequests.needing, projects],
   );
   const newest = inbox[0]?.reasons[0];
-  const nextNeed = nextInboxTarget(inbox, changesHere);
+  const nextNeed = nextInboxTarget(inbox, state.selected);
   const readyNeedsYou =
     changesHere !== null &&
     pullRequests.needing.some(
