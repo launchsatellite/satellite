@@ -22,12 +22,14 @@ export interface SessionTab {
   ready: boolean;
   hooksOff: boolean;
   needsSince: number | null;
+  since: number;
+  firstMessage: string | undefined;
 }
 export interface Sessions {
   tabsOf: (ref: WorkspaceRef) => SessionTab[];
   all: SessionTab[];
   activeOf: (ref: WorkspaceRef) => string | undefined;
-  open: (ref: WorkspaceRef, resume: boolean) => boolean;
+  open: (ref: WorkspaceRef, resume: boolean, firstMessage?: string) => boolean;
   resumesQuietly: (ref: WorkspaceRef) => boolean;
   resumeQuietly: (ref: WorkspaceRef) => string | undefined;
   restart: (key: string) => void;
@@ -113,6 +115,7 @@ export function useSessions(notify: Notify): Sessions {
                         ready,
                         hooksOff,
                         needsSince: needsSince(tab, status, nextNeed),
+                        since: tab.status === status ? tab.since : Date.now(),
                       }
                     : tab,
                 ),
@@ -122,7 +125,7 @@ export function useSessions(notify: Notify): Sessions {
       }),
     [],
   );
-  const openTab = useCallback((ref: WorkspaceRef, resume: boolean) => {
+  const openTab = useCallback((ref: WorkspaceRef, resume: boolean, firstMessage?: string) => {
     if (count.current >= tabLimit) return undefined;
     count.current += 1;
     const place = placeOf(ref);
@@ -139,6 +142,8 @@ export function useSessions(notify: Notify): Sessions {
       ready: false,
       hooksOff: false,
       needsSince: null,
+      since: Date.now(),
+      firstMessage,
     };
     setState((current) => ({
       ...current,
@@ -149,7 +154,8 @@ export function useSessions(notify: Notify): Sessions {
     return tab.key;
   }, []);
   const open = useCallback(
-    (ref: WorkspaceRef, resume: boolean) => openTab(ref, resume) !== undefined,
+    (ref: WorkspaceRef, resume: boolean, firstMessage?: string) =>
+      openTab(ref, resume, firstMessage) !== undefined,
     [openTab],
   );
   const resumeQuietly = useCallback(
@@ -170,6 +176,8 @@ export function useSessions(notify: Notify): Sessions {
               ready: false,
               hooksOff: false,
               needsSince: null,
+              since: Date.now(),
+              firstMessage: undefined,
             }
           : tab,
       ),

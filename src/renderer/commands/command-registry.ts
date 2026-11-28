@@ -8,7 +8,7 @@ import {
 
 export type CommandId =
   | "palette.commands"
-  | "palette.agents"
+  | "agents.show"
   | "palette.switcher"
   | "focus.sidebar"
   | "sidebar.toggle"

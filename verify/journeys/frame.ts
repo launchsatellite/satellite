@@ -46,9 +46,9 @@ async function checkCommands(session: AppSession): Promise<void> {
   await textIs(session, "workspace-title", "repo / hostile", "on the hostile workspace");
   await dragsIn(session, "workspace-header");
   await session.page.getByTestId("sidebar-new-workspace").click();
-  await visible(session, "new-workspace-dialog", "after the New workspace button");
+  await visible(session, "new-workspace-page", "after the New workspace button");
   await session.page.keyboard.press("Escape");
-  await gone(session, "new-workspace-dialog", "after closing it");
+  await gone(session, "new-workspace-page", "after closing it");
   await session.page.getByTestId("open-command-menu").click();
   await visible(session, "palette", "after the command menu row");
   assert.equal(

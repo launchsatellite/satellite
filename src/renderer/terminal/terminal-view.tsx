@@ -28,6 +28,7 @@ interface TerminalViewProps {
   terminalId: string;
   workspace: WorkspaceRef;
   resume: boolean;
+  firstMessage: string | undefined;
   shown: boolean;
   onRestart: () => void;
   onStarted: () => void;
@@ -63,6 +64,7 @@ export function TerminalView({
   terminalId,
   workspace,
   resume,
+  firstMessage,
   shown,
   onRestart,
   onStarted,
@@ -144,6 +146,7 @@ export function TerminalView({
       program: "claude",
       workspace: { projectId, workspace: key },
       resume,
+      firstMessage,
       cols: sent.cols,
       rows: sent.rows,
     }).then((result) => {
@@ -292,7 +295,7 @@ export function TerminalView({
       gpu.end();
       void invoke("terminal.close", { id: terminalId });
     };
-  }, [terminalId, projectId, key, resume]);
+  }, [terminalId, projectId, key, resume, firstMessage]);
 
   useEffect(() => {
     noticedNow.current = noticed;

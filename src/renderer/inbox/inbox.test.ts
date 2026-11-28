@@ -33,6 +33,8 @@ function tab(
     ready: true,
     hooksOff: false,
     needsSince,
+    since: 0,
+    firstMessage: undefined,
   };
 }
 

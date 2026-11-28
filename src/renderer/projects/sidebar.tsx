@@ -561,7 +561,7 @@ export function Sidebar({
       </div>
       <div className="mx-2 mb-2 flex flex-none items-center gap-[2px] border-t border-line pt-[6px]">
         <CommandRow
-          command="palette.agents"
+          command="agents.show"
           icon="agents"
           text="Agents"
           testId="open-agents"

@@ -20,6 +20,7 @@ const includedFiles: [string, string][] = [
 const leftOutFiles = ["notes.log", "node_modules", "scratch.txt"];
 const onlyHere = "src/only-here.ts";
 const keptCommit = "keep this commit";
+const request = 'Add "release notes" & check %PATH% | ^\non two lines';
 
 function inside(folder: string, path: string): string {
   return join(folder, ...path.split("/"));
@@ -72,8 +73,28 @@ async function selectedRow(session: AppSession, name: string, when: string): Pro
 
 async function openNewWorkspace(session: AppSession, open: () => Promise<void>): Promise<string> {
   await open();
-  await visible(session, "create-workspace", "once the New workspace dialog had read the project");
+  await visible(session, "workspace-name", "once the New workspace page had read the repo");
   return session.page.getByTestId("workspace-name").inputValue();
+}
+
+async function firstMessageArrived(session: AppSession): Promise<void> {
+  let args: readonly string[] = [];
+  await waitUntil(
+    async () => {
+      const starts = (await session.standInEvents()).flatMap((event) =>
+        event.type === "start" && event.tool === "claude" ? [event.args] : [],
+      );
+      args = starts[1] ?? [];
+      return starts.length > 1;
+    },
+    promptTimeoutMs,
+    "Claude Code never started in second-look",
+  );
+  assert.deepEqual(
+    args.slice(-2),
+    ["--", request],
+    `Claude Code started with ${JSON.stringify(args)}, not the request as its first message`,
+  );
 }
 
 async function checkIncludedFiles(session: AppSession, folder: string): Promise<void> {
@@ -216,7 +237,7 @@ async function undoAfterHookLinked(session: AppSession): Promise<void> {
       `the undone creation said "${failure}"`,
     );
     await session.screenshot("workspaces-undone");
-    await page.getByTestId("close-workspace-dialog").click();
+    await page.getByTestId("new-workspace-page-back").click();
   } finally {
     await unlink(hook);
   }
@@ -252,10 +273,13 @@ async function run(session: AppSession): Promise<void> {
   await checkIncludedFiles(session, first);
 
   await openNewWorkspace(session, () => page.keyboard.press(`${commandModifier}+N`));
+  await page.getByTestId("workspace-request").fill(request);
   await page.getByTestId("workspace-name").fill("second-look");
   await chooseOption(page, "workspace-start", "release");
-  await page.getByTestId("create-workspace").click();
+  await page.getByTestId("workspace-request").focus();
+  await page.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+Enter`);
   await selectedRow(session, "second-look", "after making it from release");
+  await firstMessageArrived(session);
   await session.screenshot("workspaces-created");
 
   await checkSeparateFiles(session, first, second);

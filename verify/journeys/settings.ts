@@ -59,7 +59,7 @@ async function draculaApplied(session: AppSession, when: string): Promise<void> 
 
 async function openSettings(session: AppSession): Promise<void> {
   await session.page.keyboard.press(settingsKeys);
-  await visible(session, "settings-dialog", "after the settings shortcut");
+  await visible(session, "settings-page", "after the settings shortcut");
 }
 
 async function ghChecks(session: AppSession): Promise<number> {
@@ -124,7 +124,7 @@ async function journey(session: AppSession): Promise<void> {
   await checkSecurityLink(session);
 
   await session.page.keyboard.press("Escape");
-  await gone(session, "settings-dialog", "before the relaunch");
+  await gone(session, "settings-page", "before the relaunch");
   await session.relaunch();
   await visible(session, "workspace-repo-main", "after the relaunch");
   await draculaApplied(session, "after the relaunch");
@@ -133,7 +133,7 @@ async function journey(session: AppSession): Promise<void> {
   await shows(session, "Dracula", "off", "after the relaunch");
 
   await session.page.getByTestId("settings-show-guide").click();
-  await gone(session, "settings-dialog", "after Show the guide");
+  await gone(session, "settings-page", "after Show the guide");
   await visible(session, "guide-title", "after Show the guide in settings");
   assert.deepEqual(session.consoleErrors, [], "the window logged errors");
 }

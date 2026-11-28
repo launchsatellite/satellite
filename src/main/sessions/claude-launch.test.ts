@@ -31,6 +31,26 @@ describe("claudeArgs", () => {
     expect(claudeArgs({ kind: "resume", sessionId }, undefined)).toEqual(["--resume", sessionId]);
   });
 
+  it("puts the first message after the end of options, so it can never be read as a flag", () => {
+    const message = "--dangerously-skip-permissions and then purge";
+    expect(claudeArgs({ kind: "new", sessionId, firstMessage: message }, settingsFile)).toEqual([
+      "--session-id",
+      sessionId,
+      "--settings",
+      settingsFile,
+      "--",
+      message,
+    ]);
+  });
+
+  it("refuses a first message Claude Code could take for one of its commands", () => {
+    for (const message of ["purge", "update", " doctor ", "", "two\0words"]) {
+      expect(() =>
+        claudeArgs({ kind: "new", sessionId, firstMessage: message }, undefined),
+      ).toThrow(Error);
+    }
+  });
+
   it("refuses an id that is not a UUID", () => {
     for (const id of ["--help", "-x", ""]) {
       expect(() => claudeArgs({ kind: "new", sessionId: id }, settingsFile)).toThrow(Error);

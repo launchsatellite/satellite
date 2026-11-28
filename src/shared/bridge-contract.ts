@@ -58,6 +58,7 @@ export const bridgeLimits = {
   workspacesNeeding: 4200,
   messageChars: 1000,
   linkChars: 2048,
+  firstMessageChars: 8000,
   cols: { min: 2, max: 500 },
   rows: { min: 1, max: 300 },
 };
@@ -373,6 +374,11 @@ export const defaultInterfaceState: InterfaceState = {
 };
 
 const terminalId = z.uuid();
+export const firstMessage = z
+  .string()
+  .max(bridgeLimits.firstMessageChars)
+  .regex(/\S\s+\S/)
+  .refine((text) => !text.includes("\0"));
 const cols = z.int().min(bridgeLimits.cols.min).max(bridgeLimits.cols.max);
 const rows = z.int().min(bridgeLimits.rows.min).max(bridgeLimits.rows.max);
 const empty = z.strictObject({});
@@ -669,6 +675,7 @@ export const bridgeRequests = {
       program: z.literal("claude"),
       workspace: workspaceRef,
       resume: z.boolean(),
+      firstMessage: firstMessage.optional(),
       cols,
       rows,
     }),

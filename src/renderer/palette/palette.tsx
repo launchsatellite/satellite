@@ -16,9 +16,8 @@ import { visibleText } from "../../shared/visible-text.ts";
 import { FileIcon, useIcons, type LoadedIcons } from "../files/file-icon.tsx";
 import { findSentence, typeAFileNameSentence } from "../files/file-words.ts";
 import type { FileSearch } from "../files/use-file-search.ts";
-import type { AgentItem } from "../sessions/agent-list.ts";
 
-export type PaletteMode = "commands" | "switcher" | "files" | "agents";
+export type PaletteMode = "commands" | "switcher" | "files";
 
 export interface SwitcherItem {
   ref: WorkspaceRef;
@@ -34,8 +33,6 @@ interface PaletteProps {
   onClose: () => void;
   switcher: readonly SwitcherItem[];
   onOpenWorkspace: (ref: WorkspaceRef) => void;
-  agents: readonly AgentItem[];
-  onOpenAgent: (agent: AgentItem) => void;
   files: FileSearch;
   onOpenFile: (path: string) => void;
   onQuery: (query: string) => void;
@@ -52,24 +49,19 @@ interface PaletteOption {
 }
 
 const queryLimit = 200;
+const everything = 1000;
 const activeRow = "outline-1 -outline-offset-1 outline-accent";
 const copy = {
   commands: {
     label: "Command menu",
-    placeholder: "Type a command",
-    group: "Commands",
+    placeholder: "Type a command or a workspace",
+    group: "Workspaces and commands",
     action: "Run",
   },
   switcher: {
     label: "Go to a workspace",
     placeholder: "Type part of a workspace or repo name",
     group: "Workspaces",
-    action: "Open",
-  },
-  agents: {
-    label: "Agents",
-    placeholder: "Type part of a workspace or repo name",
-    group: "Every Claude Code session",
     action: "Open",
   },
   files: {
@@ -80,31 +72,36 @@ const copy = {
   },
 };
 
-function commandOptions(query: string, commands: readonly Command[]): PaletteOption[] {
-  const listed = commands.filter(
-    (command) => command.available && command.id !== "palette.commands",
-  );
-  return rankMatches(query, listed, (command) => command.title).map((command) => ({
-    key: command.id,
-    testId: `command-${command.id.replaceAll(".", "-")}`,
-    title: command.title,
-    hint: commandShortcut(command),
-    run: command.run,
-  }));
-}
-
-function switcherOptions(
+function commandOptions(
   query: string,
+  commands: readonly Command[],
   switcher: readonly SwitcherItem[],
   onOpenWorkspace: (ref: WorkspaceRef) => void,
 ): PaletteOption[] {
-  const ranked = rankMatches(
-    query,
-    switcher,
-    (item) => `${item.label} ${item.project} ${item.parent ?? ""}`,
+  const listed = commands
+    .filter((command) => command.available && command.id !== "palette.commands")
+    .map((command) => ({
+      match: command.title,
+      option: {
+        key: command.id,
+        testId: `command-${command.id.replaceAll(".", "-")}`,
+        title: command.title,
+        hint: commandShortcut(command),
+        run: command.run,
+      },
+    }));
+  const places = switcherOptions(switcher, onOpenWorkspace);
+  return rankMatches(query, [...places, ...listed], (entry) => entry.match, everything).map(
+    (entry) => entry.option,
   );
-  return withUniqueTestIds(
-    ranked.map((item) => ({
+}
+
+function switcherOptions(
+  switcher: readonly SwitcherItem[],
+  onOpenWorkspace: (ref: WorkspaceRef) => void,
+): { match: string; option: PaletteOption }[] {
+  const options = withUniqueTestIds(
+    switcher.map((item) => ({
       key: `${item.ref.projectId}/${item.ref.workspace}`,
       testId: `switch-${item.project}-${item.testKey}`,
       title: visibleLabel(item.label),
@@ -112,40 +109,13 @@ function switcherOptions(
         item.parent === undefined ? item.project : `${item.project} · ${item.parent}`,
       ),
       pixel: item.pixel,
+      match: `${item.label} ${item.project} ${item.parent ?? ""}`,
       run: () => {
         onOpenWorkspace(item.ref);
       },
     })),
   );
-}
-
-function agentOptions(
-  query: string,
-  agents: readonly AgentItem[],
-  onOpenAgent: (agent: AgentItem) => void,
-): PaletteOption[] {
-  const ranked = rankMatches(
-    query,
-    agents,
-    (agent) => `${agent.label} ${agent.project} ${agent.parent ?? ""} ${agent.state}`,
-  );
-  return withUniqueTestIds(
-    ranked.map((agent) => {
-      const place =
-        agent.parent === undefined ? agent.project : `${agent.project} · ${agent.parent}`;
-      const session = agent.session === null ? "" : ` · Session ${String(agent.session)}`;
-      return {
-        key: agent.key,
-        testId: `agent-${agent.project}-${agent.testKey}`,
-        title: visibleLabel(agent.label),
-        detail: visibleText(`${agent.state}${session} · ${place}`),
-        pixel: agent.pixel,
-        run: () => {
-          onOpenAgent(agent);
-        },
-      };
-    }),
-  );
+  return options.map(({ match, ...option }) => ({ match, option }));
 }
 
 function fileOptions(
@@ -172,9 +142,6 @@ function emptyNote(
   query: string,
   files: FileSearch,
 ): { testId: string; text: string } | undefined {
-  if (mode === "agents" && query === "") {
-    return { testId: "palette-empty", text: "No Claude Code session is open in any repo." };
-  }
   if (mode !== "files") return { testId: "palette-empty", text: "Nothing matches that." };
   if (query === "" || files.state === "idle") {
     return { testId: "palette-note", text: typeAFileNameSentence };
@@ -209,8 +176,6 @@ export function Palette({
   onClose,
   switcher,
   onOpenWorkspace,
-  agents,
-  onOpenAgent,
   files,
   onOpenFile,
   onQuery,
@@ -240,30 +205,14 @@ export function Palette({
   }, [mode]);
 
   const options = useMemo(() => {
-    if (mode === "commands") return commandOptions(query, commands);
+    if (mode === "commands") return commandOptions(query, commands, switcher, onOpenWorkspace);
     if (mode === "files") return fileOptions(files.paths, onOpenFile);
-    if (mode === "agents") return agentOptions(query, agents, onOpenAgent);
-    return switcherOptions(query, switcher, onOpenWorkspace);
-  }, [
-    mode,
-    query,
-    commands,
-    switcher,
-    onOpenWorkspace,
-    agents,
-    onOpenAgent,
-    files.paths,
-    onOpenFile,
-  ]);
-  const [shownAgents, setShownAgents] = useState({ agents, options });
-  if (shownAgents.agents !== agents) {
-    const key = shownAgents.options[active]?.key;
-    const held = options.findIndex((option) => option.key === key);
-    setShownAgents({ agents, options });
-    setActive(held === -1 ? 0 : held);
-  } else if (shownAgents.options !== options) {
-    setShownAgents({ agents, options });
-  }
+    return rankMatches(
+      query,
+      switcherOptions(switcher, onOpenWorkspace),
+      (entry) => entry.match,
+    ).map((entry) => entry.option);
+  }, [mode, query, commands, switcher, onOpenWorkspace, files.paths, onOpenFile]);
   const stale = mode === "files" && (files.query !== query || files.state === "searching");
   const optionId = (index: number) => `${listId}-${String(index)}`;
   const activeOption = options[active];

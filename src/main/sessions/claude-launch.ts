@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { firstMessage as firstMessageSchema } from "../../shared/bridge-contract.ts";
 import { isFullyQualified } from "../platform/paths.ts";
 
 export type HookEventName = (typeof hookEvents)[number];
 export type ClaudeStart =
-  { kind: "new"; sessionId: string } | { kind: "resume"; sessionId: string };
+  { kind: "new"; sessionId: string; firstMessage?: string } | { kind: "resume"; sessionId: string };
 interface HttpHook {
   type: "http";
   url: string;
@@ -28,12 +29,19 @@ export function claudeArgs(start: ClaudeStart, settingsFile: string | undefined)
   if (!sessionIdSchema.safeParse(start.sessionId).success) {
     throw new Error("Claude Code's session id must be a UUID");
   }
+  const message = start.kind === "new" ? start.firstMessage : undefined;
+  if (message !== undefined && !firstMessageSchema.safeParse(message).success) {
+    throw new Error("Claude Code's first message must hold two words and no NUL");
+  }
   const args = [startFlags[start.kind], start.sessionId];
-  if (settingsFile === undefined) return args;
-  if (!isFullyQualified(settingsFile)) {
+  if (settingsFile !== undefined && !isFullyQualified(settingsFile)) {
     throw new Error("Claude Code's settings file must be a fully qualified path");
   }
-  return [...args, "--settings", settingsFile];
+  return [
+    ...args,
+    ...(settingsFile === undefined ? [] : ["--settings", settingsFile]),
+    ...(message === undefined ? [] : ["--", message]),
+  ];
 }
 
 export function hookSettings(

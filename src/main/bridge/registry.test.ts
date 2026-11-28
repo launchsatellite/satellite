@@ -241,6 +241,11 @@ describe("createBridgeRouter", () => {
       { ...valid, workspace: undefined },
       { ...valid, workspace: { projectId: terminalId, workspace: "../x" } },
       { ...valid, resume: undefined },
+      { ...valid, firstMessage: "purge" },
+      { ...valid, firstMessage: "--help" },
+      { ...valid, firstMessage: "two\0words" },
+      { ...valid, firstMessage: `a ${"b".repeat(8000)}` },
+      { ...valid, firstMessage: ["fix", "it"] },
     ];
     for (const payload of payloads) {
       const result = await route("terminal.start", payload, owner);

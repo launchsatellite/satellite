@@ -4,14 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { AppSession } from "../driver.ts";
 import type { Journey } from "../journeys.ts";
-import {
-  gone,
-  promptTimeoutMs,
-  startClaude,
-  toastReads,
-  visible,
-  waitUntil,
-} from "./conditions.ts";
+import { gone, promptTimeoutMs, toastReads, visible, waitUntil } from "./conditions.ts";
 
 type GuideStep = 1 | 2 | 3 | 4;
 
@@ -77,9 +70,7 @@ async function run(session: AppSession): Promise<void> {
   await session.page.getByTestId("sidebar-new-workspace").click();
   await visible(session, "create-workspace", "after New workspace was pressed");
   await session.page.getByTestId("create-workspace").click();
-  await stepShows(session, 2, "after making a workspace");
-  await startClaude(session, 1);
-  await stepShows(session, 3, "after a session started");
+  await stepShows(session, 3, "after making a workspace, which starts Claude Code in it");
   await session.page.getByTestId("guide-next").click();
   await stepShows(session, 4, "after Next from step 3");
   await session.page.getByTestId("guide-done").click();

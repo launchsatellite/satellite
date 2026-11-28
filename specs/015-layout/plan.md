@@ -49,7 +49,7 @@ Proof. `pr-open`, `checks-failed`, `changes-requested`, `pr-conflicts`, `pr-appe
 1. A page slot in the centre, `window/page.tsx`, with a way back. Pages never use `DialogShell`, so the sidebar stays live and commands stay on. Toasts show above pages.
 2. Settings fills the window, its sections in a sidebar under Back to work. Theme is one select holding the curated themes and credits. Cmd+Comma toggles it.
 3. Agents is a centre page from `sessions/agent-list.ts`, grouped needs you, nothing blocks, working, done, idle or stopped. Cmd+G opens it and the palette's Agents mode goes.
-4. New workspace is a centre page with the request box, repo, starting point and name. Create and start on Cmd+Enter. The request is written to the new session's terminal once Claude Code reports it is ready, with Enter, never as an argument.
+4. New workspace is a centre page with the request box, repo, starting point and name. Create and start on Cmd+Enter. The request is Claude Code's first message, its positional prompt after `--` (spec 004).
 5. Running processes become a popover from the header readout.
 6. Specs 003, 004, 009, 012 and 014 take their Next into scope.
 

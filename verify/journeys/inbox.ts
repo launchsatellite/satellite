@@ -112,6 +112,19 @@ async function textIs(session: AppSession, testId: string, expected: string, whe
   );
 }
 
+async function textHolds(session: AppSession, testId: string, expected: string) {
+  const element = session.page.getByTestId(testId);
+  let read = "";
+  await waitUntil(
+    async () => {
+      read = (await element.count()) === 0 ? "" : (await element.innerText()).trim();
+      return read.startsWith(expected);
+    },
+    promptTimeoutMs,
+    () => `${testId} read ${JSON.stringify(read)}, not starting ${JSON.stringify(expected)}`,
+  );
+}
+
 async function attributeIs(
   session: AppSession,
   testId: string,
@@ -152,7 +165,7 @@ async function firstNeed(session: AppSession): Promise<void> {
 
 async function openFromAgents(session: AppSession): Promise<void> {
   await session.page.getByTestId("open-agents").click();
-  await textIs(session, "agent-repo-alpha-1", "alpha\nNeeds you · repo", "in Agents");
+  await textHolds(session, "agent-repo-alpha-1", "alpha\nrepo · Session 1\nClaude Code needs you");
   await session.page.keyboard.press("Enter");
   await attributeIs(
     session,
