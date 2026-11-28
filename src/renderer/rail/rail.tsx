@@ -57,7 +57,11 @@ export function Rail({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {!shown ? null : folded ? (
-        <nav aria-label="Workspace views" className="flex flex-col items-center gap-1 pt-2">
+        <nav
+          aria-label="Workspace views"
+          data-guide="views"
+          className="flex flex-col items-center gap-1 pt-2"
+        >
           {views.map((shown) => (
             <span key={shown.view} className="relative flex">
               <Button
