@@ -34,7 +34,6 @@ interface TabProps {
   id: string;
   testId: string;
   panel?: string;
-  size?: "default" | "small";
   label?: string;
   tooltip?: string;
   description?: string;
@@ -108,7 +107,6 @@ export function Tab({
   id,
   testId,
   panel,
-  size = "default",
   label,
   tooltip,
   description,
@@ -135,8 +133,7 @@ export function Tab({
     <div
       role="presentation"
       className={cn(
-        "group flex flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap",
-        size === "default" ? "h-7" : "h-6",
+        "group flex h-7 flex-none items-center rounded-[6px] text-[12px] font-medium whitespace-nowrap",
         selected ? "bg-sel text-fg" : "text-dim hover:bg-hover",
         className,
       )}
