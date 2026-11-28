@@ -75,5 +75,6 @@ A Satellite feature is accepted on macOS, Windows and Linux, in light, dark and 
 
 ## Open questions
 
-- Specs 004, 011, 012 and 013 still read In progress with a plan.md. This layout removes the title bar strip from 011 and moves Settings to a page in 012, so their status needs settling first.
+- Specs 004, 011, 012 and 013 still read In progress with a plan.md. They are checked against main and closed out in their own docs pull request before the first Layout pull request, which then edits 011 and 012 in place.
+- Claude Code receives the first message through its terminal once it is ready, never as a launch argument, since a `.cmd` shim on Windows could misread free text. Confirm against Claude Code's current docs while building.
 - Whether the guide's four cards keep their steps with the controls in their new places, or the first step points at the repo view.
