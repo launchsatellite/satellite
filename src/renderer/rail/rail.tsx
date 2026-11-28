@@ -56,7 +56,11 @@ export function Rail({
         <TopRow frame={frame} left={frameLeft} right={0} className="h-11" />
       ) : null}
       {!shown ? null : folded ? (
-        <nav aria-label="Workspace views" className="flex flex-col items-center gap-1">
+        <nav
+          aria-label="Workspace views"
+          data-guide="views"
+          className="flex flex-col items-center gap-1"
+        >
           {views.map((shown) => (
             <Button
               key={shown.view}
@@ -66,6 +70,7 @@ export function Rail({
               label={labelOf(shown.view, pullRequest)}
               tooltip={labelOf(shown.view, pullRequest)}
               testId={railTabId(shown.view)}
+              data-number={shown.view === "pull-request" ? (pullRequest ?? undefined) : undefined}
               onClick={() => {
                 onUnfold(shown.view);
               }}

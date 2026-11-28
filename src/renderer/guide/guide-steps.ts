@@ -29,7 +29,7 @@ export const guideSteps: Record<GuideStep, GuideStepDetail> = {
   },
   3: {
     anchor: "views",
-    side: "below",
+    side: "left",
     title: "read what it did",
     text: "Changes, Files and Pull request show the work in this workspace, read only, because your agent does the writing.",
   },
